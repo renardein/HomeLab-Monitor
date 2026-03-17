@@ -22,6 +22,7 @@ let currentTrueNASServerIndex = 0;
 let connectionIdMap = {}; // key: `${type}|${url}` -> connectionId (no secrets)
 let isRefreshing = false;
 const htmlCache = {}; // elementId -> last innerHTML string
+let monitoredServices = []; // [{ name, type: 'tcp'|'udp'|'http', host?, port?, url?, lastStatus, lastLatency }]
 
 function el(id) {
     return document.getElementById(id);
@@ -47,6 +48,12 @@ function setHTMLIfChanged(id, value) {
 function setValue(id, value) {
     const e = el(id);
     if (e) e.value = value;
+}
+
+function escapeHtml(s) {
+    if (s == null) return '';
+    const t = String(s);
+    return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 function setDisplay(id, display) {
@@ -102,6 +109,10 @@ function setServerType(type) {
     if (quick) quick.value = currentServerType;
     const monitorSelect = document.getElementById('monitorServerTypeSelect');
     if (monitorSelect) monitorSelect.value = currentServerType;
+    const serverMenuTitle = document.getElementById('serverMenuTitle');
+    if (serverMenuTitle) {
+        serverMenuTitle.textContent = currentServerType === 'truenas' ? 'TrueNAS' : 'Proxmox';
+    }
 
     // Update connection labels/hints
     const isTrueNAS = currentServerType === 'truenas';
@@ -124,9 +135,33 @@ function setServerType(type) {
     const backupsTab = document.getElementById('backups-tab')?.closest('li');
     const quorumTab = document.getElementById('quorum-tab')?.closest('li');
     const nodesTab = document.getElementById('nodes-tab')?.closest('li');
+    const serversTab = document.getElementById('servers-tab')?.closest('li');
     if (backupsTab) backupsTab.style.display = isTrueNAS ? 'none' : '';
     if (quorumTab) quorumTab.style.display = isTrueNAS ? 'none' : '';
     if (nodesTab) nodesTab.style.display = isTrueNAS ? 'none' : '';
+    if (serversTab) serversTab.style.display = isTrueNAS ? '' : 'none';
+
+    // Переключаем активную вкладку при смене типа
+    const defaultTabId = isTrueNAS ? 'servers-tab' : 'nodes-tab';
+    const btn = document.getElementById(defaultTabId);
+    if (btn) btn.click();
+}
+
+function openServicesMonitorFromMenu() {
+    const dashboardSection = document.getElementById('dashboardSection');
+    const servicesSection = document.getElementById('servicesMonitorSection');
+    const configSection = document.getElementById('configSection');
+    if (dashboardSection) dashboardSection.style.display = 'none';
+    if (configSection) configSection.style.display = 'none';
+    if (servicesSection) servicesSection.style.display = 'block';
+    renderMonitoredServices();
+}
+
+function closeServicesMonitor() {
+    const dashboardSection = document.getElementById('dashboardSection');
+    const servicesSection = document.getElementById('servicesMonitorSection');
+    if (servicesSection) servicesSection.style.display = 'none';
+    if (dashboardSection) dashboardSection.style.display = '';
 }
 
 // Language switch function
@@ -200,6 +235,7 @@ function updateUILanguage() {
         virtualizationLabel: 'virtualization',
         tabNodes: 'tabNodes',
         tabStorage: 'tabStorage',
+        tabServers: 'tabServers',
         tabBackups: 'tabBackups',
         tabQuorum: 'tabQuorum',
         displaySettings: 'displaySettings',
@@ -229,6 +265,24 @@ function updateUILanguage() {
         backupLastRunHeader: 'backupLastRun',
         backupResultHeader: 'backupResult',
         backupNextRunHeader: 'backupNextRun',
+        tabServicesMonitor: 'tabServicesMonitor',
+        menuServicesMonitorText: 'tabServicesMonitor',
+        servicesMonitorTitle: 'servicesMonitorTitle',
+        serviceNameLabel: 'serviceNameLabel',
+        serviceTypeLabel: 'serviceTypeLabel',
+        serviceHostLabel: 'serviceHostLabel',
+        servicePortLabel: 'servicePortLabel',
+        serviceUrlLabel: 'serviceUrlLabel',
+        addServiceText: 'addServiceText',
+        servicesListTitle: 'servicesListTitle',
+        pingAllText: 'pingAllText',
+        serviceNameHeader: 'serviceNameHeader',
+        serviceTypeHeader: 'serviceTypeHeader',
+        serviceTargetHeader: 'serviceTargetHeader',
+        serviceStatusHeader: 'serviceStatusHeader',
+        serviceLatencyHeader: 'serviceLatencyHeader',
+        serviceActionsHeader: 'serviceActionsHeader',
+        backToDashboardText: 'backToDashboardText',
         rememberLabel: 'rememberLabel',
         logoutText: 'logoutText',
         // New connection settings
@@ -291,6 +345,9 @@ document.addEventListener('DOMContentLoaded', async function() {
     
     // Load saved settings
     loadSettings();
+
+    toggleServiceTypeFields();
+    renderMonitoredServices();
 
     // Server type selection
     const savedType = localStorage.getItem('serverType');
@@ -457,6 +514,8 @@ function showToast(message, type = 'info') {
 function showConfig() {
     document.getElementById('configSection').style.display = 'block';
     document.getElementById('dashboardSection').style.display = 'none';
+    const servicesSection = document.getElementById('servicesMonitorSection');
+    if (servicesSection) servicesSection.style.display = 'none';
     if (autoRefreshInterval) {
         clearInterval(autoRefreshInterval);
         autoRefreshInterval = null;
@@ -468,9 +527,11 @@ function toggleSettings() {
     const configSection = document.getElementById('configSection');
     const dashboardSection = document.getElementById('dashboardSection');
     
+    const servicesSection = document.getElementById('servicesMonitorSection');
     if (configSection.style.display === 'none' || configSection.style.display === '') {
         configSection.style.display = 'block';
         dashboardSection.style.display = 'none';
+        if (servicesSection) servicesSection.style.display = 'none';
         if (autoRefreshInterval) {
             clearInterval(autoRefreshInterval);
             autoRefreshInterval = null;
@@ -478,6 +539,7 @@ function toggleSettings() {
     } else {
         configSection.style.display = 'none';
         dashboardSection.style.display = 'block';
+        if (servicesSection) servicesSection.style.display = 'none';
         if (apiToken) {
             refreshData();
             startAutoRefresh();
@@ -529,6 +591,8 @@ async function toggleMonitorMode() {
 function showDashboard() {
     document.getElementById('configSection').style.display = 'none';
     document.getElementById('dashboardSection').style.display = 'block';
+    const servicesSection = document.getElementById('servicesMonitorSection');
+    if (servicesSection) servicesSection.style.display = 'none';
     // Refresh only when authenticated
     if (apiToken) {
         refreshData();
@@ -757,7 +821,37 @@ async function refreshData(options = {}) {
 }
 
 function updateTrueNASDashboard(systemData, poolsData) {
-    // Basic header stats
+    const sys = systemData && typeof systemData === 'object' ? systemData : {};
+    const hostname = sys.hostname || sys.system_hostname || sys.host || 'TrueNAS';
+    const version = sys.version || sys.product_version || sys.release || '';
+    const uptimeRaw = sys.uptime;
+    const uptimeStr = (typeof uptimeRaw === 'number' && uptimeRaw >= 0)
+        ? formatUptime(uptimeRaw)
+        : (uptimeRaw && String(uptimeRaw).trim() ? String(uptimeRaw) : '');
+
+    // Попробуем вытащить CPU usage
+    let cpuPercent = null;
+    if (typeof sys.cpu_usage === 'number') {
+        cpuPercent = Math.max(0, Math.min(100, Math.round(sys.cpu_usage)));
+    } else if (Array.isArray(sys.loadavg) && typeof sys.loadavg[0] === 'number' && typeof sys.cores === 'number' && sys.cores > 0) {
+        cpuPercent = Math.max(0, Math.min(100, Math.round((sys.loadavg[0] / sys.cores) * 100)));
+    }
+
+    // И память
+    let memTotal = null;
+    let memUsed = null;
+    if (sys.memory && typeof sys.memory === 'object') {
+        const m = sys.memory;
+        // TrueNAS часто возвращает байты
+        if (typeof m.total === 'number' && typeof m.free === 'number') {
+            memTotal = m.total;
+            memUsed = m.total - m.free;
+        } else if (typeof m.total === 'number' && typeof m.used === 'number') {
+            memTotal = m.total;
+            memUsed = m.used;
+        }
+    }
+
     setText('totalNodes', '1');
     setText('onlineNodes', '1');
     setHTML('quorumStatus', t('notApplicable'));
@@ -765,54 +859,69 @@ function updateTrueNASDashboard(systemData, poolsData) {
     if (quorumEl) quorumEl.className = 'stat-value text-muted';
     setHTML('connectionStatus', '<i class="bi bi-check-circle-fill text-success"></i> ' + t('connected'));
 
-    // Resources cards: TrueNAS API doesn't directly expose usage in a stable way in MVP
-    setText('clusterCpu', '—');
-    setText('clusterCpuDetail', t('truenasSystem'));
-    const cpuBar = document.getElementById('clusterCpuBar');
-    if (cpuBar) cpuBar.style.width = '0%';
+    // CPU card
+    if (cpuPercent !== null) {
+        setText('clusterCpu', cpuPercent + '%');
+        setText('clusterCpuDetail', t('truenasSystem'));
+        const cpuBar = document.getElementById('clusterCpuBar');
+        if (cpuBar) cpuBar.style.width = cpuPercent + '%';
+    } else {
+        setText('clusterCpu', '—');
+        setText('clusterCpuDetail', t('truenasSystem'));
+        const cpuBar = document.getElementById('clusterCpuBar');
+        if (cpuBar) cpuBar.style.width = '0%';
+    }
 
-    setText('clusterMemory', '—');
-    const hostname = systemData?.hostname || systemData?.system_hostname || systemData?.host || 'TrueNAS';
-    const version = systemData?.version || systemData?.product_version || systemData?.release || '';
-    setText('clusterMemoryDetail', version ? `${hostname} • ${version}` : hostname);
-    const memBar = document.getElementById('clusterMemoryBar');
-    if (memBar) memBar.style.width = '0%';
+    // Memory card
+    if (memTotal && memUsed !== null) {
+        const memPercent = memTotal > 0 ? Math.round((memUsed / memTotal) * 100) : 0;
+        setText('clusterMemory', memPercent + '%');
+        setText('clusterMemoryDetail', `${formatSize(memUsed)} / ${formatSize(memTotal)}`);
+        const memBar = document.getElementById('clusterMemoryBar');
+        if (memBar) memBar.style.width = memPercent + '%';
+    } else {
+        setText('clusterMemory', '—');
+        setText('clusterMemoryDetail', version ? `${hostname} • ${version}` : hostname);
+        const memBar = document.getElementById('clusterMemoryBar');
+        if (memBar) memBar.style.width = '0%';
+    }
 
     setText('clusterVms', '—');
     setText('clusterContainers', '—');
 
-    // Nodes container: show system summary card
-    const nodesContainer = document.getElementById('nodesContainer');
-    if (nodesContainer) {
-        setHTMLIfChanged('nodesContainer', `
+    const serversContainer = document.getElementById('serversContainer') || document.getElementById('nodesContainer');
+    if (serversContainer) {
+        setHTMLIfChanged(serversContainer.id, `
             <div class="col-12">
                 <div class="node-card">
                     <div class="d-flex justify-content-between align-items-center mb-2">
-                        <h5 class="mb-0">${hostname}</h5>
+                        <h5 class="mb-0">${escapeHtml(hostname)}</h5>
                         <span class="badge bg-success">${t('connected')}</span>
                     </div>
                     <div class="text-muted small">
-                        ${version ? `<div><strong>${t('version')}:</strong> ${version}</div>` : ''}
-                        ${systemData?.uptime ? `<div><strong>${t('uptime')}:</strong> ${systemData.uptime}</div>` : ''}
+                        ${version ? `<div><strong>${t('version')}:</strong> ${escapeHtml(version)}</div>` : ''}
+                        ${uptimeStr ? `<div><strong>${t('uptime')}:</strong> ${escapeHtml(uptimeStr)}</div>` : ''}
                     </div>
                 </div>
             </div>
         `);
     }
 
-    // Storage tab: reuse existing storage UI, but values are bytes/numbers
+
+    const pools = (poolsData && Array.isArray(poolsData.all)) ? poolsData.all : [];
+    const summary = (poolsData && poolsData.summary) ? poolsData.summary : { total: 0, active: 0, total_space: 0, used_space: 0 };
     updateStorageUI({
-        ...poolsData,
-        all: (poolsData?.all || []).map(p => ({
+        all: pools.map(p => ({
             ...p,
             used_fmt: formatSize(p.used),
             total_fmt: formatSize(p.total)
         })),
-        summary: poolsData?.summary ? {
-            ...poolsData.summary,
-            total_space_fmt: formatSize(poolsData.summary.total_space),
-            used_space_fmt: formatSize(poolsData.summary.used_space)
-        } : poolsData?.summary
+        byType: (poolsData && poolsData.byType) ? poolsData.byType : { pool: { count: 0, total: 0, used: 0 } },
+        summary: {
+            ...summary,
+            total_space_fmt: formatSize(summary.total_space),
+            used_space_fmt: formatSize(summary.used_space)
+        }
     });
 
     // Clear backups table if present
@@ -1083,6 +1192,161 @@ function updateBackupsUI(data) {
     }
 }
 
+// ==================== SERVICE MONITORING (отдельная вкладка, TCP/UDP/HTTP) ====================
+
+function saveMonitoredServices() {
+    localStorage.setItem('monitoredServices', JSON.stringify(monitoredServices));
+}
+
+function toggleServiceTypeFields() {
+    const typeSelect = document.getElementById('serviceTypeSelect');
+    const hostWrap = document.getElementById('serviceHostWrap');
+    const portWrap = document.getElementById('servicePortWrap');
+    const urlWrap = document.getElementById('serviceUrlWrap');
+    if (!typeSelect || !hostWrap || !portWrap || !urlWrap) return;
+    const type = (typeSelect.value || 'tcp').toLowerCase();
+    const isHttp = type === 'http' || type === 'https';
+    hostWrap.classList.toggle('d-none', isHttp);
+    portWrap.classList.toggle('d-none', isHttp);
+    urlWrap.classList.toggle('d-none', !isHttp);
+}
+
+function getServiceTargetDisplay(s) {
+    if (s.type === 'http' || s.type === 'https' || s.url) return s.url || '—';
+    const host = s.host || '';
+    const port = s.port != null ? s.port : '';
+    return host && port ? `${host}:${port}` : (host || port || '—');
+}
+
+function buildServiceTargetForApi(s) {
+    const type = (s.type || 'tcp').toLowerCase();
+    const name = s.name || getServiceTargetDisplay(s);
+    if (type === 'http' || type === 'https') {
+        return { name, type: 'http', url: (s.url || '').trim() };
+    }
+    return { name, type: type || 'tcp', host: (s.host || '').trim(), port: parseInt(s.port, 10) };
+}
+
+function renderMonitoredServices() {
+    const body = document.getElementById('servicesBody');
+    if (!body) return;
+    const list = Array.isArray(monitoredServices) ? monitoredServices : [];
+    const rows = list.map((s, idx) => {
+        const statusBadge = s.lastStatus === 'up'
+            ? `<span class="badge bg-success">${t('connected')}</span>`
+            : (s.lastStatus === 'down'
+                ? `<span class="badge bg-danger">${t('serverError')}</span>`
+                : `<span class="badge bg-secondary">${t('notConnected')}</span>`);
+        const latency = typeof s.lastLatency === 'number' ? `${s.lastLatency} ms` : '—';
+        const typeLabel = (s.type || 'tcp').toUpperCase();
+        const target = getServiceTargetDisplay(s);
+        return `
+            <tr>
+                <td>${escapeHtml(s.name || target)}</td>
+                <td><span class="badge bg-secondary">${escapeHtml(typeLabel)}</span></td>
+                <td><code>${escapeHtml(target)}</code></td>
+                <td>${statusBadge}</td>
+                <td>${latency}</td>
+                <td class="text-nowrap">
+                    <button class="btn btn-sm btn-outline-success me-1" onclick="checkService(${idx})" title="${t('pingAllText')}">
+                        <i class="bi bi-arrow-repeat"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="removeMonitoredService(${idx})">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+    setHTMLIfChanged('servicesBody', rows || '');
+}
+
+async function checkService(index) {
+    const list = Array.isArray(monitoredServices) ? monitoredServices : [];
+    const svc = list[index];
+    if (!svc) return;
+    try {
+        const resp = await fetch('/api/health/check', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ targets: [buildServiceTargetForApi(svc)] })
+        });
+        const data = await resp.json();
+        const r = data.results && data.results[0];
+        if (r) {
+            svc.lastStatus = r.up ? 'up' : 'down';
+            svc.lastLatency = r.latency ?? null;
+        }
+        saveMonitoredServices();
+        renderMonitoredServices();
+    } catch (e) {
+        showToast(t('connectError') + ': ' + e.message, 'error');
+    }
+}
+
+async function checkAllServices() {
+    const list = Array.isArray(monitoredServices) ? monitoredServices : [];
+    if (!list.length) return;
+    try {
+        const targets = list.map(buildServiceTargetForApi);
+        const resp = await fetch('/api/health/check', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ targets })
+        });
+        const data = await resp.json();
+        const results = data.results || [];
+        results.forEach((r, i) => {
+            if (!list[i]) return;
+            list[i].lastStatus = r.up ? 'up' : 'down';
+            list[i].lastLatency = r.latency ?? null;
+        });
+        saveMonitoredServices();
+        renderMonitoredServices();
+    } catch (e) {
+        showToast(t('connectError') + ': ' + e.message, 'error');
+    }
+}
+
+function addMonitoredService() {
+    const nameInput = document.getElementById('serviceNameInput');
+    const typeSelect = document.getElementById('serviceTypeSelect');
+    const hostInput = document.getElementById('serviceHostInput');
+    const portInput = document.getElementById('servicePortInput');
+    const urlInput = document.getElementById('serviceUrlInput');
+    if (!typeSelect) return;
+    const type = (typeSelect.value || 'tcp').toLowerCase();
+    const name = nameInput ? nameInput.value.trim() : '';
+    if (type === 'http' || type === 'https') {
+        const url = urlInput ? urlInput.value.trim() : '';
+        if (!url) {
+            showToast(t('serviceUrlRequired') || 'Укажите URL', 'error');
+            return;
+        }
+        monitoredServices.push({ name: name || url, type: 'http', url, lastStatus: null, lastLatency: null });
+        if (urlInput) urlInput.value = '';
+    } else {
+        const host = hostInput ? hostInput.value.trim() : '';
+        const port = portInput ? parseInt(portInput.value, 10) : null;
+        if (!host || !port || port < 1 || port > 65535) {
+            showToast(t('serviceHostPortRequired') || 'Укажите хост и порт (1–65535)', 'error');
+            return;
+        }
+        monitoredServices.push({ name: name || `${host}:${port}`, type: type || 'tcp', host, port, lastStatus: null, lastLatency: null });
+        if (hostInput) hostInput.value = '';
+        if (portInput) portInput.value = '';
+    }
+    if (nameInput) nameInput.value = '';
+    saveMonitoredServices();
+    renderMonitoredServices();
+}
+
+function removeMonitoredService(index) {
+    monitoredServices.splice(index, 1);
+    saveMonitoredServices();
+    renderMonitoredServices();
+}
+
 // ==================== NEW SETTINGS FUNCTIONS ====================
 
 // Load settings from localStorage
@@ -1131,6 +1395,15 @@ function loadSettings() {
     const savedMap = localStorage.getItem('connectionIdMap');
     if (savedMap) {
         try { connectionIdMap = JSON.parse(savedMap) || {}; } catch { connectionIdMap = {}; }
+    }
+    const savedServices = localStorage.getItem('monitoredServices');
+    if (savedServices) {
+        try {
+            const parsed = JSON.parse(savedServices);
+            monitoredServices = Array.isArray(parsed) ? parsed : [];
+        } catch {
+            monitoredServices = [];
+        }
     }
     
     // Current server index

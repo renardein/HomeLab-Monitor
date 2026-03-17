@@ -13,9 +13,11 @@ function checkTrueNASAuth(req, res, next) {
         return next();
     }
 
-    const authHeader = req.headers['authorization'] || req.headers['x-api-key'];
-    const cookieKey = req.cookies?.truenas_key;
-    const apiKey = authHeader || cookieKey;
+    let apiKey = req.headers['authorization'] || req.headers['x-api-key'] || req.cookies?.truenas_key;
+    if (apiKey && typeof apiKey === 'string') {
+        if (apiKey.toLowerCase().startsWith('bearer ')) apiKey = apiKey.slice(7).trim();
+        else apiKey = apiKey.trim();
+    }
 
     const serverUrlHeader = req.headers['x-server-url'];
     const cookieServer = req.cookies?.truenas_server;

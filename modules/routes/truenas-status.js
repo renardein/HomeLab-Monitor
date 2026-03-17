@@ -1,23 +1,32 @@
 const express = require('express');
+const crypto = require('crypto');
 const router = express.Router();
 const truenas = require('../truenas-api');
 const cache = require('../cache');
 const { log } = require('../utils');
 const checkTrueNASAuth = require('../middleware/truenas-auth');
 
+function cacheKey(prefix, req) {
+    const salt = `${req.serverUrl || 'default'}\n${req.apiKey || ''}`;
+    const h = crypto.createHash('sha256').update(salt).digest('hex').slice(0, 16);
+    return `truenas_${prefix}_${h}`;
+}
+
 router.get('/system', checkTrueNASAuth, async (req, res) => {
-    const cacheKey = `truenas_system_${req.apiKey}`;
-    const cached = cache.get(cacheKey);
+    const key = cacheKey('system', req);
+    const cached = cache.get(key);
     if (cached) return res.json(cached);
 
     try {
         const info = await truenas.getSystemInfo(req.apiKey, req.serverUrl || null);
-        cache.set(cacheKey, info);
+        cache.set(key, info);
         res.json(info);
     } catch (error) {
         log('error', `Error fetching TrueNAS system info: ${error.message}`);
-        if (error?.response?.status) {
-            res.status(error.response.status).json({ error: `Ошибка API: ${error.response.status}` });
+        const status = error?.response?.status;
+        const msg = error?.response?.data?.message || error?.response?.data?.error || error.message;
+        if (status) {
+            res.status(status).json({ error: msg || `Ошибка API: ${status}` });
         } else {
             res.status(500).json({ error: 'Ошибка получения данных TrueNAS' });
         }
@@ -25,8 +34,8 @@ router.get('/system', checkTrueNASAuth, async (req, res) => {
 });
 
 router.get('/storage/pools', checkTrueNASAuth, async (req, res) => {
-    const cacheKey = `truenas_pools_${req.apiKey}`;
-    const cached = cache.get(cacheKey);
+    const cacheKeyPools = cacheKey('pools', req);
+    const cached = cache.get(cacheKeyPools);
     if (cached) return res.json(cached);
 
     try {
@@ -71,12 +80,14 @@ router.get('/storage/pools', checkTrueNASAuth, async (req, res) => {
             }
         };
 
-        cache.set(cacheKey, result);
+        cache.set(cacheKeyPools, result);
         res.json(result);
     } catch (error) {
         log('error', `Error fetching TrueNAS pools: ${error.message}`);
-        if (error?.response?.status) {
-            res.status(error.response.status).json({ error: `Ошибка API: ${error.response.status}` });
+        const status = error?.response?.status;
+        const msg = error?.response?.data?.message || error?.response?.data?.error || error.message;
+        if (status) {
+            res.status(status).json({ error: msg || `Ошибка API: ${status}` });
         } else {
             res.status(500).json({ error: 'Ошибка получения пулов TrueNAS' });
         }

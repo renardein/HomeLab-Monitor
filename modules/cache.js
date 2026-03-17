@@ -12,7 +12,11 @@ module.exports = {
     set: (key, value, ttl) => {
         // Если TTL не указан явно, пытаемся определить его по ключу
         if (ttl === undefined) {
-            if (key.includes('status') || key.includes('cluster') || key.includes('nodes')) {
+            if (key.includes('truenas_system')) {
+                ttl = config.cacheTTLs.status;
+            } else if (key.includes('truenas_pools')) {
+                ttl = config.cacheTTLs.config;
+            } else if (key.includes('status') || key.includes('cluster') || key.includes('nodes')) {
                 ttl = config.cacheTTLs.status;
             } else if (key.includes('storage') || key.includes('config')) {
                 ttl = config.cacheTTLs.config;

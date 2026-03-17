@@ -89,17 +89,27 @@ async function request(endpoint, apiKey, method = 'GET', data = null, serverUrl 
 }
 
 async function getSystemInfo(apiKey, serverUrl = null) {
-    // CORE + SCALE both expose /system/info; keep fallback for older variants.
+    let raw;
     try {
-        return await request('/system/info', apiKey, 'GET', null, serverUrl);
+        raw = await request('/system/info', apiKey, 'GET', null, serverUrl);
     } catch (e) {
         if (e?.response?.status === 404) {
-            return {
-                version: await request('/system/version', apiKey, 'GET', null, serverUrl)
-            };
+            const ver = await request('/system/version', apiKey, 'GET', null, serverUrl);
+            raw = typeof ver === 'string' ? { version: ver } : (ver || {});
+        } else {
+            throw e;
         }
-        throw e;
     }
+    const hostname = raw?.hostname ?? raw?.system_hostname ?? raw?.host ?? null;
+    const version = raw?.version ?? raw?.product_version ?? raw?.release ?? raw?.full_version ?? null;
+    let uptime = raw?.uptime ?? raw?.uptime_seconds ?? null;
+    if (typeof uptime === 'string' && /^\d+$/.test(uptime)) uptime = parseInt(uptime, 10);
+    return {
+        ...raw,
+        hostname,
+        version,
+        uptime: typeof uptime === 'number' ? uptime : uptime
+    };
 }
 
 function parseIntLike(x) {
@@ -121,26 +131,48 @@ function extractBytes(value) {
     return parseIntLike(value);
 }
 
-async function getPools(apiKey, serverUrl = null) {
-    const pools = await request('/pool', apiKey, 'GET', null, serverUrl);
-    if (!Array.isArray(pools)) return [];
+function parsePoolList(data) {
+    if (Array.isArray(data)) return data;
+    if (data && typeof data === 'object' && Array.isArray(data.pools)) return data.pools;
+    if (data && typeof data === 'object' && Array.isArray(data.pool)) return data.pool;
+    return [];
+}
 
-    const results = await Promise.all(pools.map(async (p) => {
+async function getPools(apiKey, serverUrl = null) {
+    let poolList = [];
+    try {
+        const data = await request('/pool', apiKey, 'GET', null, serverUrl);
+        poolList = parsePoolList(data);
+    } catch (e) {
+        if (e?.response?.status === 404) {
+            try {
+                const dsList = await request('/pool/dataset', apiKey, 'GET', null, serverUrl);
+                const arr = Array.isArray(dsList) ? dsList : (dsList && typeof dsList === 'object' ? (dsList.pool_dataset || dsList.pool || Object.values(dsList).find(Array.isArray) || []) : []);
+                const rootOnly = arr.filter(d => d && typeof d === 'object' && (d.name || d.id) && !String(d.name || d.id || '').includes('/'));
+                poolList = (rootOnly.length ? rootOnly : arr).map(d => ({ name: d.name || d.id, id: d.id || d.name, healthy: d.healthy, status: d.status }));
+            } catch {
+                return [];
+            }
+        } else {
+            throw e;
+        }
+    }
+
+    const results = await Promise.all(poolList.map(async (p) => {
         const name = p?.name || p?.id;
         if (!name) return null;
 
-        // Prefer dataset info for accurate used/available.
         let used = null;
         let available = null;
         let total = null;
 
         try {
-            const ds = await request(`/pool/dataset/id/${encodeURIComponent(name)}`, apiKey, 'GET', null, serverUrl);
+            const idEnc = encodeURIComponent(String(name));
+            const ds = await request(`/pool/dataset/id/${idEnc}`, apiKey, 'GET', null, serverUrl);
             used = extractBytes(ds?.used);
             available = extractBytes(ds?.available);
             if (used !== null && available !== null) total = used + available;
         } catch (e) {
-            // fallback: try pool object fields
             const size = extractBytes(p?.size);
             const alloc = extractBytes(p?.allocated);
             if (size !== null) total = size;
@@ -149,7 +181,7 @@ async function getPools(apiKey, serverUrl = null) {
         }
 
         return {
-            name,
+            name: String(name),
             id: String(name),
             healthy: p?.healthy ?? null,
             status: p?.status ?? null,

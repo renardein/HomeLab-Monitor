@@ -6,7 +6,8 @@ const config = require('../config');
 
 router.post('/test', async (req, res) => {
     const { apiKey, token, remember, serverUrl } = req.body || {};
-    const key = apiKey || token; // allow reuse of existing UI field name
+    let key = (apiKey || token || '').toString().trim();
+    if (key.toLowerCase().startsWith('bearer ')) key = key.slice(7).trim();
 
     if (!key) {
         log('warn', 'TrueNAS key test failed: no key provided');

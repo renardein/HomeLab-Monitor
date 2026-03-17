@@ -38,6 +38,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Подключаем маршруты
 app.use('/api/status', require('./modules/routes/status'));
 app.use('/api/auth', require('./modules/routes/auth'));
+app.use('/api/health', require('./modules/routes/health'));
 app.use('/api/cluster', require('./modules/routes/cluster'));
 app.use('/api/nodes', require('./modules/routes/nodes'));
 app.use('/api/storage', require('./modules/routes/storage'));
