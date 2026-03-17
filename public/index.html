@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title id="pageTitle">Proxmox Cluster Monitor</title>
+
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <!-- DataTables CSS -->
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
+    <link rel="stylesheet" href="./css/styles.css">
+</head>
+
+<body>
+    <div class="toast-container" id="toastContainer"></div>
+
+    <div class="container">
+        <!-- Навигация -->
+        <nav class="navbar navbar-expand-lg bg-white rounded-3 shadow-sm mb-4 p-3">
+            <div class="container-fluid">
+                <a class="navbar-brand fw-bold" href="#">
+                    <i class="bi bi-diagram-3 text-primary me-2"></i>
+                    <span id="appName">Proxmox Cluster Monitor</span>
+                </a>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="collapse navbar-collapse justify-content-end" id="navbarNav">
+                    <ul class="navbar-nav align-items-center">
+                        <li class="nav-item me-3">
+                            <button class="btn btn-outline-primary btn-sm" onclick="toggleSettings()" id="settingsBtn">
+                                <i class="bi bi-sliders"></i> <span id="settingsText">Settings</span>
+                            </button>
+                        </li>
+                        <li class="nav-item me-2">
+                            <button class="btn btn-outline-success btn-sm" onclick="toggleDemoMode()" id="demoModeBtn" title="Демо режим">
+                                <i class="bi bi-mask"></i> <span id="demoModeText">Демо</span>
+                            </button>
+                        </li>
+                        <li class="nav-item me-2">
+                            <button class="btn btn-outline-info btn-sm" onclick="toggleMonitorMode()" id="monitorModeBtn" title="Режим монитора">
+                                <i class="bi bi-display"></i> <span id="monitorModeText">Монитор</span>
+                            </button>
+                        </li>
+                        <li class="nav-item">
+                            <span class="badge bg-success" id="serverStatus">
+                                <i class="bi bi-check-circle"></i> <span id="serverStatusText">Server OK</span>
+                            </span>
+                        </li>
+                        <li class="nav-item">
+                            <span class="badge bg-light text-dark me-2" id="connectionStatus">
+                                <i class="bi bi-wifi-off"></i> <span id="notConnectedText">Не подключено</span>
+                            </span>
+                        </li>
+                        <li class="nav-item me-3">
+                            <span class="badge bg-info" id="currentServerBadge" style="display: none;">
+                                <i class="bi bi-server me-1"></i> <span id="currentServerName"></span>
+                            </span>
+                        </li>
+                        <li class="nav-item">
+                            <button class="btn btn-primary" onclick="refreshData()" id="refreshBtn">
+                                <i class="bi bi-arrow-repeat me-2"></i><span id="refreshText">Обновить</span>
+                            </button>
+                        </li>
+
+
+
+
+
+                    </ul>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Панель настроек (расширенная) -->
+        <div id="configSection" class="card" style="display: none;">
+            <div class="card-body p-4">
+                <!-- Секция подключения -->
+                <div class="settings-section">
+                    <h5 class="mb-3"><i class="bi bi-key me-2"></i><span id="connectTitle">Подключение к Proxmox</span>
+                    </h5>
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i>
+                        <span id="connectDesc">Введите API токен для подключения к кластеру Proxmox</span>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold" id="tokenLabel">API токен</label>
+                        <input type="password" class="form-control form-control-lg" id="apiToken"
+                            placeholder="root@pam!monitoring=UUID">
+                        <div class="form-text" id="tokenHint">
+                            Формат: пользователь@область!идентификатор_токена=секрет
+                        </div>
+                    </div>
+
+                    <!-- Список серверов Proxmox -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold" id="proxmoxServersLabel">Серверы Proxmox</label>
+                        <div id="serverList"></div>
+                        <button class="btn btn-outline-primary btn-sm mt-2" onclick="addServer()">
+                            <i class="bi bi-plus-lg me-1"></i><span id="addServer">Добавить сервер</span>
+                        </button>
+                        <div class="form-text" id="proxmoxServersHint">
+                            Список URL серверов (каждый с новой строки). При недоступности основного сервера будет
+                            использован резервный.
+                        </div>
+                    </div>
+
+                    <!-- Чекбокс "Запомнить меня" -->
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" id="rememberToken" checked>
+                        <label class="form-check-label" for="rememberToken" id="rememberLabel">
+                            Запомнить меня (сохранить токен в cookies)
+                        </label>
+                    </div>
+
+                    <!-- Кнопка выхода -->
+                    <div class="mb-3 text-end" id="logoutContainer" style="display: none;">
+                        <button class="btn btn-outline-danger btn-sm" onclick="logout()">
+                            <i class="bi bi-box-arrow-right me-1"></i> <span id="logoutText">Выйти</span>
+                        </button>
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        <!-- Кнопка проверки соединения -->
+                        <button class="btn btn-outline-primary" onclick="testConnection()" id="testConnectionBtn">
+                            <i class="bi bi-wifi me-2"></i><span>Проверить соединение</span>
+                        </button>
+
+                        <button class="btn btn-primary btn-lg" onclick="connect()" id="connectBtn">
+                            <i class="bi bi-plug me-2"></i><span id="connectButton">Подключиться к кластеру</span>
+                        </button>
+                    </div>
+
+                    <!-- Статус подключения -->
+                    <div class="mt-3 text-center" id="connectionStatusDisplay" style="display: none;">
+                        <span class="badge" id="connectionStatusBadge">
+                            <i class="bi bi-circle-fill me-1"></i><span id="connectionStatusText">Не подключено</span>
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Секция отображения -->
+                <div class="settings-section">
+                    <h5 class="mb-3"><i class="bi bi-eye me-2"></i><span id="displaySettings">Отображение</span></h5>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold" id="refreshIntervalLabel">Интервал обновления</label>
+                                <select class="form-select" id="refreshIntervalSelect"
+                                    onchange="updateRefreshInterval()">
+                                    <option value="5000">5 секунд</option>
+                                    <option value="10000">10 секунд</option>
+                                    <option value="30000" selected>30 секунд</option>
+                                    <option value="60000">1 минута</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold" id="themeLabel">Тема оформления</label>
+                                <div class="btn-group w-100" role="group">
+                                    <button class="btn btn-outline-primary" onclick="setTheme('light')" id="themeLight">
+                                        <i class="bi bi-sun me-1"></i> Светлая
+                                    </button>
+                                    <button class="btn btn-outline-dark" onclick="setTheme('dark')" id="themeDark">
+                                        <i class="bi bi-moon me-1"></i> Тёмная
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold" id="unitsLabel">Единицы измерения</label>
+                        <div class="btn-group w-100" role="group">
+                            <button class="btn btn-outline-primary active" onclick="setUnits('decimal')"
+                                id="unitsDecimal">
+                                ГБ / ТБ (десятичные)
+                            </button>
+                            <button class="btn btn-outline-primary" onclick="setUnits('binary')" id="unitsBinary">
+                                ГиБ / ТиБ (двоичные)
+                            </button>
+                        </div>
+                    </div>
+                    
+                </div>
+
+                <!-- Секция порогов -->
+                <div class="settings-section">
+                    <h5 class="mb-3"><i class="bi bi-speedometer2 me-2"></i><span id="thresholdSettings">Пороги
+                            индикации</span></h5>
+
+                    <div class="mb-4">
+                        <div class="threshold-label">
+                            <span><span class="color-indicator color-green"></span><span id="cpuGreenLabel">CPU: Зелёный
+                                    до</span></span>
+                            <span id="cpuGreenValue">70%</span>
+                        </div>
+                        <input type="range" class="form-range threshold-slider" id="cpuGreenThreshold" min="0" max="100"
+                            value="70" oninput="updateThreshold('cpuGreen', this.value)">
+                    </div>
+
+                    <div class="mb-4">
+                        <div class="threshold-label">
+                            <span><span class="color-indicator color-yellow"></span><span id="cpuYellowLabel">CPU:
+                                    Жёлтый до</span></span>
+                            <span id="cpuYellowValue">90%</span>
+                        </div>
+                        <input type="range" class="form-range threshold-slider" id="cpuYellowThreshold" min="0"
+                            max="100" value="90" oninput="updateThreshold('cpuYellow', this.value)">
+                    </div>
+
+                    <div class="mb-4">
+                        <div class="threshold-label">
+                            <span><span class="color-indicator color-green"></span><span id="ramGreenLabel">RAM: Зелёный
+                                    до</span></span>
+                            <span id="ramGreenValue">70%</span>
+                        </div>
+                        <input type="range" class="form-range threshold-slider" id="ramGreenThreshold" min="0" max="100"
+                            value="70" oninput="updateThreshold('ramGreen', this.value)">
+                    </div>
+
+                    <div class="mb-4">
+                        <div class="threshold-label">
+                            <span><span class="color-indicator color-yellow"></span><span id="ramYellowLabel">RAM:
+                                    Жёлтый до</span></span>
+                            <span id="ramYellowValue">90%</span>
+                        </div>
+                        <input type="range" class="form-range threshold-slider" id="ramYellowThreshold" min="0"
+                            max="100" value="90" oninput="updateThreshold('ramYellow', this.value)">
+                    </div>
+
+                    <div class="text-end">
+                        <button class="btn btn-outline-secondary btn-sm" onclick="resetThresholds()">
+                            <i class="bi bi-arrow-counterclockwise me-1"></i> <span id="resetThresholds">Сбросить
+                                пороги</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Дашборд -->
+        <div id="dashboardSection" style="display: none;">
+            <!-- Заголовок -->
+
+
+            <!-- Статистика кластера -->
+            <div class="row g-4 mb-4">
+                <div class="col-md-4">
+                    <div class="stat-card">
+                        <div class="stat-value" id="totalNodes">0</div>
+                        <div class="stat-label" id="totalNodesLabel">Всего узлов</div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="stat-card">
+                        <div class="stat-value text-success" id="onlineNodes">0</div>
+                        <div class="stat-label" id="onlineNodesLabel">Узлов онлайн</div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="stat-card">
+                        <div class="stat-value" id="quorumStatus">-</div>
+                        <div class="stat-label" id="quorumLabel">Кворум</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Сводка ресурсов кластера -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="bi bi-pie-chart me-2"></i><span id="clusterResources">Ресурсы
+                                    кластера</span></h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="text-center p-3">
+                                        <h6><i class="bi bi-cpu me-2"></i><span id="cpuLabel">CPU</span></h6>
+                                        <div class="display-6" id="clusterCpu">0</div>
+                                        <small class="text-muted" id="clusterCpuDetail">0/0 ядер</small>
+                                        <div class="progress mt-2" style="height: 10px;">
+                                            <div class="progress-bar bg-primary" id="clusterCpuBar" style="width: 0%">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="text-center p-3">
+                                        <h6><i class="bi bi-memory me-2"></i><span id="memoryLabel">Память</span></h6>
+                                        <div class="display-6" id="clusterMemory">0</div>
+                                        <small class="text-muted" id="clusterMemoryDetail">0/0</small>
+                                        <div class="progress mt-2" style="height: 10px;">
+                                            <div class="progress-bar bg-success" id="clusterMemoryBar"
+                                                style="width: 0%"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="text-center p-3">
+                                        <h6><i class="bi bi-boxes me-2"></i><span
+                                                id="virtualizationLabel">Виртуализация</span></h6>
+                                        <div class="display-6" id="clusterVms">0</div>
+                                        <small class="text-muted" id="clusterContainers">0 контейнеров</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Вкладки -->
+            <ul class="nav nav-tabs mb-4" id="myTab" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="nodes-tab" data-bs-toggle="tab" data-bs-target="#nodes"
+                        type="button" role="tab">
+                        <span id="tabNodes">Узлы</span>
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="storage-tab" data-bs-toggle="tab" data-bs-target="#storage"
+                        type="button" role="tab">
+                        <i class="bi bi-hdd-stack me-1"></i><span id="tabStorage">Хранилища</span>
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="backups-tab" data-bs-toggle="tab" data-bs-target="#backups"
+                        type="button" role="tab">
+                        <i class="bi bi-archive me-1"></i><span id="tabBackups">Задания бэкапа</span>
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="quorum-tab" data-bs-toggle="tab" data-bs-target="#quorum" type="button"
+                        role="tab">
+                        <i class="bi bi-people me-1"></i><span id="tabQuorum">Кворум</span>
+                    </button>
+                </li>
+            </ul>
+
+            <!-- Индикатор загрузки -->
+            <div id="loadingIndicator" class="text-center py-5" style="display: none;">
+                <div class="spinner-border text-primary mb-3" role="status"></div>
+                <p class="text-muted" id="loadingText">Загрузка данных из кластера...</p>
+            </div>
+
+            <!-- Содержимое вкладок -->
+            <div class="tab-content" id="myTabContent">
+                <div class="tab-pane fade show active" id="nodes" role="tabpanel">
+                    <div class="row" id="nodesContainer"></div>
+                </div>
+
+                <div class="tab-pane fade" id="storage" role="tabpanel">
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="row mb-4" id="storageStats"></div>
+                            <div class="row mb-4" id="storageTypes"></div>
+                            <div class="table-responsive">
+                                <table class="table table-hover" id="storageTable">
+                                    <thead>
+                                        <tr>
+                                            <th id="storageNodeHeader">Узел</th>
+                                            <th id="storageNameHeader">Хранилище</th>
+                                            <th id="storageTypeHeader">Тип</th>
+                                            <th id="storageStatusHeader">Статус</th>
+                                            <th id="storageUsedHeader">Использовано</th>
+                                            <th id="storageTotalHeader">Всего</th>
+                                            <th id="storageUsageHeader">Загрузка</th>
+                                            <th id="storageDetailsHeader">Детали</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="storageBody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="backups" role="tabpanel">
+                    <div class="row mb-4" id="backupStats"></div>
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-hover" id="backupsTable">
+                                    <thead>
+                                        <tr>
+                                            <th id="backupIdHeader">ID</th>
+                                            <th id="backupScheduleHeader">Расписание</th>
+                                            <th id="backupStatusHeader">Статус</th>
+                                            <th id="backupStorageHeader">Хранилище</th>
+                                            <th id="backupVmidHeader">VM/CT</th>
+                                            <th id="backupModeHeader">Режим</th>
+                                            <th id="backupLastRunHeader">Последний запуск</th>
+                                            <th id="backupResultHeader">Результат</th>
+                                            <th id="backupNextRunHeader">Следующий</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="backupsBody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="quorum" role="tabpanel">
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="row text-center mb-4" id="quorumStats"></div>
+                            <div class="row" id="quorumNodesList"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="text-end mt-4">
+                <small class="text-muted" id="lastUpdate"></small>
+            </div>
+        </div>
+        <footer class="d-flex flex-wrap justify-content-between align-items-center py-3 my-4 border-top">
+            <div class="col-md-4 d-flex align-items-center"> <a href="/"
+                    class="mb-3 me-2 mb-md-0 text-body-secondary text-decoration-none lh-1" aria-label="Bootstrap"> <svg
+                        class="bi" width="30" height="24" aria-hidden="true">
+                        <use xlink:href="#bootstrap"></use>
+                    </svg> </a> <span class="mb-3 mb-md-0 text-body-secondary">© 2026 renardein</span> </div>
+            <ul class="nav col-md-4 justify-content-end list-unstyled d-flex">
+                <li class="ms-3"><a class="text-body-secondary" href="#" aria-label="Instagram"><svg class="bi"
+                            width="24" height="24" aria-hidden="true">
+                            <use xlink:href="#instagram"></use>
+                        </svg></a></li>
+                <li class="ms-3 language-switcher-container">
+                    <!-- Language buttons will be rendered dynamically -->
+                </li>
+                <li class="ms-3">
+                    <button class="btn btn-outline-dark btn-sm" id="themeToggle" onclick="toggleTheme()">
+                        <i class="bi bi-moon-stars-fill"></i>
+                    </button>
+                </li>
+            </ul>
+        </footer>
+        
+        <!-- Кнопка выхода из режима монитора (плавающая) -->
+        <button id="monitorExitBtnFixed" onclick="toggleMonitorMode()" title="Выход из режима монитора">
+            <i class="bi bi-x-lg"></i> Выход
+        </button>
+    </div>
+
+    <!-- Скрипты -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+    <script src="/js/app.js"></script>
+</body>
+
+</html>

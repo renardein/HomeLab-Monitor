@@ -1,0 +1,640 @@
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+            transition: background-color 0.3s, color 0.3s;
+        }
+        body.dark-mode {
+            background: #1a1a2e;
+            color: #eee;
+        }
+        body.dark-mode .card {
+            background: #16213e;
+            color: #eee;
+        }
+        body.dark-mode .card-header {
+            background: linear-gradient(135deg, #0f3460 0%, #533483 100%);
+        }
+        body.dark-mode .stat-card {
+            background: #16213e;
+        }
+        body.dark-mode .stat-value {
+            color: #eee;
+        }
+        body.dark-mode .stat-label {
+            color: #aaa;
+        }
+        body.dark-mode .node-card {
+            background: #16213e;
+        }
+        body.dark-mode .table {
+            color: #eee;
+        }
+        body.dark-mode .table th {
+            background-color: #0f3460;
+            color: #eee;
+        }
+        body.dark-mode .table td {
+            border-color: #0f3460;
+        }
+        body.dark-mode .table tbody tr:hover {
+            background-color: rgba(255, 255, 255, 0.05);
+        }
+        body.dark-mode .navbar {
+            background: #0f3460 !important;
+            color: #eee;
+        }
+        body.dark-mode .form-control {
+            background: #0f3460;
+            border-color: #533483;
+            color: #eee;
+        }
+        body.dark-mode .form-control:focus {
+            background: #1a1a2e;
+            color: #eee;
+        }
+        body.dark-mode .nav-tabs .nav-link {
+            color: #aaa;
+        }
+        body.dark-mode .nav-tabs .nav-link.active {
+            background: #16213e;
+            color: #eee;
+            border-color: #533483 #533483 transparent;
+        }
+        body.dark-mode .nav-tabs {
+            border-color: #533483;
+        }
+        body.dark-mode .btn-group .btn {
+            border-color: #533483;
+        }
+        body.dark-mode .progress {
+            background: #0f3460;
+        }
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+        .card {
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+            border: none;
+            margin-bottom: 20px;
+        }
+        body.dark-mode .card-body {
+            color: #eee;
+        }
+        body.dark-mode .navbar-brand {
+            color: #eee !important;
+        }
+        .card-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 15px 15px 0 0 !important;
+            padding: 15px 20px;
+        }
+        .stat-card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.05);
+        }
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #333;
+        }
+        .stat-label {
+            color: #666;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+        }
+        .node-card {
+            background: white;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.05);
+            transition: all 0.3s ease;
+        }
+        .node-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        .progress {
+            height: 8px;
+            margin-top: 5px;
+        }
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+        }
+        .toast {
+            background: white;
+            border-left: 4px solid;
+            margin-bottom: 10px;
+            min-width: 300px;
+        }
+        .spinner-border {
+            width: 3rem;
+            height: 3rem;
+        }
+        body.dark-mode .spinner-border {
+            border-color: #667eea;
+        }
+        body.dark-mode .spinner-border.text-primary {
+            border-color: #667eea !important;
+        }
+        .nav-tabs .nav-link {
+            color: #495057;
+            font-weight: 500;
+        }
+        .nav-tabs .nav-link.active {
+            color: #667eea;
+            font-weight: 600;
+        }
+        .table th {
+            background-color: #f8f9fa;
+        }
+        .badge-success {
+            background-color: #28a745;
+            color: white;
+        }
+        .badge-warning {
+            background-color: #ffc107;
+            color: #333;
+        }
+        .badge-danger {
+            background-color: #dc3545;
+            color: white;
+        }
+        .badge-info {
+            background-color: #17a2b8;
+            color: white;
+        }
+        .badge-secondary {
+            background-color: #6c757d;
+            color: white;
+        }
+        .status-running {
+            color: #28a745;
+            font-weight: bold;
+        }
+        .status-success {
+            color: #28a745;
+        }
+        .status-error {
+            color: #dc3545;
+        }
+        .status-warning {
+            color: #ffc107;
+        }
+        .language-switcher {
+            cursor: pointer;
+            padding: 5px 10px;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+        }
+        .language-switcher:hover {
+            background-color: #e9ecef;
+        }
+        .language-switcher.active {
+            background-color: #667eea;
+            color: white;
+        }
+        .settings-section {
+            border: 1px solid #dee2e6;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            background: #fff;
+        }
+        body.dark-mode .settings-section {
+            background: #0f3460;
+            border-color: #533483;
+        }
+        body.dark-mode .toast {
+            background: #16213e;
+            color: #eee;
+        }
+        body.dark-mode .btn-close {
+            filter: invert(1) grayscale(100%) brightness(200%);
+        }
+        body.dark-mode .form-select {
+            background: #0f3460;
+            border-color: #533483;
+            color: #eee;
+        }
+        body.dark-mode .form-select:focus {
+            background: #1a1a2e;
+            color: #eee;
+        }
+        body.dark-mode .form-check-input {
+            background-color: #0f3460;
+            border-color: #533483;
+        }
+        body.dark-mode .form-check-input:checked {
+            background-color: #667eea;
+            border-color: #667eea;
+        }
+        body.dark-mode .form-check-label {
+            color: #eee;
+        }
+        body.dark-mode .form-label {
+            color: #eee;
+        }
+        body.dark-mode .form-text {
+            color: #aaa;
+        }
+        body.dark-mode .bg-white {
+            background-color: #16213e !important;
+        }
+        body.dark-mode .bg-light {
+            background-color: #0f3460 !important;
+        }
+        body.dark-mode .text-muted {
+            color: #aaa !important;
+        }
+        body.dark-mode .text-dark {
+            color: #eee !important;
+        }
+        body.dark-mode .btn-outline-primary {
+            border-color: #667eea;
+            color: #667eea;
+        }
+        body.dark-mode .btn-outline-primary:hover {
+            background-color: #667eea;
+            color: white;
+        }
+        body.dark-mode .btn-outline-dark {
+            border-color: #aaa;
+            color: #aaa;
+        }
+        body.dark-mode .btn-outline-dark:hover {
+            background-color: #aaa;
+            color: #1a1a2e;
+        }
+        body.dark-mode .btn-outline-secondary {
+            border-color: #aaa;
+            color: #aaa;
+        }
+        body.dark-mode .btn-outline-secondary:hover {
+            background-color: #aaa;
+            color: #1a1a2e;
+        }
+        body.dark-mode .btn-outline-danger {
+            border-color: #dc3545;
+            color: #dc3545;
+        }
+        body.dark-mode .btn-outline-danger:hover {
+            background-color: #dc3545;
+            color: white;
+        }
+        body.dark-mode .btn-primary {
+            background-color: #667eea;
+            border-color: #667eea;
+        }
+        body.dark-mode .btn-primary:hover {
+            background-color: #5a6fd6;
+            border-color: #5a6fd6;
+        }
+        body.dark-mode .btn-outline-info {
+            border-color: #17a2b8;
+            color: #17a2b8;
+        }
+        body.dark-mode .btn-outline-info:hover {
+            background-color: #17a2b8;
+            color: white;
+        }
+        body.dark-mode .btn-outline-success {
+            border-color: #28a745;
+            color: #28a745;
+        }
+        body.dark-mode .btn-outline-success:hover {
+            background-color: #28a745;
+            color: white;
+        }
+        body.dark-mode .btn-success {
+            background-color: #28a745;
+            border-color: #28a745;
+            color: white;
+        }
+        body.dark-mode .btn-info {
+            background-color: #17a2b8;
+            border-color: #17a2b8;
+            color: white;
+        }
+        body.dark-mode .btn-success:hover,
+        body.dark-mode .btn-info:hover {
+            opacity: 0.9;
+        }
+        body.dark-mode .btn {
+            color: #eee;
+        }
+        body.dark-mode .text-center {
+            color: #eee;
+        }
+        body.dark-mode .form-range::-webkit-slider-thumb {
+            background: #667eea;
+        }
+        body.dark-mode .form-range::-moz-range-thumb {
+            background: #667eea;
+        }
+        body.dark-mode .navbar-toggler {
+            border-color: rgba(255,255,255,0.5);
+        }
+        body.dark-mode .navbar-toggler-icon {
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba%28255, 255, 255, 0.75%29' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
+        }
+        
+        /* Mobile menu improvements */
+        @media (max-width: 991px) {
+            .navbar-collapse {
+                background: #fff;
+                border-radius: 8px;
+                margin-top: 10px;
+                padding: 15px;
+                box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            }
+            body.dark-mode .navbar-collapse {
+                background: #16213e;
+            }
+            .navbar-nav {
+                gap: 10px;
+            }
+            .nav-item {
+                width: 100%;
+            }
+            .nav-item button {
+                width: 100%;
+                margin-bottom: 8px;
+                text-align: left;
+            }
+            .nav-item .badge {
+                display: inline-block;
+                margin-bottom: 8px;
+            }
+        }
+        
+        body.dark-mode .input-group-text {
+            background: #0f3460;
+            border-color: #533483;
+            color: #eee;
+        }
+        body.dark-mode .input-group > .form-control {
+            background: #0f3460;
+            border-color: #533483;
+            color: #eee;
+        }
+        body.dark-mode .alert-info {
+            background: #0f3460;
+            border-color: #533483;
+            color: #eee;
+        }
+        body.dark-mode .alert-warning {
+            background: #3d340f;
+            border-color: #837a34;
+            color: #eee;
+        }
+        body.dark-mode .alert-danger {
+            background: #3d0f0f;
+            border-color: #833434;
+            color: #eee;
+        }
+        body.dark-mode .alert-success {
+            background: #0f3d1f;
+            border-color: #34835a;
+            color: #eee;
+        }
+        body.dark-mode .bg-success {
+            background-color: #28a745 !important;
+            color: white;
+        }
+        body.dark-mode .bg-warning {
+            background-color: #ffc107 !important;
+            color: #333;
+        }
+        body.dark-mode .bg-danger {
+            background-color: #dc3545 !important;
+            color: white;
+        }
+        body.dark-mode .bg-primary {
+            background-color: #667eea !important;
+            color: white;
+        }
+        body.dark-mode .bg-secondary {
+            background-color: #6c757d !important;
+            color: white;
+        }
+        body.dark-mode .bg-info {
+            background-color: #17a2b8 !important;
+            color: white;
+        }
+        body.dark-mode .text-primary {
+            color: #667eea !important;
+        }
+        body.dark-mode .text-success {
+            color: #28a745 !important;
+        }
+        body.dark-mode .text-warning {
+            color: #ffc107 !important;
+        }
+        body.dark-mode .text-danger {
+            color: #dc3545 !important;
+        }
+        body.dark-mode .progress-bar.bg-primary {
+            background-color: #667eea !important;
+        }
+        body.dark-mode .progress-bar.bg-success {
+            background-color: #28a745 !important;
+        }
+        body.dark-mode .progress-bar.bg-warning {
+            background-color: #ffc107 !important;
+        }
+        body.dark-mode .progress-bar.bg-danger {
+            background-color: #dc3545 !important;
+        }
+        body.dark-mode .badge {
+            color: white;
+        }
+        body.dark-mode .badge.bg-light {
+            background-color: #0f3460 !important;
+            color: #eee;
+        }
+        body.dark-mode .badge.bg-success {
+            background-color: #28a745 !important;
+            color: white;
+        }
+        body.dark-mode .badge.bg-warning {
+            background-color: #ffc107 !important;
+            color: #333;
+        }
+        body.dark-mode .badge.bg-danger {
+            background-color: #dc3545 !important;
+            color: white;
+        }
+        body.dark-mode .badge.bg-info {
+            background-color: #17a2b8 !important;
+            color: white;
+        }
+        body.dark-mode .table-responsive {
+            border-color: #0f3460;
+        }
+        .threshold-slider {
+            width: 100%;
+        }
+        .threshold-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+        }
+        .color-indicator {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 10px;
+        }
+        .color-green { background: #28a745; }
+        .color-yellow { background: #ffc107; }
+        .color-red { background: #dc3545; }
+        
+        /* Monitor mode styles */
+        body.monitor-mode {
+            background: #000;
+            padding: 5px;
+            overflow-x: hidden;
+        }
+        
+        body.monitor-mode .navbar,
+        body.monitor-mode #configSection,
+        body.monitor-mode .settings-section,
+        body.monitor-mode #toastContainer {
+            display: none !important;
+        }
+        
+        body.monitor-mode #dashboardSection {
+            max-width: 100%;
+            padding: 10px;
+        }
+        
+        body.monitor-mode .stat-card {
+            background: #1a1a2e;
+            color: #fff;
+            border: 2px solid #667eea;
+            padding: 20px;
+        }
+        
+        body.monitor-mode .stat-value {
+            color: #fff;
+            font-size: 3.5rem;
+            font-weight: bold;
+        }
+        
+        body.monitor-mode .stat-label {
+            color: #aaa;
+            font-size: 1.2rem;
+            text-transform: uppercase;
+        }
+        
+        body.monitor-mode .card {
+            background: #16213e;
+            color: #fff;
+            border: 1px solid #0f3460;
+            margin-bottom: 20px;
+        }
+        
+        body.monitor-mode .card-header {
+            background: linear-gradient(135deg, #0f3460 0%, #533483 100%);
+            color: #fff;
+            font-size: 1.5rem;
+            padding: 15px 20px;
+        }
+        
+        body.monitor-mode .node-card {
+            background: #16213e;
+            color: #fff;
+            border: 1px solid #0f3460;
+            padding: 15px;
+        }
+        
+        body.monitor-mode .table {
+            color: #fff;
+            font-size: 1.1rem;
+        }
+        
+        body.monitor-mode .table th {
+            background-color: #0f3460;
+            color: #fff;
+            font-size: 1.2rem;
+            padding: 12px;
+        }
+        
+        body.monitor-mode .table td {
+            padding: 10px;
+        }
+        
+        body.monitor-mode .progress {
+            background: #0f3460;
+            height: 25px;
+        }
+        
+        body.monitor-mode .progress-bar {
+            font-size: 1rem;
+        }
+        
+        body.monitor-mode .text-muted {
+            color: #aaa !important;
+        }
+        
+        body.monitor-mode #loadingIndicator {
+            color: #667eea;
+            font-size: 1.5rem;
+        }
+        
+        body.monitor-mode .display-6 {
+            font-size: 2.5rem;
+        }
+        
+        body.monitor-mode h5, body.monitor-mode h6 {
+            font-size: 1.3rem;
+        }
+        
+        body.monitor-mode .badge {
+            font-size: 1rem;
+            padding: 8px 12px;
+        }
+        
+        /* Hide footer in monitor mode for cleaner display */
+        body.monitor-mode footer {
+            display: none !important;
+        }
+        
+        /* Add exit button for monitor mode - floating button on screen */
+        body.monitor-mode #monitorExitBtnFixed {
+            display: block !important;
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            background: rgba(220, 53, 69, 0.9);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1.1rem;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            transition: all 0.3s ease;
+        }
+        
+        body.monitor-mode #monitorExitBtnFixed:hover {
+            background: rgba(220, 53, 69, 1);
+            transform: scale(1.05);
+        }
+        
+        #monitorExitBtnFixed {
+            display: none;
+        }
