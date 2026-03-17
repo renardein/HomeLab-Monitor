@@ -225,7 +225,7 @@ function updateUILanguage() {
         clusterState: 'appName',
         notConnectedText: 'notConnected',
         refreshText: 'refresh',
-        loadingText: 'loading',
+        loadingText: 'loadingClusterData',
         totalNodesLabel: 'totalNodes',
         onlineNodesLabel: 'nodesOnline',
         quorumLabel: 'quorum',
@@ -295,7 +295,8 @@ function updateUILanguage() {
         proxmoxServersHint: 'proxmoxServersHint',
         addServer: 'addServer',
         removeServer: 'removeServer',
-        currentServer: 'currentServer'
+        currentServer: 'currentServer',
+        monitorModeText: 'monitorMode'
     };
     
     for (const [id, key] of Object.entries(elements)) {
@@ -312,6 +313,8 @@ function updateUILanguage() {
     if (themeDark) themeDark.innerHTML = '<i class="bi bi-moon me-1"></i> ' + t('themeDark');
     if (unitsDecimal) unitsDecimal.textContent = t('unitsDecimal');
     if (unitsBinary) unitsBinary.textContent = t('unitsBinary');
+    const monitorModeBtn = document.getElementById('monitorModeBtn');
+    if (monitorModeBtn) monitorModeBtn.title = t('monitorModeTitle');
 }
 
 // Available languages (will be populated from server)
@@ -559,12 +562,12 @@ async function toggleMonitorMode() {
         btn.classList.add('active');
         btn.classList.remove('btn-outline-info');
         btn.classList.add('btn-info');
-        btn.innerHTML = '<i class="bi bi-check-lg"></i> <span id="monitorModeText">Монитор ВКЛ</span>';
+        btn.innerHTML = '<i class="bi bi-check-lg"></i> <span id="monitorModeText">' + t('monitorModeOn') + '</span>';
     } else {
         btn.classList.remove('active');
         btn.classList.remove('btn-info');
         btn.classList.add('btn-outline-info');
-        btn.innerHTML = '<i class="bi bi-display"></i> <span id="monitorModeText">Монитор</span>';
+        btn.innerHTML = '<i class="bi bi-display"></i> <span id="monitorModeText">' + t('monitorMode') + '</span>';
     }
 
     // Fullscreen toggle for monitor mode
@@ -1425,7 +1428,7 @@ function loadSettings() {
         monitorBtn.classList.add('active');
         monitorBtn.classList.remove('btn-outline-info');
         monitorBtn.classList.add('btn-info');
-        monitorBtn.innerHTML = '<i class="bi bi-check-lg"></i> <span id="monitorModeText">Монитор ВКЛ</span>';
+        monitorBtn.innerHTML = '<i class="bi bi-check-lg"></i> <span id="monitorModeText">' + t('monitorModeOn') + '</span>';
     }
     
     renderServerList();
