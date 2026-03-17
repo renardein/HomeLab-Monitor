@@ -1,62 +1,103 @@
 const axios = require('axios');
 const https = require('https');
+const { constants: cryptoConstants } = require('crypto');
 const config = require('./config');
 const { log } = require('./utils');
 
 // Создаем HTTPS агент для игнорирования SSL ошибок
 const httpsAgent = new https.Agent({
     rejectUnauthorized: false,
-    secureOptions: require('constants').SSL_OP_NO_TLSv1 | require('constants').SSL_OP_NO_TLSv1_1
+    // Proxmox чаще всего работает с современным TLS, но на старых Node/SSL стэках
+    // явное отключение TLSv1/1.1 помогает избежать negotiation edge-cases.
+    secureOptions: cryptoConstants.SSL_OP_NO_TLSv1 | cryptoConstants.SSL_OP_NO_TLSv1_1
 });
 
 // Базовый URL для API
 const getBaseUrl = () => `https://${config.proxmox.host}:${config.proxmox.port}/api2/json`;
 
+function normalizeToken(rawToken) {
+    if (!rawToken) return null;
+    let t = String(rawToken).trim();
+    // Пользователи часто вставляют токен вместе с префиксом заголовка
+    if (t.toLowerCase().startsWith('pveapitoken=')) {
+        t = t.slice('pveapitoken='.length).trim();
+    }
+    // Некоторые форматы встречаются как user@realm!tokenid:secret
+    if (!t.includes('=') && t.includes(':')) {
+        const idx = t.indexOf(':');
+        t = `${t.slice(0, idx)}=${t.slice(idx + 1)}`;
+    }
+    return t;
+}
+
 // Выполнение запроса к Proxmox API
 async function request(endpoint, token, method = 'GET', data = null) {
     const url = `${getBaseUrl()}${endpoint}`;
+    const normalizedToken = normalizeToken(token);
     
     log('debug', `Proxmox API Request: ${method} ${url}`);
-    log('debug', `Token: ${token ? token.substring(0, 20) + '...' : 'none'}`);
+    log('debug', `Token: ${normalizedToken ? normalizedToken.substring(0, 16) + '...' : 'none'}`);
     
     try {
         const response = await axios({
             method,
             url,
             headers: {
-                'Authorization': `PVEAPIToken=${token}`,
+                ...(normalizedToken ? { 'Authorization': `PVEAPIToken=${normalizedToken}` } : {}),
                 'Content-Type': 'application/json',
                 'Accept': 'application/json'
             },
             httpsAgent,
             timeout: 10000,
+            data,
             validateStatus: function (status) {
-                return status >= 200 && status < 500; // Не кидаем ошибку на 401/403
+                return true; // Разбираем любые статусы сами, чтобы не терять тело ответа
             }
         });
         
         // Проверяем статус ответа
-        if (response.status === 401) {
-            throw new Error('Unauthorized: Invalid token');
-        } else if (response.status === 403) {
-            throw new Error('Forbidden: Insufficient permissions');
-        } else if (response.status >= 400) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        if (response.status >= 400) {
+            const err = new Error(
+                response.status === 401
+                    ? 'Unauthorized: Invalid token'
+                    : response.status === 403
+                        ? 'Forbidden: Insufficient permissions'
+                        : `HTTP ${response.status}: ${response.statusText}`
+            );
+            // Сохраняем response, чтобы роуты могли корректно разобрать причину
+            err.response = response;
+            throw err;
         }
         
         return response.data;
     } catch (error) {
-        log('error', `Proxmox API Error: ${error.message}`);
+        const status = error?.response?.status;
+        const statusText = error?.response?.statusText;
+        const dataPreview = (() => {
+            const d = error?.response?.data;
+            if (!d) return null;
+            if (typeof d === 'string') return d.slice(0, 500);
+            try { return JSON.stringify(d).slice(0, 500); } catch { return '[unserializable]'; }
+        })();
+        log('error', `Proxmox API Error: ${error.message}${status ? ` (HTTP ${status}${statusText ? ` ${statusText}` : ''})` : ''}`);
+        if (dataPreview) log('error', `Proxmox API Error body (preview): ${dataPreview}`);
         
         // Пробрасываем ошибку дальше с понятным сообщением
         if (error.response) {
-            throw new Error(`API error: ${error.response.status}`);
+            // Не затираем исходную ошибку, иначе теряются детали (status/data)
+            throw error;
         } else if (error.code === 'ECONNREFUSED') {
-            throw new Error('Connection refused');
+            const err = new Error('Connection refused');
+            err.code = 'ECONNREFUSED';
+            throw err;
         } else if (error.code === 'ENOTFOUND') {
-            throw new Error('Host not found');
+            const err = new Error('Host not found');
+            err.code = 'ENOTFOUND';
+            throw err;
         } else if (error.code === 'ETIMEDOUT') {
-            throw new Error('Connection timeout');
+            const err = new Error('Connection timeout');
+            err.code = 'ETIMEDOUT';
+            throw err;
         } else {
             throw error;
         }

@@ -136,7 +136,12 @@ router.get('/full', checkAuth, async (req, res) => {
         
     } catch (error) {
         log('error', `Error fetching cluster data: ${error.message}`);
-        res.status(500).json({ error: 'Ошибка получения данных кластера' });
+        if (error?.response?.status) {
+            const st = error.response.status;
+            res.status(st).json({ error: st === 401 ? 'Требуется API токен (или токен неверный)' : `Ошибка API: ${st}` });
+        } else {
+            res.status(500).json({ error: 'Ошибка получения данных кластера' });
+        }
     }
 });
 

@@ -55,14 +55,24 @@ router.post('/test', async (req, res) => {
             errorMessage = 'Хост Proxmox не найден. Проверьте host';
             statusCode = 404;
         } else if (error.response) {
+            // По умолчанию пробрасываем реальный статус API
+            statusCode = error.response.status || statusCode;
+            
             if (error.response.status === 401) {
-                errorMessage = 'Неверный API токен. Проверьте правильность токена';
+                const hint = (error.response.statusText && String(error.response.statusText).toLowerCase().includes('ticket'))
+                    ? ' (Proxmox вернул "No ticket" — обычно это неверный/неполный токен)'
+                    : '';
+                errorMessage = 'Неверный API токен. Проверьте правильность токена' + hint;
             } else if (error.response.status === 403) {
                 errorMessage = 'Недостаточно прав. Токену нужны права: Sys.Audit, VM.Audit';
             } else if (error.response.status === 404) {
                 errorMessage = 'API endpoint не найден. Проверьте версию Proxmox';
+            } else if (error.response.status === 501) {
+                // Для Proxmox API это нетипично — чаще означает, что на host:port не Proxmox (прокси/другой сервис)
+                errorMessage = 'Ошибка API: 501. Похоже, что по указанному host/port отвечает не Proxmox API (или прокси не поддерживает запрос). Проверьте, что открывается https://HOST:PORT/api2/json';
+                statusCode = 502;
             } else {
-                errorMessage = `Ошибка API: ${error.response.status}`;
+                errorMessage = `Ошибка API: ${error.response.status}${error.response.statusText ? ` ${error.response.statusText}` : ''}`;
             }
         } else if (error.message.includes('timeout')) {
             errorMessage = 'Таймаут подключения. Сервер не отвечает';

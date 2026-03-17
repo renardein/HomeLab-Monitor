@@ -18,11 +18,46 @@ let thresholds = {
 let proxmoxServers = ['https://192.168.1.1:8006']; // List of Proxmox servers
 let currentServerIndex = 0; // Current server index
 
+function el(id) {
+    return document.getElementById(id);
+}
+
+function setText(id, value) {
+    const e = el(id);
+    if (e) e.textContent = value;
+}
+
+function setHTML(id, value) {
+    const e = el(id);
+    if (e) e.innerHTML = value;
+}
+
+function setValue(id, value) {
+    const e = el(id);
+    if (e) e.value = value;
+}
+
+function setDisplay(id, display) {
+    const e = el(id);
+    if (e) e.style.display = display;
+}
+
 // Client-side translations (will be loaded from server)
 let translations = {
     ru: {},
     en: {}
 };
+
+function ensureTranslationsShape(obj) {
+    const base = { ru: {}, en: {} };
+    if (!obj || typeof obj !== 'object') return base;
+    return {
+        ...base,
+        ...obj,
+        ru: (obj.ru && typeof obj.ru === 'object') ? obj.ru : base.ru,
+        en: (obj.en && typeof obj.en === 'object') ? obj.en : base.en
+    };
+}
 
 // Load translations from server
 async function loadTranslations() {
@@ -30,15 +65,19 @@ async function loadTranslations() {
         const response = await fetch('/api/translations');
         const data = await response.json();
         if (data.translations) {
-            translations = data.translations;
+            translations = ensureTranslationsShape(data.translations);
+        } else {
+            translations = ensureTranslationsShape(translations);
         }
     } catch (error) {
         console.error('Failed to load translations:', error);
+        translations = ensureTranslationsShape(translations);
     }
 }
 
 function t(key) {
-    return translations[currentLanguage]?.[key] || translations.ru[key] || key;
+    const dict = ensureTranslationsShape(translations);
+    return dict[currentLanguage]?.[key] ?? dict.ru?.[key] ?? key;
 }
 
 // Language switch function
@@ -161,10 +200,14 @@ function updateUILanguage() {
     }
     
     // Update theme and units button texts
-    document.getElementById('themeLight').innerHTML = '<i class="bi bi-sun me-1"></i> ' + t('themeLight');
-    document.getElementById('themeDark').innerHTML = '<i class="bi bi-moon me-1"></i> ' + t('themeDark');
-    document.getElementById('unitsDecimal').textContent = t('unitsDecimal');
-    document.getElementById('unitsBinary').textContent = t('unitsBinary');
+    const themeLight = document.getElementById('themeLight');
+    const themeDark = document.getElementById('themeDark');
+    const unitsDecimal = document.getElementById('unitsDecimal');
+    const unitsBinary = document.getElementById('unitsBinary');
+    if (themeLight) themeLight.innerHTML = '<i class="bi bi-sun me-1"></i> ' + t('themeLight');
+    if (themeDark) themeDark.innerHTML = '<i class="bi bi-moon me-1"></i> ' + t('themeDark');
+    if (unitsDecimal) unitsDecimal.textContent = t('unitsDecimal');
+    if (unitsBinary) unitsBinary.textContent = t('unitsBinary');
 }
 
 // Available languages (will be populated from server)
@@ -212,9 +255,9 @@ async function checkSavedToken() {
         
         if (data.success && data.token) {
             apiToken = data.token;
-            document.getElementById('apiToken').value = '••••••••••••••••';
+            setValue('apiToken', '••••••••••••••••');
             document.getElementById('rememberToken').checked = true;
-            document.getElementById('logoutContainer').style.display = 'block';
+            setDisplay('logoutContainer', 'block');
             
             showToast(t('tokenFound'), 'info');
             testTokenAndConnect(data.token);
@@ -257,8 +300,8 @@ async function logout() {
         if (data.success) {
             showToast(t('logoutSuccess'), 'success');
             apiToken = null;
-            document.getElementById('apiToken').value = '';
-            document.getElementById('logoutContainer').style.display = 'none';
+            setValue('apiToken', '');
+            setDisplay('logoutContainer', 'none');
             showConfig();
         }
     } catch (error) {
@@ -271,11 +314,9 @@ async function checkServerStatus() {
     try {
         const response = await fetch('/api/status');
         const data = await response.json();
-        document.getElementById('serverStatus').innerHTML = 
-            '<i class="bi bi-check-circle"></i> <span id="serverStatusText">' + t('serverWorking') + '</span>';
+        setHTML('serverStatus', '<i class="bi bi-check-circle"></i> <span id="serverStatusText">' + t('serverWorking') + '</span>');
     } catch (error) {
-        document.getElementById('serverStatus').innerHTML = 
-            '<i class="bi bi-exclamation-circle"></i> <span id="serverStatusText">' + t('serverError') + '</span>';
+        setHTML('serverStatus', '<i class="bi bi-exclamation-circle"></i> <span id="serverStatusText">' + t('serverError') + '</span>');
     }
 }
 
@@ -428,8 +469,11 @@ function startAutoRefresh() {
 
 // Connect
 async function connect() {
-    const token = document.getElementById('apiToken').value.trim();
-    const rememberToken = document.getElementById('rememberToken')?.checked || true;
+    const tokenInput = document.getElementById('apiToken');
+    const rawToken = tokenInput ? tokenInput.value.trim() : '';
+    // Если в поле маска (после загрузки из cookies), используем сохранённый apiToken
+    const token = (rawToken && rawToken.includes('•')) ? (apiToken || '') : rawToken;
+    const rememberToken = document.getElementById('rememberToken')?.checked ?? true;
     
     // Allow connecting without token if demo mode is active
     if (!token && !demoMode) {
@@ -464,7 +508,7 @@ async function connect() {
         if (data.success) {
             showToast(t('connectSuccess'), 'success');
             apiToken = token;
-            document.getElementById('logoutContainer').style.display = 'block';
+            setDisplay('logoutContainer', 'block');
             updateConnectionStatus(true);
             showDashboard();
         } else {
@@ -482,7 +526,9 @@ async function connect() {
 
 // Test connection
 async function testConnection() {
-    const token = document.getElementById('apiToken').value.trim();
+    const tokenInput = document.getElementById('apiToken');
+    const rawToken = tokenInput ? tokenInput.value.trim() : '';
+    const token = (rawToken && rawToken.includes('•')) ? (apiToken || '') : rawToken;
     
     // Allow testing in demo mode without token
     if (!token && !demoMode) {
@@ -696,6 +742,10 @@ async function refreshData() {
         const storageData = await storageRes.json();
         const backupsData = await backupsRes.json();
         
+        if (!clusterRes.ok) throw new Error(clusterData?.error || `cluster: HTTP ${clusterRes.status}`);
+        if (!storageRes.ok) throw new Error(storageData?.error || `storage: HTTP ${storageRes.status}`);
+        if (!backupsRes.ok) throw new Error(backupsData?.error || `backups: HTTP ${backupsRes.status}`);
+        
         updateDashboard(clusterData, storageData, backupsData, {});
         showToast(t('dataUpdated'), 'success');
 
@@ -708,8 +758,9 @@ async function refreshData() {
 
 // Show/hide loading
 function showLoading(show) {
-    document.getElementById('loadingIndicator').style.display = show ? 'block' : 'none';
-    document.getElementById('refreshBtn').disabled = show;
+    setDisplay('loadingIndicator', show ? 'block' : 'none');
+    const refreshBtn = el('refreshBtn');
+    if (refreshBtn) refreshBtn.disabled = show;
 }
 
 // Format time
@@ -739,34 +790,38 @@ function formatBytes(bytes) {
 
 // Update dashboard
 function updateDashboard(clusterData, storageData, backupsData) {
+    if (!clusterData || !Array.isArray(clusterData.nodes) || !clusterData.cluster?.summary || !clusterData.quorum) {
+        throw new Error(clusterData?.error || 'Некорректный ответ кластера');
+    }
     const totalNodes = clusterData.nodes.length;
     const onlineNodes = clusterData.nodes.filter(n => n.status === 'online').length;
     
-    document.getElementById('totalNodes').textContent = totalNodes;
-    document.getElementById('onlineNodes').textContent = onlineNodes;
+    setText('totalNodes', String(totalNodes));
+    setText('onlineNodes', String(onlineNodes));
     
     const quorumOk = onlineNodes >= clusterData.quorum.quorum;
-    document.getElementById('quorumStatus').innerHTML = quorumOk ? 
-        t('quorumEnough') : t('quorumNotEnough');
-    document.getElementById('quorumStatus').className = 'stat-value ' + (quorumOk ? 'text-success' : 'text-warning');
+    setHTML('quorumStatus', quorumOk ? t('quorumEnough') : t('quorumNotEnough'));
+    const quorumEl = el('quorumStatus');
+    if (quorumEl) quorumEl.className = 'stat-value ' + (quorumOk ? 'text-success' : 'text-warning');
 
-    document.getElementById('connectionStatus').innerHTML = 
-        '<i class="bi bi-check-circle-fill text-success"></i> ' + t('connected');
+    setHTML('connectionStatus', '<i class="bi bi-check-circle-fill text-success"></i> ' + t('connected'));
 
     const summary = clusterData.cluster.summary;
-    document.getElementById('clusterCpu').textContent = summary.cpuUsagePercent + '%';
-    document.getElementById('clusterCpuDetail').textContent = `${Math.round(summary.usedCPU)}/${summary.totalCPU} ${t('cores')}`;
-    document.getElementById('clusterCpuBar').style.width = summary.cpuUsagePercent + '%';
+    setText('clusterCpu', summary.cpuUsagePercent + '%');
+    setText('clusterCpuDetail', `${Math.round(summary.usedCPU)}/${summary.totalCPU} ${t('cores')}`);
+    const cpuBar = el('clusterCpuBar');
+    if (cpuBar) cpuBar.style.width = summary.cpuUsagePercent + '%';
     
-    document.getElementById('clusterMemory').textContent = summary.memoryUsagePercent + '%';
-    document.getElementById('clusterMemoryDetail').textContent = `${summary.usedMemory}/${summary.totalMemory}`;
-    document.getElementById('clusterMemoryBar').style.width = summary.memoryUsagePercent + '%';
+    setText('clusterMemory', summary.memoryUsagePercent + '%');
+    setText('clusterMemoryDetail', `${summary.usedMemory}/${summary.totalMemory}`);
+    const memBar = el('clusterMemoryBar');
+    if (memBar) memBar.style.width = summary.memoryUsagePercent + '%';
     
-    document.getElementById('clusterVms').textContent = summary.totalVMs || 0;
-    document.getElementById('clusterContainers').textContent = (summary.totalContainers || 0) + ' ' + t('containers');
+    setText('clusterVms', String(summary.totalVMs || 0));
+    setText('clusterContainers', (summary.totalContainers || 0) + ' ' + t('containers'));
 
-    const nodesContainer = document.getElementById('nodesContainer');
-    nodesContainer.innerHTML = clusterData.nodes.map(node => {
+    const nodesContainer = el('nodesContainer');
+    if (nodesContainer) nodesContainer.innerHTML = clusterData.nodes.map(node => {
         return `
             <div class="col-md-6 col-lg-3">
                 <div class="node-card">
@@ -804,13 +859,14 @@ function updateDashboard(clusterData, storageData, backupsData) {
     updateStorageUI(storageData);
     updateBackupsUI(backupsData);
     
-    document.getElementById('quorumStats').innerHTML = `
+    setHTML('quorumStats', `
         <div class="col-md-4"><h3>${clusterData.quorum.votes}</h3><p class="text-muted">${t('quorumVotes')}</p></div>
         <div class="col-md-4"><h3>${clusterData.quorum.expected}</h3><p class="text-muted">${t('quorumExpected')}</p></div>
         <div class="col-md-4"><h3 class="${quorumOk ? 'text-success' : 'text-warning'}">${clusterData.quorum.quorum}</h3><p class="text-muted">${t('quorumNeeded')}</p></div>
-    `;
+    `);
     
-    document.getElementById('quorumNodesList').innerHTML = clusterData.quorum.nodes.map(node => `
+    const quorumList = el('quorumNodesList');
+    if (quorumList) quorumList.innerHTML = clusterData.quorum.nodes.map(node => `
         <div class="col-md-3 mb-2">
             <span class="badge ${node.online ? 'bg-success' : 'bg-secondary'} p-2 w-100">
                 ${node.name} (${node.votes} ${node.votes === 1 ? t('quorumVote') : t('quorumVotes_plural')})
@@ -818,8 +874,7 @@ function updateDashboard(clusterData, storageData, backupsData) {
         </div>
     `).join('');
 
-    document.getElementById('lastUpdate').innerHTML = 
-        '<i class="bi bi-clock"></i> ' + t('lastUpdate') + ': ' + new Date().toLocaleString(currentLanguage === 'ru' ? 'ru-RU' : 'en-US');
+    setHTML('lastUpdate', '<i class="bi bi-clock"></i> ' + t('lastUpdate') + ': ' + new Date().toLocaleString(currentLanguage === 'ru' ? 'ru-RU' : 'en-US'));
 }
 
 // Update storage UI

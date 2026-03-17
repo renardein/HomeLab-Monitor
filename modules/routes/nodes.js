@@ -20,7 +20,12 @@ router.get('/', checkAuth, async (req, res) => {
         res.json(nodes);
     } catch (error) {
         log('error', `Error fetching nodes: ${error.message}`);
-        res.status(500).json({ error: 'Ошибка получения списка узлов' });
+        if (error?.response?.status) {
+            const st = error.response.status;
+            res.status(st).json({ error: st === 401 ? 'Требуется API токен (или токен неверный)' : `Ошибка API: ${st}` });
+        } else {
+            res.status(500).json({ error: 'Ошибка получения списка узлов' });
+        }
     }
 });
 
@@ -40,7 +45,12 @@ router.get('/:node/status', checkAuth, async (req, res) => {
         res.json(status);
     } catch (error) {
         log('error', `Error fetching node ${node} status: ${error.message}`);
-        res.status(500).json({ error: `Ошибка получения статуса узла ${node}` });
+        if (error?.response?.status) {
+            const st = error.response.status;
+            res.status(st).json({ error: st === 401 ? 'Требуется API токен (или токен неверный)' : `Ошибка API: ${st}` });
+        } else {
+            res.status(500).json({ error: `Ошибка получения статуса узла ${node}` });
+        }
     }
 });
 

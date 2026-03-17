@@ -127,6 +127,15 @@ app.get('*', (req, res) => {
 // Обработка ошибок
 app.use((err, req, res, next) => {
     log('error', `Unhandled error: ${err.message}`);
+    // Частая причина: некорректный JSON в body (например, при ручных запросах)
+    const isJsonParseError =
+        err?.type === 'entity.parse.failed' ||
+        (err instanceof SyntaxError && Object.prototype.hasOwnProperty.call(err, 'body'));
+    
+    if (isJsonParseError) {
+        return res.status(400).json({ error: 'Некорректный JSON в запросе' });
+    }
+    
     res.status(500).json({ error: 'Внутренняя ошибка сервера' });
 });
 
