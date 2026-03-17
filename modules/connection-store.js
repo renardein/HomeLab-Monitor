@@ -101,10 +101,50 @@ function deleteConnection(id) {
     return true;
 }
 
+function exportConnectionsWithSecrets() {
+    const db = getDbSync();
+    const stmt = db.prepare('SELECT id, type, url, name, secret, createdAt, updatedAt FROM connections ORDER BY createdAt ASC');
+    const rows = [];
+    while (stmt.step()) rows.push(stmt.get());
+    stmt.free();
+    return rows.map((row) => ({
+        id: row[0],
+        type: row[1],
+        url: row[2],
+        name: row[3] || null,
+        secret: row[4],
+        createdAt: row[5],
+        updatedAt: row[6]
+    }));
+}
+
+function importConnectionsWithSecrets(list) {
+    const db = getDbSync();
+    db.run('DELETE FROM connections');
+    if (Array.isArray(list) && list.length) {
+        const stmt = db.prepare('INSERT INTO connections (id, type, url, name, secret, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?)');
+        for (const c of list) {
+            stmt.run([
+                c.id || crypto.randomUUID(),
+                String(c.type || 'proxmox'),
+                String(c.url || ''),
+                c.name != null ? String(c.name) : null,
+                String(c.secret || ''),
+                c.createdAt || new Date().toISOString(),
+                c.updatedAt || new Date().toISOString()
+            ]);
+        }
+        stmt.free();
+    }
+    saveDb();
+}
+
 module.exports = {
     listConnections,
     getConnectionById,
     findByTypeUrl,
     upsertConnection,
-    deleteConnection
+    deleteConnection,
+    exportConnectionsWithSecrets,
+    importConnectionsWithSecrets
 };

@@ -7,7 +7,11 @@ const SETTING_KEYS = [
     'monitor_theme', 'monitor_mode', 'server_type',
     'current_server_index', 'current_truenas_index',
     'proxmox_servers', 'truenas_servers', 'connection_id_map',
-    'preferred_language'
+    'preferred_language',
+    // monitor-mode specific
+    'monitor_hidden_service_ids',
+    'monitor_vms',
+    'monitor_hidden_vm_ids'
 ];
 
 // GET /api/settings — все настройки (без пароля), флаг password_required
@@ -17,7 +21,15 @@ router.get('/', (req, res) => {
         for (const key of SETTING_KEYS) {
             const value = store.getSetting(key);
             if (value !== null && value !== undefined && value !== '') {
-                if (key === 'thresholds' || key === 'proxmox_servers' || key === 'truenas_servers' || key === 'connection_id_map') {
+                if (
+                    key === 'thresholds' ||
+                    key === 'proxmox_servers' ||
+                    key === 'truenas_servers' ||
+                    key === 'connection_id_map' ||
+                    key === 'monitor_hidden_service_ids' ||
+                    key === 'monitor_vms' ||
+                    key === 'monitor_hidden_vm_ids'
+                ) {
                     try {
                         payload[key] = JSON.parse(value);
                     } catch {
@@ -53,7 +65,10 @@ router.post('/', (req, res) => {
             proxmox_servers: body.proxmox_servers ?? body.proxmoxServers,
             truenas_servers: body.truenas_servers ?? body.truenasServers,
             connection_id_map: body.connection_id_map ?? body.connectionIdMap,
-            preferred_language: body.preferred_language ?? body.preferredLanguage
+            preferred_language: body.preferred_language ?? body.preferredLanguage,
+            monitor_hidden_service_ids: body.monitor_hidden_service_ids ?? body.monitorHiddenServiceIds,
+            monitor_vms: body.monitor_vms ?? body.monitorVms,
+            monitor_hidden_vm_ids: body.monitor_hidden_vm_ids ?? body.monitorHiddenVmIds
         };
         for (const [key, value] of Object.entries(map)) {
             if (value === undefined) continue;
@@ -165,22 +180,52 @@ router.delete('/services/:id', (req, res) => {
     }
 });
 
-// GET /api/settings/export — экспорт настроек и сервисов мониторинга (без пароля)
-router.get('/export', (req, res) => {
+// GET /api/settings/export/services — только сервисы мониторинга
+router.get('/export/services', (req, res) => {
     try {
-        const data = store.exportSettingsAndServices();
-        res.json(data);
+        const list = store.listMonitoredServices();
+        res.json({ services: list });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
 });
 
-// POST /api/settings/import — импорт настроек и сервисов мониторинга
-router.post('/import', (req, res) => {
+// POST /api/settings/import/services — только сервисы мониторинга
+router.post('/import/services', (req, res) => {
+    try {
+        const payload = req.body;
+        if (!payload || typeof payload !== 'object' || !Array.isArray(payload.services)) {
+            return res.status(400).json({ success: false, error: 'invalid_payload' });
+        }
+        store.importSettingsAndServices({ services: payload.services });
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// GET /api/settings/export/all — все настройки + сервисы + подключения (c секретами)
+router.get('/export/all', (req, res) => {
+    try {
+        const base = store.exportSettingsAndServices();
+        const connectionsStore = require('../connection-store');
+        const connections = connectionsStore.exportConnectionsWithSecrets();
+        res.json({ ...base, connections });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// POST /api/settings/import/all — все настройки + сервисы + подключения
+router.post('/import/all', (req, res) => {
     try {
         const payload = req.body;
         if (!payload || typeof payload !== 'object') {
             return res.status(400).json({ success: false, error: 'invalid_payload' });
+        }
+        const connectionsStore = require('../connection-store');
+        if (payload.connections) {
+            connectionsStore.importConnectionsWithSecrets(payload.connections);
         }
         store.importSettingsAndServices(payload);
         res.json({ success: true });

@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title id="pageTitle">Proxmox Cluster Monitor</title>
+    <title id="pageTitle">HomeLab Monitor</title>
 
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -24,7 +24,7 @@
             <div class="container-fluid">
                 <a class="navbar-brand fw-bold" href="#">
                     <i class="bi bi-diagram-3 text-primary me-2"></i>
-                    <span id="appName">Proxmox Cluster Monitor</span>
+                    <span id="appName">HomeLab Monitor</span>
                 </a>
                 <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                     <span class="navbar-toggler-icon"></span>
@@ -47,6 +47,11 @@
                                 <li>
                                     <button class="dropdown-item" type="button" onclick="openServicesMonitorFromMenu()">
                                         <i class="bi bi-activity me-2"></i><span id="menuServicesMonitorText">Мониторинг сервисов</span>
+                                    </button>
+                                </li>
+                                <li>
+                                    <button class="dropdown-item" type="button" onclick="openVmsMonitorFromMenu()">
+                                        <i class="bi bi-hdd-network me-2"></i><span id="menuVmsMonitorText">Статус VM/CT</span>
                                     </button>
                                 </li>
                             </ul>
@@ -101,11 +106,14 @@
                             <button class="nav-link" id="settings-nav-thresholds" data-bs-toggle="pill" data-bs-target="#settings-tab-thresholds" type="button" role="tab">
                                 <i class="bi bi-speedometer2 me-2"></i><span id="settingsNavThresholds">Пороги</span>
                             </button>
+                            <button class="nav-link" id="settings-nav-services" data-bs-toggle="pill" data-bs-target="#settings-tab-services" type="button" role="tab">
+                                <i class="bi bi-activity me-2"></i><span id="settingsNavServices">Мониторинг сервисов</span>
+                            </button>
                             <button class="nav-link" id="settings-nav-security" data-bs-toggle="pill" data-bs-target="#settings-tab-security" type="button" role="tab">
                                 <i class="bi bi-shield-lock me-2"></i><span id="settingsNavSecurity">Безопасность</span>
                             </button>
-                            <button class="nav-link" id="settings-nav-services" data-bs-toggle="pill" data-bs-target="#settings-tab-services" type="button" role="tab">
-                                <i class="bi bi-activity me-2"></i><span id="settingsNavServices">Мониторинг сервисов</span>
+                            <button class="nav-link" id="settings-nav-import" data-bs-toggle="pill" data-bs-target="#settings-tab-import" type="button" role="tab">
+                                <i class="bi bi-upload me-2"></i><span id="settingsNavImportExport">Импорт / экспорт</span>
                             </button>
                         </nav>
                     </div>
@@ -113,77 +121,72 @@
                         <div class="tab-content" id="settingsTabContent">
                             <!-- Подключение -->
                             <div class="tab-pane fade show active" id="settings-tab-connection" role="tabpanel">
-                                <div class="settings-section">
-                    <h5 class="mb-3"><i class="bi bi-key me-2"></i><span id="connectTitle">Подключение к Proxmox</span>
-                    </h5>
-                    <div class="alert alert-info">
-                        <i class="bi bi-info-circle me-2"></i>
-                        <span id="connectDesc">Введите API токен для подключения к кластеру Proxmox</span>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label fw-bold" id="serverTypeLabel">Тип сервера</label>
-                        <select class="form-select" id="serverTypeSelect" onchange="setServerType(this.value)">
-                            <option value="proxmox">Proxmox</option>
-                            <option value="truenas">TrueNAS</option>
-                        </select>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label fw-bold" id="tokenLabel">API токен</label>
-                        <input type="password" class="form-control form-control-lg" id="apiToken"
-                            placeholder="root@pam!monitoring=UUID">
-                        <div class="form-text" id="tokenHint">
-                            Формат: пользователь@область!идентификатор_токена=секрет
-                        </div>
-                    </div>
-
-                    <!-- Список серверов Proxmox -->
-                    <div class="mb-3">
-                        <label class="form-label fw-bold" id="proxmoxServersLabel">Серверы Proxmox</label>
-                        <div id="serverList"></div>
-                        <button class="btn btn-outline-primary btn-sm mt-2" onclick="addServer()">
-                            <i class="bi bi-plus-lg me-1"></i><span id="addServer">Добавить сервер</span>
-                        </button>
-                        <div class="form-text" id="proxmoxServersHint">
-                            Список URL серверов (каждый с новой строки). При недоступности основного сервера будет
-                            использован резервный.
-                        </div>
-                    </div>
-
-                    <!-- Чекбокс "Запомнить меня" -->
-                    <div class="mb-3 form-check">
-                        <input type="checkbox" class="form-check-input" id="rememberToken" checked>
-                        <label class="form-check-label" for="rememberToken" id="rememberLabel">
-                            Запомнить меня (сохранить токен в cookies)
-                        </label>
-                    </div>
-
-                    <!-- Кнопка выхода -->
-                    <div class="mb-3 text-end" id="logoutContainer" style="display: none;">
-                        <button class="btn btn-outline-danger btn-sm" onclick="logout()">
-                            <i class="bi bi-box-arrow-right me-1"></i> <span id="logoutText">Выйти</span>
-                        </button>
-                    </div>
-
-                    <div class="d-grid gap-2">
-                        <!-- Кнопка проверки соединения -->
-                        <button class="btn btn-outline-primary" onclick="testConnection()" id="testConnectionBtn">
-                            <i class="bi bi-wifi me-2"></i><span>Проверить соединение</span>
-                        </button>
-
-                        <button class="btn btn-primary btn-lg" onclick="connect()" id="connectBtn">
-                            <i class="bi bi-plug me-2"></i><span id="connectButton">Подключиться к кластеру</span>
-                        </button>
-                    </div>
-
-                    <!-- Статус подключения -->
-                    <div class="mt-3 text-center" id="connectionStatusDisplay" style="display: none;">
-                        <span class="badge" id="connectionStatusBadge">
-                            <i class="bi bi-circle-fill me-1"></i><span id="connectionStatusText">Не подключено</span>
-                        </span>
-                    </div>
-                </div>
+                                <!-- Блок Proxmox -->
+                                <div class="settings-section card mb-4">
+                                    <div class="card-body">
+                                        <h5 class="mb-3"><i class="bi bi-diagram-3 me-2"></i><span id="connectTitle">Подключение к Proxmox</span></h5>
+                                        <div class="alert alert-info py-2">
+                                            <i class="bi bi-info-circle me-2"></i>
+                                            <span id="connectDesc">Введите API токен для подключения к кластеру Proxmox</span>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label fw-bold" id="tokenLabel">API токен</label>
+                                            <input type="password" class="form-control form-control-lg" id="apiToken" placeholder="root@pam!monitoring=UUID">
+                                            <div class="form-text" id="tokenHint">Формат: пользователь@область!идентификатор_токена=секрет</div>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label fw-bold" id="proxmoxServersLabel">Серверы Proxmox</label>
+                                            <div id="serverListProxmox"></div>
+                                            <button class="btn btn-outline-primary btn-sm mt-2" onclick="addServerByType('proxmox')">
+                                                <i class="bi bi-plus-lg me-1"></i><span id="addServer">Добавить сервер</span>
+                                            </button>
+                                            <div class="form-text" id="proxmoxServersHint">Список URL серверов. При недоступности основного будет использован резервный.</div>
+                                        </div>
+                                        <div class="mb-3 text-end" id="logoutContainerProxmox" style="display: none;">
+                                            <button class="btn btn-outline-danger btn-sm" onclick="logoutAs('proxmox')"><i class="bi bi-box-arrow-right me-1"></i><span id="logoutText">Выйти</span></button>
+                                        </div>
+                                        <div class="d-grid gap-2">
+                                            <button class="btn btn-outline-primary" onclick="testConnectionAs('proxmox')" id="testConnectionBtnProxmox"><i class="bi bi-wifi me-2"></i><span id="testConnectionBtnTextProxmox">Проверить соединение</span></button>
+                                            <button class="btn btn-primary btn-lg" onclick="connectAs('proxmox')" id="connectBtnProxmox"><i class="bi bi-plug me-2"></i><span id="connectButton">Подключиться</span></button>
+                                        </div>
+                                        <div class="mt-3 text-center" id="connectionStatusDisplayProxmox" style="display: none;">
+                                            <span class="badge" id="connectionStatusBadgeProxmox"><i class="bi bi-circle-fill me-1"></i><span id="connectionStatusTextProxmox">Не подключено</span></span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- Блок TrueNAS -->
+                                <div class="settings-section card">
+                                    <div class="card-body">
+                                        <h5 class="mb-3"><i class="bi bi-hdd-stack me-2"></i><span id="truenasConnectTitle">Подключение к TrueNAS</span></h5>
+                                        <div class="alert alert-info py-2">
+                                            <i class="bi bi-info-circle me-2"></i>
+                                            <span id="truenasConnectDesc">Введите API Key для подключения к TrueNAS</span>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label fw-bold" id="truenasKeyLabel">TrueNAS API Key</label>
+                                            <input type="password" class="form-control form-control-lg" id="apiTokenTrueNAS" placeholder="API Key">
+                                            <div class="form-text" id="truenasKeyHint">Вставьте API Key, созданный в TrueNAS</div>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label fw-bold" id="truenasServersLabel">Серверы TrueNAS</label>
+                                            <div id="serverListTrueNAS"></div>
+                                            <button class="btn btn-outline-primary btn-sm mt-2" onclick="addServerByType('truenas')">
+                                                <i class="bi bi-plus-lg me-1"></i><span id="addServerTrueNAS">Добавить сервер</span>
+                                            </button>
+                                            <div class="form-text" id="truenasServersHint">Список URL серверов TrueNAS.</div>
+                                        </div>
+                                        <div class="mb-3 text-end" id="logoutContainerTrueNAS" style="display: none;">
+                                            <button class="btn btn-outline-danger btn-sm" onclick="logoutAs('truenas')"><i class="bi bi-box-arrow-right me-1"></i><span id="logoutTextTrueNAS">Выйти</span></button>
+                                        </div>
+                                        <div class="d-grid gap-2">
+                                            <button class="btn btn-outline-primary" onclick="testConnectionAs('truenas')" id="testConnectionBtnTrueNAS"><i class="bi bi-wifi me-2"></i><span id="testConnectionBtnTextTrueNAS">Проверить соединение</span></button>
+                                            <button class="btn btn-primary btn-lg" onclick="connectAs('truenas')" id="connectBtnTrueNAS"><i class="bi bi-plug me-2"></i><span id="connectButtonTrueNAS">Подключиться</span></button>
+                                        </div>
+                                        <div class="mt-3 text-center" id="connectionStatusDisplayTrueNAS" style="display: none;">
+                                            <span class="badge" id="connectionStatusBadgeTrueNAS"><i class="bi bi-circle-fill me-1"></i><span id="connectionStatusTextTrueNAS">Не подключено</span></span>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                             <!-- Отображение -->
                             <div class="tab-pane fade" id="settings-tab-display" role="tabpanel">
@@ -320,15 +323,6 @@
                                 <div class="settings-section">
                                     <h5 class="mb-3"><i class="bi bi-activity me-2"></i><span id="settingsServicesTitle">Хосты для мониторинга</span></h5>
                     <p class="text-muted small mb-3" id="settingsServicesHint">Добавьте хосты или URL для проверки доступности. В разделе «Мониторинг сервисов» отображается только список и статус.</p>
-                    <div class="d-flex flex-wrap gap-2 mb-3">
-                        <button class="btn btn-outline-secondary btn-sm" type="button" onclick="exportSettingsAndServices()">
-                            <i class="bi bi-download me-1"></i><span id="settingsExportBtn">Экспорт настроек</span>
-                        </button>
-                        <button class="btn btn-outline-secondary btn-sm" type="button" onclick="triggerImportSettings()">
-                            <i class="bi bi-upload me-1"></i><span id="settingsImportBtn">Импорт настроек</span>
-                        </button>
-                        <input type="file" id="settingsImportFile" accept="application/json" class="d-none" onchange="handleImportSettingsFile(event)">
-                    </div>
                     <div class="row g-3 align-items-end mb-3">
                         <div class="col-md-2">
                             <label class="form-label fw-bold" for="settingsServiceNameInput" id="settingsServiceNameLabel">Имя</label>
@@ -360,19 +354,88 @@
                             </button>
                         </div>
                     </div>
-                    <div class="table-responsive">
+                    <div class="table-responsive mb-4">
                         <table class="table table-sm align-middle">
                             <thead>
                                 <tr>
                                     <th id="settingsServiceNameHeader">Имя</th>
                                     <th id="settingsServiceTypeHeader">Тип</th>
                                     <th id="settingsServiceTargetHeader">Адрес / URL</th>
+                                    <th class="text-center" id="settingsServiceMonitorVisibleHeader">В режиме монитора</th>
                                     <th id="settingsServiceActionsHeader">Действия</th>
                                 </tr>
                             </thead>
                             <tbody id="settingsServicesBody"></tbody>
                         </table>
                     </div>
+                    <hr class="my-4">
+                    <h5 class="mb-2"><i class="bi bi-hdd-network me-2"></i><span id="settingsVmsTitle">VM/CT для мониторинга</span></h5>
+                    <p class="text-muted small mb-3" id="settingsVmsHint">Введите ID или имя VM/CT и нажмите «Добавить» — гость будет отображаться в режиме монитора. Список загружается с Proxmox по кнопке «Обновить».</p>
+                    <div class="row g-3 align-items-end mb-3">
+                        <div class="col-md-5">
+                            <label class="form-label fw-bold" for="settingsVmIdOrNameInput" id="settingsVmIdOrNameLabel">ID или имя VM/CT</label>
+                            <input type="text" class="form-control" id="settingsVmIdOrNameInput" list="settingsVmSuggestList" placeholder="101 или my-vm" autocomplete="off">
+                            <datalist id="settingsVmSuggestList"></datalist>
+                        </div>
+                        <div class="col-md-2 d-grid">
+                            <button class="btn btn-outline-primary" type="button" onclick="addVmToMonitorByIdOrName()" id="addVmToMonitorBtn">
+                                <i class="bi bi-plus-lg me-1"></i><span id="addVmToMonitorBtnText">Добавить</span>
+                            </button>
+                        </div>
+                        <div class="col-md-3 d-grid">
+                            <button class="btn btn-outline-secondary btn-sm" type="button" onclick="loadClusterVmsForSettings()" id="loadClusterVmsBtn">
+                                <i class="bi bi-arrow-clockwise me-1"></i><span id="loadClusterVmsBtnText">Обновить список VM/CT</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle">
+                            <thead>
+                                <tr>
+                                    <th id="settingsVmNameHeader">Имя</th>
+                                    <th id="settingsVmTypeHeader">Тип</th>
+                                    <th id="settingsVmStatusHeader">Статус</th>
+                                    <th id="settingsVmNoteHeader">Примечание</th>
+                                    <th class="text-center" id="settingsVmShowInMonitorHeader">В режиме монитора</th>
+                                    <th id="settingsVmActionsHeader">Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody id="settingsVmsBody"></tbody>
+                        </table>
+                    </div>
+                                </div>
+                            </div>
+                            <!-- Импорт / экспорт -->
+                            <div class="tab-pane fade" id="settings-tab-import" role="tabpanel">
+                                <div class="settings-section">
+                                    <h5 class="mb-3"><i class="bi bi-upload me-2"></i><span id="settingsImportExportTitle">Импорт / экспорт</span></h5>
+                                    <div class="mb-4">
+                                        <h6 class="fw-bold mb-2" id="settingsServicesOnlyTitle">Только хосты мониторинга</h6>
+                                        <p class="text-muted small mb-2" id="settingsServicesOnlyHint">Экспорт или импорт только списка хостов для мониторинга сервисов.</p>
+                                        <div class="d-flex flex-wrap gap-2">
+                                            <button class="btn btn-outline-secondary btn-sm" type="button" onclick="exportServicesOnly()">
+                                                <i class="bi bi-download me-1"></i><span id="settingsExportServicesBtn">Экспорт хостов</span>
+                                            </button>
+                                            <button class="btn btn-outline-secondary btn-sm" type="button" onclick="triggerImportServices()">
+                                                <i class="bi bi-upload me-1"></i><span id="settingsImportServicesBtn">Импорт хостов</span>
+                                            </button>
+                                            <input type="file" id="servicesImportFile" accept="application/json" class="d-none" onchange="handleImportServicesFile(event)">
+                                        </div>
+                                    </div>
+                                    <hr>
+                                    <div class="mb-2">
+                                        <h6 class="fw-bold mb-2" id="settingsAllTitle">Полная конфигурация</h6>
+                                        <p class="text-muted small mb-2" id="settingsAllHint">Экспорт или импорт всех настроек, подключений (включая токены) и списка хостов мониторинга. Используйте осторожно.</p>
+                                        <div class="d-flex flex-wrap gap-2">
+                                            <button class="btn btn-outline-danger btn-sm" type="button" onclick="exportAllConfig()">
+                                                <i class="bi bi-download me-1"></i><span id="settingsExportAllBtn">Экспорт всех настроек</span>
+                                            </button>
+                                            <button class="btn btn-outline-danger btn-sm" type="button" onclick="triggerImportAllConfig()">
+                                                <i class="bi bi-upload me-1"></i><span id="settingsImportAllBtn">Импорт всех настроек</span>
+                                            </button>
+                                            <input type="file" id="allConfigImportFile" accept="application/json" class="d-none" onchange="handleImportAllConfigFile(event)">
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -569,7 +632,7 @@
                 <small class="text-muted" id="lastUpdate"></small>
             </div>
             </div>
-            <!-- Компактный вид режима монитора (1920×1200 без скролла) -->
+            <!-- Компактный вид режима монитора (1920×1200 без скролла, свайпы + стрелки) -->
             <div id="monitorView" class="monitor-view" style="display: none;">
                 <div class="monitor-view__stats">
                     <div class="monitor-view__stat"><span class="monitor-view__stat-value" id="monitorTotalNodes">0</span><span class="monitor-view__stat-label" id="monitorTotalNodesLabel">Узлов</span></div>
@@ -590,11 +653,23 @@
                         <div class="monitor-view__panel-title" id="monitorServicesTitle">Сервисы</div>
                         <div class="monitor-view__list monitor-view__services-list" id="monitorServicesList"></div>
                     </div>
+                    <div class="monitor-view__panel monitor-view__services-panel">
+                        <div class="monitor-view__panel-title" id="monitorVmsPanelTitle">VM / CT</div>
+                        <div class="monitor-view__list monitor-view__services-list" id="monitorVmsList"></div>
+                    </div>
+                </div>
+                <div class="monitor-view__nav">
+                    <button type="button" class="monitor-view__nav-btn monitor-view__nav-btn--prev" onclick="goMonitorView('prev')" aria-label="Prev">
+                        <i class="bi bi-chevron-left"></i>
+                    </button>
+                    <button type="button" class="monitor-view__nav-btn monitor-view__nav-btn--next" onclick="goMonitorView('next')" aria-label="Next">
+                        <i class="bi bi-chevron-right"></i>
+                    </button>
                 </div>
             </div>
         </div>
 
-        <!-- Раздел мониторинга сервисов: только список и статусы (управление — в настройках) -->
+        <!-- Раздел мониторинга сервисов: карточки статусов (управление — в настройках) -->
         <div id="servicesMonitorSection" class="mb-4" style="display: none;">
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <button type="button" class="btn btn-outline-secondary btn-sm" onclick="closeServicesMonitor()">
@@ -610,20 +685,25 @@
                 </div>
                 <div class="card-body">
                     <p class="text-muted small mb-3" id="servicesMonitorHint"></p>
-                    <div class="table-responsive">
-                        <table class="table table-sm align-middle" id="servicesTable">
-                            <thead>
-                                <tr>
-                                    <th id="serviceNameHeader">Имя</th>
-                                    <th id="serviceTypeHeader">Тип</th>
-                                    <th id="serviceTargetHeader">Адрес / URL</th>
-                                    <th id="serviceStatusHeader">Статус</th>
-                                    <th id="serviceLatencyHeader">Задержка</th>
-                                </tr>
-                            </thead>
-                            <tbody id="servicesBody"></tbody>
-                        </table>
-                    </div>
+                    <div class="row" id="servicesCards"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Раздел мониторинга VM/CT: карточки статусов (управление — в настройках) -->
+        <div id="vmsMonitorSection" class="mb-4" style="display: none;">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="closeVmsMonitor()">
+                    <i class="bi bi-arrow-left me-1"></i><span id="backToDashboardTextVms">К дашборду</span>
+                </button>
+            </div>
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-hdd-network me-2"></i><span id="vmsMonitorTitle">Статус VM/CT</span></h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-3" id="vmsMonitorHint"></p>
+                    <div class="row" id="vmsMonitorCards"></div>
                 </div>
             </div>
         </div>
@@ -650,7 +730,7 @@
             </ul>
         </footer>
         
-        <!-- Панель режима монитора (одна полоса: тип сервера + обновление + выход) -->
+        <!-- Панель режима монитора (тип сервера + навигация экранов + темы + выход) -->
         <div id="monitorToolbar" class="monitor-toolbar">
             <div class="monitor-toolbar-left">
                 <select class="form-select form-select-sm monitor-toolbar-select" id="monitorServerTypeSelect" onchange="setServerType(this.value)">
@@ -663,6 +743,15 @@
                 <span class="monitor-toolbar-update text-muted small" id="monitorToolbarUpdate"></span>
             </div>
             <div class="monitor-toolbar-theme">
+                <button type="button" class="btn btn-sm monitor-toolbar-nav-btn" id="monitorPrevBtn" onclick="goMonitorView('prev')" title="←">
+                    <i class="bi bi-chevron-left"></i>
+                </button>
+                <button type="button" class="btn btn-sm monitor-toolbar-nav-btn" id="monitorNextBtn" onclick="goMonitorView('next')" title="→">
+                    <i class="bi bi-chevron-right"></i>
+                </button>
+                <button type="button" class="btn btn-sm monitor-toolbar-theme-btn" id="monitorRefreshBtn" onclick="refreshData()" title="">
+                    <i class="bi bi-arrow-repeat"></i>
+                </button>
                 <button type="button" class="btn btn-sm monitor-toolbar-theme-btn" id="monitorThemeLight" onclick="setMonitorTheme('light')" title="">
                     <i class="bi bi-sun-fill"></i>
                 </button>

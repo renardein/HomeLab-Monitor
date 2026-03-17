@@ -552,22 +552,17 @@
             display: none !important;
         }
 
+        /* Секция дашборда в режиме монитора: без скролла, видимость #dashboardContent/#monitorView задаётся в JS */
         body.monitor-mode #dashboardSection {
             max-width: 100%;
             height: 100vh;
             padding: 0;
             padding-top: 52px;
-            overflow-y: auto;
-            overflow-x: hidden;
+            overflow: hidden;
         }
 
         body.monitor-mode #dashboardContent {
-            display: block !important;
             padding: 16px 20px 24px;
-        }
-
-        body.monitor-mode #monitorView {
-            display: none !important;
         }
 
         /* Крупные блоки дашборда в режиме монитора */
@@ -678,31 +673,198 @@
         }
         body.monitor-mode.monitor-theme-dark .progress { background: #2d3748; }
         body.monitor-mode.monitor-theme-dark .text-muted { color: #a0aec0 !important; }
-        body.monitor-mode.monitor-theme-dark #servicesMonitorSection .card { background: #16213e; color: #fff; border-color: #2d3748; }
-        body.monitor-mode.monitor-theme-dark #servicesMonitorSection .card-header { background: #0f3460; color: #fff; }
-        body.monitor-mode.monitor-theme-dark #servicesMonitorSection .table {
-            color: #e2e8f0;
-            background-color: #16213e;
-        }
-        body.monitor-mode.monitor-theme-dark #servicesMonitorSection .table thead th {
-            background-color: #0f3460;
-            color: #fff;
+        body.monitor-mode.monitor-theme-dark #servicesMonitorSection .card,
+        body.monitor-mode.monitor-theme-dark #vmsMonitorSection .card { background: #16213e; color: #fff; border-color: #2d3748; }
+        body.monitor-mode.monitor-theme-dark #servicesMonitorSection .card-header,
+        body.monitor-mode.monitor-theme-dark #vmsMonitorSection .card-header { background: #0f3460; color: #fff; }
+        body.monitor-mode.monitor-theme-dark #servicesMonitorSection .node-card,
+        body.monitor-mode.monitor-theme-dark #vmsMonitorSection .node-card,
+        body.monitor-mode.monitor-theme-dark .monitor-view__card {
+            background-color: #1a2740;
             border-color: #2d3748;
-        }
-        body.monitor-mode.monitor-theme-dark #servicesMonitorSection .table tbody td {
-            background-color: #16213e;
             color: #e2e8f0;
-            border-color: #2d3748;
         }
-        body.monitor-mode.monitor-theme-dark #servicesMonitorSection .table tbody tr:hover td {
-            background-color: rgba(255, 255, 255, 0.06);
-        }
-        body.monitor-mode.monitor-theme-dark #servicesMonitorSection .table code {
+        body.monitor-mode.monitor-theme-dark .monitor-view__stat-value,
+        body.monitor-mode.monitor-theme-dark .monitor-view__res-value,
+        body.monitor-mode.monitor-theme-dark .monitor-view__panel-title { color: #e2e8f0; }
+        body.monitor-mode.monitor-theme-dark .monitor-view__stat-label,
+        body.monitor-mode.monitor-theme-dark .monitor-view__res-label { color: #a0aec0; }
+        body.monitor-mode.monitor-theme-dark #servicesMonitorSection code {
             background: rgba(0, 0, 0, 0.25);
             color: #e2e8f0;
         }
-        body.monitor-mode.monitor-theme-dark #servicesMonitorSection .table .badge {
+        body.monitor-mode.monitor-theme-dark #servicesMonitorSection .badge,
+        body.monitor-mode.monitor-theme-dark #vmsMonitorSection .badge {
             color: #fff;
+        }
+
+        /* Режим монитора: один экран без скролла, под 1920×1200 */
+        .monitor-view {
+            margin: 0;
+            padding: 1rem 56px 1.5rem;
+            border-radius: 0;
+            background: transparent;
+            color: inherit;
+            height: calc(100vh - 52px);
+            max-height: calc(100vh - 52px);
+            overflow: hidden;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .monitor-view__stats {
+            flex: 0 0 auto;
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 0.75rem;
+            flex-wrap: wrap;
+        }
+
+        .monitor-view__stat {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            background: rgba(0, 0, 0, 0.06);
+            min-width: 100px;
+        }
+
+        body.monitor-mode.monitor-theme-dark .monitor-view__stat {
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .monitor-view__stat-value { font-size: 1.5rem; font-weight: 700; line-height: 1.2; }
+        .monitor-view__stat-label { font-size: 0.8rem; opacity: 0.9; margin-top: 0.15rem; }
+
+        .monitor-view__resources {
+            flex: 0 0 auto;
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 0.75rem;
+            flex-wrap: wrap;
+        }
+
+        .monitor-view__res {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.4rem 0.75rem;
+            border-radius: 0.4rem;
+            background: rgba(0, 0, 0, 0.06);
+            min-width: 120px;
+        }
+
+        body.monitor-mode.monitor-theme-dark .monitor-view__res {
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .monitor-view__res-label { font-size: 0.8rem; flex-shrink: 0; }
+        .monitor-view__res-value { font-weight: 600; font-size: 0.95rem; }
+        .monitor-view__res-bar { flex: 1; min-width: 40px; height: 8px; background: rgba(0,0,0,0.15); border-radius: 4px; overflow: hidden; }
+        body.monitor-mode.monitor-theme-dark .monitor-view__res-bar { background: rgba(255,255,255,0.2); }
+        .monitor-view__res-fill { height: 100%; background: #3b82f6; border-radius: 4px; transition: width 0.2s; }
+        .monitor-view__res-fill--mem { background: #22c55e; }
+
+        .monitor-view__empty {
+            padding: 1rem;
+            text-align: center;
+            color: inherit;
+            opacity: 0.8;
+            font-size: 0.9rem;
+        }
+
+        .monitor-view__body {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 0;
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        .monitor-view__body .monitor-view__panel {
+            display: none;
+            flex-direction: column;
+            min-height: 0;
+            overflow: hidden;
+            height: 100%;
+        }
+
+        .monitor-view__panel-title {
+            flex: 0 0 auto;
+            font-size: 1.1rem;
+        }
+
+        .monitor-view__list {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow: hidden;
+            padding-right: 4px;
+            display: grid;
+            gap: 0.5rem;
+            align-content: start;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        }
+
+        .monitor-view__services-list {
+            max-height: 100%;
+            overflow: hidden;
+        }
+
+        /* Экран кластера: только список узлов (одна колонка) */
+        .monitor-view__nodes .monitor-view__list {
+            grid-template-columns: 1fr;
+            gap: 0.35rem;
+        }
+
+        .monitor-view__node-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.4rem;
+            background: rgba(0, 0, 0, 0.08);
+        }
+
+        body.monitor-mode.monitor-theme-dark .monitor-view__node-row {
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .monitor-view__node-name { font-weight: 500; }
+        .monitor-view__node-status { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+        .monitor-view__node-status.online { background: #22c55e; }
+        .monitor-view__node-status.offline { background: #ef4444; }
+
+        .monitor-view__card {
+            background: rgba(15, 23, 42, 0.85);
+            border-radius: 0.5rem;
+            padding: 0.5rem 0.75rem;
+            margin-bottom: 0.4rem;
+        }
+
+        /* Кнопки навигации режимов монитора теперь в тулбаре, а не в отдельной панели */
+        .monitor-view__nav {
+            display: none;
+        }
+
+        .monitor-toolbar-nav-btn {
+            margin-right: 0.25rem;
+            border-radius: 999px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 4px 8px;
+        }
+
+        .monitor-view__nav-btn:hover {
+            background: rgba(59, 130, 246, 0.9);
+            color: #fff;
+        }
+
+        body.monitor-mode {
+            overflow: hidden;
         }
         body.monitor-mode.monitor-theme-dark .table-success { background-color: rgba(40, 167, 69, 0.2) !important; color: #e2e8f0; }
         body.monitor-mode.monitor-theme-dark .table-danger { background-color: rgba(220, 53, 69, 0.2) !important; color: #e2e8f0; }
@@ -736,6 +898,17 @@
         }
         body.monitor-mode:not(.monitor-theme-dark) .table th { background: #edf2f7; color: #2d3748; }
         body.monitor-mode:not(.monitor-theme-dark) .progress { background: #e2e8f0; }
+        body.monitor-mode:not(.monitor-theme-dark) .monitor-view__card {
+            background: rgba(255, 255, 255, 0.95);
+            color: #1a202c;
+            border: 1px solid #e2e8f0;
+        }
+        body.monitor-mode:not(.monitor-theme-dark) .monitor-view__stat-value,
+        body.monitor-mode:not(.monitor-theme-dark) .monitor-view__res-value { color: #2d3748; }
+        body.monitor-mode:not(.monitor-theme-dark) .monitor-view__stat-label,
+        body.monitor-mode:not(.monitor-theme-dark) .monitor-view__res-label { color: #4a5568; }
+        body.monitor-mode:not(.monitor-theme-dark) .monitor-view__panel-title { color: #2d3748; }
+        body.monitor-mode:not(.monitor-theme-dark) .monitor-view__node-row { color: #2d3748; }
 
         /* Панель инструментов монитора */
         .monitor-toolbar {
@@ -889,12 +1062,23 @@
             pointer-events: auto;
         }
 
-        /* Режим монитора: подгонка под 1920×1200 */
+        /* Режим монитора: подгонка под 1920×1200, без скролла */
         @media (min-width: 1920px) and (min-height: 1200px) {
-            body.monitor-mode #dashboardContent {
-                padding: 20px 24px 28px;
+            body.monitor-mode #dashboardSection {
+                height: 100vh;
+                padding-top: 52px;
             }
-            body.monitor-mode .stat-card { padding: 28px; }
-            body.monitor-mode .stat-value { font-size: 3.5rem; }
-            body.monitor-mode .stat-label { font-size: 1.15rem; }
+            .monitor-view {
+                height: calc(100vh - 52px);
+                padding: 1.25rem 2rem 1.5rem;
+            }
+            .monitor-view__stat-value { font-size: 2rem; }
+            .monitor-view__stat-label { font-size: 0.9rem; }
+            .monitor-view__list {
+                grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+                gap: 0.6rem;
+            }
+            .monitor-view__card {
+                padding: 0.6rem 0.85rem;
+            }
         }

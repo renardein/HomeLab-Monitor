@@ -28,7 +28,10 @@ let currentTrueNASServerIndex = 0;
 let connectionIdMap = {}; // key: `${type}|${url}` -> connectionId (no secrets)
 let isRefreshing = false;
 const htmlCache = {}; // elementId -> last innerHTML string
-let monitoredServices = []; // [{ name, type: 'tcp'|'udp'|'http', host?, port?, url?, lastStatus, lastLatency }]
+let monitoredServices = []; // [{ id, name, type: 'tcp'|'udp'|'http', host?, port?, url?, lastStatus, lastLatency }]
+let monitorHiddenServiceIds = []; // IDs of services to hide in monitor mode (empty = show all)
+let monitoredVmIds = []; // VMids that are in the "monitored" list (shown in settings table)
+let monitorHiddenVmIds = []; // Of those, VMids to hide in monitor mode (checkbox unchecked)
 let lastClusterData = null;   // for monitor view (Proxmox)
 let lastTrueNASData = null;   // { system, pools } for monitor view (TrueNAS)
 
@@ -88,6 +91,9 @@ async function saveSettingsToServer(payload) {
     if (payload.truenasServers !== undefined) body.truenasServers = payload.truenasServers;
     if (payload.connectionIdMap !== undefined) body.connectionIdMap = payload.connectionIdMap;
     if (payload.preferredLanguage !== undefined) body.preferredLanguage = payload.preferredLanguage;
+    if (payload.monitorHiddenServiceIds !== undefined) body.monitorHiddenServiceIds = payload.monitorHiddenServiceIds;
+    if (payload.monitorHiddenVmIds !== undefined) body.monitorHiddenVmIds = payload.monitorHiddenVmIds;
+    if (payload.monitorVms !== undefined) body.monitorVms = payload.monitorVms;
     try {
         await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     } catch (e) {
@@ -137,8 +143,6 @@ function setServerType(type) {
     currentServerType = (type === 'truenas') ? 'truenas' : 'proxmox';
     saveSettingsToServer({ serverType: currentServerType });
 
-    const select = document.getElementById('serverTypeSelect');
-    if (select) select.value = currentServerType;
     const monitorSelect = document.getElementById('monitorServerTypeSelect');
     if (monitorSelect) monitorSelect.value = currentServerType;
     const serverMenuTitle = document.getElementById('serverMenuTitle');
@@ -146,24 +150,11 @@ function setServerType(type) {
         serverMenuTitle.textContent = currentServerType === 'truenas' ? 'TrueNAS' : 'Proxmox';
     }
 
-    // Update connection labels/hints
-    const isTrueNAS = currentServerType === 'truenas';
-    setText('connectTitle', t(isTrueNAS ? 'truenasConnectTitle' : 'connectTitle'));
-    setText('connectDesc', t(isTrueNAS ? 'truenasConnectDesc' : 'connectDesc'));
-    setText('tokenLabel', t(isTrueNAS ? 'truenasKeyLabel' : 'tokenLabel'));
-    setText('tokenHint', t(isTrueNAS ? 'truenasKeyHint' : 'tokenHint'));
-
-    const tokenInput = document.getElementById('apiToken');
-    if (tokenInput) tokenInput.placeholder = isTrueNAS ? 'API Key' : 'root@pam!tokenid=secret';
-
-    // Proxmox server list UI is not applicable for TrueNAS in MVP
-    // Server list is used for both types; just update label/hint
-    setText('proxmoxServersLabel', t(isTrueNAS ? 'truenasServersLabel' : 'proxmoxServersLabel'));
-    setText('proxmoxServersHint', t(isTrueNAS ? 'truenasServersHint' : 'proxmoxServersHint'));
     renderServerList();
     updateCurrentServerBadge();
 
     // Hide/Show tabs that are not applicable
+    const isTrueNAS = currentServerType === 'truenas';
     const backupsTab = document.getElementById('backups-tab')?.closest('li');
     const quorumTab = document.getElementById('quorum-tab')?.closest('li');
     const nodesTab = document.getElementById('nodes-tab')?.closest('li');
@@ -182,9 +173,11 @@ function setServerType(type) {
 function openServicesMonitorFromMenu() {
     const dashboardSection = document.getElementById('dashboardSection');
     const servicesSection = document.getElementById('servicesMonitorSection');
+    const vmsSection = document.getElementById('vmsMonitorSection');
     const configSection = document.getElementById('configSection');
     if (dashboardSection) dashboardSection.style.display = 'none';
     if (configSection) configSection.style.display = 'none';
+    if (vmsSection) vmsSection.style.display = 'none';
     if (servicesSection) servicesSection.style.display = 'block';
     renderMonitoredServices();
 }
@@ -192,7 +185,28 @@ function openServicesMonitorFromMenu() {
 function closeServicesMonitor() {
     const dashboardSection = document.getElementById('dashboardSection');
     const servicesSection = document.getElementById('servicesMonitorSection');
+    const vmsSection = document.getElementById('vmsMonitorSection');
     if (servicesSection) servicesSection.style.display = 'none';
+    if (vmsSection) vmsSection.style.display = 'none';
+    if (dashboardSection) dashboardSection.style.display = '';
+}
+
+function openVmsMonitorFromMenu() {
+    const dashboardSection = document.getElementById('dashboardSection');
+    const servicesSection = document.getElementById('servicesMonitorSection');
+    const vmsSection = document.getElementById('vmsMonitorSection');
+    const configSection = document.getElementById('configSection');
+    if (dashboardSection) dashboardSection.style.display = 'none';
+    if (servicesSection) servicesSection.style.display = 'none';
+    if (configSection) configSection.style.display = 'none';
+    if (vmsSection) vmsSection.style.display = 'block';
+    renderVmsMonitorCards();
+}
+
+function closeVmsMonitor() {
+    const dashboardSection = document.getElementById('dashboardSection');
+    const vmsSection = document.getElementById('vmsMonitorSection');
+    if (vmsSection) vmsSection.style.display = 'none';
     if (dashboardSection) dashboardSection.style.display = '';
 }
 
@@ -317,7 +331,6 @@ function updateUILanguage() {
         serviceLatencyHeader: 'serviceLatencyHeader',
         serviceActionsHeader: 'serviceActionsHeader',
         backToDashboardText: 'backToDashboardText',
-        rememberLabel: 'rememberLabel',
         logoutText: 'logoutText',
         // New connection settings
         connectionSettings: 'connectionSettings',
@@ -328,6 +341,17 @@ function updateUILanguage() {
         proxmoxServersLabel: 'proxmoxServersLabel',
         proxmoxServersHint: 'proxmoxServersHint',
         addServer: 'addServer',
+        truenasConnectTitle: 'truenasConnectTitle',
+        truenasConnectDesc: 'truenasConnectDesc',
+        truenasKeyLabel: 'truenasKeyLabel',
+        truenasKeyHint: 'truenasKeyHint',
+        truenasServersLabel: 'truenasServersLabel',
+        truenasServersHint: 'truenasServersHint',
+        addServerTrueNAS: 'addServer',
+        logoutTextTrueNAS: 'logoutText',
+        connectButtonTrueNAS: 'connectButton',
+        testConnectionBtnTextProxmox: 'testConnectionBtn',
+        testConnectionBtnTextTrueNAS: 'testConnectionBtn',
         removeServer: 'removeServer',
         currentServer: 'currentServer',
         monitorModeText: 'monitorMode'
@@ -355,6 +379,8 @@ function updateUILanguage() {
     if (monitorExitBtnText) monitorExitBtnText.textContent = t('monitorExitText');
     const monitorExitBtn = document.getElementById('monitorExitBtnFixed');
     if (monitorExitBtn) monitorExitBtn.title = t('monitorExitTitle');
+    const monitorRefreshBtn = document.getElementById('monitorRefreshBtn');
+    if (monitorRefreshBtn) monitorRefreshBtn.title = t('monitorRefreshTitle');
     const monitorThemeLight = document.getElementById('monitorThemeLight');
     const monitorThemeDark = document.getElementById('monitorThemeDark');
     if (monitorThemeLight) monitorThemeLight.title = t('themeLight');
@@ -378,9 +404,31 @@ function updateUILanguage() {
     setText('settingsServiceNameHeader', t('serviceNameHeader'));
     setText('settingsServiceTypeHeader', t('serviceTypeHeader'));
     setText('settingsServiceTargetHeader', t('serviceTargetHeader'));
+    setText('settingsServiceMonitorVisibleHeader', t('settingsServiceShowInMonitor'));
     setText('settingsServiceActionsHeader', t('serviceActionsHeader'));
-    setText('settingsExportBtn', t('settingsExportBtn'));
-    setText('settingsImportBtn', t('settingsImportBtn'));
+    setText('settingsVmsTitle', t('settingsVmsTitle') || 'VM/CT для мониторинга');
+    setText('settingsVmsHint', t('settingsVmsHint') || 'Введите ID или имя VM/CT и нажмите «Добавить» — гость будет отображаться в режиме монитора. Список загружается с Proxmox по кнопке «Обновить».');
+    setText('settingsVmNameLabel', t('settingsVmNameLabel') || 'Имя');
+    setText('settingsVmTypeLabel', t('settingsVmTypeLabel') || 'Тип');
+    setText('settingsVmIdOrNameLabel', t('settingsVmIdOrNameLabel') || 'ID или имя VM/CT');
+    setText('addVmToMonitorBtnText', t('addVmToMonitorBtnText') || 'Добавить');
+    setText('loadClusterVmsBtnText', t('loadClusterVmsBtnText') || 'Обновить список VM/CT');
+    setText('settingsVmNameHeader', t('settingsVmNameHeader') || 'Имя');
+    setText('settingsVmTypeHeader', t('settingsVmTypeHeader') || 'Тип');
+    setText('settingsVmNoteHeader', t('settingsVmNoteHeader') || 'Примечание');
+    setText('settingsVmStatusHeader', t('settingsVmStatusHeader') || 'Статус');
+    setText('settingsVmShowInMonitorHeader', t('settingsVmShowInMonitor') || 'В режиме монитора');
+    setText('settingsVmActionsHeader', t('settingsVmActionsHeader') || 'Действия');
+    setText('settingsNavImportExport', t('settingsNavImportExport') || 'Импорт / экспорт');
+    setText('settingsImportExportTitle', t('settingsImportExportTitle') || 'Импорт / экспорт');
+    setText('settingsServicesOnlyTitle', t('settingsServicesOnlyTitle') || 'Только хосты мониторинга');
+    setText('settingsServicesOnlyHint', t('settingsServicesOnlyHint') || 'Экспорт или импорт только списка хостов для мониторинга сервисов.');
+    setText('settingsExportServicesBtn', t('settingsExportServicesBtn') || 'Экспорт хостов');
+    setText('settingsImportServicesBtn', t('settingsImportServicesBtn') || 'Импорт хостов');
+    setText('settingsAllTitle', t('settingsAllTitle') || 'Полная конфигурация');
+    setText('settingsAllHint', t('settingsAllHint') || 'Экспорт или импорт всех настроек, подключений и списка хостов мониторинга.');
+    setText('settingsExportAllBtn', t('settingsExportAllBtn') || 'Экспорт всех настроек');
+    setText('settingsImportAllBtn', t('settingsImportAllBtn') || 'Импорт всех настроек');
     setText('settingsNavConnection', t('settingsNavConnection'));
     setText('settingsNavDisplay', t('settingsNavDisplay'));
     setText('settingsNavThresholds', t('settingsNavThresholds'));
@@ -437,14 +485,59 @@ document.addEventListener('DOMContentLoaded', async function() {
     toggleServiceTypeFields();
     renderMonitoredServices();
     renderSettingsMonitoredServices();
+    renderSettingsMonitoredVms();
+    fillVmSuggestDatalist();
+    const vmIdOrNameInput = document.getElementById('settingsVmIdOrNameInput');
+    if (vmIdOrNameInput) {
+        vmIdOrNameInput.addEventListener('change', addVmToMonitorByIdOrName);
+        vmIdOrNameInput.addEventListener('keydown', function(e) { if (e.key === 'Enter') { e.preventDefault(); addVmToMonitorByIdOrName(); } });
+    }
     
-    checkSavedToken();
     checkServerStatus();
     updateCurrentServerBadge();
+
+    // Показать дашборд или настройки: при сохранённом подключении — загрузить данные и показать контент, иначе — форму входа
+    const hasConnIds = connectionIdMap && typeof connectionIdMap === 'object' && Object.keys(connectionIdMap).length > 0;
+    if (apiToken || hasConnIds) {
+        try {
+            await refreshData();
+            startAutoRefresh();
+            if (!monitorMode) showDashboard();
+            // если monitorMode — видимость уже задана в loadSettings() через applyMonitorView
+        } catch (e) {
+            console.warn('Initial refresh failed:', e);
+            showConfigSectionOnly();
+        }
+    } else {
+        showConfigSectionOnly();
+    }
 });
 
+function showConfigSectionOnly() {
+    const configSection = document.getElementById('configSection');
+    const dashboardSection = document.getElementById('dashboardSection');
+    const servicesSection = document.getElementById('servicesMonitorSection');
+    const vmsSection = document.getElementById('vmsMonitorSection');
+    const monitorView = document.getElementById('monitorView');
+    if (configSection) configSection.style.display = 'block';
+    if (dashboardSection) dashboardSection.style.display = 'none';
+    if (servicesSection) servicesSection.style.display = 'none';
+    if (vmsSection) vmsSection.style.display = 'none';
+    if (monitorView) monitorView.style.display = 'none';
+}
+
+function normalizeUrlClient(u) {
+    try {
+        const url = new URL(String(u));
+        if (!url.protocol.startsWith('http')) return String(u || '').trim();
+        return url.toString().replace(/\/+$/, '');
+    } catch {
+        return String(u || '').trim();
+    }
+}
+
 function connectionKey(type, url) {
-    return `${type}|${String(url || '').trim()}`;
+    return `${type}|${normalizeUrlClient(url)}`;
 }
 
 function getCurrentConnectionId() {
@@ -453,82 +546,56 @@ function getCurrentConnectionId() {
 }
 
 function saveConnectionId(type, url, id) {
-    connectionIdMap[connectionKey(type, url)] = id;
+    const normalizedUrl = normalizeUrlClient(url);
+    connectionIdMap[connectionKey(type, normalizedUrl)] = id;
+
+    // Обновляем списки серверов, чтобы URL в настройках совпадал с тем, что в DB
+    if (type === 'proxmox') {
+        const servers = getServersForCurrentType();
+        const idx = getCurrentIndexForType();
+        if (servers && typeof idx === 'number' && servers[idx]) {
+            servers[idx] = normalizedUrl;
+            proxmoxServers = [...servers];
+            saveSettingsToServer({ proxmoxServers: [...proxmoxServers], connectionIdMap: { ...connectionIdMap } });
+            return;
+        }
+    } else if (type === 'truenas') {
+        const servers = getServersForCurrentType();
+        const idx = getCurrentIndexForType();
+        if (servers && typeof idx === 'number' && servers[idx]) {
+            servers[idx] = normalizedUrl;
+            truenasServers = [...servers];
+            saveSettingsToServer({ truenasServers: [...truenasServers], connectionIdMap: { ...connectionIdMap } });
+            return;
+        }
+    }
+
     saveSettingsToServer({ connectionIdMap: { ...connectionIdMap } });
 }
 
-// Check saved token
-async function checkSavedToken() {
-    try {
-        const response = await fetch(currentServerType === 'truenas' ? '/api/truenas/auth/key' : '/api/auth/token');
-        const data = await response.json();
-        
-        const key = data.token || data.apiKey;
-        if (data.success && key) {
-            apiToken = key;
-            const savedServerUrl = data.serverUrl;
-            if (savedServerUrl) {
-                if (currentServerType === 'truenas') {
-                    truenasServers = [savedServerUrl];
-                    currentTrueNASServerIndex = 0;
-                    saveSettingsToServer({ truenasServers: [...truenasServers], currentTrueNASServerIndex: 0 });
-                } else {
-                    proxmoxServers = [savedServerUrl];
-                    currentServerIndex = 0;
-                    saveSettingsToServer({ proxmoxServers: [...proxmoxServers], currentServerIndex: 0 });
-                }
-            }
-            setValue('apiToken', '••••••••••••••••');
-            document.getElementById('rememberToken').checked = true;
-            setDisplay('logoutContainer', 'block');
-            
-            showToast(t('tokenFound'), 'info');
-            testTokenAndConnect(key);
-        }
-    } catch (error) {
-        console.log('No saved token found');
-    }
-}
+// (Запоминание токенов через cookies больше не используется; все секреты хранятся в DB через /api/connections/upsert)
 
-// Test token and connect
-async function testTokenAndConnect(token) {
-    try {
-        const serverUrl = getCurrentServerUrl();
-        const response = await fetch(currentServerType === 'truenas' ? '/api/truenas/auth/test' : '/api/auth/test', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(currentServerType === 'truenas'
-                ? { apiKey: token, remember: false, serverUrl }
-                : { token, remember: false, serverUrl })
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            showToast(t('connectSuccess'), 'success');
-            apiToken = token;
-            showDashboard();
-        }
-    } catch (error) {
-        console.log('Token test failed');
-    }
-}
-
-// Logout function
+// Logout (called after logoutAs(type) sets currentServerType)
 async function logout() {
     try {
-        // Clear local token and mapping for current url (server-side secrets remain unless user deletes connection)
         const url = getCurrentServerUrl();
         delete connectionIdMap[connectionKey(currentServerType, url)];
         saveSettingsToServer({ connectionIdMap: { ...connectionIdMap } });
         showToast(t('logoutSuccess'), 'success');
         apiToken = null;
-        setValue('apiToken', '');
-        setDisplay('logoutContainer', 'none');
+        const tokenInputId = currentServerType === 'truenas' ? 'apiTokenTrueNAS' : 'apiToken';
+        const logoutContainerId = currentServerType === 'truenas' ? 'logoutContainerTrueNAS' : 'logoutContainerProxmox';
+        setValue(tokenInputId, '');
+        setDisplay(logoutContainerId, 'none');
         showConfig();
     } catch (error) {
         showToast('Ошибка при выходе: ' + error.message, 'error');
     }
+}
+
+function logoutAs(type) {
+    currentServerType = type === 'truenas' ? 'truenas' : 'proxmox';
+    logout();
 }
 
 // Check server status
@@ -614,6 +681,33 @@ async function ensureSettingsUnlocked() {
     return false;
 }
 
+// Загрузка данных для таблиц настроек (сервисы + VM/CT)
+async function loadSettingsPanelData() {
+    delete htmlCache['settingsServicesBody'];
+    delete htmlCache['settingsVmsBody'];
+    try {
+        const servRes = await fetch('/api/settings/services');
+        if (servRes.ok) {
+            const servData = await servRes.json();
+            monitoredServices = Array.isArray(servData.services) ? servData.services : [];
+        }
+    } catch (e) {
+        console.error('Failed to load services for settings:', e);
+    }
+    if (currentServerType === 'proxmox') {
+        await loadClusterVmsForSettings({ silent: true });
+        if (monitoredVmIds.length === 0 && getClusterVms().length > 0) {
+            monitoredVmIds = getClusterVms().map(v => v.vmid).filter(id => !monitorHiddenVmIds.includes(Number(id)));
+            saveSettingsToServer({ monitorVms: monitoredVmIds });
+        }
+    } else {
+        renderSettingsMonitoredVms();
+        fillVmSuggestDatalist();
+    }
+    renderSettingsMonitoredServices();
+    renderServerList();
+}
+
 // Show settings section
 async function showConfig() {
     if (!(await ensureSettingsUnlocked())) return;
@@ -621,7 +715,7 @@ async function showConfig() {
     document.getElementById('dashboardSection').style.display = 'none';
     const servicesSection = document.getElementById('servicesMonitorSection');
     if (servicesSection) servicesSection.style.display = 'none';
-    renderSettingsMonitoredServices();
+    await loadSettingsPanelData();
     if (autoRefreshInterval) {
         clearInterval(autoRefreshInterval);
         autoRefreshInterval = null;
@@ -639,6 +733,7 @@ async function toggleSettings() {
         configSection.style.display = 'block';
         dashboardSection.style.display = 'none';
         if (servicesSection) servicesSection.style.display = 'none';
+        await loadSettingsPanelData();
         if (autoRefreshInterval) {
             clearInterval(autoRefreshInterval);
             autoRefreshInterval = null;
@@ -654,35 +749,49 @@ async function toggleSettings() {
     }
 }
 
-// Toggle monitor mode — показываем полный дашборд (крупные блоки), переключение по свайпам
+// Toggle monitor mode — используем существующий крупный дашборд как основу, переключаем полноэкранные экраны
 async function toggleMonitorMode() {
     monitorMode = !monitorMode;
     saveSettingsToServer({ monitorMode });
 
+    const dashboardSection = document.getElementById('dashboardSection');
     const dashboardContent = document.getElementById('dashboardContent');
+    const servicesSection = document.getElementById('servicesMonitorSection');
+    const vmsSection = document.getElementById('vmsMonitorSection');
     const monitorView = document.getElementById('monitorView');
-    if (dashboardContent) dashboardContent.style.display = 'block';
-    if (monitorView) monitorView.style.display = 'none';
 
     document.body.classList.toggle('monitor-mode', monitorMode);
 
     const btn = document.getElementById('monitorModeBtn');
     if (monitorMode) {
-        btn.classList.add('active');
-        btn.classList.remove('btn-outline-info');
-        btn.classList.add('btn-info');
-        btn.innerHTML = '<i class="bi bi-check-lg"></i> <span id="monitorModeText">' + t('monitorModeOn') + '</span>';
-        monitorCurrentView = currentServerType === 'truenas' ? 'truenas' : 'proxmox';
-        applyMonitorView(monitorCurrentView);
+        // Входим в режим монитора: fullscreen, крупные блоки, свайпы, текущий экран — кластер
+        if (btn) {
+            btn.classList.add('active');
+            btn.classList.remove('btn-outline-info');
+            btn.classList.add('btn-info');
+            btn.innerHTML = '<i class="bi bi-check-lg"></i> <span id="monitorModeText">' + t('monitorModeOn') + '</span>';
+        }
+        monitorCurrentView = 'cluster';
         applyMonitorTheme();
         initMonitorSwipes();
+        if (monitorView) monitorView.style.display = 'none';
+        applyMonitorView(monitorCurrentView);
     } else {
-        btn.classList.remove('active');
-        btn.classList.remove('btn-info');
-        btn.classList.add('btn-outline-info');
-        btn.innerHTML = '<i class="bi bi-display"></i> <span id="monitorModeText">' + t('monitorMode') + '</span>';
+        // Выходим из режима монитора: возвращаем обычный дашборд
+        if (btn) {
+            btn.classList.remove('active');
+            btn.classList.remove('btn-info');
+            btn.classList.add('btn-outline-info');
+            btn.innerHTML = '<i class="bi bi-display"></i> <span id="monitorModeText">' + t('monitorMode') + '</span>';
+        }
         document.body.classList.remove('monitor-theme-dark');
         destroyMonitorSwipes();
+
+        if (dashboardSection) dashboardSection.style.display = 'block';
+        if (dashboardContent) dashboardContent.style.display = 'block';
+        if (servicesSection) servicesSection.style.display = 'none';
+        if (vmsSection) vmsSection.style.display = 'none';
+        if (monitorView) monitorView.style.display = 'none';
     }
 
     try {
@@ -699,30 +808,57 @@ async function toggleMonitorMode() {
         console.warn('Fullscreen toggle failed:', e);
     }
 
-    if (apiToken) refreshData();
+    if (apiToken || getCurrentConnectionId()) refreshData();
 }
 
 let monitorSwipeStartX = null;
 let monitorSwipeHandlersAttached = false;
-/** Текущий раздел в режиме монитора: 'proxmox' | 'truenas' | 'services' */
-let monitorCurrentView = 'proxmox';
+/** Текущий экран режима монитора: 'cluster' | 'vms' | 'services' */
+let monitorCurrentView = 'cluster';
 
-const MONITOR_VIEWS = ['proxmox', 'truenas', 'services'];
+const MONITOR_VIEWS = ['cluster', 'vms', 'services'];
 
+// Переключение экранов в режиме монитора:
+// cluster  -> обычный дашборд (крупные блоки Proxmox / TrueNAS)
+// vms      -> раздел мониторинга VM/CT (vmsMonitorSection)
+// services -> раздел мониторинга сервисов (servicesMonitorSection)
 function applyMonitorView(view) {
     monitorCurrentView = view;
     const dashboardSection = document.getElementById('dashboardSection');
+    const dashboardContent = document.getElementById('dashboardContent');
     const servicesSection = document.getElementById('servicesMonitorSection');
-    if (view === 'proxmox' || view === 'truenas') {
+    const vmsSection = document.getElementById('vmsMonitorSection');
+    const monitorView = document.getElementById('monitorView');
+
+    if (monitorView) monitorView.style.display = 'none'; // компактный вид больше не используем
+
+    if (!monitorMode) {
+        // В обычном режиме всегда показываем полный дашборд
         if (dashboardSection) dashboardSection.style.display = 'block';
+        if (dashboardContent) dashboardContent.style.display = 'block';
         if (servicesSection) servicesSection.style.display = 'none';
-        setServerType(view);
-    } else {
+        if (vmsSection) vmsSection.style.display = 'none';
+        return;
+    }
+
+    if (view === 'cluster') {
+        if (dashboardSection) dashboardSection.style.display = 'block';
+        if (dashboardContent) dashboardContent.style.display = 'block';
+        if (servicesSection) servicesSection.style.display = 'none';
+        if (vmsSection) vmsSection.style.display = 'none';
+    } else if (view === 'services') {
         if (dashboardSection) dashboardSection.style.display = 'none';
-        if (servicesSection) {
-            servicesSection.style.display = 'block';
-            renderMonitoredServices();
-        }
+        if (servicesSection) servicesSection.style.display = 'block';
+        if (vmsSection) vmsSection.style.display = 'none';
+        // при переключении на экран сервисов обновляем карточки, чтобы статусы были актуальны
+        renderMonitorServicesList();
+    } else if (view === 'vms') {
+        if (dashboardSection) dashboardSection.style.display = 'none';
+        if (servicesSection) servicesSection.style.display = 'none';
+        if (vmsSection) vmsSection.style.display = 'block';
+        // при переключении на экран VM/CT обновляем список/карточки с учётом статуса
+        renderMonitorVmsList();
+        renderVmsMonitorCards();
     }
 }
 
@@ -742,9 +878,8 @@ function applyMonitorTheme() {
 
 function goMonitorView(direction) {
     const currentIndex = MONITOR_VIEWS.indexOf(monitorCurrentView);
-    const nextIndex = direction === 'next'
-        ? (currentIndex + 1) % MONITOR_VIEWS.length
-        : (currentIndex - 1 + MONITOR_VIEWS.length) % MONITOR_VIEWS.length;
+    const delta = direction === 'next' ? 1 : -1;
+    const nextIndex = (currentIndex + delta + MONITOR_VIEWS.length) % MONITOR_VIEWS.length;
     applyMonitorView(MONITOR_VIEWS[nextIndex]);
 }
 
@@ -752,21 +887,28 @@ function destroyMonitorSwipes() {
     monitorSwipeStartX = null;
     monitorSwipeHandlersAttached = false;
     const target = document.body;
-    if (!target._monitorSwipeStart) return;
-    target.removeEventListener('touchstart', target._monitorSwipeStart);
-    target.removeEventListener('touchend', target._monitorSwipeEnd);
-    delete target._monitorSwipeStart;
-    delete target._monitorSwipeEnd;
+    if (target._monitorSwipeStart) {
+        target.removeEventListener('touchstart', target._monitorSwipeStart);
+        target.removeEventListener('touchend', target._monitorSwipeEnd);
+        delete target._monitorSwipeStart;
+        delete target._monitorSwipeEnd;
+    }
+    if (target._monitorSwipeMouseStart) {
+        target.removeEventListener('mousedown', target._monitorSwipeMouseStart);
+        delete target._monitorSwipeMouseStart;
+    }
 }
 
 function initMonitorSwipes() {
     if (monitorSwipeHandlersAttached) return;
     const minDist = 80;
     function onStart(e) {
+        if (!monitorMode) return;
         const x = e.touches ? e.touches[0].clientX : e.clientX;
         monitorSwipeStartX = x;
     }
     function onEnd(e) {
+        if (!monitorMode) return;
         if (monitorSwipeStartX == null) return;
         const x = e.changedTouches ? e.changedTouches[0].clientX : e.clientX;
         const delta = x - monitorSwipeStartX;
@@ -774,11 +916,8 @@ function initMonitorSwipes() {
         else if (delta > minDist) goMonitorView('prev');
         monitorSwipeStartX = null;
     }
-    document.body._monitorSwipeStart = onStart;
-    document.body._monitorSwipeEnd = onEnd;
-    document.body.addEventListener('touchstart', onStart, { passive: true });
-    document.body.addEventListener('touchend', onEnd, { passive: true });
-    document.body.addEventListener('mousedown', function mouseStart(e) {
+    function mouseStart(e) {
+        if (!monitorMode) return;
         monitorSwipeStartX = e.clientX;
         function mouseEnd(ev) {
             const d = ev.clientX - monitorSwipeStartX;
@@ -786,7 +925,13 @@ function initMonitorSwipes() {
             document.body.removeEventListener('mouseup', mouseEnd);
         }
         document.body.addEventListener('mouseup', mouseEnd, { once: true });
-    });
+    }
+    document.body._monitorSwipeStart = onStart;
+    document.body._monitorSwipeEnd = onEnd;
+    document.body._monitorSwipeMouseStart = mouseStart;
+    document.body.addEventListener('touchstart', onStart, { passive: true });
+    document.body.addEventListener('touchend', onEnd, { passive: true });
+    document.body.addEventListener('mousedown', mouseStart);
     monitorSwipeHandlersAttached = true;
 }
 
@@ -794,6 +939,10 @@ function initMonitorSwipes() {
 function showDashboard() {
     document.getElementById('configSection').style.display = 'none';
     document.getElementById('dashboardSection').style.display = 'block';
+    const dashboardContent = document.getElementById('dashboardContent');
+    const monitorView = document.getElementById('monitorView');
+    if (dashboardContent) dashboardContent.style.display = 'block';
+    if (monitorView) monitorView.style.display = 'none';
     const servicesSection = document.getElementById('servicesMonitorSection');
     if (servicesSection) servicesSection.style.display = 'none';
     // Refresh only when authenticated
@@ -809,88 +958,94 @@ function startAutoRefresh() {
     autoRefreshInterval = setInterval(() => refreshData({ silent: true }), refreshIntervalMs);
 }
 
-// Connect
+// Connect (called after connectAs(type) sets currentServerType)
 async function connect() {
-    const tokenInput = document.getElementById('apiToken');
+    const tokenInput = currentServerType === 'truenas'
+        ? document.getElementById('apiTokenTrueNAS')
+        : document.getElementById('apiToken');
     const rawToken = tokenInput ? tokenInput.value.trim() : '';
-    // Если в поле маска (после загрузки из cookies), используем сохранённый apiToken
     const token = (rawToken && rawToken.includes('•')) ? (apiToken || '') : rawToken;
-    const rememberToken = document.getElementById('rememberToken')?.checked ?? true;
-    
+
     if (!token) {
         showToast(t('tokenRequired'), 'error');
         return;
     }
 
-    const connectBtn = document.getElementById('connectBtn');
+    const connectBtnId = currentServerType === 'truenas' ? 'connectBtnTrueNAS' : 'connectBtnProxmox';
+    const connectBtn = document.getElementById(connectBtnId);
     const originalText = connectBtn.innerHTML;
     connectBtn.disabled = true;
     connectBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>' + t('loading');
     
     const serverUrl = getCurrentServerUrl();
     try {
-        // If user wants to remember, store the secret server-side and keep only connectionId client-side.
-        if (rememberToken) {
-            const upsertRes = await fetch('/api/connections/upsert', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    type: currentServerType,
-                    url: serverUrl,
-                    secret: token
-                })
-            });
-            const upsertData = await upsertRes.json();
-            if (!upsertRes.ok || !upsertData?.success) {
-                throw new Error(upsertData?.error || `connections: HTTP ${upsertRes.status}`);
-            }
-            saveConnectionId(currentServerType, upsertData.connection.url, upsertData.connection.id);
-            apiToken = null; // do not keep secret in memory when remembered
-        } else {
-            apiToken = token;
+        // Всегда сохраняем секрет в DB и используем connectionId
+        const upsertRes = await fetch('/api/connections/upsert', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                type: currentServerType,
+                url: serverUrl,
+                secret: token
+            })
+        });
+        const upsertData = await upsertRes.json();
+        if (!upsertRes.ok || !upsertData?.success) {
+            throw new Error(upsertData?.error || `connections: HTTP ${upsertRes.status}`);
         }
+        saveConnectionId(currentServerType, upsertData.connection.url, upsertData.connection.id);
+        apiToken = null; // секрет в памяти не держим, всё в DB
 
         const response = await fetch(currentServerType === 'truenas' ? '/api/truenas/auth/test' : '/api/auth/test', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(currentServerType === 'truenas'
-                ? { apiKey: token, remember: rememberToken, serverUrl }
-                : { token, remember: rememberToken, serverUrl })
+                ? { apiKey: token, serverUrl }
+                : { token, serverUrl })
         });
         
         const data = await response.json();
         
         if (data.success) {
             showToast(t('connectSuccess'), 'success');
-            setDisplay('logoutContainer', 'block');
-            updateConnectionStatus(true);
+            const logoutContainerId = currentServerType === 'truenas' ? 'logoutContainerTrueNAS' : 'logoutContainerProxmox';
+            setDisplay(logoutContainerId, 'block');
+            updateConnectionStatus(true, currentServerType);
             showDashboard();
         } else {
             showToast(t('connectError') + ': ' + data.error, 'error');
-            updateConnectionStatus(false);
+            updateConnectionStatus(false, currentServerType);
         }
     } catch (error) {
         showToast(t('connectError') + ': ' + error.message, 'error');
-        updateConnectionStatus(false);
+        updateConnectionStatus(false, currentServerType);
     } finally {
         connectBtn.disabled = false;
         connectBtn.innerHTML = originalText;
     }
 }
 
+function connectAs(type) {
+    currentServerType = type === 'truenas' ? 'truenas' : 'proxmox';
+    connect();
+}
+
 // Test connection
 async function testConnection() {
-    const tokenInput = document.getElementById('apiToken');
+    const tokenInput = currentServerType === 'truenas'
+        ? document.getElementById('apiTokenTrueNAS')
+        : document.getElementById('apiToken');
     const rawToken = tokenInput ? tokenInput.value.trim() : '';
     const token = (rawToken && rawToken.includes('•')) ? (apiToken || '') : rawToken;
-    
+
     if (!token) {
         showToast(t('tokenRequired'), 'warning');
-        updateConnectionStatus(false);
+        updateConnectionStatus(false, currentServerType);
         return;
     }
-    
-    const testBtn = document.getElementById('testConnectionBtn');
+
+    const testBtnId = currentServerType === 'truenas' ? 'testConnectionBtnTrueNAS' : 'testConnectionBtnProxmox';
+    const testBtn = document.getElementById(testBtnId);
     const originalText = testBtn.innerHTML;
     testBtn.disabled = true;
     testBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>' + t('loading');
@@ -903,11 +1058,11 @@ async function testConnection() {
             const testData = await testRes.json();
             if (testRes.ok && testData.success) {
                 showToast(t('connectionStatusConnected'), 'success');
-                updateConnectionStatus(true);
+                updateConnectionStatus(true, currentServerType);
                 return;
             }
             showToast(t('connectionStatusDisconnected') + ': ' + (testData.error || `HTTP ${testRes.status}`), 'error');
-            updateConnectionStatus(false);
+            updateConnectionStatus(false, currentServerType);
             return;
         }
 
@@ -915,37 +1070,42 @@ async function testConnection() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(currentServerType === 'truenas'
-                ? { apiKey: token, remember: false, serverUrl }
-                : { token, remember: false, serverUrl })
+                ? { apiKey: token, serverUrl }
+                : { token, serverUrl })
         });
         
         const data = await response.json();
         
         if (data.success) {
             showToast(t('connectionStatusConnected'), 'success');
-            updateConnectionStatus(true);
+            updateConnectionStatus(true, currentServerType);
         } else {
             showToast(t('connectionStatusDisconnected') + ': ' + data.error, 'error');
-            updateConnectionStatus(false);
+            updateConnectionStatus(false, currentServerType);
         }
     } catch (error) {
         showToast(t('connectionStatusDisconnected') + ': ' + error.message, 'error');
-        updateConnectionStatus(false);
+        updateConnectionStatus(false, currentServerType);
     } finally {
         testBtn.disabled = false;
         testBtn.innerHTML = originalText;
     }
 }
 
-// Update connection status
-function updateConnectionStatus(connected) {
-    const statusDisplay = document.getElementById('connectionStatusDisplay');
-    const statusBadge = document.getElementById('connectionStatusBadge');
-    const statusText = document.getElementById('connectionStatusText');
-    
+function testConnectionAs(type) {
+    currentServerType = type === 'truenas' ? 'truenas' : 'proxmox';
+    testConnection();
+}
+
+// Update connection status for a given type (proxmox | truenas)
+function updateConnectionStatus(connected, type) {
+    const suffix = (type || currentServerType) === 'truenas' ? 'TrueNAS' : 'Proxmox';
+    const statusDisplay = document.getElementById('connectionStatusDisplay' + suffix);
+    const statusBadge = document.getElementById('connectionStatusBadge' + suffix);
+    const statusText = document.getElementById('connectionStatusText' + suffix);
+
     if (statusDisplay && statusBadge && statusText) {
         statusDisplay.style.display = 'block';
-        
         if (connected) {
             statusBadge.className = 'badge bg-success';
             statusText.textContent = t('connectionStatusConnected');
@@ -1153,10 +1313,11 @@ function updateTrueNASDashboard(systemData, poolsData) {
 
 // Компактный вид режима монитора (Proxmox)
 function updateMonitorView(clusterData) {
-    if (!clusterData || !clusterData.nodes) return;
-    const total = clusterData.nodes.length;
-    const online = clusterData.nodes.filter(n => n.status === 'online').length;
-    const quorumOk = clusterData.quorum && online >= clusterData.quorum.quorum;
+    if (!clusterData) return;
+    const nodes = Array.isArray(clusterData.nodes) ? clusterData.nodes : [];
+    const total = nodes.length;
+    const online = nodes.filter(n => n.status === 'online').length;
+    const quorumOk = clusterData.quorum && online >= (clusterData.quorum.quorum || 0);
     setText('monitorTotalNodes', String(total));
     setText('monitorOnlineNodes', String(online));
     setText('monitorQuorum', quorumOk ? t('quorumEnough') : t('quorumNotEnough'));
@@ -1177,10 +1338,14 @@ function updateMonitorView(clusterData) {
     setText('monitorNodesTitle', t('tabNodes'));
     const listEl = el('monitorNodesList');
     if (listEl) {
-        listEl.innerHTML = clusterData.nodes.map(node => {
-            const statusClass = node.status === 'online' ? 'online' : 'offline';
-            return `<div class="monitor-view__node-row"><span class="monitor-view__node-name">${escapeHtml(node.name)}</span><span class="monitor-view__node-status ${statusClass}" title="${node.status === 'online' ? t('nodeOnline') : t('nodeOffline')}"></span></div>`;
-        }).join('');
+        if (!nodes.length) {
+            listEl.innerHTML = '<div class="monitor-view__empty">' + escapeHtml(t('backupNoData') || 'Нет данных') + '</div>';
+        } else {
+            listEl.innerHTML = nodes.map(node => {
+                const statusClass = node.status === 'online' ? 'online' : 'offline';
+                return `<div class="monitor-view__node-row"><span class="monitor-view__node-name">${escapeHtml(node.name)}</span><span class="monitor-view__node-status ${statusClass}" title="${node.status === 'online' ? t('nodeOnline') : t('nodeOffline')}"></span></div>`;
+            }).join('');
+        }
     }
 }
 
@@ -1217,21 +1382,106 @@ function updateMonitorViewTrueNAS(systemData, poolsData) {
     }
 }
 
-// Список сервисов в компактном виде монитора
+// Список сервисов в компактном виде монитора (только те, что не скрыты в настройках)
 function renderMonitorServicesList() {
     const listEl = document.getElementById('monitorServicesList');
     if (!listEl) return;
     const list = Array.isArray(monitoredServices) ? monitoredServices : [];
+    const visibleList = list.filter(s => !monitorHiddenServiceIds.includes(Number(s.id)));
     setText('monitorServicesTitle', t('tabServicesMonitor'));
-    if (!list.length) {
-        listEl.innerHTML = '<div class="text-muted small">' + (t('servicesListTitle') || 'Сервисы') + '</div>';
+    if (!visibleList.length) {
+        listEl.innerHTML = '<div class="monitor-view__empty">' + escapeHtml(t('backupNoData') || 'Нет данных') + '</div>';
         return;
     }
-    listEl.innerHTML = list.map(s => {
+    listEl.innerHTML = visibleList.map(s => {
         const name = s.name || getServiceTargetDisplay(s);
-        const dotClass = s.lastStatus === 'up' ? 'up' : (s.lastStatus === 'down' ? 'down' : 'unknown');
-        return `<div class="monitor-view__service-row"><span class="monitor-view__service-name" title="${escapeHtml(getServiceTargetDisplay(s))}">${escapeHtml(name)}</span><span class="monitor-view__service-dot ${dotClass}" title="${s.lastStatus === 'up' ? t('connected') : (s.lastStatus === 'down' ? t('serverError') : t('notConnected'))}"></span></div>`;
+        const statusKey = s.lastStatus === 'up' ? 'connected' : (s.lastStatus === 'down' ? 'serverError' : 'notConnected');
+        const statusLabel = t(statusKey);
+        const statusClass = s.lastStatus === 'up' ? 'bg-success' : (s.lastStatus === 'down' ? 'bg-danger' : 'bg-secondary');
+        const typeLabel = (s.type || 'tcp').toUpperCase();
+        const target = getServiceTargetDisplay(s);
+        const latency = typeof s.lastLatency === 'number' ? `${s.lastLatency} ms` : '—';
+        return `
+            <div class="monitor-view__card">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <span class="fw-semibold text-truncate" title="${escapeHtml(name)}">${escapeHtml(name)}</span>
+                    <span class="badge ${statusClass}" title="${escapeHtml(statusLabel)}">${escapeHtml(statusLabel)}</span>
+                </div>
+                <div class="small mb-1">
+                    <span class="badge bg-secondary me-1">${escapeHtml(typeLabel)}</span>
+                    <code class="text-truncate d-inline-block" style="max-width: 180px;" title="${escapeHtml(target)}">${escapeHtml(target)}</code>
+                </div>
+                <div class="small text-muted">${t('serviceLatencyHeader') || 'Задержка'}: ${latency}</div>
+            </div>
+        `;
     }).join('');
+}
+
+function renderMonitorVmsList() {
+    const listEl = document.getElementById('monitorVmsList');
+    if (!listEl) return;
+    setText('monitorVmsPanelTitle', t('monitoredVmsDashboardTitle'));
+    const cluster = lastClusterData;
+    const list = cluster && Array.isArray(cluster.vms) ? cluster.vms : [];
+    const visible = list.filter(vm => monitoredVmIds.includes(Number(vm.vmid != null ? vm.vmid : vm.id)) && !monitorHiddenVmIds.includes(Number(vm.vmid != null ? vm.vmid : vm.id)));
+    const emptyText = t('vmListEmpty');
+    if (!visible.length) {
+        listEl.innerHTML = '<div class="monitor-view__empty">' + escapeHtml(emptyText) + '</div>';
+        return;
+    }
+    listEl.innerHTML = visible.map(vm => {
+        const typeLabel = (vm.type || 'vm').toUpperCase();
+        const status = vm.status || 'unknown';
+        const statusClass = getVmStatusBadgeClass(status);
+        const statusLabel = getVmStatusLabel(status);
+        const note = vm.node ? (vm.node + (vm.vmid != null ? ` / ${vm.vmid}` : '')) : (vm.note || '');
+        return `
+            <div class="monitor-view__card">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <span class="fw-semibold text-truncate" title="${escapeHtml(vm.name || '')}">${escapeHtml(vm.name || '')}</span>
+                    <span class="badge ${statusClass}" title="${escapeHtml(statusLabel)}">${escapeHtml(statusLabel)}</span>
+                </div>
+                <div class="small mb-1">
+                    <span class="badge bg-secondary me-1">${escapeHtml(typeLabel)}</span>
+                    <span class="text-muted" title="${escapeHtml(note || '')}">${escapeHtml(note || '')}</span>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function renderVmsMonitorCards() {
+    const container = document.getElementById('vmsMonitorCards');
+    if (!container) return;
+    const cluster = lastClusterData;
+    const list = cluster && Array.isArray(cluster.vms) ? cluster.vms : [];
+    const visible = list.filter(vm => monitoredVmIds.includes(Number(vm.vmid != null ? vm.vmid : vm.id)));
+    if (!visible.length) {
+        container.innerHTML = '<div class="col-12 text-muted small">' + (t('vmListEmpty') || 'VM/CT не выбраны') + '</div>';
+        return;
+    }
+    const cards = visible.map(vm => {
+        const typeLabel = (vm.type || 'vm').toUpperCase();
+        const status = vm.status || 'unknown';
+        const statusClass = getVmStatusBadgeClass(status);
+        const statusLabel = getVmStatusLabel(status);
+        const note = vm.node ? (vm.node + (vm.vmid != null ? ` / ${vm.vmid}` : '')) : (vm.note || '');
+        return `
+            <div class="col-md-4 col-lg-3 mb-3">
+                <div class="node-card h-100">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="mb-0">${escapeHtml(vm.name || '')}</h6>
+                        <span class="badge ${statusClass}" title="${escapeHtml(statusLabel)}">${escapeHtml(statusLabel)}</span>
+                    </div>
+                    <div class="mb-1">
+                        <span class="badge bg-secondary me-1">${escapeHtml(typeLabel)}</span>
+                        <span class="small text-muted" title="${escapeHtml(note || '')}">${escapeHtml(note || '')}</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+    setHTMLIfChanged('vmsMonitorCards', cards || '');
 }
 
 // Show/hide loading
@@ -1338,6 +1588,12 @@ function updateDashboard(clusterData, storageData, backupsData) {
         setHTMLIfChanged('nodesContainer', nodesHtml);
     }
 
+    if (monitorMode) {
+        updateMonitorView(clusterData);
+        renderMonitorServicesList();
+        renderMonitorVmsList();
+    }
+
     updateStorageUI(storageData);
     updateBackupsUI(backupsData);
     
@@ -1346,7 +1602,7 @@ function updateDashboard(clusterData, storageData, backupsData) {
         <div class="col-md-4"><h3>${clusterData.quorum.expected}</h3><p class="text-muted">${t('quorumExpected')}</p></div>
         <div class="col-md-4"><h3 class="${quorumOk ? 'text-success' : 'text-warning'}">${clusterData.quorum.quorum}</h3><p class="text-muted">${t('quorumNeeded')}</p></div>
     `);
-    
+
     const quorumList = el('quorumNodesList');
     if (quorumList) {
         const quorumHtml = clusterData.quorum.nodes.map(node => `
@@ -1533,10 +1789,14 @@ function buildServiceTargetForApi(s) {
 }
 
 function renderMonitoredServices() {
-    const body = document.getElementById('servicesBody');
-    if (!body) return;
+    const container = document.getElementById('servicesCards');
+    if (!container) return;
     const list = Array.isArray(monitoredServices) ? monitoredServices : [];
-    const rows = list.map((s, idx) => {
+    if (!list.length) {
+        container.innerHTML = '<div class="col-12 text-muted small">' + (t('servicesListTitle') || 'Сервисы не настроены') + '</div>';
+        return;
+    }
+    const cards = list.map((s, idx) => {
         const statusBadge = s.lastStatus === 'up'
             ? `<span class="badge bg-success">${t('connected')}</span>`
             : (s.lastStatus === 'down'
@@ -1546,16 +1806,24 @@ function renderMonitoredServices() {
         const typeLabel = (s.type || 'tcp').toUpperCase();
         const target = getServiceTargetDisplay(s);
         return `
-            <tr>
-                <td>${escapeHtml(s.name || target)}</td>
-                <td><span class="badge bg-secondary">${escapeHtml(typeLabel)}</span></td>
-                <td><code>${escapeHtml(target)}</code></td>
-                <td>${statusBadge}</td>
-                <td>${latency}</td>
-            </tr>
+            <div class="col-md-4 col-lg-3 mb-3">
+                <div class="node-card h-100">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="mb-0">${escapeHtml(s.name || target)}</h6>
+                        ${statusBadge}
+                    </div>
+                    <div class="mb-1">
+                        <span class="badge bg-secondary me-1">${escapeHtml(typeLabel)}</span>
+                        <code class="small">${escapeHtml(target)}</code>
+                    </div>
+                    <div class="small text-muted">
+                        ${t('serviceLatencyHeader') || 'Задержка'}: ${latency}
+                    </div>
+                </div>
+            </div>
         `;
     }).join('');
-    setHTMLIfChanged('servicesBody', rows || '');
+    setHTMLIfChanged('servicesCards', cards || '');
 }
 
 function renderSettingsMonitoredServices() {
@@ -1566,11 +1834,16 @@ function renderSettingsMonitoredServices() {
         const typeLabel = (s.type || 'tcp').toUpperCase();
         const target = getServiceTargetDisplay(s);
         const id = s.id != null ? s.id : 0;
+        const showInMonitor = !monitorHiddenServiceIds.includes(Number(id));
         return `
             <tr>
                 <td>${escapeHtml(s.name || target)}</td>
                 <td><span class="badge bg-secondary">${escapeHtml(typeLabel)}</span></td>
                 <td><code>${escapeHtml(target)}</code></td>
+                <td class="text-center align-middle">
+                    <input type="checkbox" class="form-check-input" id="monitorVisible_${id}" ${showInMonitor ? 'checked' : ''}
+                           onchange="toggleMonitorVisible(${id})" title="${t('settingsServiceShowInMonitor') || 'Показывать в режиме монитора'}">
+                </td>
                 <td class="text-nowrap">
                     <button class="btn btn-sm btn-outline-danger" onclick="removeMonitoredService(${id})" title="${t('remove') || 'Удалить'}">
                         <i class="bi bi-trash"></i>
@@ -1580,6 +1853,179 @@ function renderSettingsMonitoredServices() {
         `;
     }).join('');
     setHTMLIfChanged('settingsServicesBody', rows || '');
+}
+
+function toggleMonitorVisible(serviceId) {
+    const id = Number(serviceId);
+    if (monitorHiddenServiceIds.includes(id)) {
+        monitorHiddenServiceIds = monitorHiddenServiceIds.filter(x => x !== id);
+    } else {
+        monitorHiddenServiceIds = [...monitorHiddenServiceIds, id];
+    }
+    saveSettingsToServer({ monitorHiddenServiceIds: monitorHiddenServiceIds });
+    renderSettingsMonitoredServices();
+    renderMonitorServicesList();
+}
+
+function getClusterVms() {
+    return (lastClusterData && Array.isArray(lastClusterData.vms)) ? lastClusterData.vms : [];
+}
+
+function fillVmSuggestDatalist() {
+    const listEl = document.getElementById('settingsVmSuggestList');
+    if (!listEl) return;
+    const vms = getClusterVms();
+    listEl.innerHTML = vms.map(vm => {
+        const label = [vm.name, vm.node, vm.vmid].filter(Boolean).join(' / ');
+        return `<option value="${escapeHtml(label)}">`;
+    }).join('');
+}
+
+async function loadClusterVmsForSettings(options) {
+    const silent = options && options.silent === true;
+    if (currentServerType !== 'proxmox') return;
+    const btn = document.getElementById('loadClusterVmsBtn');
+    if (btn && !silent) { btn.disabled = true; setText('loadClusterVmsBtnText', t('loading') || 'Загрузка…'); }
+    try {
+        const connId = getCurrentConnectionId();
+        const serverUrl = getCurrentServerUrl();
+        const headers = connId ? { 'X-Connection-Id': connId } : { 'Authorization': apiToken, 'X-Server-Url': serverUrl };
+        const res = await fetch('/api/cluster/full', { headers });
+        const data = await res.json();
+        if (res.ok && data && Array.isArray(data.vms)) {
+            lastClusterData = data;
+            fillVmSuggestDatalist();
+            renderSettingsMonitoredVms();
+            renderMonitorVmsList();
+            if (!silent) showToast(t('dataUpdated') || 'Список обновлён', 'success');
+        } else {
+            if (!silent) showToast(data?.error || (t('connectError') || 'Ошибка загрузки'), 'error');
+        }
+    } catch (e) {
+        if (!silent) showToast((t('connectError') || 'Ошибка') + ': ' + e.message, 'error');
+    }
+    if (btn) { btn.disabled = false; setText('loadClusterVmsBtnText', t('loadClusterVmsBtnText') || 'Обновить список VM/CT'); }
+}
+
+/** Добавить VM/CT в монитор по введённому ID или имени */
+function addVmToMonitorByIdOrName() {
+    const input = document.getElementById('settingsVmIdOrNameInput');
+    if (!input) return;
+    const raw = (input.value || '').trim();
+    if (!raw) {
+        showToast(t('settingsVmEnterIdOrName') || 'Введите ID или имя VM/CT', 'warning');
+        return;
+    }
+    let vms = getClusterVms();
+    if (!vms.length) {
+        showToast(t('settingsVmRefreshListFirst') || 'Сначала нажмите «Обновить список VM/CT»', 'warning');
+        return;
+    }
+    const asNum = parseInt(raw, 10);
+    const isNumeric = String(asNum) === raw && !Number.isNaN(asNum);
+    const matched = vms.filter(vm => {
+        if (isNumeric && vm.vmid != null) return Number(vm.vmid) === asNum;
+        const name = (vm.name || '').toLowerCase();
+        return name === raw.toLowerCase() || name.includes(raw.toLowerCase());
+    });
+    if (matched.length === 0) {
+        showToast(t('settingsVmNotFound') || 'Не найдено. Проверьте ID/имя или обновите список.', 'warning');
+        return;
+    }
+    matched.forEach(vm => {
+        if (vm.vmid == null) return;
+        const nid = Number(vm.vmid);
+        if (!monitoredVmIds.includes(nid)) monitoredVmIds = [...monitoredVmIds, nid];
+        monitorHiddenVmIds = monitorHiddenVmIds.filter(x => x !== nid);
+    });
+    saveSettingsToServer({ monitorVms: monitoredVmIds, monitorHiddenVmIds });
+    renderSettingsMonitoredVms();
+    renderMonitorVmsList();
+    input.value = '';
+    showToast(matched.length === 1
+        ? (t('settingsVmAdded') || 'Добавлено в монитор')
+        : (t('settingsVmAddedCount') || 'Добавлено в монитор').replace('{n}', matched.length),
+        'success');
+}
+
+function getVmStatusBadgeClass(status) {
+    const s = (status || '').toLowerCase();
+    if (s === 'running') return 'bg-success';
+    if (s === 'stopped') return 'bg-secondary';
+    return 'bg-warning text-dark';
+}
+
+function getVmStatusLabel(status) {
+    const key = 'vmStatus_' + (status || 'unknown').toLowerCase();
+    return t(key) || (status || 'unknown');
+}
+
+function renderSettingsMonitoredVms() {
+    const body = document.getElementById('settingsVmsBody');
+    if (!body) return;
+    const list = getClusterVms().filter(vm => monitoredVmIds.includes(Number(vm.vmid != null ? vm.vmid : vm.id)));
+    const rows = list.map((vm) => {
+        const id = vm.vmid != null ? vm.vmid : vm.id != null ? vm.id : 0;
+        const showInMonitor = !monitorHiddenVmIds.includes(Number(id));
+        const typeLabel = (vm.type || 'vm').toUpperCase();
+        const status = vm.status || 'unknown';
+        const note = vm.node ? (vm.node + (vm.vmid != null ? ` / ${vm.vmid}` : '')) : (vm.note || '');
+        const statusClass = getVmStatusBadgeClass(status);
+        const showInMonitorTitle = t('settingsVmShowInMonitor') || 'Показывать в режиме монитора';
+        return `
+            <tr>
+                <td>${escapeHtml(vm.name || '')}</td>
+                <td><span class="badge bg-secondary">${escapeHtml(typeLabel)}</span></td>
+                <td><span class="badge ${statusClass}">${escapeHtml(getVmStatusLabel(status))}</span></td>
+                <td>${note ? `<span class="text-muted small">${escapeHtml(note)}</span>` : '&mdash;'}</td>
+                <td class="text-center align-middle">
+                    <input type="checkbox" class="form-check-input" id="monitorVmVisible_${id}" ${showInMonitor ? 'checked' : ''}
+                           onchange="toggleMonitorVmVisible(${id})" title="${escapeHtml(showInMonitorTitle)}">
+                </td>
+                <td class="text-nowrap">
+                    <button class="btn btn-sm btn-outline-danger" onclick="removeMonitoredVm(${id})" title="${t('remove') || 'Удалить'}">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+    setHTMLIfChanged('settingsVmsBody', rows || '');
+}
+
+function toggleMonitorVmVisible(vmId) {
+    const id = Number(vmId);
+    if (monitorHiddenVmIds.includes(id)) {
+        monitorHiddenVmIds = monitorHiddenVmIds.filter(x => x !== id);
+    } else {
+        monitorHiddenVmIds = [...monitorHiddenVmIds, id];
+    }
+    saveSettingsToServer({ monitorHiddenVmIds });
+    renderSettingsMonitoredVms();
+    renderMonitorVmsList();
+}
+
+function removeMonitoredVm(vmId) {
+    const id = Number(vmId);
+    monitoredVmIds = monitoredVmIds.filter(x => x !== id);
+    monitorHiddenVmIds = monitorHiddenVmIds.filter(x => x !== id);
+    saveSettingsToServer({ monitorVms: monitoredVmIds, monitorHiddenVmIds });
+    renderSettingsMonitoredVms();
+    renderMonitorVmsList();
+    if (lastClusterData) {
+        const visible = (lastClusterData.vms || []).filter(vm => monitoredVmIds.includes(Number(vm.vmid)) && !monitorHiddenVmIds.includes(Number(vm.vmid)));
+        const wrap = document.getElementById('monitoredVmsDashboardWrap');
+        const tbody = document.getElementById('monitoredVmsDashboardBody');
+        if (wrap) wrap.style.display = visible.length ? 'block' : 'none';
+        if (tbody && visible.length) {
+            tbody.innerHTML = visible.map(vm => {
+                const typeLabel = (vm.type || 'vm').toUpperCase();
+                const status = vm.status || 'unknown';
+                const statusClass = getVmStatusBadgeClass(status);
+                return `<tr><td>${escapeHtml(vm.name || '')}</td><td><span class="badge bg-secondary">${escapeHtml(typeLabel)}</span></td><td><span class="badge ${statusClass}">${escapeHtml(getVmStatusLabel(status))}</span></td><td class="text-muted small">${escapeHtml(vm.node || '')}</td></tr>`;
+            }).join('');
+        }
+    }
 }
 
 async function checkService(index) {
@@ -1642,19 +2088,20 @@ async function checkAllServices() {
     }
 }
 
-async function exportSettingsAndServices() {
+async function exportServicesOnly() {
     try {
-        const resp = await fetch('/api/settings/export');
+        const resp = await fetch('/api/settings/export/services');
         if (!resp.ok) {
             const data = await resp.json().catch(() => ({}));
             throw new Error(data.error || `HTTP ${resp.status}`);
         }
         const json = await resp.json();
-        const blob = new Blob([JSON.stringify(json, null, 2)], { type: 'application/json' });
+        const only = { services: json.services || [] };
+        const blob = new Blob([JSON.stringify(only, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'proxmox-monitor-settings.json';
+        a.download = 'homelab-monitor-services.json';
         document.body.appendChild(a);
         a.click();
         a.remove();
@@ -1664,12 +2111,12 @@ async function exportSettingsAndServices() {
     }
 }
 
-function triggerImportSettings() {
-    const input = document.getElementById('settingsImportFile');
+function triggerImportServices() {
+    const input = document.getElementById('servicesImportFile');
     if (input) input.click();
 }
 
-async function handleImportSettingsFile(event) {
+async function handleImportServicesFile(event) {
     const file = event.target.files && event.target.files[0];
     if (!file) return;
     const reader = new FileReader();
@@ -1682,7 +2129,70 @@ async function handleImportSettingsFile(event) {
             return;
         }
         try {
-            const resp = await fetch('/api/settings/import', {
+            const resp = await fetch('/api/settings/import/services', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ services: parsed.services || parsed })
+            });
+            const data = await resp.json().catch(() => ({}));
+            if (!resp.ok || data.success === false) {
+                throw new Error(data.error || `HTTP ${resp.status}`);
+            }
+            showToast(t('settingsImportSuccess') || 'Настройки импортированы, данные обновлены', 'success');
+            const servicesData = await fetch('/api/settings/services').then(r => r.json()).catch(() => ({ services: [] }));
+            monitoredServices = Array.isArray(servicesData.services) ? servicesData.services : [];
+            renderMonitoredServices();
+            renderSettingsMonitoredServices();
+        } catch (err) {
+            showToast((t('settingsImportError') || t('errorUpdate')) + ': ' + err.message, 'error');
+        } finally {
+            event.target.value = '';
+        }
+    };
+    reader.readAsText(file, 'utf-8');
+}
+
+async function exportAllConfig() {
+    try {
+        const resp = await fetch('/api/settings/export/all');
+        if (!resp.ok) {
+            const data = await resp.json().catch(() => ({}));
+            throw new Error(data.error || `HTTP ${resp.status}`);
+        }
+        const json = await resp.json();
+        const blob = new Blob([JSON.stringify(json, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'homelab-monitor-config.json';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+    } catch (e) {
+        showToast((t('settingsImportError') || t('errorUpdate')) + ': ' + e.message, 'error');
+    }
+}
+
+function triggerImportAllConfig() {
+    const input = document.getElementById('allConfigImportFile');
+    if (input) input.click();
+}
+
+async function handleImportAllConfigFile(event) {
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        let parsed;
+        try {
+            parsed = JSON.parse(String(e.target.result || ''));
+        } catch {
+            showToast(t('settingsImportError') || 'Неверный файл импорта', 'error');
+            return;
+        }
+        try {
+            const resp = await fetch('/api/settings/import/all', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(parsed)
@@ -1693,7 +2203,8 @@ async function handleImportSettingsFile(event) {
             }
             showToast(t('settingsImportSuccess') || 'Настройки импортированы, данные обновлены', 'success');
             const settingsData = await loadSettings();
-            monitoredServices = Array.isArray((await fetch('/api/settings/services').then(r => r.json())).services) ? (await fetch('/api/settings/services').then(r => r.json())).services : [];
+            const servicesData = await fetch('/api/settings/services').then(r => r.json()).catch(() => ({ services: [] }));
+            monitoredServices = Array.isArray(servicesData.services) ? servicesData.services : [];
             renderMonitoredServices();
             renderSettingsMonitoredServices();
         } catch (err) {
@@ -1766,8 +2277,11 @@ async function removeMonitoredService(id) {
             return;
         }
         monitoredServices = monitoredServices.filter(s => s.id !== id);
+        monitorHiddenServiceIds = monitorHiddenServiceIds.filter(x => x !== Number(id));
+        saveSettingsToServer({ monitorHiddenServiceIds: monitorHiddenServiceIds });
         renderMonitoredServices();
         renderSettingsMonitoredServices();
+        renderMonitorServicesList();
     } catch (e) {
         showToast(t('connectError') + ': ' + e.message, 'error');
     }
@@ -1904,21 +2418,38 @@ async function loadSettings() {
         if (ry) ry.value = thresholds.ramYellow;
         updateThresholdLabels();
     }
-    if (Array.isArray(data.proxmox_servers) && data.proxmox_servers.length) proxmoxServers = data.proxmox_servers;
-    if (Array.isArray(data.truenas_servers) && data.truenas_servers.length) truenasServers = data.truenas_servers;
-    if (data.connection_id_map && typeof data.connection_id_map === 'object') connectionIdMap = data.connection_id_map;
+    if (Array.isArray(data.proxmox_servers) && data.proxmox_servers.length) proxmoxServers = data.proxmox_servers.map(u => normalizeUrlClient(u));
+    if (Array.isArray(data.truenas_servers) && data.truenas_servers.length) truenasServers = data.truenas_servers.map(u => normalizeUrlClient(u));
+    if (data.connection_id_map && typeof data.connection_id_map === 'object') {
+        connectionIdMap = {};
+        for (const [k, id] of Object.entries(data.connection_id_map)) {
+            const parts = String(k).split('|');
+            if (parts.length >= 2) {
+                const type = parts[0];
+                const url = parts.slice(1).join('|');
+                connectionIdMap[connectionKey(type, url)] = id;
+            } else {
+                connectionIdMap[k] = id;
+            }
+        }
+    }
     monitoredServices = Array.isArray(servicesData.services) ? servicesData.services : [];
+    monitoredVmIds = [];
+    if (Array.isArray(data.monitor_vms) && data.monitor_vms.length) {
+        data.monitor_vms.forEach(x => {
+            const id = typeof x === 'number' ? x : (x && (x.vmid ?? x.id));
+            if (id != null) monitoredVmIds.push(Number(id));
+        });
+    }
     if (data.current_server_index != null) currentServerIndex = parseInt(data.current_server_index, 10) || 0;
     if (data.current_truenas_index != null) currentTrueNASServerIndex = parseInt(data.current_truenas_index, 10) || 0;
     if (data.server_type) currentServerType = data.server_type === 'truenas' ? 'truenas' : 'proxmox';
     if (data.monitor_theme === 'light' || data.monitor_theme === 'dark') monitorTheme = data.monitor_theme;
+    monitorHiddenServiceIds = Array.isArray(data.monitor_hidden_service_ids) ? data.monitor_hidden_service_ids : [];
+    monitorHiddenVmIds = Array.isArray(data.monitor_hidden_vm_ids) ? data.monitor_hidden_vm_ids : [];
     if (data.monitor_mode === true || data.monitor_mode === 'true') {
         monitorMode = true;
         document.body.classList.add('monitor-mode');
-        const dashboardContent = document.getElementById('dashboardContent');
-        const monitorView = document.getElementById('monitorView');
-        if (dashboardContent) dashboardContent.style.display = 'block';
-        if (monitorView) monitorView.style.display = 'none';
         const monitorBtn = document.getElementById('monitorModeBtn');
         if (monitorBtn) {
             monitorBtn.classList.add('active');
@@ -1926,7 +2457,9 @@ async function loadSettings() {
             monitorBtn.classList.add('btn-info');
             monitorBtn.innerHTML = '<i class="bi bi-check-lg"></i> <span id="monitorModeText">' + t('monitorModeOn') + '</span>';
         }
-        monitorCurrentView = currentServerType === 'truenas' ? 'truenas' : 'proxmox';
+        // По умолчанию после перезагрузки открываем экран кластера (без автозапуска fullscreen — только по клику пользователя)
+        monitorCurrentView = 'cluster';
+        applyMonitorView(monitorCurrentView);
         applyMonitorTheme();
         initMonitorSwipes();
     }
@@ -2078,87 +2611,96 @@ function setCurrentIndexForType(index) {
     }
 }
 
-// Render servers list
-function renderServerList() {
-    const container = document.getElementById('serverList');
+// Render one server list into a container
+function renderOneServerList(containerId, servers, currentIdx, type) {
+    const container = document.getElementById(containerId);
     if (!container) return;
-    
     container.innerHTML = '';
-    
-    const servers = getServersForCurrentType();
-    const currentIdx = getCurrentIndexForType();
+    const placeholder = type === 'truenas' ? 'https://truenas.local' : 'https://192.168.1.1:8006';
     servers.forEach((server, index) => {
         const div = document.createElement('div');
         div.className = 'input-group mb-2';
-        
         const isCurrent = index === currentIdx;
-        const statusBadge = isCurrent 
-            ? '<span class="badge bg-success ms-2">✓</span>' 
-            : '';
-        
+        const statusBadge = isCurrent ? '<span class="badge bg-success ms-2">✓</span>' : '';
         div.innerHTML = `
-            <input type="text" class="form-control form-control-sm ${isCurrent ? 'border-success' : ''}" 
-                   value="${server}" data-index="${index}" 
-                   onchange="updateServerUrl(${index}, this.value)"
-                   placeholder="https://192.168.1.1:8006">
-            <button class="btn btn-outline-secondary btn-sm" type="button" onclick="setCurrentServer(${index})" 
+            <input type="text" class="form-control form-control-sm ${isCurrent ? 'border-success' : ''}"
+                   value="${escapeHtml(server)}" data-index="${index}"
+                   onchange="updateServerUrlByType('${type}', ${index}, this.value)"
+                   placeholder="${placeholder}">
+            <button class="btn btn-outline-secondary btn-sm" type="button" onclick="setCurrentServerByType('${type}', ${index})"
                     title="${t('currentServer')}">
                 <i class="bi bi-${isCurrent ? 'check-lg' : 'arrow-right'}"></i>
             </button>
-            <button class="btn btn-outline-danger btn-sm" type="button" onclick="removeServer(${index})" 
+            <button class="btn btn-outline-danger btn-sm" type="button" onclick="removeServerByType('${type}', ${index})"
                     title="${t('removeServer')}">
                 <i class="bi bi-trash"></i>
             </button>
             ${statusBadge}
         `;
-        
         container.appendChild(div);
     });
 }
 
-// Add new server
-function addServer() {
-    const servers = getServersForCurrentType();
-    servers.push('https://');
+// Render servers list (both Proxmox and TrueNAS blocks)
+function renderServerList() {
+    renderOneServerList('serverListProxmox', proxmoxServers, currentServerIndex, 'proxmox');
+    renderOneServerList('serverListTrueNAS', truenasServers, currentTrueNASServerIndex, 'truenas');
+}
+
+// Add new server by type
+function addServerByType(type) {
+    if (type === 'truenas') {
+        truenasServers.push('https://');
+    } else {
+        proxmoxServers.push('https://');
+    }
     renderServerList();
     saveServers();
 }
 
-// Update server URL
-function updateServerUrl(index, url) {
-    const servers = getServersForCurrentType();
-    servers[index] = url.trim();
+// Update server URL by type
+function updateServerUrlByType(type, index, url) {
+    const servers = type === 'truenas' ? truenasServers : proxmoxServers;
+    servers[index] = String(url || '').trim();
     saveServers();
 }
 
-// Set current server
-function setCurrentServer(index) {
-    setCurrentIndexForType(index);
+// Set current server by type
+function setCurrentServerByType(type, index) {
+    if (type === 'truenas') {
+        currentTrueNASServerIndex = index;
+        saveSettingsToServer({ currentTrueNASServerIndex: index });
+    } else {
+        currentServerIndex = index;
+        saveSettingsToServer({ currentServerIndex: index });
+    }
     renderServerList();
     updateCurrentServerBadge();
-    
-    if (apiToken) {
-        const servers = getServersForCurrentType();
+    const servers = type === 'truenas' ? truenasServers : proxmoxServers;
+    if (servers[index]) {
         showToast(`${t('currentServer')}: ${servers[index]}`, 'info');
-        refreshData();
+        if (currentServerType === type) refreshData();
     }
 }
 
-// Remove server
-function removeServer(index) {
-    const servers = getServersForCurrentType();
+// Remove server by type
+function removeServerByType(type, index) {
+    const servers = type === 'truenas' ? truenasServers : proxmoxServers;
     if (servers.length <= 1) {
         showToast(currentLanguage === 'ru' ? 'Нельзя удалить последний сервер' : 'Cannot remove the last server', 'warning');
         return;
     }
-    
     servers.splice(index, 1);
-    
-    const currentIdx = getCurrentIndexForType();
+    const currentIdx = type === 'truenas' ? currentTrueNASServerIndex : currentServerIndex;
     if (currentIdx >= servers.length) {
-        setCurrentIndexForType(servers.length - 1);
+        if (type === 'truenas') {
+            currentTrueNASServerIndex = servers.length - 1;
+            saveSettingsToServer({ currentTrueNASServerIndex: currentTrueNASServerIndex });
+        } else {
+            currentServerIndex = servers.length - 1;
+            saveSettingsToServer({ currentServerIndex: currentServerIndex });
+        }
     }
-    
     renderServerList();
     saveServers();
 }

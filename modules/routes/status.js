@@ -10,7 +10,7 @@ router.get('/', (req, res) => {
     res.json({
         status: 'ok',
         timestamp: new Date().toISOString(),
-        server: 'Proxmox Monitor',
+        server: 'HomeLab Monitor',
         version: config.version,
         proxmox: {
             host: config.proxmox.host,

@@ -6,7 +6,7 @@ const config = require('../config');
 
 // Тест токена
 router.post('/test', async (req, res) => {
-    const { token, remember, serverUrl } = req.body;
+    const { token, serverUrl } = req.body;
     
     if (!token) {
         log('warn', 'Token test failed: no token provided');
@@ -22,20 +22,6 @@ router.post('/test', async (req, res) => {
         const nodes = await proxmox.getNodes(token, serverUrl || null);
         
         log('info', `Token test successful, found ${nodes.length} nodes`);
-        
-        if (remember) {
-            const cookieOptions = {
-                httpOnly: true,
-                secure: config.env === 'production',
-                sameSite: 'lax',
-                path: '/',
-                maxAge: 30 * 24 * 60 * 60 * 1000
-            };
-            
-            res.cookie('proxmox_token', token, cookieOptions);
-            if (serverUrl) res.cookie('proxmox_server', serverUrl, cookieOptions);
-            log('info', 'Token saved to cookies');
-        }
         
         res.json({ 
             success: true, 

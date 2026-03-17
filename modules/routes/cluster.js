@@ -80,12 +80,22 @@ router.get('/full', checkAuth, async (req, res) => {
             })
         );
         
-        // Считаем VM и контейнеры
+        // Считаем VM и контейнеры и формируем плоский список гостей
+        const vms = [];
         clusterResources.forEach(resource => {
-            if (resource.type === 'qemu') {
-                clusterSummary.totalVMs++;
-            } else if (resource.type === 'lxc') {
-                clusterSummary.totalContainers++;
+            if (resource.type === 'qemu' || resource.type === 'lxc') {
+                if (resource.type === 'qemu') {
+                    clusterSummary.totalVMs++;
+                } else if (resource.type === 'lxc') {
+                    clusterSummary.totalContainers++;
+                }
+                vms.push({
+                    vmid: resource.vmid,
+                    type: resource.type === 'qemu' ? 'vm' : 'ct',
+                    name: resource.name || '',
+                    node: resource.node || '',
+                    status: resource.status || 'unknown'
+                });
             }
         });
         
@@ -107,6 +117,7 @@ router.get('/full', checkAuth, async (req, res) => {
         
         const result = {
             nodes: nodesDetails,
+            vms,
             cluster: {
                 summary: {
                     totalCPU: clusterSummary.totalCPU,

@@ -5,7 +5,7 @@ const { log } = require('../utils');
 const config = require('../config');
 
 router.post('/test', async (req, res) => {
-    const { apiKey, token, remember, serverUrl } = req.body || {};
+    const { apiKey, token, serverUrl } = req.body || {};
     let key = (apiKey || token || '').toString().trim();
     if (key.toLowerCase().startsWith('bearer ')) key = key.slice(7).trim();
 
@@ -21,18 +21,6 @@ router.post('/test', async (req, res) => {
 
     try {
         const info = await truenas.getSystemInfo(key, serverUrl || null);
-
-        if (remember) {
-            const cookieOptions = {
-                httpOnly: true,
-                secure: config.env === 'production',
-                sameSite: 'lax',
-                path: '/',
-                maxAge: 30 * 24 * 60 * 60 * 1000
-            };
-            res.cookie('truenas_key', key, cookieOptions);
-            if (serverUrl) res.cookie('truenas_server', serverUrl, cookieOptions);
-        }
 
         res.json({
             success: true,

@@ -156,7 +156,7 @@ getDb()
     .then(() => {
         app.listen(config.port, '0.0.0.0', () => {
             console.log('=================================');
-            console.log(`Proxmox Monitor запущен на порту ${config.port}`);
+            console.log(`HomeLab Monitor запущен на порту ${config.port}`);
             console.log('=================================');
             console.log(`Режим: ${config.env}`);
             console.log(`БД: SQLite (data/app.db)`);
