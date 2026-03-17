@@ -37,6 +37,12 @@
                             </button>
                         </li>
                         <li class="nav-item me-2">
+                            <select class="form-select form-select-sm" id="serverTypeQuick" onchange="setServerType(this.value)" style="min-width: 130px;">
+                                <option value="proxmox">Proxmox</option>
+                                <option value="truenas">TrueNAS</option>
+                            </select>
+                        </li>
+                        <li class="nav-item me-2">
                             <button class="btn btn-outline-info btn-sm" onclick="toggleMonitorMode()" id="monitorModeBtn" title="Режим монитора">
                                 <i class="bi bi-display"></i> <span id="monitorModeText">Монитор</span>
                             </button>
@@ -351,7 +357,7 @@
             </ul>
 
             <!-- Индикатор загрузки -->
-            <div id="loadingIndicator" class="text-center py-5" style="display: none;">
+            <div id="loadingIndicator" class="text-center py-5">
                 <div class="spinner-border text-primary mb-3" role="status"></div>
                 <p class="text-muted" id="loadingText">Загрузка данных из кластера...</p>
             </div>
@@ -454,6 +460,14 @@
         <button id="monitorExitBtnFixed" onclick="toggleMonitorMode()" title="Выход из режима монитора">
             <i class="bi bi-x-lg"></i> Выход
         </button>
+        
+        <!-- Переключатель типа сервера в режиме монитора -->
+        <div id="monitorServerTypeSwitch">
+            <select class="form-select form-select-sm" id="monitorServerTypeSelect" onchange="setServerType(this.value)">
+                <option value="proxmox">Proxmox</option>
+                <option value="truenas">TrueNAS</option>
+            </select>
+        </div>
     </div>
 
     <!-- Скрипты -->

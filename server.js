@@ -44,6 +44,7 @@ app.use('/api/storage', require('./modules/routes/storage'));
 app.use('/api/backups', require('./modules/routes/backups'));
 app.use('/api/truenas/auth', require('./modules/routes/truenas-auth'));
 app.use('/api/truenas', require('./modules/routes/truenas-status'));
+app.use('/api/connections', require('./modules/routes/connections'));
 
 // Доступные языки
 app.get('/api/languages', (req, res) => {

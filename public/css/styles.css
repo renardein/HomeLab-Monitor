@@ -507,6 +507,19 @@
             padding: 5px;
             overflow-x: hidden;
         }
+
+        /* Use full screen real estate in monitor mode */
+        body.monitor-mode .container {
+            max-width: none;
+            width: 100vw;
+            margin: 0;
+            padding-left: 0;
+            padding-right: 0;
+        }
+        
+        body.monitor-mode #dashboardSection {
+            min-height: 100vh;
+        }
         
         body.monitor-mode .navbar,
         body.monitor-mode #configSection,
@@ -637,4 +650,123 @@
         
         #monitorExitBtnFixed {
             display: none;
+        }
+
+        /* Server type switch in monitor mode */
+        #monitorServerTypeSwitch {
+            display: none;
+        }
+
+        body.monitor-mode #monitorServerTypeSwitch {
+            display: block !important;
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 9999;
+            width: 160px;
+        }
+
+        body.monitor-mode #monitorServerTypeSwitch .form-select {
+            background: rgba(15, 52, 96, 0.9);
+            border-color: #533483;
+            color: #fff;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+
+        /* Smooth loading overlay (prevents layout shifts) */
+        #loadingIndicator {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: rgba(245, 245, 245, 0.85);
+            backdrop-filter: blur(2px);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 180ms ease;
+            z-index: 2000;
+        }
+
+        body.dark-mode #loadingIndicator {
+            background: rgba(26, 26, 46, 0.7);
+        }
+
+        #loadingIndicator.is-visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        /* Monitor mode tuning for 1920x1200 (16:10 dashboards) */
+        @media (width: 1920px) and (height: 1200px) {
+            body.monitor-mode {
+                padding: 8px;
+            }
+
+            body.monitor-mode .container {
+                width: 100vw;
+                padding-left: 0;
+                padding-right: 0;
+            }
+
+            body.monitor-mode #dashboardSection {
+                padding: 8px;
+            }
+
+            /* Top stats row: slightly smaller to fit 16:10 */
+            body.monitor-mode .stat-card {
+                padding: 16px;
+            }
+
+            body.monitor-mode .stat-value {
+                font-size: 3.1rem;
+                line-height: 1.05;
+            }
+
+            body.monitor-mode .stat-label {
+                font-size: 1.05rem;
+            }
+
+            /* Cards/tables density */
+            body.monitor-mode .card-header {
+                font-size: 1.35rem;
+                padding: 12px 16px;
+            }
+
+            body.monitor-mode .node-card {
+                padding: 12px;
+                margin-bottom: 12px;
+            }
+
+            body.monitor-mode .table {
+                font-size: 1.02rem;
+            }
+
+            body.monitor-mode .table th {
+                font-size: 1.08rem;
+                padding: 10px;
+            }
+
+            body.monitor-mode .table td {
+                padding: 8px;
+            }
+
+            body.monitor-mode .progress {
+                height: 22px;
+            }
+
+            body.monitor-mode .display-6 {
+                font-size: 2.2rem;
+            }
+
+            body.monitor-mode h5,
+            body.monitor-mode h6 {
+                font-size: 1.15rem;
+            }
+
+            body.monitor-mode .badge {
+                font-size: 0.95rem;
+                padding: 6px 10px;
+            }
         }

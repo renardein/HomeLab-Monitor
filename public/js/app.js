@@ -19,6 +19,9 @@ let proxmoxServers = ['https://192.168.1.1:8006']; // List of Proxmox servers
 let currentServerIndex = 0; // Current server index
 let truenasServers = ['https://192.168.1.2']; // List of TrueNAS servers
 let currentTrueNASServerIndex = 0;
+let connectionIdMap = {}; // key: `${type}|${url}` -> connectionId (no secrets)
+let isRefreshing = false;
+const htmlCache = {}; // elementId -> last innerHTML string
 
 function el(id) {
     return document.getElementById(id);
@@ -32,6 +35,13 @@ function setText(id, value) {
 function setHTML(id, value) {
     const e = el(id);
     if (e) e.innerHTML = value;
+}
+
+function setHTMLIfChanged(id, value) {
+    const v = String(value);
+    if (htmlCache[id] === v) return;
+    htmlCache[id] = v;
+    setHTML(id, v);
 }
 
 function setValue(id, value) {
@@ -88,6 +98,10 @@ function setServerType(type) {
 
     const select = document.getElementById('serverTypeSelect');
     if (select) select.value = currentServerType;
+    const quick = document.getElementById('serverTypeQuick');
+    if (quick) quick.value = currentServerType;
+    const monitorSelect = document.getElementById('monitorServerTypeSelect');
+    if (monitorSelect) monitorSelect.value = currentServerType;
 
     // Update connection labels/hints
     const isTrueNAS = currentServerType === 'truenas';
@@ -288,6 +302,20 @@ document.addEventListener('DOMContentLoaded', async function() {
     updateCurrentServerBadge();
 });
 
+function connectionKey(type, url) {
+    return `${type}|${String(url || '').trim()}`;
+}
+
+function getCurrentConnectionId() {
+    const url = getCurrentServerUrl();
+    return connectionIdMap[connectionKey(currentServerType, url)] || null;
+}
+
+function saveConnectionId(type, url, id) {
+    connectionIdMap[connectionKey(type, url)] = id;
+    localStorage.setItem('connectionIdMap', JSON.stringify(connectionIdMap));
+}
+
 // Check saved token
 async function checkSavedToken() {
     try {
@@ -351,19 +379,16 @@ async function testTokenAndConnect(token) {
 // Logout function
 async function logout() {
     try {
-        const response = await fetch(currentServerType === 'truenas' ? '/api/truenas/auth/logout' : '/api/auth/logout', {
-            method: 'POST'
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            showToast(t('logoutSuccess'), 'success');
-            apiToken = null;
-            setValue('apiToken', '');
-            setDisplay('logoutContainer', 'none');
-            showConfig();
-        }
+        // Clear local token and mapping for current url (server-side secrets remain unless user deletes connection)
+        const url = getCurrentServerUrl();
+        delete connectionIdMap[connectionKey(currentServerType, url)];
+        localStorage.setItem('connectionIdMap', JSON.stringify(connectionIdMap));
+
+        showToast(t('logoutSuccess'), 'success');
+        apiToken = null;
+        setValue('apiToken', '');
+        setDisplay('logoutContainer', 'none');
+        showConfig();
     } catch (error) {
         showToast('Ошибка при выходе: ' + error.message, 'error');
     }
@@ -514,7 +539,7 @@ function showDashboard() {
 // Start auto refresh
 function startAutoRefresh() {
     if (autoRefreshInterval) clearInterval(autoRefreshInterval);
-    autoRefreshInterval = setInterval(refreshData, refreshIntervalMs);
+    autoRefreshInterval = setInterval(() => refreshData({ silent: true }), refreshIntervalMs);
 }
 
 // Connect
@@ -537,6 +562,27 @@ async function connect() {
     
     const serverUrl = getCurrentServerUrl();
     try {
+        // If user wants to remember, store the secret server-side and keep only connectionId client-side.
+        if (rememberToken) {
+            const upsertRes = await fetch('/api/connections/upsert', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    type: currentServerType,
+                    url: serverUrl,
+                    secret: token
+                })
+            });
+            const upsertData = await upsertRes.json();
+            if (!upsertRes.ok || !upsertData?.success) {
+                throw new Error(upsertData?.error || `connections: HTTP ${upsertRes.status}`);
+            }
+            saveConnectionId(currentServerType, upsertData.connection.url, upsertData.connection.id);
+            apiToken = null; // do not keep secret in memory when remembered
+        } else {
+            apiToken = token;
+        }
+
         const response = await fetch(currentServerType === 'truenas' ? '/api/truenas/auth/test' : '/api/auth/test', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -549,7 +595,6 @@ async function connect() {
         
         if (data.success) {
             showToast(t('connectSuccess'), 'success');
-            apiToken = token;
             setDisplay('logoutContainer', 'block');
             updateConnectionStatus(true);
             showDashboard();
@@ -585,6 +630,20 @@ async function testConnection() {
     
     const serverUrl = getCurrentServerUrl();
     try {
+        const connId = getCurrentConnectionId();
+        if (connId) {
+            const testRes = await fetch(`/api/connections/${connId}/test`, { method: 'POST' });
+            const testData = await testRes.json();
+            if (testRes.ok && testData.success) {
+                showToast(t('connectionStatusConnected'), 'success');
+                updateConnectionStatus(true);
+                return;
+            }
+            showToast(t('connectionStatusDisconnected') + ': ' + (testData.error || `HTTP ${testRes.status}`), 'error');
+            updateConnectionStatus(false);
+            return;
+        }
+
         const response = await fetch(currentServerType === 'truenas' ? '/api/truenas/auth/test' : '/api/auth/test', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -631,32 +690,29 @@ function updateConnectionStatus(connected) {
 }
 
 // Refresh data
-async function refreshData() {
-    if (!apiToken) {
-        try {
-            const tokenResponse = await fetch(currentServerType === 'truenas' ? '/api/truenas/auth/key' : '/api/auth/token');
-            const tokenData = await tokenResponse.json();
-            
-            if (tokenData.success) {
-                apiToken = tokenData.token || tokenData.apiKey;
-            } else {
-                showToast(t('errorNoToken'), 'error');
-                return;
-            }
-        } catch (error) {
-            showToast(t('errorNoToken'), 'error');
-            return;
-        }
+async function refreshData(options = {}) {
+    const silent = options === true ? true : !!options.silent;
+
+    if (isRefreshing) return;
+    isRefreshing = true;
+    const connId = getCurrentConnectionId();
+    if (!connId && !apiToken) {
+        if (!silent) showToast(t('errorNoToken'), 'error');
+        isRefreshing = false;
+        return;
     }
 
-    showLoading(true);
+    if (!silent) showLoading(true);
 
     try {
+        const prevScrollY = window.scrollY;
+        const prevActiveId = document.activeElement && document.activeElement.id ? document.activeElement.id : null;
+
         if (currentServerType === 'truenas') {
             const serverUrl = getCurrentServerUrl();
             const [systemRes, poolsRes] = await Promise.all([
-                fetch('/api/truenas/system', { headers: { 'Authorization': apiToken, 'X-Server-Url': serverUrl } }),
-                fetch('/api/truenas/storage/pools', { headers: { 'Authorization': apiToken, 'X-Server-Url': serverUrl } })
+                fetch('/api/truenas/system', { headers: connId ? { 'X-Connection-Id': connId } : { 'Authorization': apiToken, 'X-Server-Url': serverUrl } }),
+                fetch('/api/truenas/storage/pools', { headers: connId ? { 'X-Connection-Id': connId } : { 'Authorization': apiToken, 'X-Server-Url': serverUrl } })
             ]);
             const systemData = await systemRes.json();
             const poolsData = await poolsRes.json();
@@ -666,9 +722,9 @@ async function refreshData() {
         } else {
             const serverUrl = getCurrentServerUrl();
             const [clusterRes, storageRes, backupsRes] = await Promise.all([
-                fetch('/api/cluster/full', { headers: { 'Authorization': apiToken, 'X-Server-Url': serverUrl } }),
-                fetch('/api/storage', { headers: { 'Authorization': apiToken, 'X-Server-Url': serverUrl } }),
-                fetch('/api/backups/jobs', { headers: { 'Authorization': apiToken, 'X-Server-Url': serverUrl } })
+                fetch('/api/cluster/full', { headers: connId ? { 'X-Connection-Id': connId } : { 'Authorization': apiToken, 'X-Server-Url': serverUrl } }),
+                fetch('/api/storage', { headers: connId ? { 'X-Connection-Id': connId } : { 'Authorization': apiToken, 'X-Server-Url': serverUrl } }),
+                fetch('/api/backups/jobs', { headers: connId ? { 'X-Connection-Id': connId } : { 'Authorization': apiToken, 'X-Server-Url': serverUrl } })
             ]);
 
             const clusterData = await clusterRes.json();
@@ -681,12 +737,22 @@ async function refreshData() {
             
             updateDashboard(clusterData, storageData, backupsData, {});
         }
-        showToast(t('dataUpdated'), 'success');
+        
+        // Restore scroll/focus to avoid visible "jumps" on full re-render
+        requestAnimationFrame(() => {
+            window.scrollTo({ top: prevScrollY, left: 0, behavior: 'auto' });
+            if (prevActiveId) {
+                const a = document.getElementById(prevActiveId);
+                if (a && typeof a.focus === 'function') a.focus({ preventScroll: true });
+            }
+        });
+        if (!silent) showToast(t('dataUpdated'), 'success');
 
     } catch (error) {
-        showToast(t('errorUpdate') + ': ' + error.message, 'error');
+        if (!silent) showToast(t('errorUpdate') + ': ' + error.message, 'error');
     } finally {
-        showLoading(false);
+        if (!silent) showLoading(false);
+        isRefreshing = false;
     }
 }
 
@@ -718,7 +784,7 @@ function updateTrueNASDashboard(systemData, poolsData) {
     // Nodes container: show system summary card
     const nodesContainer = document.getElementById('nodesContainer');
     if (nodesContainer) {
-        nodesContainer.innerHTML = `
+        setHTMLIfChanged('nodesContainer', `
             <div class="col-12">
                 <div class="node-card">
                     <div class="d-flex justify-content-between align-items-center mb-2">
@@ -731,7 +797,7 @@ function updateTrueNASDashboard(systemData, poolsData) {
                     </div>
                 </div>
             </div>
-        `;
+        `);
     }
 
     // Storage tab: reuse existing storage UI, but values are bytes/numbers
@@ -755,12 +821,13 @@ function updateTrueNASDashboard(systemData, poolsData) {
         backupsTable = null;
     }
 
-    setHTML('lastUpdate', '<i class="bi bi-clock"></i> ' + t('lastUpdate') + ': ' + new Date().toLocaleString(currentLanguage === 'ru' ? 'ru-RU' : 'en-US'));
+    setHTMLIfChanged('lastUpdate', '<i class="bi bi-clock"></i> ' + t('lastUpdate') + ': ' + new Date().toLocaleString(currentLanguage === 'ru' ? 'ru-RU' : 'en-US'));
 }
 
 // Show/hide loading
 function showLoading(show) {
-    setDisplay('loadingIndicator', show ? 'block' : 'none');
+    const ind = document.getElementById('loadingIndicator');
+    if (ind) ind.classList.toggle('is-visible', !!show);
     const refreshBtn = el('refreshBtn');
     if (refreshBtn) refreshBtn.disabled = show;
 }
@@ -823,7 +890,8 @@ function updateDashboard(clusterData, storageData, backupsData) {
     setText('clusterContainers', (summary.totalContainers || 0) + ' ' + t('containers'));
 
     const nodesContainer = el('nodesContainer');
-    if (nodesContainer) nodesContainer.innerHTML = clusterData.nodes.map(node => {
+    if (nodesContainer) {
+        const nodesHtml = clusterData.nodes.map(node => {
         return `
             <div class="col-md-6 col-lg-3">
                 <div class="node-card">
@@ -856,41 +924,46 @@ function updateDashboard(clusterData, storageData, backupsData) {
                 </div>
             </div>
         `;
-    }).join('');
+        }).join('');
+        setHTMLIfChanged('nodesContainer', nodesHtml);
+    }
 
     updateStorageUI(storageData);
     updateBackupsUI(backupsData);
     
-    setHTML('quorumStats', `
+    setHTMLIfChanged('quorumStats', `
         <div class="col-md-4"><h3>${clusterData.quorum.votes}</h3><p class="text-muted">${t('quorumVotes')}</p></div>
         <div class="col-md-4"><h3>${clusterData.quorum.expected}</h3><p class="text-muted">${t('quorumExpected')}</p></div>
         <div class="col-md-4"><h3 class="${quorumOk ? 'text-success' : 'text-warning'}">${clusterData.quorum.quorum}</h3><p class="text-muted">${t('quorumNeeded')}</p></div>
     `);
     
     const quorumList = el('quorumNodesList');
-    if (quorumList) quorumList.innerHTML = clusterData.quorum.nodes.map(node => `
+    if (quorumList) {
+        const quorumHtml = clusterData.quorum.nodes.map(node => `
         <div class="col-md-3 mb-2">
             <span class="badge ${node.online ? 'bg-success' : 'bg-secondary'} p-2 w-100">
                 ${node.name} (${node.votes} ${node.votes === 1 ? t('quorumVote') : t('quorumVotes_plural')})
             </span>
         </div>
     `).join('');
+        setHTMLIfChanged('quorumNodesList', quorumHtml);
+    }
 
-    setHTML('lastUpdate', '<i class="bi bi-clock"></i> ' + t('lastUpdate') + ': ' + new Date().toLocaleString(currentLanguage === 'ru' ? 'ru-RU' : 'en-US'));
+    setHTMLIfChanged('lastUpdate', '<i class="bi bi-clock"></i> ' + t('lastUpdate') + ': ' + new Date().toLocaleString(currentLanguage === 'ru' ? 'ru-RU' : 'en-US'));
 }
 
 // Update storage UI
 function updateStorageUI(data) {
     if (!data || !data.all) return;
     
-    document.getElementById('storageStats').innerHTML = `
+    setHTMLIfChanged('storageStats', `
         <div class="col-md-3"><div class="stat-card"><div class="stat-value">${data.summary.total}</div><div class="stat-label">${t('storageTotal')}</div></div></div>
         <div class="col-md-3"><div class="stat-card"><div class="stat-value text-success">${data.summary.active}</div><div class="stat-label">${t('storageActive')}</div></div></div>
         <div class="col-md-3"><div class="stat-card"><div class="stat-value">${data.summary.total_space_fmt}</div><div class="stat-label">${t('storageTotalSpace')}</div></div></div>
         <div class="col-md-3"><div class="stat-card"><div class="stat-value">${data.summary.used_space_fmt}</div><div class="stat-label">${t('storageUsedSpace')}</div></div></div>
-    `;
+    `);
     
-    document.getElementById('storageTypes').innerHTML = Object.keys(data.byType).map(type => {
+    setHTMLIfChanged('storageTypes', Object.keys(data.byType).map(type => {
         const tData = data.byType[type];
         const usage = tData.total > 0 ? Math.round((tData.used / tData.total) * 100) : 0;
         return `
@@ -905,9 +978,9 @@ function updateStorageUI(data) {
                 </div></div>
             </div>
         `;
-    }).join('');
+    }).join(''));
     
-    document.getElementById('storageBody').innerHTML = data.all.map(s => `
+    setHTMLIfChanged('storageBody', data.all.map(s => `
         <tr>
             <td>${s.node}</td>
             <td><strong>${s.name}</strong></td>
@@ -926,7 +999,7 @@ function updateStorageUI(data) {
             </td>
             <td><small>${s.type === 'nfs' && s.server ? `${s.server}:${s.export || ''}` : s.node}</small></td>
         </tr>
-    `).join('');
+    `).join(''));
     
     if (!storageTable) {
         storageTable = $('#storageTable').DataTable({ 
@@ -947,16 +1020,16 @@ function updateStorageUI(data) {
 function updateBackupsUI(data) {
     if (!data || !data.jobs) return;
     
-    document.getElementById('backupStats').innerHTML = `
+    setHTMLIfChanged('backupStats', `
         <div class="col-md-2"><div class="stat-card"><div class="stat-value">${data.stats.total}</div><div class="stat-label">${t('backupTotal')}</div></div></div>
         <div class="col-md-2"><div class="stat-card"><div class="stat-value text-success">${data.stats.enabled}</div><div class="stat-label">${t('backupEnabled')}</div></div></div>
         <div class="col-md-2"><div class="stat-card"><div class="stat-value text-success">${data.stats.success}</div><div class="stat-label">${t('backupSuccess')}</div></div></div>
         <div class="col-md-2"><div class="stat-card"><div class="stat-value text-danger">${data.stats.error}</div><div class="stat-label">${t('backupError')}</div></div></div>
         <div class="col-md-2"><div class="stat-card"><div class="stat-value text-primary">${data.stats.running}</div><div class="stat-label">${t('backupRunning')}</div></div></div>
         <div class="col-md-2"><div class="stat-card"><div class="stat-value">${data.stats.disabled}</div><div class="stat-label">${t('backupDisabled')}</div></div></div>
-    `;
+    `);
     
-    document.getElementById('backupsBody').innerHTML = data.jobs.map(job => {
+    setHTMLIfChanged('backupsBody', data.jobs.map(job => {
         let statusBadge = '';
         
         switch(job.status) {
@@ -993,7 +1066,7 @@ function updateBackupsUI(data) {
                 <td><small>${job.next_run || 'N/A'}</small></td>
             </tr>
         `;
-    }).join('');
+    }).join(''));
     
     if (!backupsTable) {
         backupsTable = $('#backupsTable').DataTable({ 
@@ -1054,6 +1127,10 @@ function loadSettings() {
     const savedTrueNASSrvs = localStorage.getItem('truenasServers');
     if (savedTrueNASSrvs) {
         truenasServers = JSON.parse(savedTrueNASSrvs);
+    }
+    const savedMap = localStorage.getItem('connectionIdMap');
+    if (savedMap) {
+        try { connectionIdMap = JSON.parse(savedMap) || {}; } catch { connectionIdMap = {}; }
     }
     
     // Current server index

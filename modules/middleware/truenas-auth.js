@@ -1,6 +1,18 @@
 const { log } = require('../utils');
+const connectionStore = require('../connection-store');
 
 function checkTrueNASAuth(req, res, next) {
+    const connectionId = req.headers['x-connection-id'];
+    if (connectionId) {
+        const conn = connectionStore.getConnectionById(String(connectionId));
+        if (!conn || conn.type !== 'truenas') {
+            return res.status(401).json({ error: 'Неверный connectionId для TrueNAS' });
+        }
+        req.apiKey = conn.secret;
+        req.serverUrl = conn.url;
+        return next();
+    }
+
     const authHeader = req.headers['authorization'] || req.headers['x-api-key'];
     const cookieKey = req.cookies?.truenas_key;
     const apiKey = authHeader || cookieKey;

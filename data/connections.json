@@ -1,0 +1,22 @@
+{
+  "connections": [
+    {
+      "id": "2ba8b81c-adc7-4100-bc94-6b1eda76c365",
+      "type": "truenas",
+      "url": "https://10.200.0.5",
+      "name": null,
+      "secret": "root@pam!MON=7435129e-b68d-499f-b201-eb7d181bcc50",
+      "createdAt": "2026-03-17T07:53:59.405Z",
+      "updatedAt": "2026-03-17T08:03:37.593Z"
+    },
+    {
+      "id": "17fdc8cb-86d4-4612-ae1d-a0765dc4541b",
+      "type": "proxmox",
+      "url": "https://10.200.0.1:8006",
+      "name": null,
+      "secret": "root@pam!MON=7435129e-b68d-499f-b201-eb7d181bcc50",
+      "createdAt": "2026-03-17T07:54:28.328Z",
+      "updatedAt": "2026-03-17T07:57:24.005Z"
+    }
+  ]
+}
