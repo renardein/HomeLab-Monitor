@@ -15,7 +15,7 @@ router.get('/', checkAuth, async (req, res) => {
     }
     
     try {
-        const nodes = await proxmox.getNodes(req.token);
+        const nodes = await proxmox.getNodes(req.token, req.serverUrl || null);
         cache.set(cacheKey, nodes);
         res.json(nodes);
     } catch (error) {
@@ -40,7 +40,7 @@ router.get('/:node/status', checkAuth, async (req, res) => {
     }
     
     try {
-        const status = await proxmox.getNodeStatus(node, req.token);
+        const status = await proxmox.getNodeStatus(node, req.token, req.serverUrl || null);
         cache.set(cacheKey, status);
         res.json(status);
     } catch (error) {

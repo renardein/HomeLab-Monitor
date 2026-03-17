@@ -7,8 +7,8 @@ let currentLanguage = 'ru';
 let refreshIntervalMs = 30000; // Default refresh interval
 let currentTheme = 'light';
 let currentUnits = 'decimal'; // 'decimal' (GB) or 'binary' (GiB)
-let demoMode = false; // Demo mode flag
 let monitorMode = false; // Monitor (display) mode flag
+let currentServerType = 'proxmox'; // 'proxmox' | 'truenas'
 let thresholds = {
     cpuGreen: 70,
     cpuYellow: 90,
@@ -17,6 +17,8 @@ let thresholds = {
 };
 let proxmoxServers = ['https://192.168.1.1:8006']; // List of Proxmox servers
 let currentServerIndex = 0; // Current server index
+let truenasServers = ['https://192.168.1.2']; // List of TrueNAS servers
+let currentTrueNASServerIndex = 0;
 
 function el(id) {
     return document.getElementById(id);
@@ -80,6 +82,39 @@ function t(key) {
     return dict[currentLanguage]?.[key] ?? dict.ru?.[key] ?? key;
 }
 
+function setServerType(type) {
+    currentServerType = (type === 'truenas') ? 'truenas' : 'proxmox';
+    localStorage.setItem('serverType', currentServerType);
+
+    const select = document.getElementById('serverTypeSelect');
+    if (select) select.value = currentServerType;
+
+    // Update connection labels/hints
+    const isTrueNAS = currentServerType === 'truenas';
+    setText('connectTitle', t(isTrueNAS ? 'truenasConnectTitle' : 'connectTitle'));
+    setText('connectDesc', t(isTrueNAS ? 'truenasConnectDesc' : 'connectDesc'));
+    setText('tokenLabel', t(isTrueNAS ? 'truenasKeyLabel' : 'tokenLabel'));
+    setText('tokenHint', t(isTrueNAS ? 'truenasKeyHint' : 'tokenHint'));
+
+    const tokenInput = document.getElementById('apiToken');
+    if (tokenInput) tokenInput.placeholder = isTrueNAS ? 'API Key' : 'root@pam!tokenid=secret';
+
+    // Proxmox server list UI is not applicable for TrueNAS in MVP
+    // Server list is used for both types; just update label/hint
+    setText('proxmoxServersLabel', t(isTrueNAS ? 'truenasServersLabel' : 'proxmoxServersLabel'));
+    setText('proxmoxServersHint', t(isTrueNAS ? 'truenasServersHint' : 'proxmoxServersHint'));
+    renderServerList();
+    updateCurrentServerBadge();
+
+    // Hide/Show tabs that are not applicable
+    const backupsTab = document.getElementById('backups-tab')?.closest('li');
+    const quorumTab = document.getElementById('quorum-tab')?.closest('li');
+    const nodesTab = document.getElementById('nodes-tab')?.closest('li');
+    if (backupsTab) backupsTab.style.display = isTrueNAS ? 'none' : '';
+    if (quorumTab) quorumTab.style.display = isTrueNAS ? 'none' : '';
+    if (nodesTab) nodesTab.style.display = isTrueNAS ? 'none' : '';
+}
+
 // Language switch function
 function setLanguage(lang) {
     currentLanguage = lang;
@@ -134,6 +169,7 @@ function updateUILanguage() {
         settingsTitle: 'settingsTitle',
         connectTitle: 'connectTitle',
         connectDesc: 'connectDesc',
+        serverTypeLabel: 'serverTypeLabel',
         tokenLabel: 'tokenLabel',
         tokenHint: 'tokenHint',
         connectButton: 'connectButton',
@@ -241,6 +277,11 @@ document.addEventListener('DOMContentLoaded', async function() {
     
     // Load saved settings
     loadSettings();
+
+    // Server type selection
+    const savedType = localStorage.getItem('serverType');
+    if (savedType) currentServerType = savedType;
+    setServerType(currentServerType);
     
     checkSavedToken();
     checkServerStatus();
@@ -250,17 +291,33 @@ document.addEventListener('DOMContentLoaded', async function() {
 // Check saved token
 async function checkSavedToken() {
     try {
-        const response = await fetch('/api/auth/token');
+        const response = await fetch(currentServerType === 'truenas' ? '/api/truenas/auth/key' : '/api/auth/token');
         const data = await response.json();
         
-        if (data.success && data.token) {
-            apiToken = data.token;
+        const key = data.token || data.apiKey;
+        if (data.success && key) {
+            apiToken = key;
+            // restore serverUrl if backend stored it
+            const savedServerUrl = data.serverUrl;
+            if (savedServerUrl) {
+                if (currentServerType === 'truenas') {
+                    truenasServers = [savedServerUrl];
+                    currentTrueNASServerIndex = 0;
+                    localStorage.setItem('truenasServers', JSON.stringify(truenasServers));
+                    localStorage.setItem('currentTrueNASServerIndex', '0');
+                } else {
+                    proxmoxServers = [savedServerUrl];
+                    currentServerIndex = 0;
+                    localStorage.setItem('proxmoxServers', JSON.stringify(proxmoxServers));
+                    localStorage.setItem('currentServerIndex', '0');
+                }
+            }
             setValue('apiToken', '••••••••••••••••');
             document.getElementById('rememberToken').checked = true;
             setDisplay('logoutContainer', 'block');
             
             showToast(t('tokenFound'), 'info');
-            testTokenAndConnect(data.token);
+            testTokenAndConnect(key);
         }
     } catch (error) {
         console.log('No saved token found');
@@ -270,10 +327,13 @@ async function checkSavedToken() {
 // Test token and connect
 async function testTokenAndConnect(token) {
     try {
-        const response = await fetch('/api/auth/test', {
+        const serverUrl = getCurrentServerUrl();
+        const response = await fetch(currentServerType === 'truenas' ? '/api/truenas/auth/test' : '/api/auth/test', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token, remember: false })
+            body: JSON.stringify(currentServerType === 'truenas'
+                ? { apiKey: token, remember: false, serverUrl }
+                : { token, remember: false, serverUrl })
         });
         
         const data = await response.json();
@@ -291,7 +351,7 @@ async function testTokenAndConnect(token) {
 // Logout function
 async function logout() {
     try {
-        const response = await fetch('/api/auth/logout', {
+        const response = await fetch(currentServerType === 'truenas' ? '/api/truenas/auth/logout' : '/api/auth/logout', {
             method: 'POST'
         });
         
@@ -400,30 +460,8 @@ function toggleSettings() {
     }
 }
 
-// Toggle demo mode
-function toggleDemoMode() {
-    demoMode = !demoMode;
-    localStorage.setItem('demoMode', demoMode);
-    
-    const btn = document.getElementById('demoModeBtn');
-    if (demoMode) {
-        btn.classList.add('active');
-        btn.classList.remove('btn-outline-success');
-        btn.classList.add('btn-success');
-        btn.innerHTML = '<i class="bi bi-check-lg"></i> <span id="demoModeText">Демо ВКЛ</span>';
-    } else {
-        btn.classList.remove('active');
-        btn.classList.remove('btn-success');
-        btn.classList.add('btn-outline-success');
-        btn.innerHTML = '<i class="bi bi-mask"></i> <span id="demoModeText">Демо</span>';
-    }
-    
-    // Always refresh when toggling demo mode
-    refreshData();
-}
-
 // Toggle monitor mode
-function toggleMonitorMode() {
+async function toggleMonitorMode() {
     monitorMode = !monitorMode;
     localStorage.setItem('monitorMode', monitorMode);
     
@@ -441,23 +479,35 @@ function toggleMonitorMode() {
         btn.classList.add('btn-outline-info');
         btn.innerHTML = '<i class="bi bi-display"></i> <span id="monitorModeText">Монитор</span>';
     }
+
+    // Fullscreen toggle for monitor mode
+    try {
+        if (monitorMode) {
+            if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+                await document.documentElement.requestFullscreen();
+            }
+        } else {
+            if (document.fullscreenElement && document.exitFullscreen) {
+                await document.exitFullscreen();
+            }
+        }
+    } catch (e) {
+        // Fullscreen can be blocked by browser policy; monitor mode still works.
+        console.warn('Fullscreen toggle failed:', e);
+    }
     
     // Refresh data when entering/exiting monitor mode
-    if (demoMode) {
-        refreshData();
-    }
+    if (apiToken) refreshData();
 }
 
 // Show dashboard
 function showDashboard() {
     document.getElementById('configSection').style.display = 'none';
     document.getElementById('dashboardSection').style.display = 'block';
-    // Always refresh data in demo mode or if we have a token
-    if (demoMode || apiToken) {
+    // Refresh only when authenticated
+    if (apiToken) {
         refreshData();
-        if (apiToken) {
-            startAutoRefresh();
-        }
+        startAutoRefresh();
     }
 }
 
@@ -475,8 +525,7 @@ async function connect() {
     const token = (rawToken && rawToken.includes('•')) ? (apiToken || '') : rawToken;
     const rememberToken = document.getElementById('rememberToken')?.checked ?? true;
     
-    // Allow connecting without token if demo mode is active
-    if (!token && !demoMode) {
+    if (!token) {
         showToast(t('tokenRequired'), 'error');
         return;
     }
@@ -486,21 +535,14 @@ async function connect() {
     connectBtn.disabled = true;
     connectBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>' + t('loading');
     
+    const serverUrl = getCurrentServerUrl();
     try {
-        // Skip API test if in demo mode
-        if (demoMode && !token) {
-            showToast(t('connectSuccess'), 'success');
-            updateConnectionStatus(true);
-            showDashboard();
-            connectBtn.disabled = false;
-            connectBtn.innerHTML = originalText;
-            return;
-        }
-        
-        const response = await fetch('/api/auth/test', {
+        const response = await fetch(currentServerType === 'truenas' ? '/api/truenas/auth/test' : '/api/auth/test', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token, remember: rememberToken })
+            body: JSON.stringify(currentServerType === 'truenas'
+                ? { apiKey: token, remember: rememberToken, serverUrl }
+                : { token, remember: rememberToken, serverUrl })
         });
         
         const data = await response.json();
@@ -530,17 +572,9 @@ async function testConnection() {
     const rawToken = tokenInput ? tokenInput.value.trim() : '';
     const token = (rawToken && rawToken.includes('•')) ? (apiToken || '') : rawToken;
     
-    // Allow testing in demo mode without token
-    if (!token && !demoMode) {
+    if (!token) {
         showToast(t('tokenRequired'), 'warning');
         updateConnectionStatus(false);
-        return;
-    }
-    
-    // In demo mode without token, simulate successful connection
-    if (demoMode && !token) {
-        showToast(t('connectionStatusConnected'), 'success');
-        updateConnectionStatus(true);
         return;
     }
     
@@ -549,11 +583,14 @@ async function testConnection() {
     testBtn.disabled = true;
     testBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>' + t('loading');
     
+    const serverUrl = getCurrentServerUrl();
     try {
-        const response = await fetch('/api/auth/test', {
+        const response = await fetch(currentServerType === 'truenas' ? '/api/truenas/auth/test' : '/api/auth/test', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token, remember: false })
+            body: JSON.stringify(currentServerType === 'truenas'
+                ? { apiKey: token, remember: false, serverUrl }
+                : { token, remember: false, serverUrl })
         });
         
         const data = await response.json();
@@ -595,130 +632,13 @@ function updateConnectionStatus(connected) {
 
 // Refresh data
 async function refreshData() {
-    // Demo mode - use fake data for the entire application
-    if (demoMode) {
-        showLoading(true);
-        const demoClusterData = {
-            nodes: [
-                { node: 'pve1', level: '', id: 'node/pve1', maxdisk: 500000000000, disk: 200000000000, maxmem: 32000000000, mem: 16000000000, maxcpu: 8, cpu: 0.25, uptime: 864000, status: 'online', name: 'pve1' },
-                { node: 'pve2', level: '', id: 'node/pve2', maxdisk: 500000000000, disk: 250000000000, maxmem: 32000000000, mem: 20000000000, maxcpu: 8, cpu: 0.45, uptime: 764000, status: 'online', name: 'pve2' },
-                { node: 'pve3', level: '', id: 'node/pve3', maxdisk: 500000000000, disk: 180000000000, maxmem: 32000000000, mem: 12000000000, maxcpu: 8, cpu: 0.15, uptime: 964000, status: 'online', name: 'pve3' }
-            ],
-            cluster: {
-                summary: {
-                    totalCPU: 24,
-                    usedCPU: 10.2,
-                    cpuUsagePercent: 42,
-                    totalMemory: 96000000000,
-                    usedMemory: 48000000000,
-                    memoryUsagePercent: 50,
-                    totalVMs: 12,
-                    totalContainers: 8
-                }
-            },
-            quorum: {
-                votes: 3,
-                expected: 3,
-                quorum: 2,
-                nodes: [
-                    { name: 'pve1', online: true, votes: 1 },
-                    { name: 'pve2', online: true, votes: 1 },
-                    { name: 'pve3', online: true, votes: 1 }
-                ]
-            }
-        };
-        
-        // Demo storage data - formatted correctly for updateStorageUI
-        const demoStorageData = {
-            all: [
-                { node: 'pve1', name: 'local', type: 'dir', server: null, export: null, used: 200000000000, total: 500000000000, used_fmt: '200 GB', total_fmt: '500 GB', usage_percent: 40, content: ['images', 'vztmpl', 'iso'], active: true, shared: false },
-                { node: 'pve1', name: 'local-lvm', type: 'lvmthin', server: null, export: null, used: 180000000000, total: 450000000000, used_fmt: '180 GB', total_fmt: '450 GB', usage_percent: 40, content: ['images', 'rootdir'], active: true, shared: false },
-                { node: 'pve2', name: 'nfs-backup', type: 'nfs', server: '192.168.1.100', export: '/backup', used: 450000000000, total: 1000000000000, used_fmt: '450 GB', total_fmt: '1 TB', usage_percent: 45, content: ['images', 'vztmpl', 'backup'], active: true, shared: true },
-                { node: 'pve3', name: 'ceph-pool', type: 'rbd', server: null, export: null, used: 800000000000, total: 2000000000000, used_fmt: '800 GB', total_fmt: '2 TB', usage_percent: 40, content: ['images'], active: true, shared: true }
-            ],
-            byType: {
-                dir: { count: 1, total: 500000000000, used: 200000000000 },
-                lvmthin: { count: 1, total: 450000000000, used: 180000000000 },
-                nfs: { count: 1, total: 1000000000000, used: 450000000000 },
-                rbd: { count: 1, total: 2000000000000, used: 800000000000 }
-            },
-            summary: {
-                total: 4,
-                active: 4,
-                total_space: 3950000000000,
-                used_space: 1630000000000,
-                total_space_fmt: '3.95 TB',
-                used_space_fmt: '1.63 TB'
-            }
-        };
-        
-        // Demo backup jobs data - formatted correctly for updateBackupsUI
-        const now = Date.now();
-        const demoBackupsData = {
-            jobs: [
-                { 
-                    id: 'backup-job-1', 
-                    enable: 1, 
-                    enabled: true,
-                    schedule: 'daily', 
-                    storage: 'nfs-backup', 
-                    vmid: '100,101,102', 
-                    mode: 'snapshot',
-                    last_run: { starttime_fmt: new Date(now - 86400000).toLocaleString(), status: 'OK', exitstatus: 'OK' },
-                    lastResult: 'OK',
-                    next_run: new Date(now + 3600000).toLocaleString(),
-                    status: 'success'
-                },
-                { 
-                    id: 'backup-job-2', 
-                    enable: 1, 
-                    enabled: true,
-                    schedule: 'weekly', 
-                    storage: 'nfs-backup', 
-                    vmid: '200,201', 
-                    mode: 'suspend',
-                    last_run: { starttime_fmt: new Date(now - 604800000).toLocaleString(), status: 'OK', exitstatus: 'OK' },
-                    lastResult: 'OK',
-                    next_run: new Date(now + 172800000).toLocaleString(),
-                    status: 'success'
-                },
-                { 
-                    id: 'backup-job-3', 
-                    enable: 0, 
-                    enabled: false,
-                    schedule: 'daily', 
-                    storage: 'local', 
-                    vmid: '300', 
-                    mode: 'snapshot',
-                    last_run: { starttime_fmt: new Date(now - 172800000).toLocaleString(), status: 'ERROR', exitstatus: 'FAILED' },
-                    lastResult: 'ERROR',
-                    next_run: null,
-                    status: 'error'
-                }
-            ],
-            stats: {
-                total: 3,
-                enabled: 2,
-                disabled: 1,
-                success: 2,
-                error: 1,
-                running: 0
-            }
-        };
-        
-        // Demo data
-        updateDashboard(demoClusterData, demoStorageData, demoBackupsData, {});
-        showLoading(false);
-        return;
-    }
-    
     if (!apiToken) {
         try {
-            const tokenResponse = await fetch('/api/auth/token');
+            const tokenResponse = await fetch(currentServerType === 'truenas' ? '/api/truenas/auth/key' : '/api/auth/token');
             const tokenData = await tokenResponse.json();
             
             if (tokenData.success) {
-                apiToken = tokenData.token;
+                apiToken = tokenData.token || tokenData.apiKey;
             } else {
                 showToast(t('errorNoToken'), 'error');
                 return;
@@ -732,21 +652,35 @@ async function refreshData() {
     showLoading(true);
 
     try {
-        const [clusterRes, storageRes, backupsRes] = await Promise.all([
-            fetch('/api/cluster/full', { headers: { 'Authorization': apiToken } }),
-            fetch('/api/storage', { headers: { 'Authorization': apiToken } }),
-            fetch('/api/backups/jobs', { headers: { 'Authorization': apiToken } })
-        ]);
+        if (currentServerType === 'truenas') {
+            const serverUrl = getCurrentServerUrl();
+            const [systemRes, poolsRes] = await Promise.all([
+                fetch('/api/truenas/system', { headers: { 'Authorization': apiToken, 'X-Server-Url': serverUrl } }),
+                fetch('/api/truenas/storage/pools', { headers: { 'Authorization': apiToken, 'X-Server-Url': serverUrl } })
+            ]);
+            const systemData = await systemRes.json();
+            const poolsData = await poolsRes.json();
+            if (!systemRes.ok) throw new Error(systemData?.error || `system: HTTP ${systemRes.status}`);
+            if (!poolsRes.ok) throw new Error(poolsData?.error || `pools: HTTP ${poolsRes.status}`);
+            updateTrueNASDashboard(systemData, poolsData);
+        } else {
+            const serverUrl = getCurrentServerUrl();
+            const [clusterRes, storageRes, backupsRes] = await Promise.all([
+                fetch('/api/cluster/full', { headers: { 'Authorization': apiToken, 'X-Server-Url': serverUrl } }),
+                fetch('/api/storage', { headers: { 'Authorization': apiToken, 'X-Server-Url': serverUrl } }),
+                fetch('/api/backups/jobs', { headers: { 'Authorization': apiToken, 'X-Server-Url': serverUrl } })
+            ]);
 
-        const clusterData = await clusterRes.json();
-        const storageData = await storageRes.json();
-        const backupsData = await backupsRes.json();
-        
-        if (!clusterRes.ok) throw new Error(clusterData?.error || `cluster: HTTP ${clusterRes.status}`);
-        if (!storageRes.ok) throw new Error(storageData?.error || `storage: HTTP ${storageRes.status}`);
-        if (!backupsRes.ok) throw new Error(backupsData?.error || `backups: HTTP ${backupsRes.status}`);
-        
-        updateDashboard(clusterData, storageData, backupsData, {});
+            const clusterData = await clusterRes.json();
+            const storageData = await storageRes.json();
+            const backupsData = await backupsRes.json();
+            
+            if (!clusterRes.ok) throw new Error(clusterData?.error || `cluster: HTTP ${clusterRes.status}`);
+            if (!storageRes.ok) throw new Error(storageData?.error || `storage: HTTP ${storageRes.status}`);
+            if (!backupsRes.ok) throw new Error(backupsData?.error || `backups: HTTP ${backupsRes.status}`);
+            
+            updateDashboard(clusterData, storageData, backupsData, {});
+        }
         showToast(t('dataUpdated'), 'success');
 
     } catch (error) {
@@ -754,6 +688,74 @@ async function refreshData() {
     } finally {
         showLoading(false);
     }
+}
+
+function updateTrueNASDashboard(systemData, poolsData) {
+    // Basic header stats
+    setText('totalNodes', '1');
+    setText('onlineNodes', '1');
+    setHTML('quorumStatus', t('notApplicable'));
+    const quorumEl = document.getElementById('quorumStatus');
+    if (quorumEl) quorumEl.className = 'stat-value text-muted';
+    setHTML('connectionStatus', '<i class="bi bi-check-circle-fill text-success"></i> ' + t('connected'));
+
+    // Resources cards: TrueNAS API doesn't directly expose usage in a stable way in MVP
+    setText('clusterCpu', '—');
+    setText('clusterCpuDetail', t('truenasSystem'));
+    const cpuBar = document.getElementById('clusterCpuBar');
+    if (cpuBar) cpuBar.style.width = '0%';
+
+    setText('clusterMemory', '—');
+    const hostname = systemData?.hostname || systemData?.system_hostname || systemData?.host || 'TrueNAS';
+    const version = systemData?.version || systemData?.product_version || systemData?.release || '';
+    setText('clusterMemoryDetail', version ? `${hostname} • ${version}` : hostname);
+    const memBar = document.getElementById('clusterMemoryBar');
+    if (memBar) memBar.style.width = '0%';
+
+    setText('clusterVms', '—');
+    setText('clusterContainers', '—');
+
+    // Nodes container: show system summary card
+    const nodesContainer = document.getElementById('nodesContainer');
+    if (nodesContainer) {
+        nodesContainer.innerHTML = `
+            <div class="col-12">
+                <div class="node-card">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h5 class="mb-0">${hostname}</h5>
+                        <span class="badge bg-success">${t('connected')}</span>
+                    </div>
+                    <div class="text-muted small">
+                        ${version ? `<div><strong>${t('version')}:</strong> ${version}</div>` : ''}
+                        ${systemData?.uptime ? `<div><strong>${t('uptime')}:</strong> ${systemData.uptime}</div>` : ''}
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // Storage tab: reuse existing storage UI, but values are bytes/numbers
+    updateStorageUI({
+        ...poolsData,
+        all: (poolsData?.all || []).map(p => ({
+            ...p,
+            used_fmt: formatSize(p.used),
+            total_fmt: formatSize(p.total)
+        })),
+        summary: poolsData?.summary ? {
+            ...poolsData.summary,
+            total_space_fmt: formatSize(poolsData.summary.total_space),
+            used_space_fmt: formatSize(poolsData.summary.used_space)
+        } : poolsData?.summary
+    });
+
+    // Clear backups table if present
+    if (backupsTable) {
+        backupsTable.destroy();
+        backupsTable = null;
+    }
+
+    setHTML('lastUpdate', '<i class="bi bi-clock"></i> ' + t('lastUpdate') + ': ' + new Date().toLocaleString(currentLanguage === 'ru' ? 'ru-RU' : 'en-US'));
 }
 
 // Show/hide loading
@@ -1049,24 +1051,19 @@ function loadSettings() {
     if (savedServers) {
         proxmoxServers = JSON.parse(savedServers);
     }
+    const savedTrueNASSrvs = localStorage.getItem('truenasServers');
+    if (savedTrueNASSrvs) {
+        truenasServers = JSON.parse(savedTrueNASSrvs);
+    }
     
     // Current server index
     const savedServerIndex = localStorage.getItem('currentServerIndex');
     if (savedServerIndex !== null) {
         currentServerIndex = parseInt(savedServerIndex);
     }
-    
-    // Demo mode
-    const savedDemoMode = localStorage.getItem('demoMode') === 'true';
-    if (savedDemoMode) {
-        demoMode = true;
-        const demoBtn = document.getElementById('demoModeBtn');
-        demoBtn.classList.add('active');
-        demoBtn.classList.remove('btn-outline-success');
-        demoBtn.classList.add('btn-success');
-        demoBtn.innerHTML = '<i class="bi bi-check-lg"></i> <span id="demoModeText">Демо ВКЛ</span>';
-        // Refresh data immediately in demo mode
-        setTimeout(() => refreshData(), 500);
+    const savedTrueNASIndex = localStorage.getItem('currentTrueNASServerIndex');
+    if (savedTrueNASIndex !== null) {
+        currentTrueNASServerIndex = parseInt(savedTrueNASIndex);
     }
     
     // Monitor mode
@@ -1224,6 +1221,23 @@ function getColorClass(percent, type) {
 }
 
 // ==================== PROXMOX SERVERS MANAGEMENT ====================
+function getServersForCurrentType() {
+    return currentServerType === 'truenas' ? truenasServers : proxmoxServers;
+}
+
+function getCurrentIndexForType() {
+    return currentServerType === 'truenas' ? currentTrueNASServerIndex : currentServerIndex;
+}
+
+function setCurrentIndexForType(index) {
+    if (currentServerType === 'truenas') {
+        currentTrueNASServerIndex = index;
+        localStorage.setItem('currentTrueNASServerIndex', String(index));
+    } else {
+        currentServerIndex = index;
+        localStorage.setItem('currentServerIndex', String(index));
+    }
+}
 
 // Render servers list
 function renderServerList() {
@@ -1232,11 +1246,13 @@ function renderServerList() {
     
     container.innerHTML = '';
     
-    proxmoxServers.forEach((server, index) => {
+    const servers = getServersForCurrentType();
+    const currentIdx = getCurrentIndexForType();
+    servers.forEach((server, index) => {
         const div = document.createElement('div');
         div.className = 'input-group mb-2';
         
-        const isCurrent = index === currentServerIndex;
+        const isCurrent = index === currentIdx;
         const statusBadge = isCurrent 
             ? '<span class="badge bg-success ms-2">✓</span>' 
             : '';
@@ -1263,41 +1279,45 @@ function renderServerList() {
 
 // Add new server
 function addServer() {
-    proxmoxServers.push('https://');
+    const servers = getServersForCurrentType();
+    servers.push('https://');
     renderServerList();
     saveServers();
 }
 
 // Update server URL
 function updateServerUrl(index, url) {
-    proxmoxServers[index] = url.trim();
+    const servers = getServersForCurrentType();
+    servers[index] = url.trim();
     saveServers();
 }
 
 // Set current server
 function setCurrentServer(index) {
-    currentServerIndex = index;
-    localStorage.setItem('currentServerIndex', index);
+    setCurrentIndexForType(index);
     renderServerList();
     updateCurrentServerBadge();
     
     if (apiToken) {
-        showToast(`${t('currentServer')}: ${proxmoxServers[index]}`, 'info');
+        const servers = getServersForCurrentType();
+        showToast(`${t('currentServer')}: ${servers[index]}`, 'info');
         refreshData();
     }
 }
 
 // Remove server
 function removeServer(index) {
-    if (proxmoxServers.length <= 1) {
+    const servers = getServersForCurrentType();
+    if (servers.length <= 1) {
         showToast(currentLanguage === 'ru' ? 'Нельзя удалить последний сервер' : 'Cannot remove the last server', 'warning');
         return;
     }
     
-    proxmoxServers.splice(index, 1);
+    servers.splice(index, 1);
     
-    if (currentServerIndex >= proxmoxServers.length) {
-        currentServerIndex = proxmoxServers.length - 1;
+    const currentIdx = getCurrentIndexForType();
+    if (currentIdx >= servers.length) {
+        setCurrentIndexForType(servers.length - 1);
     }
     
     renderServerList();
@@ -1307,7 +1327,9 @@ function removeServer(index) {
 // Save servers list
 function saveServers() {
     localStorage.setItem('proxmoxServers', JSON.stringify(proxmoxServers));
-    localStorage.setItem('currentServerIndex', currentServerIndex);
+    localStorage.setItem('truenasServers', JSON.stringify(truenasServers));
+    localStorage.setItem('currentServerIndex', String(currentServerIndex));
+    localStorage.setItem('currentTrueNASServerIndex', String(currentTrueNASServerIndex));
     updateCurrentServerBadge();
 }
 
@@ -1318,8 +1340,10 @@ function updateCurrentServerBadge() {
     
     if (!badge || !nameSpan) return;
     
-    if (proxmoxServers && proxmoxServers.length > 0 && currentServerIndex < proxmoxServers.length) {
-        const serverUrl = proxmoxServers[currentServerIndex];
+    const servers = getServersForCurrentType();
+    const idx = getCurrentIndexForType();
+    if (servers && servers.length > 0 && idx < servers.length) {
+        const serverUrl = servers[idx];
         // Extract hostname from URL
         try {
             const url = new URL(serverUrl);
@@ -1335,5 +1359,8 @@ function updateCurrentServerBadge() {
 
 // Get current server URL
 function getCurrentServerUrl() {
-    return proxmoxServers[currentServerIndex] || 'https://192.168.1.1:8006';
+    const servers = getServersForCurrentType();
+    const idx = getCurrentIndexForType();
+    if (servers && servers[idx]) return servers[idx];
+    return currentServerType === 'truenas' ? 'https://192.168.1.2' : 'https://192.168.1.1:8006';
 }

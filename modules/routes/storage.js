@@ -15,14 +15,14 @@ router.get('/', checkAuth, async (req, res) => {
     }
     
     try {
-        const nodes = await proxmox.getNodes(req.token);
+        const nodes = await proxmox.getNodes(req.token, req.serverUrl || null);
         const allStorage = [];
         const storageMap = new Map();
         
         for (const node of nodes) {
             const nodeName = node.node || node.name;
             
-            const storages = await proxmox.getNodeStorage(nodeName, req.token);
+            const storages = await proxmox.getNodeStorage(nodeName, req.token, req.serverUrl || null);
             
             storages.forEach(storage => {
                 // Пропускаем отключенные

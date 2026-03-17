@@ -6,6 +6,10 @@ function checkAuth(req, res, next) {
     const cookieToken = req.cookies?.proxmox_token;
     
     const token = authHeader || cookieToken;
+
+    const serverUrlHeader = req.headers['x-server-url'];
+    const cookieServer = req.cookies?.proxmox_server;
+    req.serverUrl = (serverUrlHeader || cookieServer || null);
     
     if (!token) {
         log('warn', 'No token provided in request or cookies');

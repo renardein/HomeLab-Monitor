@@ -42,6 +42,8 @@ app.use('/api/cluster', require('./modules/routes/cluster'));
 app.use('/api/nodes', require('./modules/routes/nodes'));
 app.use('/api/storage', require('./modules/routes/storage'));
 app.use('/api/backups', require('./modules/routes/backups'));
+app.use('/api/truenas/auth', require('./modules/routes/truenas-auth'));
+app.use('/api/truenas', require('./modules/routes/truenas-status'));
 
 // Доступные языки
 app.get('/api/languages', (req, res) => {
@@ -76,6 +78,11 @@ app.get('/api/diagnose', (req, res) => {
             port: config.proxmox.port,
             url: `https://${config.proxmox.host}:${config.proxmox.port}`
         },
+        truenas: {
+            host: config.truenas.host,
+            port: config.truenas.port,
+            url: `https://${config.truenas.host}:${config.truenas.port}`
+        },
         cors: {
             origin: config.corsOrigin
         },
@@ -85,7 +92,8 @@ app.get('/api/diagnose', (req, res) => {
         language: config.defaultLanguage,
         availableLanguages: i18n.getAvailableLanguages(),
         cookies: {
-            hasToken: !!req.cookies.proxmox_token
+            hasProxmoxToken: !!req.cookies.proxmox_token,
+            hasTrueNASKey: !!req.cookies.truenas_key
         }
     });
 });

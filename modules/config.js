@@ -13,6 +13,12 @@ module.exports = {
         host: process.env.PROXMOX_HOST || '10.200.0.1',
         port: parseInt(process.env.PROXMOX_PORT) || 8006
     },
+
+    // TrueNAS (CORE/SCALE)
+    truenas: {
+        host: process.env.TRUENAS_HOST || '10.200.0.2',
+        port: parseInt(process.env.TRUENAS_PORT) || 443
+    },
     
     // Безопасность
     corsOrigin: process.env.CORS_ORIGIN || '*',

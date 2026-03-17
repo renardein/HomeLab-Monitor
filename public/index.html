@@ -37,11 +37,6 @@
                             </button>
                         </li>
                         <li class="nav-item me-2">
-                            <button class="btn btn-outline-success btn-sm" onclick="toggleDemoMode()" id="demoModeBtn" title="Демо режим">
-                                <i class="bi bi-mask"></i> <span id="demoModeText">Демо</span>
-                            </button>
-                        </li>
-                        <li class="nav-item me-2">
                             <button class="btn btn-outline-info btn-sm" onclick="toggleMonitorMode()" id="monitorModeBtn" title="Режим монитора">
                                 <i class="bi bi-display"></i> <span id="monitorModeText">Монитор</span>
                             </button>
@@ -86,6 +81,14 @@
                     <div class="alert alert-info">
                         <i class="bi bi-info-circle me-2"></i>
                         <span id="connectDesc">Введите API токен для подключения к кластеру Proxmox</span>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold" id="serverTypeLabel">Тип сервера</label>
+                        <select class="form-select" id="serverTypeSelect" onchange="setServerType(this.value)">
+                            <option value="proxmox">Proxmox</option>
+                            <option value="truenas">TrueNAS</option>
+                        </select>
                     </div>
 
                     <div class="mb-3">

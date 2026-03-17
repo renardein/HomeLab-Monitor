@@ -15,8 +15,8 @@ router.get('/jobs', checkAuth, async (req, res) => {
     }
     
     try {
-        const jobs = await proxmox.getBackupJobs(req.token);
-        const tasks = await proxmox.getClusterTasks(req.token, 50);
+        const jobs = await proxmox.getBackupJobs(req.token, req.serverUrl || null);
+        const tasks = await proxmox.getClusterTasks(req.token, 50, req.serverUrl || null);
         
         const jobsWithStatus = await Promise.all(
             jobs.map(async (job) => {

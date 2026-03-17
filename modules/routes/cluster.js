@@ -16,14 +16,14 @@ router.get('/full', checkAuth, async (req, res) => {
     
     try {
         // Получаем список узлов
-        const nodes = await proxmox.getNodes(req.token);
+        const nodes = await proxmox.getNodes(req.token, req.serverUrl || null);
         log('info', `Found ${nodes.length} nodes`);
         
         // Получаем статус кластера
-        const clusterStatus = await proxmox.getClusterStatus(req.token);
+        const clusterStatus = await proxmox.getClusterStatus(req.token, req.serverUrl || null);
         
         // Получаем ресурсы кластера
-        const clusterResources = await proxmox.getClusterResources(req.token);
+        const clusterResources = await proxmox.getClusterResources(req.token, req.serverUrl || null);
         
         // Инициализируем суммарные ресурсы
         const clusterSummary = {
@@ -40,7 +40,7 @@ router.get('/full', checkAuth, async (req, res) => {
             nodes.map(async (node) => {
                 const nodeName = node.node || node.name;
                 try {
-                    const status = await proxmox.getNodeStatus(nodeName, req.token);
+                    const status = await proxmox.getNodeStatus(nodeName, req.token, req.serverUrl || null);
                     
                     const cpuCount = status.cpuinfo?.cpus || 0;
                     const cpuUsage = status.cpu || 0;

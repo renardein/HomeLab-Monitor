@@ -6,7 +6,7 @@ const config = require('../config');
 
 // Тест токена
 router.post('/test', async (req, res) => {
-    const { token, remember } = req.body;
+    const { token, remember, serverUrl } = req.body;
     
     if (!token) {
         log('warn', 'Token test failed: no token provided');
@@ -19,7 +19,7 @@ router.post('/test', async (req, res) => {
     log('info', 'Testing token');
     
     try {
-        const nodes = await proxmox.getNodes(token);
+        const nodes = await proxmox.getNodes(token, serverUrl || null);
         
         log('info', `Token test successful, found ${nodes.length} nodes`);
         
@@ -33,6 +33,7 @@ router.post('/test', async (req, res) => {
             };
             
             res.cookie('proxmox_token', token, cookieOptions);
+            if (serverUrl) res.cookie('proxmox_server', serverUrl, cookieOptions);
             log('info', 'Token saved to cookies');
         }
         
@@ -93,7 +94,8 @@ router.get('/token', (req, res) => {
     if (token) {
         res.json({ 
             success: true, 
-            token: token
+            token: token,
+            serverUrl: req.cookies.proxmox_server || null
         });
     } else {
         res.json({ 
@@ -106,6 +108,12 @@ router.get('/token', (req, res) => {
 // Удаление токена из cookies
 router.post('/logout', (req, res) => {
     res.clearCookie('proxmox_token', {
+        httpOnly: true,
+        secure: config.env === 'production',
+        sameSite: 'lax',
+        path: '/'
+    });
+    res.clearCookie('proxmox_server', {
         httpOnly: true,
         secure: config.env === 'production',
         sameSite: 'lax',

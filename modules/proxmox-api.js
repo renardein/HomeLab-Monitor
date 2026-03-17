@@ -12,8 +12,15 @@ const httpsAgent = new https.Agent({
     secureOptions: cryptoConstants.SSL_OP_NO_TLSv1 | cryptoConstants.SSL_OP_NO_TLSv1_1
 });
 
-// Базовый URL для API
-const getBaseUrl = () => `https://${config.proxmox.host}:${config.proxmox.port}/api2/json`;
+function getBaseUrl(serverUrl) {
+    if (serverUrl) {
+        // Expect https://host:port or https://host
+        const u = new URL(serverUrl);
+        const port = u.port ? `:${u.port}` : '';
+        return `${u.protocol}//${u.hostname}${port}/api2/json`;
+    }
+    return `https://${config.proxmox.host}:${config.proxmox.port}/api2/json`;
+}
 
 function normalizeToken(rawToken) {
     if (!rawToken) return null;
@@ -31,29 +38,38 @@ function normalizeToken(rawToken) {
 }
 
 // Выполнение запроса к Proxmox API
-async function request(endpoint, token, method = 'GET', data = null) {
-    const url = `${getBaseUrl()}${endpoint}`;
+async function request(endpoint, token, method = 'GET', data = null, serverUrl = null) {
+    const url = `${getBaseUrl(serverUrl)}${endpoint}`;
     const normalizedToken = normalizeToken(token);
     
     log('debug', `Proxmox API Request: ${method} ${url}`);
     log('debug', `Token: ${normalizedToken ? normalizedToken.substring(0, 16) + '...' : 'none'}`);
     
     try {
-        const response = await axios({
+        const axiosConfig = {
             method,
             url,
             headers: {
                 ...(normalizedToken ? { 'Authorization': `PVEAPIToken=${normalizedToken}` } : {}),
-                'Content-Type': 'application/json',
                 'Accept': 'application/json'
             },
             httpsAgent,
             timeout: 10000,
-            data,
             validateStatus: function (status) {
                 return true; // Разбираем любые статусы сами, чтобы не терять тело ответа
             }
-        });
+        };
+        
+        // Важно: Proxmox API возвращает 501 "Unexpected content for method 'GET'",
+        // если у GET-запроса есть тело. Поэтому прикладываем body только там,
+        // где это действительно нужно.
+        const upperMethod = String(method || 'GET').toUpperCase();
+        if (data !== null && data !== undefined && upperMethod !== 'GET' && upperMethod !== 'HEAD') {
+            axiosConfig.data = data;
+            axiosConfig.headers['Content-Type'] = 'application/json';
+        }
+        
+        const response = await axios(axiosConfig);
         
         // Проверяем статус ответа
         if (response.status >= 400) {
@@ -105,9 +121,9 @@ async function request(endpoint, token, method = 'GET', data = null) {
 }
 
 // Получение списка узлов
-async function getNodes(token) {
+async function getNodes(token, serverUrl = null) {
     try {
-        const data = await request('/nodes', token);
+        const data = await request('/nodes', token, 'GET', null, serverUrl);
         return data.data || [];
     } catch (error) {
         log('error', `Error in getNodes: ${error.message}`);
@@ -116,9 +132,9 @@ async function getNodes(token) {
 }
 
 // Получение статуса узла
-async function getNodeStatus(node, token) {
+async function getNodeStatus(node, token, serverUrl = null) {
     try {
-        const data = await request(`/nodes/${node}/status`, token);
+        const data = await request(`/nodes/${node}/status`, token, 'GET', null, serverUrl);
         return data.data || {};
     } catch (error) {
         log('error', `Error in getNodeStatus for ${node}: ${error.message}`);
@@ -127,9 +143,9 @@ async function getNodeStatus(node, token) {
 }
 
 // Получение статуса кластера
-async function getClusterStatus(token) {
+async function getClusterStatus(token, serverUrl = null) {
     try {
-        const data = await request('/cluster/status', token);
+        const data = await request('/cluster/status', token, 'GET', null, serverUrl);
         return data.data || [];
     } catch (error) {
         log('warn', `Could not fetch cluster status: ${error.message}`);
@@ -138,9 +154,9 @@ async function getClusterStatus(token) {
 }
 
 // Получение ресурсов кластера
-async function getClusterResources(token) {
+async function getClusterResources(token, serverUrl = null) {
     try {
-        const data = await request('/cluster/resources', token);
+        const data = await request('/cluster/resources', token, 'GET', null, serverUrl);
         return data.data || [];
     } catch (error) {
         log('warn', `Could not fetch cluster resources: ${error.message}`);
@@ -149,9 +165,9 @@ async function getClusterResources(token) {
 }
 
 // Получение хранилищ узла
-async function getNodeStorage(node, token) {
+async function getNodeStorage(node, token, serverUrl = null) {
     try {
-        const data = await request(`/nodes/${node}/storage`, token);
+        const data = await request(`/nodes/${node}/storage`, token, 'GET', null, serverUrl);
         return data.data || [];
     } catch (error) {
         log('warn', `Could not fetch storage for node ${node}: ${error.message}`);
@@ -160,9 +176,9 @@ async function getNodeStorage(node, token) {
 }
 
 // Получение заданий бэкапа кластера
-async function getBackupJobs(token) {
+async function getBackupJobs(token, serverUrl = null) {
     try {
-        const data = await request('/cluster/backup', token);
+        const data = await request('/cluster/backup', token, 'GET', null, serverUrl);
         return data.data || [];
     } catch (error) {
         log('warn', `Could not fetch backup jobs: ${error.message}`);
@@ -171,9 +187,9 @@ async function getBackupJobs(token) {
 }
 
 // Получение задач кластера
-async function getClusterTasks(token, limit = 20) {
+async function getClusterTasks(token, limit = 20, serverUrl = null) {
     try {
-        const data = await request(`/cluster/tasks?limit=${limit}`, token);
+        const data = await request(`/cluster/tasks?limit=${limit}`, token, 'GET', null, serverUrl);
         return data.data || [];
     } catch (error) {
         log('warn', `Could not fetch cluster tasks: ${error.message}`);
