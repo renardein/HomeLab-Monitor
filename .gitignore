@@ -28,4 +28,7 @@ node_modules/
 # System files
 .DS_Store
 Thumbs.db
+# Local data (DB created automatically if missing)
 data/connections.json
+data/app.db
+data/*.db

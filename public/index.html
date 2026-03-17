@@ -36,17 +36,14 @@
                                 <i class="bi bi-sliders"></i> <span id="settingsText">Settings</span>
                             </button>
                         </li>
-                        <li class="nav-item me-2">
-                            <select class="form-select form-select-sm" id="serverTypeQuick" onchange="setServerType(this.value)" style="min-width: 130px;">
-                                <option value="proxmox">Proxmox</option>
-                                <option value="truenas">TrueNAS</option>
-                            </select>
-                        </li>
                         <li class="nav-item dropdown me-2">
-                            <a class="nav-link dropdown-toggle" href="#" id="serverMenuDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <a class="btn btn-outline-secondary btn-sm dropdown-toggle" href="#" id="serverMenuDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                                 <i class="bi bi-server me-1"></i><span id="serverMenuTitle">Proxmox</span>
                             </a>
                             <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="serverMenuDropdown">
+                                <li><button class="dropdown-item" type="button" onclick="setServerType('proxmox')"><i class="bi bi-diagram-3 me-2"></i>Proxmox</button></li>
+                                <li><button class="dropdown-item" type="button" onclick="setServerType('truenas')"><i class="bi bi-hdd-stack me-2"></i>TrueNAS</button></li>
+                                <li><hr class="dropdown-divider"></li>
                                 <li>
                                     <button class="dropdown-item" type="button" onclick="openServicesMonitorFromMenu()">
                                         <i class="bi bi-activity me-2"></i><span id="menuServicesMonitorText">Мониторинг сервисов</span>
@@ -89,11 +86,34 @@
             </div>
         </nav>
 
-        <!-- Панель настроек (расширенная) -->
+        <!-- Панель настроек (внутренние разделы) -->
         <div id="configSection" class="card" style="display: none;">
             <div class="card-body p-4">
-                <!-- Секция подключения -->
-                <div class="settings-section">
+                <div class="row">
+                    <div class="col-md-3 col-lg-2 mb-3 mb-md-0">
+                        <nav class="nav flex-column nav-pills" id="settingsNav" role="tablist">
+                            <button class="nav-link active" id="settings-nav-connection" data-bs-toggle="pill" data-bs-target="#settings-tab-connection" type="button" role="tab">
+                                <i class="bi bi-key me-2"></i><span id="settingsNavConnection">Подключение</span>
+                            </button>
+                            <button class="nav-link" id="settings-nav-display" data-bs-toggle="pill" data-bs-target="#settings-tab-display" type="button" role="tab">
+                                <i class="bi bi-eye me-2"></i><span id="settingsNavDisplay">Отображение</span>
+                            </button>
+                            <button class="nav-link" id="settings-nav-thresholds" data-bs-toggle="pill" data-bs-target="#settings-tab-thresholds" type="button" role="tab">
+                                <i class="bi bi-speedometer2 me-2"></i><span id="settingsNavThresholds">Пороги</span>
+                            </button>
+                            <button class="nav-link" id="settings-nav-security" data-bs-toggle="pill" data-bs-target="#settings-tab-security" type="button" role="tab">
+                                <i class="bi bi-shield-lock me-2"></i><span id="settingsNavSecurity">Безопасность</span>
+                            </button>
+                            <button class="nav-link" id="settings-nav-services" data-bs-toggle="pill" data-bs-target="#settings-tab-services" type="button" role="tab">
+                                <i class="bi bi-activity me-2"></i><span id="settingsNavServices">Мониторинг сервисов</span>
+                            </button>
+                        </nav>
+                    </div>
+                    <div class="col-md-9 col-lg-10">
+                        <div class="tab-content" id="settingsTabContent">
+                            <!-- Подключение -->
+                            <div class="tab-pane fade show active" id="settings-tab-connection" role="tabpanel">
+                                <div class="settings-section">
                     <h5 class="mb-3"><i class="bi bi-key me-2"></i><span id="connectTitle">Подключение к Proxmox</span>
                     </h5>
                     <div class="alert alert-info">
@@ -164,10 +184,11 @@
                         </span>
                     </div>
                 </div>
-
-                <!-- Секция отображения -->
-                <div class="settings-section">
-                    <h5 class="mb-3"><i class="bi bi-eye me-2"></i><span id="displaySettings">Отображение</span></h5>
+                            </div>
+                            <!-- Отображение -->
+                            <div class="tab-pane fade" id="settings-tab-display" role="tabpanel">
+                                <div class="settings-section">
+                                    <h5 class="mb-3"><i class="bi bi-eye me-2"></i><span id="displaySettings">Отображение</span></h5>
 
                     <div class="row">
                         <div class="col-md-6">
@@ -209,12 +230,12 @@
                             </button>
                         </div>
                     </div>
-                    
-                </div>
-
-                <!-- Секция порогов -->
-                <div class="settings-section">
-                    <h5 class="mb-3"><i class="bi bi-speedometer2 me-2"></i><span id="thresholdSettings">Пороги
+                                </div>
+                            </div>
+                            <!-- Пороги -->
+                            <div class="tab-pane fade" id="settings-tab-thresholds" role="tabpanel">
+                                <div class="settings-section">
+                                    <h5 class="mb-3"><i class="bi bi-speedometer2 me-2"></i><span id="thresholdSettings">Пороги
                             индикации</span></h5>
 
                     <div class="mb-4">
@@ -263,15 +284,107 @@
                                 пороги</span>
                         </button>
                     </div>
+                                </div>
+                            </div>
+                            <!-- Безопасность -->
+                            <div class="tab-pane fade" id="settings-tab-security" role="tabpanel">
+                                <div class="settings-section">
+                                    <h5 class="mb-3"><i class="bi bi-lock me-2"></i><span id="settingsSecurityTitle">Безопасность</span></h5>
+                                    <p class="text-muted small mb-3" id="settingsSecurityHint">Вы можете защитить доступ к настройкам паролем.</p>
+                                    <div class="row g-3 mb-3">
+                                        <div class="col-md-4">
+                                            <label class="form-label fw-bold" for="settingsPasswordCurrent" id="settingsPasswordCurrentLabel">Текущий пароль</label>
+                                            <input type="password" class="form-control" id="settingsPasswordCurrent">
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label fw-bold" for="settingsPasswordNew" id="settingsPasswordNewLabel">Новый пароль</label>
+                                            <input type="password" class="form-control" id="settingsPasswordNew">
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label fw-bold" for="settingsPasswordRepeat" id="settingsPasswordRepeatLabel">Повтор пароля</label>
+                                            <input type="password" class="form-control" id="settingsPasswordRepeat">
+                                        </div>
+                                    </div>
+                                    <div class="d-flex justify-content-between">
+                                        <button class="btn btn-primary" type="button" onclick="applySettingsPassword()" id="settingsPasswordApplyBtn">
+                                            <i class="bi bi-shield-lock me-1"></i><span id="settingsPasswordApplyText">Включить / изменить пароль</span>
+                                        </button>
+                                        <button class="btn btn-outline-danger" type="button" onclick="disableSettingsPassword()" id="settingsPasswordDisableBtn">
+                                            <i class="bi bi-shield-x me-1"></i><span id="settingsPasswordDisableText">Отключить пароль</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Хосты для мониторинга -->
+                            <div class="tab-pane fade" id="settings-tab-services" role="tabpanel">
+                                <div class="settings-section">
+                                    <h5 class="mb-3"><i class="bi bi-activity me-2"></i><span id="settingsServicesTitle">Хосты для мониторинга</span></h5>
+                    <p class="text-muted small mb-3" id="settingsServicesHint">Добавьте хосты или URL для проверки доступности. В разделе «Мониторинг сервисов» отображается только список и статус.</p>
+                    <div class="d-flex flex-wrap gap-2 mb-3">
+                        <button class="btn btn-outline-secondary btn-sm" type="button" onclick="exportSettingsAndServices()">
+                            <i class="bi bi-download me-1"></i><span id="settingsExportBtn">Экспорт настроек</span>
+                        </button>
+                        <button class="btn btn-outline-secondary btn-sm" type="button" onclick="triggerImportSettings()">
+                            <i class="bi bi-upload me-1"></i><span id="settingsImportBtn">Импорт настроек</span>
+                        </button>
+                        <input type="file" id="settingsImportFile" accept="application/json" class="d-none" onchange="handleImportSettingsFile(event)">
+                    </div>
+                    <div class="row g-3 align-items-end mb-3">
+                        <div class="col-md-2">
+                            <label class="form-label fw-bold" for="settingsServiceNameInput" id="settingsServiceNameLabel">Имя</label>
+                            <input type="text" class="form-control" id="settingsServiceNameInput" placeholder="Мой сервис">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label fw-bold" for="settingsServiceTypeSelect" id="settingsServiceTypeLabel">Тип</label>
+                            <select class="form-select" id="settingsServiceTypeSelect" onchange="toggleServiceTypeFields()">
+                                <option value="tcp">TCP</option>
+                                <option value="udp">UDP</option>
+                                <option value="http">HTTP(S)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2" id="settingsServiceHostWrap">
+                            <label class="form-label fw-bold" for="settingsServiceHostInput" id="settingsServiceHostLabel">Хост</label>
+                            <input type="text" class="form-control" id="settingsServiceHostInput" placeholder="host или IP">
+                        </div>
+                        <div class="col-md-2" id="settingsServicePortWrap">
+                            <label class="form-label fw-bold" for="settingsServicePortInput" id="settingsServicePortLabel">Порт</label>
+                            <input type="number" class="form-control" id="settingsServicePortInput" placeholder="443" min="1" max="65535">
+                        </div>
+                        <div class="col-md-3 d-none" id="settingsServiceUrlWrap">
+                            <label class="form-label fw-bold" for="settingsServiceUrlInput" id="settingsServiceUrlLabel">URL</label>
+                            <input type="text" class="form-control" id="settingsServiceUrlInput" placeholder="https://example.local/">
+                        </div>
+                        <div class="col-md-2 d-grid">
+                            <button class="btn btn-outline-primary" onclick="addMonitoredService()" id="addServiceBtn">
+                                <i class="bi bi-plus-lg me-1"></i><span id="addServiceText">Добавить</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle">
+                            <thead>
+                                <tr>
+                                    <th id="settingsServiceNameHeader">Имя</th>
+                                    <th id="settingsServiceTypeHeader">Тип</th>
+                                    <th id="settingsServiceTargetHeader">Адрес / URL</th>
+                                    <th id="settingsServiceActionsHeader">Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody id="settingsServicesBody"></tbody>
+                        </table>
+                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
 
         <!-- Дашборд -->
         <div id="dashboardSection" style="display: none;">
-            <!-- Заголовок -->
-
-
+            <!-- Обычный контент дашборда (скрыт в режиме монитора) -->
+            <div id="dashboardContent">
             <!-- Статистика кластера -->
             <div class="row g-4 mb-4">
                 <div class="col-md-4">
@@ -455,13 +568,40 @@
             <div class="text-end mt-4">
                 <small class="text-muted" id="lastUpdate"></small>
             </div>
+            </div>
+            <!-- Компактный вид режима монитора (1920×1200 без скролла) -->
+            <div id="monitorView" class="monitor-view" style="display: none;">
+                <div class="monitor-view__stats">
+                    <div class="monitor-view__stat"><span class="monitor-view__stat-value" id="monitorTotalNodes">0</span><span class="monitor-view__stat-label" id="monitorTotalNodesLabel">Узлов</span></div>
+                    <div class="monitor-view__stat"><span class="monitor-view__stat-value monitor-view__stat-ok" id="monitorOnlineNodes">0</span><span class="monitor-view__stat-label" id="monitorOnlineNodesLabel">Онлайн</span></div>
+                    <div class="monitor-view__stat"><span class="monitor-view__stat-value" id="monitorQuorum">—</span><span class="monitor-view__stat-label" id="monitorQuorumLabel">Кворум</span></div>
+                </div>
+                <div class="monitor-view__resources">
+                    <div class="monitor-view__res"><span class="monitor-view__res-label">CPU</span><span class="monitor-view__res-value" id="monitorCpu">0%</span><div class="monitor-view__res-bar"><div class="monitor-view__res-fill" id="monitorCpuBar"></div></div></div>
+                    <div class="monitor-view__res"><span class="monitor-view__res-label">RAM</span><span class="monitor-view__res-value" id="monitorMemory">0%</span><div class="monitor-view__res-bar"><div class="monitor-view__res-fill monitor-view__res-fill--mem" id="monitorMemoryBar"></div></div></div>
+                    <div class="monitor-view__res"><span class="monitor-view__res-label" id="monitorVmsLabel">VM</span><span class="monitor-view__res-value" id="monitorVms">0</span></div>
+                </div>
+                <div class="monitor-view__body">
+                    <div class="monitor-view__panel monitor-view__nodes">
+                        <div class="monitor-view__panel-title" id="monitorNodesTitle">Узлы</div>
+                        <div class="monitor-view__list" id="monitorNodesList"></div>
+                    </div>
+                    <div class="monitor-view__panel monitor-view__services-panel">
+                        <div class="monitor-view__panel-title" id="monitorServicesTitle">Сервисы</div>
+                        <div class="monitor-view__list monitor-view__services-list" id="monitorServicesList"></div>
+                    </div>
+                </div>
+            </div>
         </div>
 
-        <!-- Обособленный раздел: мониторинг сервисов (открывается из меню в шапке) -->
+        <!-- Раздел мониторинга сервисов: только список и статусы (управление — в настройках) -->
         <div id="servicesMonitorSection" class="mb-4" style="display: none;">
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <button type="button" class="btn btn-outline-secondary btn-sm" onclick="closeServicesMonitor()">
                     <i class="bi bi-arrow-left me-1"></i><span id="backToDashboardText">К дашборду</span>
+                </button>
+                <button class="btn btn-sm btn-outline-success" onclick="checkAllServices()" id="pingAllBtn">
+                    <i class="bi bi-arrow-repeat me-1"></i><span id="pingAllText">Проверить все</span>
                 </button>
             </div>
             <div class="card">
@@ -469,45 +609,7 @@
                     <h5 class="mb-0"><i class="bi bi-activity me-2"></i><span id="servicesMonitorTitle">Мониторинг сервисов</span></h5>
                 </div>
                 <div class="card-body">
-                    <div class="row g-3 align-items-end mb-3">
-                        <div class="col-md-2">
-                            <label class="form-label fw-bold" for="serviceNameInput" id="serviceNameLabel">Имя</label>
-                            <input type="text" class="form-control" id="serviceNameInput" placeholder="Мой сервис">
-                        </div>
-                        <div class="col-md-2">
-                            <label class="form-label fw-bold" for="serviceTypeSelect" id="serviceTypeLabel">Тип</label>
-                            <select class="form-select" id="serviceTypeSelect" onchange="toggleServiceTypeFields()">
-                                <option value="tcp">TCP</option>
-                                <option value="udp">UDP</option>
-                                <option value="http">HTTP(S)</option>
-                            </select>
-                        </div>
-                        <div class="col-md-2" id="serviceHostWrap">
-                            <label class="form-label fw-bold" for="serviceHostInput" id="serviceHostLabel">Хост</label>
-                            <input type="text" class="form-control" id="serviceHostInput" placeholder="host или IP">
-                        </div>
-                        <div class="col-md-2" id="servicePortWrap">
-                            <label class="form-label fw-bold" for="servicePortInput" id="servicePortLabel">Порт</label>
-                            <input type="number" class="form-control" id="servicePortInput" placeholder="443" min="1" max="65535">
-                        </div>
-                        <div class="col-md-3 d-none" id="serviceUrlWrap">
-                            <label class="form-label fw-bold" for="serviceUrlInput" id="serviceUrlLabel">URL</label>
-                            <input type="text" class="form-control" id="serviceUrlInput" placeholder="https://example.local/">
-                        </div>
-                        <div class="col-md-2 d-grid">
-                            <button class="btn btn-outline-primary" onclick="addMonitoredService()" id="addServiceBtn">
-                                <i class="bi bi-plus-lg me-1"></i><span id="addServiceText">Добавить</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <h6 class="mb-0" id="servicesListTitle">Список сервисов</h6>
-                        <button class="btn btn-sm btn-outline-success" onclick="checkAllServices()" id="pingAllBtn">
-                            <i class="bi bi-arrow-repeat me-1"></i><span id="pingAllText">Проверить все</span>
-                        </button>
-                    </div>
-
+                    <p class="text-muted small mb-3" id="servicesMonitorHint"></p>
                     <div class="table-responsive">
                         <table class="table table-sm align-middle" id="servicesTable">
                             <thead>
@@ -517,7 +619,6 @@
                                     <th id="serviceTargetHeader">Адрес / URL</th>
                                     <th id="serviceStatusHeader">Статус</th>
                                     <th id="serviceLatencyHeader">Задержка</th>
-                                    <th id="serviceActionsHeader">Действия</th>
                                 </tr>
                             </thead>
                             <tbody id="servicesBody"></tbody>
@@ -549,17 +650,31 @@
             </ul>
         </footer>
         
-        <!-- Кнопка выхода из режима монитора (плавающая) -->
-        <button id="monitorExitBtnFixed" onclick="toggleMonitorMode()" title="Выход из режима монитора">
-            <i class="bi bi-x-lg"></i> Выход
-        </button>
-        
-        <!-- Переключатель типа сервера в режиме монитора -->
-        <div id="monitorServerTypeSwitch">
-            <select class="form-select form-select-sm" id="monitorServerTypeSelect" onchange="setServerType(this.value)">
-                <option value="proxmox">Proxmox</option>
-                <option value="truenas">TrueNAS</option>
-            </select>
+        <!-- Панель режима монитора (одна полоса: тип сервера + обновление + выход) -->
+        <div id="monitorToolbar" class="monitor-toolbar">
+            <div class="monitor-toolbar-left">
+                <select class="form-select form-select-sm monitor-toolbar-select" id="monitorServerTypeSelect" onchange="setServerType(this.value)">
+                    <option value="proxmox">Proxmox</option>
+                    <option value="truenas">TrueNAS</option>
+                </select>
+            </div>
+            <div class="monitor-toolbar-center">
+                <span class="monitor-toolbar-title" id="monitorToolbarTitle">Монитор</span>
+                <span class="monitor-toolbar-update text-muted small" id="monitorToolbarUpdate"></span>
+            </div>
+            <div class="monitor-toolbar-theme">
+                <button type="button" class="btn btn-sm monitor-toolbar-theme-btn" id="monitorThemeLight" onclick="setMonitorTheme('light')" title="">
+                    <i class="bi bi-sun-fill"></i>
+                </button>
+                <button type="button" class="btn btn-sm monitor-toolbar-theme-btn active" id="monitorThemeDark" onclick="setMonitorTheme('dark')" title="">
+                    <i class="bi bi-moon-stars-fill"></i>
+                </button>
+            </div>
+            <div class="monitor-toolbar-right">
+                <button type="button" class="btn btn-sm monitor-toolbar-exit" id="monitorExitBtnFixed" onclick="toggleMonitorMode()" title="">
+                    <i class="bi bi-fullscreen-exit me-1"></i><span id="monitorExitBtnText">Выход</span>
+                </button>
+            </div>
         </div>
     </div>
 

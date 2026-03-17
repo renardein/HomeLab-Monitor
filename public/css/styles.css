@@ -28,18 +28,37 @@
             background: #16213e;
         }
         body.dark-mode .table {
-            color: #eee;
+            color: #e2e8f0;
+            border-color: #2d3748;
         }
-        body.dark-mode .table th {
+        body.dark-mode .table thead th {
             background-color: #0f3460;
-            color: #eee;
+            color: #fff;
+            border-color: #2d3748;
         }
-        body.dark-mode .table td {
-            border-color: #0f3460;
+        body.dark-mode .table tbody td {
+            background-color: #16213e;
+            color: #e2e8f0;
+            border-color: #2d3748;
         }
-        body.dark-mode .table tbody tr:hover {
-            background-color: rgba(255, 255, 255, 0.05);
+        body.dark-mode .table tbody tr:hover td {
+            background-color: rgba(255, 255, 255, 0.06);
         }
+        body.dark-mode .table .text-muted,
+        body.dark-mode .table small {
+            color: #a0aec0 !important;
+        }
+        body.dark-mode .table code {
+            background: rgba(0, 0, 0, 0.25);
+            color: #e2e8f0;
+            border-color: #2d3748;
+        }
+        body.dark-mode .table .badge {
+            color: #fff;
+        }
+        body.dark-mode .table-success { background-color: rgba(40, 167, 69, 0.2) !important; color: #e2e8f0; }
+        body.dark-mode .table-danger { background-color: rgba(220, 53, 69, 0.2) !important; color: #e2e8f0; }
+        body.dark-mode .table-warning { background-color: rgba(255, 193, 7, 0.15) !important; color: #e2e8f0; }
         body.dark-mode .navbar {
             background: #0f3460 !important;
             color: #eee;
@@ -203,6 +222,14 @@
         .language-switcher.active {
             background-color: #667eea;
             color: white;
+        }
+        #settingsNav .nav-link {
+            text-align: left;
+            border-radius: 8px;
+            margin-bottom: 4px;
+        }
+        #settingsNav .nav-link i {
+            opacity: 0.9;
         }
         .settings-section {
             border: 1px solid #dee2e6;
@@ -480,7 +507,10 @@
             color: white;
         }
         body.dark-mode .table-responsive {
-            border-color: #0f3460;
+            border-color: #2d3748;
+        }
+        body.dark-mode .card .table {
+            background-color: #16213e;
         }
         .threshold-slider {
             width: 100%;
@@ -501,176 +531,337 @@
         .color-yellow { background: #ffc107; }
         .color-red { background: #dc3545; }
         
-        /* Monitor mode styles */
+        /* Режим монитора: полный дашборд с крупными блоками, переключение свайпами */
         body.monitor-mode {
-            background: #000;
-            padding: 5px;
-            overflow-x: hidden;
+            padding: 0;
+            overflow: hidden;
         }
 
-        /* Use full screen real estate in monitor mode */
         body.monitor-mode .container {
             max-width: none;
             width: 100vw;
             margin: 0;
-            padding-left: 0;
-            padding-right: 0;
+            padding: 0;
         }
-        
-        body.monitor-mode #dashboardSection {
-            min-height: 100vh;
-        }
-        
+
         body.monitor-mode .navbar,
         body.monitor-mode #configSection,
         body.monitor-mode .settings-section,
-        body.monitor-mode #toastContainer {
-            display: none !important;
-        }
-        
-        body.monitor-mode #dashboardSection {
-            max-width: 100%;
-            padding: 10px;
-        }
-        
-        body.monitor-mode .stat-card {
-            background: #1a1a2e;
-            color: #fff;
-            border: 2px solid #667eea;
-            padding: 20px;
-        }
-        
-        body.monitor-mode .stat-value {
-            color: #fff;
-            font-size: 3.5rem;
-            font-weight: bold;
-        }
-        
-        body.monitor-mode .stat-label {
-            color: #aaa;
-            font-size: 1.2rem;
-            text-transform: uppercase;
-        }
-        
-        body.monitor-mode .card {
-            background: #16213e;
-            color: #fff;
-            border: 1px solid #0f3460;
-            margin-bottom: 20px;
-        }
-        
-        body.monitor-mode .card-header {
-            background: linear-gradient(135deg, #0f3460 0%, #533483 100%);
-            color: #fff;
-            font-size: 1.5rem;
-            padding: 15px 20px;
-        }
-        
-        body.monitor-mode .node-card {
-            background: #16213e;
-            color: #fff;
-            border: 1px solid #0f3460;
-            padding: 15px;
-        }
-        
-        body.monitor-mode .table {
-            color: #fff;
-            font-size: 1.1rem;
-        }
-        
-        body.monitor-mode .table th {
-            background-color: #0f3460;
-            color: #fff;
-            font-size: 1.2rem;
-            padding: 12px;
-        }
-        
-        body.monitor-mode .table td {
-            padding: 10px;
-        }
-        
-        body.monitor-mode .progress {
-            background: #0f3460;
-            height: 25px;
-        }
-        
-        body.monitor-mode .progress-bar {
-            font-size: 1rem;
-        }
-        
-        body.monitor-mode .text-muted {
-            color: #aaa !important;
-        }
-        
-        body.monitor-mode #loadingIndicator {
-            color: #667eea;
-            font-size: 1.5rem;
-        }
-        
-        body.monitor-mode .display-6 {
-            font-size: 2.5rem;
-        }
-        
-        body.monitor-mode h5, body.monitor-mode h6 {
-            font-size: 1.3rem;
-        }
-        
-        body.monitor-mode .badge {
-            font-size: 1rem;
-            padding: 8px 12px;
-        }
-        
-        /* Hide footer in monitor mode for cleaner display */
+        body.monitor-mode #toastContainer,
         body.monitor-mode footer {
             display: none !important;
         }
-        
-        /* Add exit button for monitor mode - floating button on screen */
-        body.monitor-mode #monitorExitBtnFixed {
+
+        body.monitor-mode #dashboardSection {
+            max-width: 100%;
+            height: 100vh;
+            padding: 0;
+            padding-top: 52px;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        body.monitor-mode #dashboardContent {
             display: block !important;
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 9999;
-            background: rgba(220, 53, 69, 0.9);
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 8px;
-            cursor: pointer;
+            padding: 16px 20px 24px;
+        }
+
+        body.monitor-mode #monitorView {
+            display: none !important;
+        }
+
+        /* Крупные блоки дашборда в режиме монитора */
+        body.monitor-mode .stat-card {
+            padding: 24px;
+            border-radius: 12px;
+        }
+        body.monitor-mode .stat-value {
+            font-size: 3.2rem;
+            font-weight: bold;
+            line-height: 1.1;
+        }
+        body.monitor-mode .stat-label {
             font-size: 1.1rem;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-            transition: all 0.3s ease;
+            text-transform: uppercase;
+            margin-top: 4px;
         }
-        
-        body.monitor-mode #monitorExitBtnFixed:hover {
-            background: rgba(220, 53, 69, 1);
-            transform: scale(1.05);
+        body.monitor-mode .card {
+            border-radius: 12px;
+            margin-bottom: 24px;
         }
-        
-        #monitorExitBtnFixed {
-            display: none;
+        body.monitor-mode .card-header {
+            font-size: 1.4rem;
+            padding: 16px 20px;
+        }
+        body.monitor-mode .card-body {
+            padding: 20px;
+        }
+        body.monitor-mode .node-card {
+            padding: 20px;
+            border-radius: 12px;
+        }
+        body.monitor-mode .display-6 {
+            font-size: 2.4rem;
+        }
+        body.monitor-mode .table {
+            font-size: 1.05rem;
+        }
+        body.monitor-mode .table th {
+            padding: 14px;
+            font-size: 1.1rem;
+        }
+        body.monitor-mode .table td {
+            padding: 12px;
+        }
+        body.monitor-mode .progress {
+            height: 24px;
+            border-radius: 6px;
+        }
+        body.monitor-mode .nav-tabs .nav-link {
+            padding: 10px 20px;
+            font-size: 1rem;
         }
 
-        /* Server type switch in monitor mode */
-        #monitorServerTypeSwitch {
-            display: none;
+        /* Тёмная тема режима монитора (выбор в панели) */
+        body.monitor-mode.monitor-theme-dark {
+            background: #0d1117;
         }
-
-        body.monitor-mode #monitorServerTypeSwitch {
-            display: block !important;
-            position: fixed;
-            top: 20px;
-            left: 20px;
-            z-index: 9999;
-            width: 160px;
-        }
-
-        body.monitor-mode #monitorServerTypeSwitch .form-select {
-            background: rgba(15, 52, 96, 0.9);
-            border-color: #533483;
+        body.monitor-mode.monitor-theme-dark .stat-card {
+            background: #1a1a2e;
             color: #fff;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            border: 2px solid #667eea;
+        }
+        body.monitor-mode.monitor-theme-dark .stat-label { color: #a0aec0; }
+        body.monitor-mode.monitor-theme-dark .card {
+            background: #16213e;
+            color: #fff;
+            border: 1px solid #2d3748;
+        }
+        body.monitor-mode.monitor-theme-dark .card-header {
+            background: linear-gradient(135deg, #0f3460 0%, #533483 100%);
+            color: #fff;
+        }
+        body.monitor-mode.monitor-theme-dark .node-card {
+            background: #16213e;
+            color: #fff;
+            border: 1px solid #2d3748;
+        }
+        body.monitor-mode.monitor-theme-dark .table {
+            color: #e2e8f0;
+            border-color: #2d3748;
+            background-color: #16213e;
+        }
+        body.monitor-mode.monitor-theme-dark .table thead th {
+            background-color: #0f3460;
+            color: #fff;
+            border-color: #2d3748;
+        }
+        body.monitor-mode.monitor-theme-dark .table tbody td {
+            background-color: #16213e;
+            color: #e2e8f0;
+            border-color: #2d3748;
+        }
+        body.monitor-mode.monitor-theme-dark .table tbody tr:hover td {
+            background-color: rgba(255, 255, 255, 0.06);
+        }
+        body.monitor-mode.monitor-theme-dark .table .text-muted,
+        body.monitor-mode.monitor-theme-dark .table small {
+            color: #a0aec0 !important;
+        }
+        body.monitor-mode.monitor-theme-dark .table code {
+            background: rgba(0, 0, 0, 0.25);
+            color: #e2e8f0;
+            border-color: #2d3748;
+        }
+        body.monitor-mode.monitor-theme-dark .table .badge {
+            color: #fff;
+        }
+        body.monitor-mode.monitor-theme-dark .progress { background: #2d3748; }
+        body.monitor-mode.monitor-theme-dark .text-muted { color: #a0aec0 !important; }
+        body.monitor-mode.monitor-theme-dark #servicesMonitorSection .card { background: #16213e; color: #fff; border-color: #2d3748; }
+        body.monitor-mode.monitor-theme-dark #servicesMonitorSection .card-header { background: #0f3460; color: #fff; }
+        body.monitor-mode.monitor-theme-dark #servicesMonitorSection .table {
+            color: #e2e8f0;
+            background-color: #16213e;
+        }
+        body.monitor-mode.monitor-theme-dark #servicesMonitorSection .table thead th {
+            background-color: #0f3460;
+            color: #fff;
+            border-color: #2d3748;
+        }
+        body.monitor-mode.monitor-theme-dark #servicesMonitorSection .table tbody td {
+            background-color: #16213e;
+            color: #e2e8f0;
+            border-color: #2d3748;
+        }
+        body.monitor-mode.monitor-theme-dark #servicesMonitorSection .table tbody tr:hover td {
+            background-color: rgba(255, 255, 255, 0.06);
+        }
+        body.monitor-mode.monitor-theme-dark #servicesMonitorSection .table code {
+            background: rgba(0, 0, 0, 0.25);
+            color: #e2e8f0;
+        }
+        body.monitor-mode.monitor-theme-dark #servicesMonitorSection .table .badge {
+            color: #fff;
+        }
+        body.monitor-mode.monitor-theme-dark .table-success { background-color: rgba(40, 167, 69, 0.2) !important; color: #e2e8f0; }
+        body.monitor-mode.monitor-theme-dark .table-danger { background-color: rgba(220, 53, 69, 0.2) !important; color: #e2e8f0; }
+        body.monitor-mode.monitor-theme-dark .table-warning { background-color: rgba(255, 193, 7, 0.15) !important; color: #e2e8f0; }
+
+        /* Светлая тема режима монитора */
+        body.monitor-mode:not(.monitor-theme-dark) {
+            background: #f0f4f8;
+        }
+        body.monitor-mode:not(.monitor-theme-dark) .stat-card {
+            background: #fff;
+            color: #1a202c;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+        body.monitor-mode:not(.monitor-theme-dark) .stat-label { color: #4a5568; }
+        body.monitor-mode:not(.monitor-theme-dark) .card {
+            background: #fff;
+            color: #2d3748;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+        body.monitor-mode:not(.monitor-theme-dark) .card-header {
+            background: linear-gradient(135deg, #edf2f7 0%, #e2e8f0 100%);
+            color: #2d3748;
+        }
+        body.monitor-mode:not(.monitor-theme-dark) .node-card {
+            background: #fff;
+            color: #2d3748;
+            border: 1px solid #e2e8f0;
+        }
+        body.monitor-mode:not(.monitor-theme-dark) .table th { background: #edf2f7; color: #2d3748; }
+        body.monitor-mode:not(.monitor-theme-dark) .progress { background: #e2e8f0; }
+
+        /* Панель инструментов монитора */
+        .monitor-toolbar {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 9999;
+            height: 52px;
+            padding: 0 20px;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: nowrap;
+            backdrop-filter: blur(8px);
+        }
+
+        body.monitor-mode .monitor-toolbar {
+            display: flex !important;
+        }
+
+        body.monitor-mode.monitor-theme-dark .monitor-toolbar {
+            background: linear-gradient(180deg, rgba(15, 52, 96, 0.98) 0%, rgba(26, 33, 62, 0.98) 100%);
+            border-bottom: 1px solid rgba(102, 126, 234, 0.4);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+
+        body.monitor-mode:not(.monitor-theme-dark) .monitor-toolbar {
+            background: rgba(255,255,255,0.95);
+            border-bottom: 1px solid #e2e8f0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+        }
+
+        .monitor-toolbar-left { flex: 0 0 auto; min-width: 140px; }
+        .monitor-toolbar-center {
+            flex: 1 1 auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+        }
+        .monitor-toolbar-theme {
+            display: flex;
+            gap: 4px;
+            flex: 0 0 auto;
+        }
+        .monitor-toolbar-theme-btn {
+            padding: 6px 10px;
+            border-radius: 6px;
+            border: 1px solid transparent;
+            opacity: 0.6;
+            transition: opacity 0.2s;
+        }
+        .monitor-toolbar-theme-btn.active {
+            opacity: 1;
+        }
+        body.monitor-mode.monitor-theme-dark .monitor-toolbar-theme-btn {
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+            border-color: rgba(255,255,255,0.2);
+        }
+        body.monitor-mode.monitor-theme-dark .monitor-toolbar-theme-btn.active {
+            background: rgba(255,255,255,0.25);
+        }
+        body.monitor-mode:not(.monitor-theme-dark) .monitor-toolbar-theme-btn {
+            background: rgba(0,0,0,0.06);
+            color: #2d3748;
+            border-color: rgba(0,0,0,0.1);
+        }
+        body.monitor-mode:not(.monitor-theme-dark) .monitor-toolbar-theme-btn.active {
+            background: rgba(0,0,0,0.12);
+        }
+        .monitor-toolbar-right { flex: 0 0 auto; }
+
+        body.monitor-mode.monitor-theme-dark .monitor-toolbar-title,
+        body.monitor-mode.monitor-theme-dark .monitor-toolbar-update {
+            color: #fff;
+        }
+        body.monitor-mode.monitor-theme-dark .monitor-toolbar-update { opacity: 0.8; }
+
+        body.monitor-mode:not(.monitor-theme-dark) .monitor-toolbar-title { color: #2d3748; font-weight: 600; }
+        body.monitor-mode:not(.monitor-theme-dark) .monitor-toolbar-update { color: #718096; }
+
+        .monitor-toolbar-title { font-size: 1rem; }
+        .monitor-toolbar-update { font-size: 0.85rem; }
+
+        body.monitor-mode.monitor-theme-dark .monitor-toolbar-select {
+            background: rgba(255,255,255,0.12) !important;
+            border: 1px solid rgba(102, 126, 234, 0.5);
+            color: #fff !important;
+        }
+        body.monitor-mode.monitor-theme-dark .monitor-toolbar-select option { background: #16213e; color: #fff; }
+
+        body.monitor-mode:not(.monitor-theme-dark) .monitor-toolbar-select {
+            background: #fff !important;
+            border: 1px solid #e2e8f0;
+            color: #2d3748 !important;
+        }
+        body.monitor-mode:not(.monitor-theme-dark) .monitor-toolbar-select option { background: #fff; color: #2d3748; }
+
+        .monitor-toolbar-select { font-size: 0.9rem; }
+
+        .monitor-toolbar-exit {
+            border: none;
+            padding: 8px 18px;
+            border-radius: 8px;
+            font-weight: 500;
+            transition: background 0.2s, transform 0.2s;
+        }
+        body.monitor-mode.monitor-theme-dark .monitor-toolbar-exit {
+            background: rgba(220, 53, 69, 0.9);
+            color: #fff;
+        }
+        body.monitor-mode.monitor-theme-dark .monitor-toolbar-exit:hover {
+            background: rgba(220, 53, 69, 1);
+            color: #fff;
+            transform: scale(1.02);
+        }
+        body.monitor-mode:not(.monitor-theme-dark) .monitor-toolbar-exit {
+            background: #e53e3e;
+            color: #fff;
+        }
+        body.monitor-mode:not(.monitor-theme-dark) .monitor-toolbar-exit:hover {
+            background: #c53030;
+            color: #fff;
+            transform: scale(1.02);
         }
 
         /* Smooth loading overlay (prevents layout shifts) */
@@ -698,75 +889,12 @@
             pointer-events: auto;
         }
 
-        /* Monitor mode tuning for 1920x1200 (16:10 dashboards) */
-        @media (width: 1920px) and (height: 1200px) {
-            body.monitor-mode {
-                padding: 8px;
+        /* Режим монитора: подгонка под 1920×1200 */
+        @media (min-width: 1920px) and (min-height: 1200px) {
+            body.monitor-mode #dashboardContent {
+                padding: 20px 24px 28px;
             }
-
-            body.monitor-mode .container {
-                width: 100vw;
-                padding-left: 0;
-                padding-right: 0;
-            }
-
-            body.monitor-mode #dashboardSection {
-                padding: 8px;
-            }
-
-            /* Top stats row: slightly smaller to fit 16:10 */
-            body.monitor-mode .stat-card {
-                padding: 16px;
-            }
-
-            body.monitor-mode .stat-value {
-                font-size: 3.1rem;
-                line-height: 1.05;
-            }
-
-            body.monitor-mode .stat-label {
-                font-size: 1.05rem;
-            }
-
-            /* Cards/tables density */
-            body.monitor-mode .card-header {
-                font-size: 1.35rem;
-                padding: 12px 16px;
-            }
-
-            body.monitor-mode .node-card {
-                padding: 12px;
-                margin-bottom: 12px;
-            }
-
-            body.monitor-mode .table {
-                font-size: 1.02rem;
-            }
-
-            body.monitor-mode .table th {
-                font-size: 1.08rem;
-                padding: 10px;
-            }
-
-            body.monitor-mode .table td {
-                padding: 8px;
-            }
-
-            body.monitor-mode .progress {
-                height: 22px;
-            }
-
-            body.monitor-mode .display-6 {
-                font-size: 2.2rem;
-            }
-
-            body.monitor-mode h5,
-            body.monitor-mode h6 {
-                font-size: 1.15rem;
-            }
-
-            body.monitor-mode .badge {
-                font-size: 0.95rem;
-                padding: 6px 10px;
-            }
+            body.monitor-mode .stat-card { padding: 28px; }
+            body.monitor-mode .stat-value { font-size: 3.5rem; }
+            body.monitor-mode .stat-label { font-size: 1.15rem; }
         }

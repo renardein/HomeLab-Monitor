@@ -7,6 +7,7 @@ const cookieParser = require('cookie-parser');
 const config = require('./modules/config');
 const i18n = require('./modules/i18n');
 const { log } = require('./modules/utils');
+const { getDb, closeDb } = require('./modules/db');
 
 // Создаем приложение
 const app = express();
@@ -46,6 +47,7 @@ app.use('/api/backups', require('./modules/routes/backups'));
 app.use('/api/truenas/auth', require('./modules/routes/truenas-auth'));
 app.use('/api/truenas', require('./modules/routes/truenas-status'));
 app.use('/api/connections', require('./modules/routes/connections'));
+app.use('/api/settings', require('./modules/routes/settings'));
 
 // Доступные языки
 app.get('/api/languages', (req, res) => {
@@ -149,15 +151,26 @@ app.use((err, req, res, next) => {
     res.status(500).json({ error: 'Внутренняя ошибка сервера' });
 });
 
-// Запуск сервера
-app.listen(config.port, '0.0.0.0', () => {
-    console.log('=================================');
-    console.log(`Proxmox Monitor запущен на порту ${config.port}`);
-    console.log('=================================');
-    console.log(`Режим: ${config.env}`);
-    console.log(`Proxmox: ${config.proxmox.host}:${config.proxmox.port}`);
-    console.log(`Cookies: ${config.env === 'production' ? 'Secure' : 'Development'}`);
-    console.log('=================================');
-    console.log(`URL: http://localhost:${config.port}`);
-    console.log('=================================');
-});
+// Запуск сервера после инициализации SQLite
+getDb()
+    .then(() => {
+        app.listen(config.port, '0.0.0.0', () => {
+            console.log('=================================');
+            console.log(`Proxmox Monitor запущен на порту ${config.port}`);
+            console.log('=================================');
+            console.log(`Режим: ${config.env}`);
+            console.log(`БД: SQLite (data/app.db)`);
+            console.log(`Proxmox: ${config.proxmox.host}:${config.proxmox.port}`);
+            console.log(`Cookies: ${config.env === 'production' ? 'Secure' : 'Development'}`);
+            console.log('=================================');
+            console.log(`URL: http://localhost:${config.port}`);
+            console.log('=================================');
+        });
+    })
+    .catch((err) => {
+        console.error('Ошибка инициализации БД:', err);
+        process.exit(1);
+    });
+
+process.on('SIGINT', () => { closeDb(); process.exit(0); });
+process.on('SIGTERM', () => { closeDb(); process.exit(0); });

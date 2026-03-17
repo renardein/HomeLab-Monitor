@@ -8,6 +8,12 @@ let refreshIntervalMs = 30000; // Default refresh interval
 let currentTheme = 'light';
 let currentUnits = 'decimal'; // 'decimal' (GB) or 'binary' (GiB)
 let monitorMode = false; // Monitor (display) mode flag
+/** Тема режима монитора: 'light' | 'dark' (независимо от общей темы) */
+let monitorTheme = 'dark';
+/** Разблокированы ли настройки в этой сессии (для защиты паролем) */
+let settingsUnlocked = false;
+/** Пароль настроек включён (из API) */
+let settingsPasswordRequired = false;
 let currentServerType = 'proxmox'; // 'proxmox' | 'truenas'
 let thresholds = {
     cpuGreen: 70,
@@ -23,6 +29,8 @@ let connectionIdMap = {}; // key: `${type}|${url}` -> connectionId (no secrets)
 let isRefreshing = false;
 const htmlCache = {}; // elementId -> last innerHTML string
 let monitoredServices = []; // [{ name, type: 'tcp'|'udp'|'http', host?, port?, url?, lastStatus, lastLatency }]
+let lastClusterData = null;   // for monitor view (Proxmox)
+let lastTrueNASData = null;   // { system, pools } for monitor view (TrueNAS)
 
 function el(id) {
     return document.getElementById(id);
@@ -59,6 +67,32 @@ function escapeHtml(s) {
 function setDisplay(id, display) {
     const e = el(id);
     if (e) e.style.display = display;
+}
+
+function isSettingsPasswordEnabled() {
+    return !!settingsPasswordRequired;
+}
+
+async function saveSettingsToServer(payload) {
+    const body = {};
+    if (payload.theme !== undefined) body.theme = payload.theme;
+    if (payload.refreshInterval !== undefined) body.refreshInterval = payload.refreshInterval;
+    if (payload.units !== undefined) body.units = payload.units;
+    if (payload.thresholds !== undefined) body.thresholds = payload.thresholds;
+    if (payload.monitorTheme !== undefined) body.monitorTheme = payload.monitorTheme;
+    if (payload.monitorMode !== undefined) body.monitorMode = payload.monitorMode;
+    if (payload.serverType !== undefined) body.serverType = payload.serverType;
+    if (payload.currentServerIndex !== undefined) body.currentServerIndex = payload.currentServerIndex;
+    if (payload.currentTrueNASServerIndex !== undefined) body.currentTrueNASServerIndex = payload.currentTrueNASServerIndex;
+    if (payload.proxmoxServers !== undefined) body.proxmoxServers = payload.proxmoxServers;
+    if (payload.truenasServers !== undefined) body.truenasServers = payload.truenasServers;
+    if (payload.connectionIdMap !== undefined) body.connectionIdMap = payload.connectionIdMap;
+    if (payload.preferredLanguage !== undefined) body.preferredLanguage = payload.preferredLanguage;
+    try {
+        await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    } catch (e) {
+        console.error('Failed to save settings:', e);
+    }
 }
 
 // Client-side translations (will be loaded from server)
@@ -101,12 +135,10 @@ function t(key) {
 
 function setServerType(type) {
     currentServerType = (type === 'truenas') ? 'truenas' : 'proxmox';
-    localStorage.setItem('serverType', currentServerType);
+    saveSettingsToServer({ serverType: currentServerType });
 
     const select = document.getElementById('serverTypeSelect');
     if (select) select.value = currentServerType;
-    const quick = document.getElementById('serverTypeQuick');
-    if (quick) quick.value = currentServerType;
     const monitorSelect = document.getElementById('monitorServerTypeSelect');
     if (monitorSelect) monitorSelect.value = currentServerType;
     const serverMenuTitle = document.getElementById('serverMenuTitle');
@@ -175,7 +207,9 @@ function setLanguage(lang) {
         }
     });
     
-    localStorage.setItem('preferred_language', lang);
+    try {
+        localStorage.setItem('preferred_language', lang);
+    } catch (_) {}
     updateUILanguage();
     
     // Re-render server list to update translated tooltips and text
@@ -315,6 +349,50 @@ function updateUILanguage() {
     if (unitsBinary) unitsBinary.textContent = t('unitsBinary');
     const monitorModeBtn = document.getElementById('monitorModeBtn');
     if (monitorModeBtn) monitorModeBtn.title = t('monitorModeTitle');
+    const monitorToolbarTitle = document.getElementById('monitorToolbarTitle');
+    if (monitorToolbarTitle) monitorToolbarTitle.textContent = t('monitorMode');
+    const monitorExitBtnText = document.getElementById('monitorExitBtnText');
+    if (monitorExitBtnText) monitorExitBtnText.textContent = t('monitorExitText');
+    const monitorExitBtn = document.getElementById('monitorExitBtnFixed');
+    if (monitorExitBtn) monitorExitBtn.title = t('monitorExitTitle');
+    const monitorThemeLight = document.getElementById('monitorThemeLight');
+    const monitorThemeDark = document.getElementById('monitorThemeDark');
+    if (monitorThemeLight) monitorThemeLight.title = t('themeLight');
+    if (monitorThemeDark) monitorThemeDark.title = t('themeDark');
+    if (monitorMode) {
+        setText('monitorTotalNodesLabel', t('totalNodes'));
+        setText('monitorOnlineNodesLabel', t('nodesOnline'));
+        setText('monitorQuorumLabel', t('quorum'));
+        setText('monitorNodesTitle', currentServerType === 'truenas' ? t('tabServers') : t('tabNodes'));
+        setText('monitorServicesTitle', t('tabServicesMonitor'));
+        setText('monitorVmsLabel', t('virtualization'));
+    }
+    setText('settingsServicesTitle', t('settingsServicesTitle'));
+    setText('settingsServicesHint', t('settingsServicesHint'));
+    setText('servicesMonitorHint', t('servicesMonitorHint'));
+    setText('settingsServiceNameLabel', t('serviceNameLabel'));
+    setText('settingsServiceTypeLabel', t('serviceTypeLabel'));
+    setText('settingsServiceHostLabel', t('serviceHostLabel'));
+    setText('settingsServicePortLabel', t('servicePortLabel'));
+    setText('settingsServiceUrlLabel', t('serviceUrlLabel'));
+    setText('settingsServiceNameHeader', t('serviceNameHeader'));
+    setText('settingsServiceTypeHeader', t('serviceTypeHeader'));
+    setText('settingsServiceTargetHeader', t('serviceTargetHeader'));
+    setText('settingsServiceActionsHeader', t('serviceActionsHeader'));
+    setText('settingsExportBtn', t('settingsExportBtn'));
+    setText('settingsImportBtn', t('settingsImportBtn'));
+    setText('settingsNavConnection', t('settingsNavConnection'));
+    setText('settingsNavDisplay', t('settingsNavDisplay'));
+    setText('settingsNavThresholds', t('settingsNavThresholds'));
+    setText('settingsNavServices', t('settingsNavServices'));
+    setText('settingsNavSecurity', t('settingsNavSecurity'));
+    setText('settingsSecurityTitle', t('settingsSecurityTitle'));
+    setText('settingsSecurityHint', t('settingsSecurityHint'));
+    setText('settingsPasswordCurrentLabel', t('settingsPasswordCurrentLabel'));
+    setText('settingsPasswordNewLabel', t('settingsPasswordNewLabel'));
+    setText('settingsPasswordRepeatLabel', t('settingsPasswordRepeatLabel'));
+    setText('settingsPasswordApplyText', isSettingsPasswordEnabled() ? t('settingsPasswordChange') : t('settingsPasswordEnable'));
+    setText('settingsPasswordDisableText', t('settingsPasswordDisable'));
 }
 
 // Available languages (will be populated from server)
@@ -339,23 +417,26 @@ document.addEventListener('DOMContentLoaded', async function() {
         console.error('Failed to load languages:', error);
     }
     
-    const savedLang = localStorage.getItem('preferred_language');
-    if (savedLang && availableLanguages.includes(savedLang)) {
-        setLanguage(savedLang);
-    } else {
-        setLanguage(availableLanguages[0] || 'ru');
-    }
-    
-    // Load saved settings
-    loadSettings();
+    // Load saved settings from API (servers, thresholds, defaults, etc.)
+    const settingsData = await loadSettings();
+
+    // Determine language: localStorage -> default from settings -> first available
+    let storedLang = null;
+    try {
+        storedLang = localStorage.getItem('preferred_language');
+    } catch (_) {}
+    const defaultLang = settingsData && settingsData.preferred_language ? settingsData.preferred_language : null;
+    const chosenLang = (storedLang && availableLanguages.includes(storedLang))
+        ? storedLang
+        : (defaultLang && availableLanguages.includes(defaultLang)
+            ? defaultLang
+            : (availableLanguages[0] || 'ru'));
+    setLanguage(chosenLang);
+    setServerType(currentServerType);
 
     toggleServiceTypeFields();
     renderMonitoredServices();
-
-    // Server type selection
-    const savedType = localStorage.getItem('serverType');
-    if (savedType) currentServerType = savedType;
-    setServerType(currentServerType);
+    renderSettingsMonitoredServices();
     
     checkSavedToken();
     checkServerStatus();
@@ -373,7 +454,7 @@ function getCurrentConnectionId() {
 
 function saveConnectionId(type, url, id) {
     connectionIdMap[connectionKey(type, url)] = id;
-    localStorage.setItem('connectionIdMap', JSON.stringify(connectionIdMap));
+    saveSettingsToServer({ connectionIdMap: { ...connectionIdMap } });
 }
 
 // Check saved token
@@ -385,19 +466,16 @@ async function checkSavedToken() {
         const key = data.token || data.apiKey;
         if (data.success && key) {
             apiToken = key;
-            // restore serverUrl if backend stored it
             const savedServerUrl = data.serverUrl;
             if (savedServerUrl) {
                 if (currentServerType === 'truenas') {
                     truenasServers = [savedServerUrl];
                     currentTrueNASServerIndex = 0;
-                    localStorage.setItem('truenasServers', JSON.stringify(truenasServers));
-                    localStorage.setItem('currentTrueNASServerIndex', '0');
+                    saveSettingsToServer({ truenasServers: [...truenasServers], currentTrueNASServerIndex: 0 });
                 } else {
                     proxmoxServers = [savedServerUrl];
                     currentServerIndex = 0;
-                    localStorage.setItem('proxmoxServers', JSON.stringify(proxmoxServers));
-                    localStorage.setItem('currentServerIndex', '0');
+                    saveSettingsToServer({ proxmoxServers: [...proxmoxServers], currentServerIndex: 0 });
                 }
             }
             setValue('apiToken', '••••••••••••••••');
@@ -442,8 +520,7 @@ async function logout() {
         // Clear local token and mapping for current url (server-side secrets remain unless user deletes connection)
         const url = getCurrentServerUrl();
         delete connectionIdMap[connectionKey(currentServerType, url)];
-        localStorage.setItem('connectionIdMap', JSON.stringify(connectionIdMap));
-
+        saveSettingsToServer({ connectionIdMap: { ...connectionIdMap } });
         showToast(t('logoutSuccess'), 'success');
         apiToken = null;
         setValue('apiToken', '');
@@ -513,12 +590,38 @@ function showToast(message, type = 'info') {
     }, 5000);
 }
 
+async function ensureSettingsUnlocked() {
+    if (!isSettingsPasswordEnabled()) return true;
+    if (settingsUnlocked) return true;
+    const entered = prompt(t('enterSettingsPassword') || 'Введите пароль для настроек');
+    if (entered === null) return false;
+    try {
+        const resp = await fetch('/api/settings/unlock', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password: entered })
+        });
+        const data = await resp.json();
+        if (data.success) {
+            settingsUnlocked = true;
+            showToast(t('settingsPasswordUnlocked') || 'Настройки разблокированы', 'success');
+            return true;
+        }
+    } catch (e) {
+        console.error(e);
+    }
+    showToast(t('settingsPasswordIncorrect') || 'Неверный пароль', 'error');
+    return false;
+}
+
 // Show settings section
-function showConfig() {
+async function showConfig() {
+    if (!(await ensureSettingsUnlocked())) return;
     document.getElementById('configSection').style.display = 'block';
     document.getElementById('dashboardSection').style.display = 'none';
     const servicesSection = document.getElementById('servicesMonitorSection');
     if (servicesSection) servicesSection.style.display = 'none';
+    renderSettingsMonitoredServices();
     if (autoRefreshInterval) {
         clearInterval(autoRefreshInterval);
         autoRefreshInterval = null;
@@ -526,12 +629,13 @@ function showConfig() {
 }
 
 // Toggle settings visibility
-function toggleSettings() {
+async function toggleSettings() {
     const configSection = document.getElementById('configSection');
     const dashboardSection = document.getElementById('dashboardSection');
     
     const servicesSection = document.getElementById('servicesMonitorSection');
     if (configSection.style.display === 'none' || configSection.style.display === '') {
+        if (!(await ensureSettingsUnlocked())) return;
         configSection.style.display = 'block';
         dashboardSection.style.display = 'none';
         if (servicesSection) servicesSection.style.display = 'none';
@@ -550,27 +654,37 @@ function toggleSettings() {
     }
 }
 
-// Toggle monitor mode
+// Toggle monitor mode — показываем полный дашборд (крупные блоки), переключение по свайпам
 async function toggleMonitorMode() {
     monitorMode = !monitorMode;
-    localStorage.setItem('monitorMode', monitorMode);
-    
+    saveSettingsToServer({ monitorMode });
+
+    const dashboardContent = document.getElementById('dashboardContent');
+    const monitorView = document.getElementById('monitorView');
+    if (dashboardContent) dashboardContent.style.display = 'block';
+    if (monitorView) monitorView.style.display = 'none';
+
     document.body.classList.toggle('monitor-mode', monitorMode);
-    
+
     const btn = document.getElementById('monitorModeBtn');
     if (monitorMode) {
         btn.classList.add('active');
         btn.classList.remove('btn-outline-info');
         btn.classList.add('btn-info');
         btn.innerHTML = '<i class="bi bi-check-lg"></i> <span id="monitorModeText">' + t('monitorModeOn') + '</span>';
+        monitorCurrentView = currentServerType === 'truenas' ? 'truenas' : 'proxmox';
+        applyMonitorView(monitorCurrentView);
+        applyMonitorTheme();
+        initMonitorSwipes();
     } else {
         btn.classList.remove('active');
         btn.classList.remove('btn-info');
         btn.classList.add('btn-outline-info');
         btn.innerHTML = '<i class="bi bi-display"></i> <span id="monitorModeText">' + t('monitorMode') + '</span>';
+        document.body.classList.remove('monitor-theme-dark');
+        destroyMonitorSwipes();
     }
 
-    // Fullscreen toggle for monitor mode
     try {
         if (monitorMode) {
             if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
@@ -582,12 +696,98 @@ async function toggleMonitorMode() {
             }
         }
     } catch (e) {
-        // Fullscreen can be blocked by browser policy; monitor mode still works.
         console.warn('Fullscreen toggle failed:', e);
     }
-    
-    // Refresh data when entering/exiting monitor mode
+
     if (apiToken) refreshData();
+}
+
+let monitorSwipeStartX = null;
+let monitorSwipeHandlersAttached = false;
+/** Текущий раздел в режиме монитора: 'proxmox' | 'truenas' | 'services' */
+let monitorCurrentView = 'proxmox';
+
+const MONITOR_VIEWS = ['proxmox', 'truenas', 'services'];
+
+function applyMonitorView(view) {
+    monitorCurrentView = view;
+    const dashboardSection = document.getElementById('dashboardSection');
+    const servicesSection = document.getElementById('servicesMonitorSection');
+    if (view === 'proxmox' || view === 'truenas') {
+        if (dashboardSection) dashboardSection.style.display = 'block';
+        if (servicesSection) servicesSection.style.display = 'none';
+        setServerType(view);
+    } else {
+        if (dashboardSection) dashboardSection.style.display = 'none';
+        if (servicesSection) {
+            servicesSection.style.display = 'block';
+            renderMonitoredServices();
+        }
+    }
+}
+
+function setMonitorTheme(theme) {
+    monitorTheme = theme === 'dark' ? 'dark' : 'light';
+    saveSettingsToServer({ monitorTheme });
+    if (monitorMode) applyMonitorTheme();
+}
+
+function applyMonitorTheme() {
+    document.body.classList.toggle('monitor-theme-dark', monitorTheme === 'dark');
+    const lightBtn = document.getElementById('monitorThemeLight');
+    const darkBtn = document.getElementById('monitorThemeDark');
+    if (lightBtn) lightBtn.classList.toggle('active', monitorTheme === 'light');
+    if (darkBtn) darkBtn.classList.toggle('active', monitorTheme === 'dark');
+}
+
+function goMonitorView(direction) {
+    const currentIndex = MONITOR_VIEWS.indexOf(monitorCurrentView);
+    const nextIndex = direction === 'next'
+        ? (currentIndex + 1) % MONITOR_VIEWS.length
+        : (currentIndex - 1 + MONITOR_VIEWS.length) % MONITOR_VIEWS.length;
+    applyMonitorView(MONITOR_VIEWS[nextIndex]);
+}
+
+function destroyMonitorSwipes() {
+    monitorSwipeStartX = null;
+    monitorSwipeHandlersAttached = false;
+    const target = document.body;
+    if (!target._monitorSwipeStart) return;
+    target.removeEventListener('touchstart', target._monitorSwipeStart);
+    target.removeEventListener('touchend', target._monitorSwipeEnd);
+    delete target._monitorSwipeStart;
+    delete target._monitorSwipeEnd;
+}
+
+function initMonitorSwipes() {
+    if (monitorSwipeHandlersAttached) return;
+    const minDist = 80;
+    function onStart(e) {
+        const x = e.touches ? e.touches[0].clientX : e.clientX;
+        monitorSwipeStartX = x;
+    }
+    function onEnd(e) {
+        if (monitorSwipeStartX == null) return;
+        const x = e.changedTouches ? e.changedTouches[0].clientX : e.clientX;
+        const delta = x - monitorSwipeStartX;
+        if (delta < -minDist) goMonitorView('next');
+        else if (delta > minDist) goMonitorView('prev');
+        monitorSwipeStartX = null;
+    }
+    document.body._monitorSwipeStart = onStart;
+    document.body._monitorSwipeEnd = onEnd;
+    document.body.addEventListener('touchstart', onStart, { passive: true });
+    document.body.addEventListener('touchend', onEnd, { passive: true });
+    document.body.addEventListener('mousedown', function mouseStart(e) {
+        monitorSwipeStartX = e.clientX;
+        function mouseEnd(ev) {
+            const d = ev.clientX - monitorSwipeStartX;
+            if (Math.abs(d) > minDist) goMonitorView(d < 0 ? 'next' : 'prev');
+            document.body.removeEventListener('mouseup', mouseEnd);
+        }
+        document.body.addEventListener('mouseup', mouseEnd, { once: true });
+    });
+    monitorSwipeHandlersAttached = true;
 }
 
 // Show dashboard
@@ -813,6 +1013,15 @@ async function refreshData(options = {}) {
                 if (a && typeof a.focus === 'function') a.focus({ preventScroll: true });
             }
         });
+        if (monitorMode) {
+            const toolbarEl = document.getElementById('monitorToolbarUpdate');
+            if (toolbarEl) {
+                const now = new Date();
+                const timeStr = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+                toolbarEl.textContent = t('lastUpdated') + ' ' + timeStr;
+            }
+            checkAllServices().then(() => renderMonitorServicesList());
+        }
         if (!silent) showToast(t('dataUpdated'), 'success');
 
     } catch (error) {
@@ -934,6 +1143,95 @@ function updateTrueNASDashboard(systemData, poolsData) {
     }
 
     setHTMLIfChanged('lastUpdate', '<i class="bi bi-clock"></i> ' + t('lastUpdate') + ': ' + new Date().toLocaleString(currentLanguage === 'ru' ? 'ru-RU' : 'en-US'));
+
+    lastTrueNASData = { system: systemData, pools: poolsData };
+    if (monitorMode) {
+        updateMonitorViewTrueNAS(systemData, poolsData);
+        renderMonitorServicesList();
+    }
+}
+
+// Компактный вид режима монитора (Proxmox)
+function updateMonitorView(clusterData) {
+    if (!clusterData || !clusterData.nodes) return;
+    const total = clusterData.nodes.length;
+    const online = clusterData.nodes.filter(n => n.status === 'online').length;
+    const quorumOk = clusterData.quorum && online >= clusterData.quorum.quorum;
+    setText('monitorTotalNodes', String(total));
+    setText('monitorOnlineNodes', String(online));
+    setText('monitorQuorum', quorumOk ? t('quorumEnough') : t('quorumNotEnough'));
+    setText('monitorTotalNodesLabel', t('totalNodes'));
+    setText('monitorOnlineNodesLabel', t('nodesOnline'));
+    setText('monitorQuorumLabel', t('quorum'));
+    const summary = clusterData.cluster && clusterData.cluster.summary ? clusterData.cluster.summary : {};
+    const cpuPct = summary.cpuUsagePercent != null ? summary.cpuUsagePercent : 0;
+    const memPct = summary.memoryUsagePercent != null ? summary.memoryUsagePercent : 0;
+    setText('monitorCpu', cpuPct + '%');
+    setText('monitorMemory', memPct + '%');
+    setText('monitorVms', String(summary.totalVMs || 0));
+    setText('monitorVmsLabel', t('virtualization'));
+    const cpuBar = el('monitorCpuBar');
+    if (cpuBar) cpuBar.style.width = Math.min(100, cpuPct) + '%';
+    const memBar = el('monitorMemoryBar');
+    if (memBar) memBar.style.width = Math.min(100, memPct) + '%';
+    setText('monitorNodesTitle', t('tabNodes'));
+    const listEl = el('monitorNodesList');
+    if (listEl) {
+        listEl.innerHTML = clusterData.nodes.map(node => {
+            const statusClass = node.status === 'online' ? 'online' : 'offline';
+            return `<div class="monitor-view__node-row"><span class="monitor-view__node-name">${escapeHtml(node.name)}</span><span class="monitor-view__node-status ${statusClass}" title="${node.status === 'online' ? t('nodeOnline') : t('nodeOffline')}"></span></div>`;
+        }).join('');
+    }
+}
+
+// Компактный вид режима монитора (TrueNAS)
+function updateMonitorViewTrueNAS(systemData, poolsData) {
+    const sys = systemData && typeof systemData === 'object' ? systemData : {};
+    setText('monitorTotalNodes', '1');
+    setText('monitorOnlineNodes', '1');
+    setText('monitorQuorum', t('notApplicable'));
+    setText('monitorTotalNodesLabel', t('totalNodes'));
+    setText('monitorOnlineNodesLabel', t('nodesOnline'));
+    setText('monitorQuorumLabel', t('quorum'));
+    let cpuPct = 0, memPct = 0;
+    if (typeof sys.cpu_usage === 'number') cpuPct = Math.round(sys.cpu_usage);
+    else if (Array.isArray(sys.loadavg) && sys.cores) cpuPct = Math.min(100, Math.round((sys.loadavg[0] / sys.cores) * 100));
+    if (sys.memory && typeof sys.memory.total === 'number' && typeof sys.memory.used === 'number') {
+        memPct = sys.memory.total > 0 ? Math.round((sys.memory.used / sys.memory.total) * 100) : 0;
+    } else if (sys.memory && sys.memory.total && sys.memory.free != null) {
+        memPct = sys.memory.total > 0 ? Math.round(((sys.memory.total - sys.memory.free) / sys.memory.total) * 100) : 0;
+    }
+    setText('monitorCpu', cpuPct + '%');
+    setText('monitorMemory', memPct + '%');
+    setText('monitorVms', '—');
+    setText('monitorVmsLabel', t('virtualization'));
+    const cpuBar = el('monitorCpuBar');
+    if (cpuBar) cpuBar.style.width = cpuPct + '%';
+    const memBar = el('monitorMemoryBar');
+    if (memBar) memBar.style.width = memPct + '%';
+    const hostname = sys.hostname || sys.system_hostname || sys.host || 'TrueNAS';
+    setText('monitorNodesTitle', t('tabServers'));
+    const listEl = el('monitorNodesList');
+    if (listEl) {
+        listEl.innerHTML = `<div class="monitor-view__node-row"><span class="monitor-view__node-name">${escapeHtml(hostname)}</span><span class="monitor-view__node-status online" title="${t('connected')}"></span></div>`;
+    }
+}
+
+// Список сервисов в компактном виде монитора
+function renderMonitorServicesList() {
+    const listEl = document.getElementById('monitorServicesList');
+    if (!listEl) return;
+    const list = Array.isArray(monitoredServices) ? monitoredServices : [];
+    setText('monitorServicesTitle', t('tabServicesMonitor'));
+    if (!list.length) {
+        listEl.innerHTML = '<div class="text-muted small">' + (t('servicesListTitle') || 'Сервисы') + '</div>';
+        return;
+    }
+    listEl.innerHTML = list.map(s => {
+        const name = s.name || getServiceTargetDisplay(s);
+        const dotClass = s.lastStatus === 'up' ? 'up' : (s.lastStatus === 'down' ? 'down' : 'unknown');
+        return `<div class="monitor-view__service-row"><span class="monitor-view__service-name" title="${escapeHtml(getServiceTargetDisplay(s))}">${escapeHtml(name)}</span><span class="monitor-view__service-dot ${dotClass}" title="${s.lastStatus === 'up' ? t('connected') : (s.lastStatus === 'down' ? t('serverError') : t('notConnected'))}"></span></div>`;
+    }).join('');
 }
 
 // Show/hide loading
@@ -1062,6 +1360,12 @@ function updateDashboard(clusterData, storageData, backupsData) {
     }
 
     setHTMLIfChanged('lastUpdate', '<i class="bi bi-clock"></i> ' + t('lastUpdate') + ': ' + new Date().toLocaleString(currentLanguage === 'ru' ? 'ru-RU' : 'en-US'));
+
+    lastClusterData = clusterData;
+    if (monitorMode) {
+        updateMonitorView(clusterData);
+        renderMonitorServicesList();
+    }
 }
 
 // Update storage UI
@@ -1197,15 +1501,13 @@ function updateBackupsUI(data) {
 
 // ==================== SERVICE MONITORING (отдельная вкладка, TCP/UDP/HTTP) ====================
 
-function saveMonitoredServices() {
-    localStorage.setItem('monitoredServices', JSON.stringify(monitoredServices));
-}
+// Monitored services are persisted via API; no local save needed
 
 function toggleServiceTypeFields() {
-    const typeSelect = document.getElementById('serviceTypeSelect');
-    const hostWrap = document.getElementById('serviceHostWrap');
-    const portWrap = document.getElementById('servicePortWrap');
-    const urlWrap = document.getElementById('serviceUrlWrap');
+    const typeSelect = document.getElementById('settingsServiceTypeSelect');
+    const hostWrap = document.getElementById('settingsServiceHostWrap');
+    const portWrap = document.getElementById('settingsServicePortWrap');
+    const urlWrap = document.getElementById('settingsServiceUrlWrap');
     if (!typeSelect || !hostWrap || !portWrap || !urlWrap) return;
     const type = (typeSelect.value || 'tcp').toLowerCase();
     const isHttp = type === 'http' || type === 'https';
@@ -1250,18 +1552,34 @@ function renderMonitoredServices() {
                 <td><code>${escapeHtml(target)}</code></td>
                 <td>${statusBadge}</td>
                 <td>${latency}</td>
+            </tr>
+        `;
+    }).join('');
+    setHTMLIfChanged('servicesBody', rows || '');
+}
+
+function renderSettingsMonitoredServices() {
+    const body = document.getElementById('settingsServicesBody');
+    if (!body) return;
+    const list = Array.isArray(monitoredServices) ? monitoredServices : [];
+    const rows = list.map((s) => {
+        const typeLabel = (s.type || 'tcp').toUpperCase();
+        const target = getServiceTargetDisplay(s);
+        const id = s.id != null ? s.id : 0;
+        return `
+            <tr>
+                <td>${escapeHtml(s.name || target)}</td>
+                <td><span class="badge bg-secondary">${escapeHtml(typeLabel)}</span></td>
+                <td><code>${escapeHtml(target)}</code></td>
                 <td class="text-nowrap">
-                    <button class="btn btn-sm btn-outline-success me-1" onclick="checkService(${idx})" title="${t('pingAllText')}">
-                        <i class="bi bi-arrow-repeat"></i>
-                    </button>
-                    <button class="btn btn-sm btn-outline-danger" onclick="removeMonitoredService(${idx})">
+                    <button class="btn btn-sm btn-outline-danger" onclick="removeMonitoredService(${id})" title="${t('remove') || 'Удалить'}">
                         <i class="bi bi-trash"></i>
                     </button>
                 </td>
             </tr>
         `;
     }).join('');
-    setHTMLIfChanged('servicesBody', rows || '');
+    setHTMLIfChanged('settingsServicesBody', rows || '');
 }
 
 async function checkService(index) {
@@ -1279,9 +1597,16 @@ async function checkService(index) {
         if (r) {
             svc.lastStatus = r.up ? 'up' : 'down';
             svc.lastLatency = r.latency ?? null;
+            try {
+                await fetch(`/api/settings/services/${svc.id}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ lastStatus: svc.lastStatus, lastLatency: svc.lastLatency })
+                });
+            } catch (_) {}
         }
-        saveMonitoredServices();
         renderMonitoredServices();
+        renderSettingsMonitoredServices();
     } catch (e) {
         showToast(t('connectError') + ': ' + e.message, 'error');
     }
@@ -1304,30 +1629,99 @@ async function checkAllServices() {
             list[i].lastStatus = r.up ? 'up' : 'down';
             list[i].lastLatency = r.latency ?? null;
         });
-        saveMonitoredServices();
+        await Promise.all(list.map((s) =>
+            fetch(`/api/settings/services/${s.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ lastStatus: s.lastStatus, lastLatency: s.lastLatency })
+            }).catch(() => {})
+        ));
         renderMonitoredServices();
     } catch (e) {
         showToast(t('connectError') + ': ' + e.message, 'error');
     }
 }
 
-function addMonitoredService() {
-    const nameInput = document.getElementById('serviceNameInput');
-    const typeSelect = document.getElementById('serviceTypeSelect');
-    const hostInput = document.getElementById('serviceHostInput');
-    const portInput = document.getElementById('servicePortInput');
-    const urlInput = document.getElementById('serviceUrlInput');
+async function exportSettingsAndServices() {
+    try {
+        const resp = await fetch('/api/settings/export');
+        if (!resp.ok) {
+            const data = await resp.json().catch(() => ({}));
+            throw new Error(data.error || `HTTP ${resp.status}`);
+        }
+        const json = await resp.json();
+        const blob = new Blob([JSON.stringify(json, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'proxmox-monitor-settings.json';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+    } catch (e) {
+        showToast((t('settingsImportError') || t('errorUpdate')) + ': ' + e.message, 'error');
+    }
+}
+
+function triggerImportSettings() {
+    const input = document.getElementById('settingsImportFile');
+    if (input) input.click();
+}
+
+async function handleImportSettingsFile(event) {
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        let parsed;
+        try {
+            parsed = JSON.parse(String(e.target.result || ''));
+        } catch {
+            showToast(t('settingsImportError') || 'Неверный файл импорта', 'error');
+            return;
+        }
+        try {
+            const resp = await fetch('/api/settings/import', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(parsed)
+            });
+            const data = await resp.json().catch(() => ({}));
+            if (!resp.ok || data.success === false) {
+                throw new Error(data.error || `HTTP ${resp.status}`);
+            }
+            showToast(t('settingsImportSuccess') || 'Настройки импортированы, данные обновлены', 'success');
+            const settingsData = await loadSettings();
+            monitoredServices = Array.isArray((await fetch('/api/settings/services').then(r => r.json())).services) ? (await fetch('/api/settings/services').then(r => r.json())).services : [];
+            renderMonitoredServices();
+            renderSettingsMonitoredServices();
+        } catch (err) {
+            showToast((t('settingsImportError') || t('errorUpdate')) + ': ' + err.message, 'error');
+        } finally {
+            event.target.value = '';
+        }
+    };
+    reader.readAsText(file, 'utf-8');
+}
+
+async function addMonitoredService() {
+    const nameInput = document.getElementById('settingsServiceNameInput');
+    const typeSelect = document.getElementById('settingsServiceTypeSelect');
+    const hostInput = document.getElementById('settingsServiceHostInput');
+    const portInput = document.getElementById('settingsServicePortInput');
+    const urlInput = document.getElementById('settingsServiceUrlInput');
     if (!typeSelect) return;
     const type = (typeSelect.value || 'tcp').toLowerCase();
     const name = nameInput ? nameInput.value.trim() : '';
+    let body = { name, type: type === 'https' ? 'https' : (type === 'http' ? 'http' : type) };
     if (type === 'http' || type === 'https') {
         const url = urlInput ? urlInput.value.trim() : '';
         if (!url) {
             showToast(t('serviceUrlRequired') || 'Укажите URL', 'error');
             return;
         }
-        monitoredServices.push({ name: name || url, type: 'http', url, lastStatus: null, lastLatency: null });
-        if (urlInput) urlInput.value = '';
+        body.url = url;
     } else {
         const host = hostInput ? hostInput.value.trim() : '';
         const port = portInput ? parseInt(portInput.value, 10) : null;
@@ -1335,116 +1729,219 @@ function addMonitoredService() {
             showToast(t('serviceHostPortRequired') || 'Укажите хост и порт (1–65535)', 'error');
             return;
         }
-        monitoredServices.push({ name: name || `${host}:${port}`, type: type || 'tcp', host, port, lastStatus: null, lastLatency: null });
+        body.host = host;
+        body.port = port;
+    }
+    try {
+        const resp = await fetch('/api/settings/services', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        const data = await resp.json();
+        if (!resp.ok) {
+            showToast(data.error || 'Error', 'error');
+            return;
+        }
+        const list = (await fetch('/api/settings/services').then(r => r.json())).services || [];
+        monitoredServices = list;
+        if (nameInput) nameInput.value = '';
+        if (urlInput) urlInput.value = '';
         if (hostInput) hostInput.value = '';
         if (portInput) portInput.value = '';
+        renderMonitoredServices();
+        renderSettingsMonitoredServices();
+        showToast(t('dataUpdated'), 'success');
+    } catch (e) {
+        showToast(t('connectError') + ': ' + e.message, 'error');
     }
-    if (nameInput) nameInput.value = '';
-    saveMonitoredServices();
-    renderMonitoredServices();
 }
 
-function removeMonitoredService(index) {
-    monitoredServices.splice(index, 1);
-    saveMonitoredServices();
-    renderMonitoredServices();
+async function removeMonitoredService(id) {
+    try {
+        const resp = await fetch(`/api/settings/services/${id}`, { method: 'DELETE' });
+        if (!resp.ok) {
+            const data = await resp.json().catch(() => ({}));
+            showToast(data.error || 'Error', 'error');
+            return;
+        }
+        monitoredServices = monitoredServices.filter(s => s.id !== id);
+        renderMonitoredServices();
+        renderSettingsMonitoredServices();
+    } catch (e) {
+        showToast(t('connectError') + ': ' + e.message, 'error');
+    }
+}
+
+function updateSettingsSecurityUI() {
+    const hasPassword = isSettingsPasswordEnabled();
+    const applyText = hasPassword ? t('settingsPasswordChange') : t('settingsPasswordEnable');
+    setText('settingsPasswordApplyText', applyText);
+    setText('settingsPasswordDisableText', t('settingsPasswordDisable'));
+    const disableBtn = el('settingsPasswordDisableBtn');
+    if (disableBtn) disableBtn.disabled = !hasPassword;
+}
+
+async function applySettingsPassword() {
+    const currentEl = el('settingsPasswordCurrent');
+    const newEl = el('settingsPasswordNew');
+    const repeatEl = el('settingsPasswordRepeat');
+    const current = currentEl ? currentEl.value : '';
+    const next = newEl ? newEl.value : '';
+    const repeat = repeatEl ? repeatEl.value : '';
+    if (!next) {
+        showToast(t('settingsPasswordEmptyNew') || 'Введите новый пароль', 'error');
+        return;
+    }
+    if (next !== repeat) {
+        showToast(t('settingsPasswordMismatch') || 'Пароли не совпадают', 'error');
+        return;
+    }
+    try {
+        const resp = await fetch('/api/settings/password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ currentPassword: current || undefined, newPassword: next })
+        });
+        const data = await resp.json();
+        if (!data.success) {
+            if (data.error === 'wrong_current') {
+                showToast(t('settingsPasswordWrongCurrent') || 'Неверный текущий пароль', 'error');
+            } else {
+                showToast(data.error || t('settingsPasswordWrongCurrent'), 'error');
+            }
+            return;
+        }
+        settingsPasswordRequired = true;
+        settingsUnlocked = true;
+        if (currentEl) currentEl.value = '';
+        if (newEl) newEl.value = '';
+        if (repeatEl) repeatEl.value = '';
+        updateSettingsSecurityUI();
+        showToast((isSettingsPasswordEnabled() ? t('settingsPasswordChanged') : t('settingsPasswordEnabled')) || 'Пароль для настроек сохранён', 'success');
+    } catch (e) {
+        showToast(t('connectError') + ': ' + e.message, 'error');
+    }
+}
+
+async function disableSettingsPassword() {
+    const currentEl = el('settingsPasswordCurrent');
+    const current = currentEl ? currentEl.value : '';
+    if (!settingsPasswordRequired) {
+        showToast(t('settingsPasswordNotSet') || 'Пароль не задан', 'info');
+        return;
+    }
+    try {
+        const resp = await fetch('/api/settings/password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ currentPassword: current, newPassword: '' })
+        });
+        const data = await resp.json();
+        if (!data.success) {
+            if (data.error === 'wrong_current') {
+                showToast(t('settingsPasswordWrongCurrent') || 'Неверный текущий пароль', 'error');
+            } else {
+                showToast(data.error || 'Error', 'error');
+            }
+            return;
+        }
+        settingsPasswordRequired = false;
+        settingsUnlocked = true;
+        if (currentEl) currentEl.value = '';
+        const newEl = el('settingsPasswordNew');
+        const repeatEl = el('settingsPasswordRepeat');
+        if (newEl) newEl.value = '';
+        if (repeatEl) repeatEl.value = '';
+        updateSettingsSecurityUI();
+        showToast(t('settingsPasswordDisabled') || 'Пароль для настроек отключён', 'success');
+    } catch (e) {
+        showToast(t('connectError') + ': ' + e.message, 'error');
+    }
 }
 
 // ==================== NEW SETTINGS FUNCTIONS ====================
 
-// Load settings from localStorage
-function loadSettings() {
-    // Refresh interval
-    const savedInterval = localStorage.getItem('refreshInterval');
-    if (savedInterval) {
-        refreshIntervalMs = parseInt(savedInterval);
-        document.getElementById('refreshIntervalSelect').value = refreshIntervalMs;
+// Load settings from API (database)
+async function loadSettings() {
+    let data = {};
+    let servicesData = { services: [] };
+    try {
+        const [settingsRes, servicesRes] = await Promise.all([
+            fetch('/api/settings'),
+            fetch('/api/settings/services')
+        ]);
+        if (settingsRes.ok) data = await settingsRes.json();
+        if (servicesRes.ok) servicesData = await servicesRes.json();
+    } catch (e) {
+        console.error('Failed to load settings:', e);
     }
-    
-    // Theme
-    const savedTheme = localStorage.getItem('theme');
-    if (savedTheme) {
-        currentTheme = savedTheme;
+
+    settingsPasswordRequired = !!data.password_required;
+
+    if (data.refresh_interval != null) {
+        refreshIntervalMs = parseInt(data.refresh_interval, 10) || 30000;
+        const sel = document.getElementById('refreshIntervalSelect');
+        if (sel) sel.value = refreshIntervalMs;
+    }
+    if (data.theme) {
+        currentTheme = data.theme;
         applyTheme(currentTheme);
     }
-    
-    // Units
-    const savedUnits = localStorage.getItem('units');
-    if (savedUnits) {
-        currentUnits = savedUnits;
+    if (data.units) {
+        currentUnits = data.units;
         updateUnitsButtons();
     }
-    
-    // Thresholds
-    const savedThresholds = localStorage.getItem('thresholds');
-    if (savedThresholds) {
-        thresholds = JSON.parse(savedThresholds);
-        document.getElementById('cpuGreenThreshold').value = thresholds.cpuGreen;
-        document.getElementById('cpuYellowThreshold').value = thresholds.cpuYellow;
-        document.getElementById('ramGreenThreshold').value = thresholds.ramGreen;
-        document.getElementById('ramYellowThreshold').value = thresholds.ramYellow;
+    if (data.thresholds && typeof data.thresholds === 'object') {
+        thresholds = { ...thresholds, ...data.thresholds };
+        const g = document.getElementById('cpuGreenThreshold');
+        const y = document.getElementById('cpuYellowThreshold');
+        const rg = document.getElementById('ramGreenThreshold');
+        const ry = document.getElementById('ramYellowThreshold');
+        if (g) g.value = thresholds.cpuGreen;
+        if (y) y.value = thresholds.cpuYellow;
+        if (rg) rg.value = thresholds.ramGreen;
+        if (ry) ry.value = thresholds.ramYellow;
         updateThresholdLabels();
     }
-    
-    // Proxmox servers
-    const savedServers = localStorage.getItem('proxmoxServers');
-    if (savedServers) {
-        proxmoxServers = JSON.parse(savedServers);
-    }
-    const savedTrueNASSrvs = localStorage.getItem('truenasServers');
-    if (savedTrueNASSrvs) {
-        truenasServers = JSON.parse(savedTrueNASSrvs);
-    }
-    const savedMap = localStorage.getItem('connectionIdMap');
-    if (savedMap) {
-        try { connectionIdMap = JSON.parse(savedMap) || {}; } catch { connectionIdMap = {}; }
-    }
-    const savedServices = localStorage.getItem('monitoredServices');
-    if (savedServices) {
-        try {
-            const parsed = JSON.parse(savedServices);
-            monitoredServices = Array.isArray(parsed) ? parsed : [];
-        } catch {
-            monitoredServices = [];
-        }
-    }
-    
-    // Current server index
-    const savedServerIndex = localStorage.getItem('currentServerIndex');
-    if (savedServerIndex !== null) {
-        currentServerIndex = parseInt(savedServerIndex);
-    }
-    const savedTrueNASIndex = localStorage.getItem('currentTrueNASServerIndex');
-    if (savedTrueNASIndex !== null) {
-        currentTrueNASServerIndex = parseInt(savedTrueNASIndex);
-    }
-    
-    // Monitor mode
-    const savedMonitorMode = localStorage.getItem('monitorMode') === 'true';
-    if (savedMonitorMode) {
+    if (Array.isArray(data.proxmox_servers) && data.proxmox_servers.length) proxmoxServers = data.proxmox_servers;
+    if (Array.isArray(data.truenas_servers) && data.truenas_servers.length) truenasServers = data.truenas_servers;
+    if (data.connection_id_map && typeof data.connection_id_map === 'object') connectionIdMap = data.connection_id_map;
+    monitoredServices = Array.isArray(servicesData.services) ? servicesData.services : [];
+    if (data.current_server_index != null) currentServerIndex = parseInt(data.current_server_index, 10) || 0;
+    if (data.current_truenas_index != null) currentTrueNASServerIndex = parseInt(data.current_truenas_index, 10) || 0;
+    if (data.server_type) currentServerType = data.server_type === 'truenas' ? 'truenas' : 'proxmox';
+    if (data.monitor_theme === 'light' || data.monitor_theme === 'dark') monitorTheme = data.monitor_theme;
+    if (data.monitor_mode === true || data.monitor_mode === 'true') {
         monitorMode = true;
         document.body.classList.add('monitor-mode');
+        const dashboardContent = document.getElementById('dashboardContent');
+        const monitorView = document.getElementById('monitorView');
+        if (dashboardContent) dashboardContent.style.display = 'block';
+        if (monitorView) monitorView.style.display = 'none';
         const monitorBtn = document.getElementById('monitorModeBtn');
-        monitorBtn.classList.add('active');
-        monitorBtn.classList.remove('btn-outline-info');
-        monitorBtn.classList.add('btn-info');
-        monitorBtn.innerHTML = '<i class="bi bi-check-lg"></i> <span id="monitorModeText">' + t('monitorModeOn') + '</span>';
+        if (monitorBtn) {
+            monitorBtn.classList.add('active');
+            monitorBtn.classList.remove('btn-outline-info');
+            monitorBtn.classList.add('btn-info');
+            monitorBtn.innerHTML = '<i class="bi bi-check-lg"></i> <span id="monitorModeText">' + t('monitorModeOn') + '</span>';
+        }
+        monitorCurrentView = currentServerType === 'truenas' ? 'truenas' : 'proxmox';
+        applyMonitorTheme();
+        initMonitorSwipes();
     }
-    
+    updateSettingsSecurityUI();
     renderServerList();
+    return data;
 }
 
 // Update refresh interval
 function updateRefreshInterval() {
     const select = document.getElementById('refreshIntervalSelect');
-    refreshIntervalMs = parseInt(select.value);
-    localStorage.setItem('refreshInterval', refreshIntervalMs);
-    
+    refreshIntervalMs = parseInt(select.value, 10);
+    saveSettingsToServer({ refreshInterval: refreshIntervalMs });
     showToast(t('dataUpdated'), 'success');
-    
-    if (apiToken) {
-        startAutoRefresh();
-    }
+    if (apiToken) startAutoRefresh();
 }
 
 // Theme toggle function
@@ -1456,7 +1953,7 @@ function toggleTheme() {
 // Set theme
 function setTheme(theme) {
     currentTheme = theme;
-    localStorage.setItem('theme', theme);
+    saveSettingsToServer({ theme });
     applyTheme(theme);
 }
 
@@ -1474,13 +1971,9 @@ function applyTheme(theme) {
 // Set units
 function setUnits(units) {
     currentUnits = units;
-    localStorage.setItem('units', units);
+    saveSettingsToServer({ units });
     updateUnitsButtons();
-    
-    // Redraw data with new units
-    if (apiToken) {
-        refreshData();
-    }
+    if (apiToken) refreshData();
 }
 
 // Update units buttons
@@ -1499,8 +1992,8 @@ function updateUnitsButtons() {
 
 // Update thresholds
 function updateThreshold(type, value) {
-    thresholds[type] = parseInt(value);
-    localStorage.setItem('thresholds', JSON.stringify(thresholds));
+    thresholds[type] = parseInt(value, 10);
+    saveSettingsToServer({ thresholds: { ...thresholds } });
     updateThresholdLabels();
 }
 
@@ -1514,19 +2007,12 @@ function updateThresholdLabels() {
 
 // Reset thresholds
 function resetThresholds() {
-    thresholds = {
-        cpuGreen: 70,
-        cpuYellow: 90,
-        ramGreen: 70,
-        ramYellow: 90
-    };
-    localStorage.setItem('thresholds', JSON.stringify(thresholds));
-    
+    thresholds = { cpuGreen: 70, cpuYellow: 90, ramGreen: 70, ramYellow: 90 };
+    saveSettingsToServer({ thresholds: { ...thresholds } });
     document.getElementById('cpuGreenThreshold').value = 70;
     document.getElementById('cpuYellowThreshold').value = 90;
     document.getElementById('ramGreenThreshold').value = 70;
     document.getElementById('ramYellowThreshold').value = 90;
-    
     updateThresholdLabels();
     showToast(t('dataUpdated'), 'success');
 }
@@ -1585,10 +2071,10 @@ function getCurrentIndexForType() {
 function setCurrentIndexForType(index) {
     if (currentServerType === 'truenas') {
         currentTrueNASServerIndex = index;
-        localStorage.setItem('currentTrueNASServerIndex', String(index));
+        saveSettingsToServer({ currentTrueNASServerIndex: index });
     } else {
         currentServerIndex = index;
-        localStorage.setItem('currentServerIndex', String(index));
+        saveSettingsToServer({ currentServerIndex: index });
     }
 }
 
@@ -1679,10 +2165,12 @@ function removeServer(index) {
 
 // Save servers list
 function saveServers() {
-    localStorage.setItem('proxmoxServers', JSON.stringify(proxmoxServers));
-    localStorage.setItem('truenasServers', JSON.stringify(truenasServers));
-    localStorage.setItem('currentServerIndex', String(currentServerIndex));
-    localStorage.setItem('currentTrueNASServerIndex', String(currentTrueNASServerIndex));
+    saveSettingsToServer({
+        proxmoxServers: [...proxmoxServers],
+        truenasServers: [...truenasServers],
+        currentServerIndex: currentServerIndex,
+        currentTrueNASServerIndex: currentTrueNASServerIndex
+    });
     updateCurrentServerBadge();
 }
 

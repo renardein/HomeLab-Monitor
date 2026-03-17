@@ -1,101 +1,170 @@
-# Proxmox Monitor
+## Proxmox / TrueNAS Monitor
 
-[Switch to Russian](./RU_README.md)
+Web‑приложение для мониторинга кластеров **Proxmox VE** и серверов **TrueNAS CORE/SCALE**, а также доступности произвольных сервисов (TCP/UDP/HTTP/S). Подходит как для обычного просмотра, так и для круглосуточного вывода на отдельный монитор.
 
-![Dashboard](./assets/Screenshot_1.png)
+### Основные возможности
 
-## Project Description
-**Proxmox Monitor** is a web application for real-time monitoring of Proxmox VE clusters. The application provides a user-friendly interface for tracking node status, storage, backup jobs, and overall cluster health.
+- **Proxmox**
+  - **Узлы**: статус, загрузка CPU, использование RAM, uptime, количество ядер.
+  - **Хранилища**: список всех стораджей, объём, использовано/свободно, активность.
+  - **Резервные копии**: задания, статусы, ошибки/успехи, запущенные задачи.
+  - **Кворум**: статус кворума, голоса узлов и требуемое количество голосов.
 
-## Features
+- **TrueNAS**
+  - Подключение по **API v2** (CORE/SCALE).
+  - Отображение системной информации, версии, uptime.
+  - Фактическая загрузка **CPU** и **памяти**.
+  - Информация по пулам (storage).
 
-### Core Functions
-- 🖥️ **Node Monitoring** — display status, CPU load, RAM usage, and uptime for each node
-- 💾 **Storage Monitoring** — information about all cluster storages with detailed space usage
-- 📦 **Backup Jobs** — view and monitor all backup jobs
-- 🏛️ **Cluster Quorum** — track quorum status and node votes
-- 🔄 **Auto Refresh** — customizable data update intervals
-- 🌐 **Multilingual** — support for Russian and English languages
-- 🎨 **Themes** — light and dark themes
-- 🔐 **Security** — authorization via Proxmox API tokens
-- 💾 **Caching** — intelligent data caching with different TTLs for different data types
+- **Несколько серверов**
+  - Несколько кластеров Proxmox и несколько серверов TrueNAS.
+  - Выбор текущего сервера в шапке интерфейса.
+  - Секреты (токены / API‑ключи) хранятся **на сервере** в SQLite (через `sql.js`), а не в браузере.
 
-### Interface
-- Responsive design based on Bootstrap 5
-- Tables with sorting and search (DataTables)
-- Visual status indicators with configurable thresholds
-- Toast notifications for events
-- Monitor mode for large screen display
-- Demo mode for testing without cluster connection
+- **Мониторинг сервисов**
+  - Проверка произвольных сервисов:
+    - `ping` через TCP/UDP‑порты.
+    - HTTP/HTTPS по указанному URL.
+  - Отдельный полноэкранный раздел «Мониторинг сервисов».
+  - Управление списком хостов через настройки (добавление/удаление).
 
-## Project Architecture
-```
-proxmox-monitor/
-├── server.js                 # Main Express server file
-├── package.json              # npm dependencies and scripts
-├── .env                      # Environment variables
-├── public/                   # Frontend static files
-│   ├── index.html           # Main HTML file
+- **UI / режим монитора**
+  - Полноэкранный **monitor mode** с крупными блоками для экрана 1920×1200.
+  - Свайпы / стрелки между основными экранами:
+    - Proxmox Dashboard
+    - TrueNAS Dashboard
+    - Service Monitoring
+  - Отдельная тема для режима монитора: **светлая и тёмная**, независимо от глобальной темы.
+  - Гладкое обновление данных без «мигания» интерфейса.
+
+- **Настройки**
+  - Интервалы обновления, тема, единицы измерения (GB/TB и GiB/TiB).
+  - Пороговые значения для цветовой индикации CPU/RAM.
+  - Сохранение настроек и привязок серверов в базе данных.
+  - **Пароль на доступ к настройкам** (хранится локально на клиенте, проверяется через API).
+  - Разделённые вкладки настроек: Подключение, Отображение, Пороги, Хосты для мониторинга, Безопасность.
+  - **Импорт/экспорт настроек и списка сервисов мониторинга** в/из JSON‑файла.
+
+- **Локализация**
+  - Поддержка нескольких языков (`modules/locales/*.json`), полностью актуализированные ключи.
+  - По умолчанию русский и английский, могут быть подключены другие локали (de, fr, jp, by, cn‑tr).
+
+### Технологии
+
+- **Backend**
+  - Node.js, Express.
+  - `axios` для работы с Proxmox и TrueNAS API.
+  - `sql.js` (SQLite в памяти + файл `data/app.db`) для:
+    - хранения подключений (Proxmox/TrueNAS),
+    - хранения пользовательских настроек (`app_settings`),
+    - списка мониторируемых сервисов.
+  - Отдельные роуты:
+    - `/api/cluster`, `/api/nodes`, `/api/storage`, `/api/backups` — Proxmox.
+    - `/api/truenas/*` — TrueNAS.
+    - `/api/health/check` — проверка сервисов (TCP/UDP/HTTP/S).
+    - `/api/settings/*` — настройки, пароль, сервисы мониторинга, импорт/экспорт.
+
+- **Frontend**
+  - Чистый JS (`public/js/app.js`) + Bootstrap 5 + DataTables.
+  - Динамическая отрисовка, дифф‑обновления DOM.
+  - Fullscreen API для режима монитора.
+  - `fetch` для работы с backend API.
+
+### Структура проекта (упрощённо)
+
+```text
+Proxmox-Monitor-restore/
+├── server.js               # Точка входа Express
+├── package.json
+├── .env                    # Переменные окружения (опционально)
+├── data/
+│   └── app.db             # SQLite база (создаётся автоматически, в git игнорируется)
+├── public/
+│   ├── index.html         # Основной HTML
 │   ├── css/
-│   │   └── styles.css       # Application styles
+│   │   └── styles.css     # Стили, в т.ч. режим монитора и тёмные темы
 │   └── js/
-│       └── app.js           # Client-side logic
-├── modules/                  # Server modules
-│   ├── config.js            # Application configuration
-│   ├── proxmox-api.js       # Proxmox API client
-│   ├── cache.js             # Caching system
-│   ├── i18n.js              # Internationalization
-│   ├── locales.js           # Translations (RU/EN)
-│   ├── utils.js             # Utilities
+│       └── app.js         # Вся клиентская логика
+├── modules/
+│   ├── config.js          # Конфиг приложения
+│   ├── db.js              # Инициализация sql.js и app.db
+│   ├── connection-store.js# Хранение подключений к Proxmox/TrueNAS
+│   ├── settings-store.js  # Хранение настроек и сервисов мониторинга
+│   ├── proxmox-api.js     # Клиент Proxmox API
+│   ├── truenas-api.js     # Клиент TrueNAS API
+│   ├── i18n.js            # Загрузка локалей из modules/locales
+│   ├── locales/           # *.json файлы переводов
 │   ├── middleware/
-│   │   └── auth.js          # Authorization middleware
-│   └── routes/              # API routes
-│       ├── status.js        # Server status
-│       ├── auth.js          # Authorization routes
-│       ├── cluster.js       # Cluster data
-│       ├── nodes.js         # Node data
-│       ├── storage.js       # Storage data
-│       └── backups.js       # Backup data
-└── node_modules/            # npm dependencies
+│   │   ├── auth.js        # Proxmox auth по connection-id
+│   │   └── truenas-auth.js# TrueNAS auth
+│   └── routes/
+│       ├── status.js
+│       ├── auth.js
+│       ├── truenas-auth.js
+│       ├── cluster.js
+│       ├── nodes.js
+│       ├── storage.js
+│       ├── backups.js
+│       ├── truenas-status.js
+│       ├── health.js      # Проверка сервисов
+│       └── settings.js    # Настройки, пароль, сервисы, импорт/экспорт
+└── ...
 ```
 
-## Installation
+### Установка и запуск
 
-### Requirements
-- Node.js version 14 or higher
-- Access to Proxmox VE cluster (API)
-- Proxmox API token with required permissions (Sys.Audit, Sys.Monitor, VM.Audit, VM.Monitor)
+**Требования**
 
-### Installation Steps
+- Node.js 16+.
+- Доступ к Proxmox VE (API) и/или TrueNAS (API v2).
 
-1. **Clone the repository**
+**Шаги**
+
+1. Клонируйте репозиторий:
+
 ```bash
 git clone <repository-url>
-cd proxmox-monitor
+cd Proxmox-Monitor-restore
 ```
 
-2. **Install dependencies**
+2. Установите зависимости:
+
 ```bash
 npm install
 ```
 
-3. **Configure environment variables**
-Copy the `.env` file and adjust the settings:
+3. (Опционально) создайте `.env`:
+
 ```bash
-# Server settings
 PORT=81
 NODE_ENV=production
-
-# Proxmox settings
-PROXMOX_HOST=10.200.0.1
-PROXMOX_PORT=8006
-
-# Security settings
 CORS_ORIGIN=*
-
-# Cache settings
-CACHE_TTL=30
-
-# Default language (ru or en)
-DEFAULT_LANGUAGE=en
+DEFAULT_LANGUAGE=ru
 ```
+
+4. Запустите сервер:
+
+```bash
+npm start
+# или
+node server.js
+```
+
+После запуска UI будет доступен по адресу `http://<host>:<PORT>` (по умолчанию `http://localhost:81`).
+
+### Примечания по данным
+
+- Файл базы `data/app.db` автоматически создаётся при первом запуске, если его нет.
+- Файл находится в `.gitignore` и не попадает в репозиторий.
+- При наличии старого `data/connections.json` он будет мигрирован в `app.db` один раз.
+
+### Безопасность
+
+- Токены Proxmox и TrueNAS‑ключи хранятся только на сервере в БД, UI оперирует connection‑id.
+- Пароль для доступа к настройкам хранится на клиенте (для удобства) и валидируется через backend.
+
+### Импорт/экспорт настроек
+
+- В разделе **Настройки → Хосты для мониторинга** доступны:
+  - **Экспорт** — скачивает JSON с текущими настройками и списком сервисов.
+  - **Импорт** — загружает такой JSON и восстанавливает настройки и сервисы мониторинга (без изменения пароля настроек).
