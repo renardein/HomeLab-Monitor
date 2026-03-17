@@ -256,6 +256,20 @@ function renderLanguageSwitchers() {
     });
 }
 
+// Update preferred language in app settings (used as default after .env)
+async function updatePreferredLanguage() {
+    const select = document.getElementById('settingsPreferredLanguageSelect');
+    if (!select) return;
+    const lang = select.value;
+    try {
+        await saveSettingsToServer({ preferredLanguage: lang });
+        showToast(t('dataUpdated') || 'Настройки сохранены', 'success');
+    } catch (e) {
+        console.error('Failed to save preferred language', e);
+        showToast(t('connectError') + ': ' + e.message, 'error');
+    }
+}
+
 // Update all UI texts
 function updateUILanguage() {
     const elements = {
@@ -445,6 +459,7 @@ function updateUILanguage() {
 
 // Available languages (will be populated from server)
 let availableLanguages = ['ru', 'en'];
+let serverDefaultLanguage = null;
 
 // Load available languages from server and initialize
 document.addEventListener('DOMContentLoaded', async function() {
@@ -453,13 +468,16 @@ document.addEventListener('DOMContentLoaded', async function() {
     // Load translations and available languages from server
     await loadTranslations();
     
-    // Load available languages from server
+    // Load available languages from server (+ текущий язык с сервера = .env default)
     try {
         const response = await fetch('/api/languages');
         const data = await response.json();
         if (data.available && data.available.length > 0) {
             availableLanguages = data.available;
             renderLanguageSwitchers();
+        }
+        if (data.current && typeof data.current === 'string') {
+            serverDefaultLanguage = data.current;
         }
     } catch (error) {
         console.error('Failed to load languages:', error);
@@ -468,17 +486,21 @@ document.addEventListener('DOMContentLoaded', async function() {
     // Load saved settings from API (servers, thresholds, defaults, etc.)
     const settingsData = await loadSettings();
 
-    // Determine language: localStorage -> default from settings -> first available
+    // Determine language: .env (.server current) -> app settings -> user choice -> first available
     let storedLang = null;
     try {
         storedLang = localStorage.getItem('preferred_language');
     } catch (_) {}
-    const defaultLang = settingsData && settingsData.preferred_language ? settingsData.preferred_language : null;
-    const chosenLang = (storedLang && availableLanguages.includes(storedLang))
+    const envLang = (serverDefaultLanguage && availableLanguages.includes(serverDefaultLanguage))
+        ? serverDefaultLanguage
+        : null;
+    const settingsLang = (settingsData && settingsData.preferred_language && availableLanguages.includes(settingsData.preferred_language))
+        ? settingsData.preferred_language
+        : null;
+    const userLang = (storedLang && availableLanguages.includes(storedLang))
         ? storedLang
-        : (defaultLang && availableLanguages.includes(defaultLang)
-            ? defaultLang
-            : (availableLanguages[0] || 'ru'));
+        : null;
+    const chosenLang = envLang || settingsLang || userLang || (availableLanguages[0] || 'ru');
     setLanguage(chosenLang);
     setServerType(currentServerType);
 
@@ -2462,6 +2484,18 @@ async function loadSettings() {
         applyMonitorView(monitorCurrentView);
         applyMonitorTheme();
         initMonitorSwipes();
+    }
+    // Preferred language select in settings
+    const langSelect = document.getElementById('settingsPreferredLanguageSelect');
+    if (langSelect && Array.isArray(availableLanguages) && availableLanguages.length) {
+        langSelect.innerHTML = availableLanguages.map(code => {
+            return `<option value="${code}">${code.toUpperCase()}</option>`;
+        }).join('');
+        if (data.preferred_language && availableLanguages.includes(data.preferred_language)) {
+            langSelect.value = data.preferred_language;
+        } else if (serverDefaultLanguage && availableLanguages.includes(serverDefaultLanguage)) {
+            langSelect.value = serverDefaultLanguage;
+        }
     }
     updateSettingsSecurityUI();
     renderServerList();

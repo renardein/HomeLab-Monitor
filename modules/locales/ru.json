@@ -46,6 +46,7 @@
     "dataUpdated": "Данные обновлены",
     "days": "дн",
     "displaySettings": "Отображение",
+    "settingsPreferredLanguageLabel": "Язык по умолчанию",
     "enterSettingsPassword": "Введите пароль для доступа к настройкам",
     "errorNoToken": "Токен не предоставлен",
     "errorUpdate": "Ошибка обновления",

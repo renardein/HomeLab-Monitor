@@ -46,6 +46,7 @@
     "dataUpdated": "Données mises à jour",
     "days": "j",
     "displaySettings": "Affichage",
+    "settingsPreferredLanguageLabel": "Langue par défaut",
     "enterSettingsPassword": "Entrez le mot de passe des paramètres",
     "errorNoToken": "Aucun jeton fourni",
     "errorUpdate": "Échec de la mise à jour",

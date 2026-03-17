@@ -46,6 +46,7 @@
     "dataUpdated": "Data updated",
     "days": "d",
     "displaySettings": "Display",
+    "settingsPreferredLanguageLabel": "Default language",
     "enterSettingsPassword": "Enter settings password",
     "errorNoToken": "No token provided",
     "errorUpdate": "Update failed",
