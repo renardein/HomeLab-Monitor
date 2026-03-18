@@ -197,6 +197,79 @@ async function getClusterTasks(token, limit = 20, serverUrl = null) {
     }
 }
 
+function isVzdumpTaskRow(t) {
+    if (!t) return false;
+    const typ = String(t.type || '').toLowerCase();
+    if (typ === 'vzdump') return true;
+    const u = String(t.upid || '');
+    return /:vzdump:/i.test(u);
+}
+
+async function fetchVzdumpTasksForNode(node, token, serverUrl) {
+    try {
+        const data = await request(
+            `/nodes/${encodeURIComponent(node)}/tasks?type=vzdump&limit=250`,
+            token,
+            'GET',
+            null,
+            serverUrl
+        );
+        return data.data || [];
+    } catch (e1) {
+        try {
+            const data = await request(
+                `/nodes/${encodeURIComponent(node)}/tasks?limit=500`,
+                token,
+                'GET',
+                null,
+                serverUrl
+            );
+            return (data.data || []).filter(isVzdumpTaskRow);
+        } catch (e2) {
+            log('warn', `vzdump tasks node ${node}: ${e2.message}`);
+            return [];
+        }
+    }
+}
+
+/**
+ * До perNodeLimit последних vzdump на каждом узле (по времени старта).
+ */
+async function getVzdumpLastTasksPerNode(token, serverUrl = null, perNodeLimit = 10) {
+    const taskStart = (t) => Number(t && t.starttime) || Number(t && t.pstart) || 0;
+    let nodeNames = [];
+    try {
+        const nd = await getNodes(token, serverUrl);
+        nodeNames = (nd || []).map(n => n.node || n.name).filter(Boolean);
+    } catch (e) {
+        log('warn', `getNodes for vzdump: ${e.message}`);
+        return {};
+    }
+
+    const byNode = {};
+    await Promise.all(
+        nodeNames.map(async (node) => {
+            let rows = await fetchVzdumpTasksForNode(node, token, serverUrl);
+            if (!rows.length) {
+                try {
+                    const data = await request(
+                        `/nodes/${encodeURIComponent(node)}/tasks?limit=600`,
+                        token,
+                        'GET',
+                        null,
+                        serverUrl
+                    );
+                    rows = (data.data || []).filter(isVzdumpTaskRow);
+                } catch (_) { /* ignore */ }
+            }
+            rows.sort((a, b) => taskStart(b) - taskStart(a));
+            byNode[node] = rows.slice(0, perNodeLimit);
+        })
+    );
+
+    return byNode;
+}
+
 module.exports = {
     request,
     getNodes,
@@ -205,5 +278,6 @@ module.exports = {
     getClusterResources,
     getNodeStorage,
     getBackupJobs,
-    getClusterTasks
+    getClusterTasks,
+    getVzdumpLastTasksPerNode
 };

@@ -2,7 +2,8 @@
 let apiToken = null;
 let autoRefreshInterval = null;
 let storageTable = null;
-let backupsTable = null;
+let backupsJobsTable = null;
+let backupsExecTable = null;
 let currentLanguage = 'ru';
 let refreshIntervalMs = 30000; // Default refresh interval
 let currentTheme = 'light';
@@ -94,6 +95,7 @@ async function saveSettingsToServer(payload) {
     if (payload.monitorHiddenServiceIds !== undefined) body.monitorHiddenServiceIds = payload.monitorHiddenServiceIds;
     if (payload.monitorHiddenVmIds !== undefined) body.monitorHiddenVmIds = payload.monitorHiddenVmIds;
     if (payload.monitorVms !== undefined) body.monitorVms = payload.monitorVms;
+    if (payload.monitorScreensOrder !== undefined) body.monitorScreensOrder = payload.monitorScreensOrder;
     try {
         await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     } catch (e) {
@@ -168,16 +170,22 @@ function setServerType(type) {
     const defaultTabId = isTrueNAS ? 'servers-tab' : 'nodes-tab';
     const btn = document.getElementById(defaultTabId);
     if (btn) btn.click();
+
+    if (monitorMode && isTrueNAS && monitorCurrentView === 'backupRuns') {
+        applyMonitorView('cluster');
+    }
 }
 
 function openServicesMonitorFromMenu() {
     const dashboardSection = document.getElementById('dashboardSection');
     const servicesSection = document.getElementById('servicesMonitorSection');
     const vmsSection = document.getElementById('vmsMonitorSection');
+    const backupsMon = document.getElementById('backupsMonitorSection');
     const configSection = document.getElementById('configSection');
     if (dashboardSection) dashboardSection.style.display = 'none';
     if (configSection) configSection.style.display = 'none';
     if (vmsSection) vmsSection.style.display = 'none';
+    if (backupsMon) backupsMon.style.display = 'none';
     if (servicesSection) servicesSection.style.display = 'block';
     renderMonitoredServices();
 }
@@ -186,8 +194,10 @@ function closeServicesMonitor() {
     const dashboardSection = document.getElementById('dashboardSection');
     const servicesSection = document.getElementById('servicesMonitorSection');
     const vmsSection = document.getElementById('vmsMonitorSection');
+    const backupsMon = document.getElementById('backupsMonitorSection');
     if (servicesSection) servicesSection.style.display = 'none';
     if (vmsSection) vmsSection.style.display = 'none';
+    if (backupsMon) backupsMon.style.display = 'none';
     if (dashboardSection) dashboardSection.style.display = '';
 }
 
@@ -195,10 +205,12 @@ function openVmsMonitorFromMenu() {
     const dashboardSection = document.getElementById('dashboardSection');
     const servicesSection = document.getElementById('servicesMonitorSection');
     const vmsSection = document.getElementById('vmsMonitorSection');
+    const backupsMon = document.getElementById('backupsMonitorSection');
     const configSection = document.getElementById('configSection');
     if (dashboardSection) dashboardSection.style.display = 'none';
     if (servicesSection) servicesSection.style.display = 'none';
     if (configSection) configSection.style.display = 'none';
+    if (backupsMon) backupsMon.style.display = 'none';
     if (vmsSection) vmsSection.style.display = 'block';
     renderVmsMonitorCards();
 }
@@ -206,7 +218,9 @@ function openVmsMonitorFromMenu() {
 function closeVmsMonitor() {
     const dashboardSection = document.getElementById('dashboardSection');
     const vmsSection = document.getElementById('vmsMonitorSection');
+    const backupsMon = document.getElementById('backupsMonitorSection');
     if (vmsSection) vmsSection.style.display = 'none';
+    if (backupsMon) backupsMon.style.display = 'none';
     if (dashboardSection) dashboardSection.style.display = '';
 }
 
@@ -233,9 +247,13 @@ function setLanguage(lang) {
         storageTable.destroy();
         storageTable = null;
     }
-    if (backupsTable) {
-        backupsTable.destroy();
-        backupsTable = null;
+    if (backupsJobsTable) {
+        backupsJobsTable.destroy();
+        backupsJobsTable = null;
+    }
+    if (backupsExecTable) {
+        backupsExecTable.destroy();
+        backupsExecTable = null;
     }
 }
 
@@ -327,6 +345,19 @@ function updateUILanguage() {
         backupLastRunHeader: 'backupLastRun',
         backupResultHeader: 'backupResult',
         backupNextRunHeader: 'backupNextRun',
+        backupSectionJobsTitle: 'backupSectionJobsTitle',
+        backupSectionExecTitle: 'backupSectionExecTitle',
+        backupJobStateHeader: 'backupJobStateHeader',
+        backupExecHint: 'backupExecHint',
+        backupExecStartHeader: 'backupExecStartHeader',
+        backupExecEndHeader: 'backupExecEndHeader',
+        backupExecNodeHeader: 'backupExecNodeHeader',
+        backupExecTargetHeader: 'backupExecTargetHeader',
+        backupExecStatusHeader: 'backupExecStatusHeader',
+        backupExecResultHeader: 'backupExecResultHeader',
+        backupExecUserHeader: 'backupExecUserHeader',
+        backupExecUpidHeader: 'backupExecUpidHeader',
+        backupExecShown: 'backupExecShown',
         tabServicesMonitor: 'tabServicesMonitor',
         menuServicesMonitorText: 'tabServicesMonitor',
         servicesMonitorTitle: 'servicesMonitorTitle',
@@ -406,6 +437,9 @@ function updateUILanguage() {
         setText('monitorNodesTitle', currentServerType === 'truenas' ? t('tabServers') : t('tabNodes'));
         setText('monitorServicesTitle', t('tabServicesMonitor'));
         setText('monitorVmsLabel', t('virtualization'));
+        setText('monitorBackupBackText', t('monitorBackupBackText'));
+        setText('backupsMonitorTitle', t('backupSectionExecTitle'));
+        updateMonitorToolbarTitleForView();
     }
     setText('settingsServicesTitle', t('settingsServicesTitle'));
     setText('settingsServicesHint', t('settingsServicesHint'));
@@ -448,7 +482,10 @@ function updateUILanguage() {
     setText('settingsExportAllBtn', t('settingsExportAllBtn') || 'Экспорт всех настроек');
     setText('settingsImportAllBtn', t('settingsImportAllBtn') || 'Импорт всех настроек');
     setText('settingsNavConnection', t('settingsNavConnection'));
-    setText('settingsNavDisplay', t('settingsNavDisplay'));
+        setText('settingsNavDisplay', t('settingsNavDisplay'));
+        setText('settingsMonitorScreensOrderTitle', t('settingsMonitorScreensOrderTitle'));
+        setText('settingsMonitorScreensOrderHint', t('settingsMonitorScreensOrderHint'));
+        renderSettingsMonitorScreensOrderList();
     setText('settingsNavThresholds', t('settingsNavThresholds'));
     setText('settingsNavServices', t('settingsNavServices'));
     setText('settingsNavSecurity', t('settingsNavSecurity'));
@@ -543,11 +580,13 @@ function showConfigSectionOnly() {
     const dashboardSection = document.getElementById('dashboardSection');
     const servicesSection = document.getElementById('servicesMonitorSection');
     const vmsSection = document.getElementById('vmsMonitorSection');
+    const backupsMon = document.getElementById('backupsMonitorSection');
     const monitorView = document.getElementById('monitorView');
     if (configSection) configSection.style.display = 'block';
     if (dashboardSection) dashboardSection.style.display = 'none';
     if (servicesSection) servicesSection.style.display = 'none';
     if (vmsSection) vmsSection.style.display = 'none';
+    if (backupsMon) backupsMon.style.display = 'none';
     if (monitorView) monitorView.style.display = 'none';
 }
 
@@ -815,6 +854,8 @@ async function toggleMonitorMode() {
         if (dashboardContent) dashboardContent.style.display = 'block';
         if (servicesSection) servicesSection.style.display = 'none';
         if (vmsSection) vmsSection.style.display = 'none';
+        const backupsMonExit = document.getElementById('backupsMonitorSection');
+        if (backupsMonExit) backupsMonExit.style.display = 'none';
         if (monitorView) monitorView.style.display = 'none';
     }
 
@@ -837,31 +878,114 @@ async function toggleMonitorMode() {
 
 let monitorSwipeStartX = null;
 let monitorSwipeHandlersAttached = false;
-/** Текущий экран режима монитора: 'cluster' | 'vms' | 'services' */
+/** Текущий экран режима монитора: 'cluster' | 'vms' | 'services' | 'backupRuns' (только Proxmox) */
 let monitorCurrentView = 'cluster';
+/** Последние данные бэкапов для экрана монитора */
+let lastBackupsDataForMonitor = null;
 
-const MONITOR_VIEWS = ['cluster', 'vms', 'services'];
+/** Полный порядок экранов монитора (в БД); на TrueNAS экран backupRuns пропускается при листании */
+const MONITOR_SCREEN_IDS_ALL = ['cluster', 'vms', 'services', 'backupRuns'];
+let monitorScreensOrder = MONITOR_SCREEN_IDS_ALL.slice();
+
+function normalizeMonitorScreensOrder(arr) {
+    const valid = new Set(MONITOR_SCREEN_IDS_ALL);
+    if (!Array.isArray(arr)) return MONITOR_SCREEN_IDS_ALL.slice();
+    const seen = new Set();
+    const out = [];
+    for (const x of arr) {
+        const id = String(x || '').trim();
+        if (valid.has(id) && !seen.has(id)) {
+            seen.add(id);
+            out.push(id);
+        }
+    }
+    for (const id of MONITOR_SCREEN_IDS_ALL) {
+        if (!seen.has(id)) out.push(id);
+    }
+    return out;
+}
+
+function getMonitorViewsOrder() {
+    const order = normalizeMonitorScreensOrder(monitorScreensOrder);
+    return order.filter((id) => id !== 'backupRuns' || currentServerType === 'proxmox');
+}
+
+function monitorScreenSettingsLabel(id) {
+    const map = {
+        cluster: t('monitorScreenCluster'),
+        vms: t('monitorScreenVms'),
+        services: t('monitorScreenServices'),
+        backupRuns: t('monitorScreenBackupRuns')
+    };
+    return map[id] || id;
+}
+
+function renderSettingsMonitorScreensOrderList() {
+    const ul = document.getElementById('settingsMonitorScreensOrderList');
+    if (!ul) return;
+    const order = normalizeMonitorScreensOrder(monitorScreensOrder);
+    ul.innerHTML = order
+        .map(
+            (id, i) => `<li class="list-group-item d-flex align-items-center justify-content-between gap-2 py-2">
+      <span class="text-truncate"><i class="bi bi-display me-2 text-muted"></i>${escapeHtml(monitorScreenSettingsLabel(id))}</span>
+      <span class="btn-group btn-group-sm flex-shrink-0" role="group">
+        <button type="button" class="btn btn-outline-secondary" ${i === 0 ? 'disabled' : ''} onclick="moveMonitorScreenOrder(${i},-1)" aria-label="Up"><i class="bi bi-arrow-up"></i></button>
+        <button type="button" class="btn btn-outline-secondary" ${i === order.length - 1 ? 'disabled' : ''} onclick="moveMonitorScreenOrder(${i},1)" aria-label="Down"><i class="bi bi-arrow-down"></i></button>
+      </span>
+    </li>`
+        )
+        .join('');
+}
+
+function moveMonitorScreenOrder(index, delta) {
+    const order = normalizeMonitorScreensOrder(monitorScreensOrder);
+    const j = index + delta;
+    if (j < 0 || j >= order.length) return;
+    const next = order.slice();
+    const t0 = next[index];
+    next[index] = next[j];
+    next[j] = t0;
+    monitorScreensOrder = next;
+    saveSettingsToServer({ monitorScreensOrder: monitorScreensOrder });
+    renderSettingsMonitorScreensOrderList();
+}
+
+function updateMonitorToolbarTitleForView() {
+    const el = document.getElementById('monitorToolbarTitle');
+    if (!el || !monitorMode) return;
+    const titles = {
+        cluster: t('monitorScreenCluster'),
+        vms: t('monitorScreenVms'),
+        services: t('monitorScreenServices'),
+        backupRuns: t('monitorScreenBackupRuns')
+    };
+    el.textContent = titles[monitorCurrentView] || t('monitorMode');
+}
 
 // Переключение экранов в режиме монитора:
-// cluster  -> обычный дашборд (крупные блоки Proxmox / TrueNAS)
-// vms      -> раздел мониторинга VM/CT (vmsMonitorSection)
-// services -> раздел мониторинга сервисов (servicesMonitorSection)
+// cluster  -> дашборд; vms / services / backupRuns -> отдельные полноэкранные блоки
 function applyMonitorView(view) {
     monitorCurrentView = view;
     const dashboardSection = document.getElementById('dashboardSection');
     const dashboardContent = document.getElementById('dashboardContent');
     const servicesSection = document.getElementById('servicesMonitorSection');
     const vmsSection = document.getElementById('vmsMonitorSection');
+    const backupsMon = document.getElementById('backupsMonitorSection');
     const monitorView = document.getElementById('monitorView');
 
-    if (monitorView) monitorView.style.display = 'none'; // компактный вид больше не используем
+    if (monitorView) monitorView.style.display = 'none';
 
     if (!monitorMode) {
-        // В обычном режиме всегда показываем полный дашборд
         if (dashboardSection) dashboardSection.style.display = 'block';
         if (dashboardContent) dashboardContent.style.display = 'block';
         if (servicesSection) servicesSection.style.display = 'none';
         if (vmsSection) vmsSection.style.display = 'none';
+        if (backupsMon) backupsMon.style.display = 'none';
+        return;
+    }
+
+    if (view === 'backupRuns' && currentServerType !== 'proxmox') {
+        applyMonitorView('cluster');
         return;
     }
 
@@ -870,20 +994,29 @@ function applyMonitorView(view) {
         if (dashboardContent) dashboardContent.style.display = 'block';
         if (servicesSection) servicesSection.style.display = 'none';
         if (vmsSection) vmsSection.style.display = 'none';
+        if (backupsMon) backupsMon.style.display = 'none';
     } else if (view === 'services') {
         if (dashboardSection) dashboardSection.style.display = 'none';
         if (servicesSection) servicesSection.style.display = 'block';
         if (vmsSection) vmsSection.style.display = 'none';
-        // при переключении на экран сервисов обновляем карточки, чтобы статусы были актуальны
+        if (backupsMon) backupsMon.style.display = 'none';
         renderMonitorServicesList();
     } else if (view === 'vms') {
         if (dashboardSection) dashboardSection.style.display = 'none';
         if (servicesSection) servicesSection.style.display = 'none';
         if (vmsSection) vmsSection.style.display = 'block';
-        // при переключении на экран VM/CT обновляем список/карточки с учётом статуса
+        if (backupsMon) backupsMon.style.display = 'none';
         renderMonitorVmsList();
         renderVmsMonitorCards();
+    } else if (view === 'backupRuns') {
+        if (dashboardSection) dashboardSection.style.display = 'none';
+        if (servicesSection) servicesSection.style.display = 'none';
+        if (vmsSection) vmsSection.style.display = 'none';
+        /* flex, не block — иначе .monitor-backups-main-card не растягивается и card-body с flex:1 схлопывается в 0 */
+        if (backupsMon) backupsMon.style.display = 'flex';
+        renderMonitorBackupRuns(lastBackupsDataForMonitor);
     }
+    updateMonitorToolbarTitleForView();
 }
 
 function setMonitorTheme(theme) {
@@ -901,10 +1034,12 @@ function applyMonitorTheme() {
 }
 
 function goMonitorView(direction) {
-    const currentIndex = MONITOR_VIEWS.indexOf(monitorCurrentView);
+    const views = getMonitorViewsOrder();
+    let i = views.indexOf(monitorCurrentView);
+    if (i < 0) i = 0;
     const delta = direction === 'next' ? 1 : -1;
-    const nextIndex = (currentIndex + delta + MONITOR_VIEWS.length) % MONITOR_VIEWS.length;
-    applyMonitorView(MONITOR_VIEWS[nextIndex]);
+    const nextIndex = (i + delta + views.length) % views.length;
+    applyMonitorView(views[nextIndex]);
 }
 
 function destroyMonitorSwipes() {
@@ -968,7 +1103,9 @@ function showDashboard() {
     if (dashboardContent) dashboardContent.style.display = 'block';
     if (monitorView) monitorView.style.display = 'none';
     const servicesSection = document.getElementById('servicesMonitorSection');
+    const backupsMon = document.getElementById('backupsMonitorSection');
     if (servicesSection) servicesSection.style.display = 'none';
+    if (backupsMon) backupsMon.style.display = 'none';
     // Refresh only when authenticated
     if (apiToken) {
         refreshData();
@@ -1321,9 +1458,13 @@ function updateTrueNASDashboard(systemData, poolsData) {
     });
 
     // Clear backups table if present
-    if (backupsTable) {
-        backupsTable.destroy();
-        backupsTable = null;
+    if (backupsJobsTable) {
+        backupsJobsTable.destroy();
+        backupsJobsTable = null;
+    }
+    if (backupsExecTable) {
+        backupsExecTable.destroy();
+        backupsExecTable = null;
     }
 
     setHTMLIfChanged('lastUpdate', '<i class="bi bi-clock"></i> ' + t('lastUpdate') + ': ' + new Date().toLocaleString(currentLanguage === 'ru' ? 'ru-RU' : 'en-US'));
@@ -1620,7 +1761,11 @@ function updateDashboard(clusterData, storageData, backupsData) {
 
     updateStorageUI(storageData);
     updateBackupsUI(backupsData);
-    
+    lastBackupsDataForMonitor = backupsData;
+    if (monitorMode && monitorCurrentView === 'backupRuns') {
+        renderMonitorBackupRuns(backupsData);
+    }
+
     setHTMLIfChanged('quorumStats', `
         <div class="col-md-4"><h3>${clusterData.quorum.votes}</h3><p class="text-muted">${t('quorumVotes')}</p></div>
         <div class="col-md-4"><h3>${clusterData.quorum.expected}</h3><p class="text-muted">${t('quorumExpected')}</p></div>
@@ -1712,71 +1857,226 @@ function updateStorageUI(data) {
     }
 }
 
-// Update backups UI
+// Update backups UI: задания (конфиг) и выполнения (vzdump)
 function updateBackupsUI(data) {
-    if (!data || !data.jobs) return;
-    
-    setHTMLIfChanged('backupStats', `
-        <div class="col-md-2"><div class="stat-card"><div class="stat-value">${data.stats.total}</div><div class="stat-label">${t('backupTotal')}</div></div></div>
-        <div class="col-md-2"><div class="stat-card"><div class="stat-value text-success">${data.stats.enabled}</div><div class="stat-label">${t('backupEnabled')}</div></div></div>
-        <div class="col-md-2"><div class="stat-card"><div class="stat-value text-success">${data.stats.success}</div><div class="stat-label">${t('backupSuccess')}</div></div></div>
-        <div class="col-md-2"><div class="stat-card"><div class="stat-value text-danger">${data.stats.error}</div><div class="stat-label">${t('backupError')}</div></div></div>
-        <div class="col-md-2"><div class="stat-card"><div class="stat-value text-primary">${data.stats.running}</div><div class="stat-label">${t('backupRunning')}</div></div></div>
-        <div class="col-md-2"><div class="stat-card"><div class="stat-value">${data.stats.disabled}</div><div class="stat-label">${t('backupDisabled')}</div></div></div>
+    if (!data) return;
+    const jobs = Array.isArray(data.jobs) ? data.jobs : [];
+    const execs = Array.isArray(data.executions) ? data.executions : [];
+    const stats = data.stats || { total: 0, enabled: 0, disabled: 0 };
+    const exs = data.execution_stats || { shown: 0, success: 0, error: 0, running: 0 };
+    const dtLangUrl = currentLanguage === 'ru'
+        ? 'https://cdn.datatables.net/plug-ins/1.13.6/i18n/ru.json'
+        : 'https://cdn.datatables.net/plug-ins/1.13.6/i18n/en-GB.json';
+
+    setHTMLIfChanged('backupJobsStats', `
+        <div class="col-6 col-md-4 col-lg-2"><div class="stat-card"><div class="stat-value">${stats.total}</div><div class="stat-label">${t('backupTotal')}</div></div></div>
+        <div class="col-6 col-md-4 col-lg-2"><div class="stat-card"><div class="stat-value text-success">${stats.enabled}</div><div class="stat-label">${t('backupEnabled')}</div></div></div>
+        <div class="col-6 col-md-4 col-lg-2"><div class="stat-card"><div class="stat-value text-secondary">${stats.disabled}</div><div class="stat-label">${t('backupDisabled')}</div></div></div>
     `);
-    
-    setHTMLIfChanged('backupsBody', data.jobs.map(job => {
-        let statusBadge = '';
-        
-        switch(job.status) {
-            case 'success':
-                statusBadge = `<span class="badge bg-success">${t('backupStatusSuccess')}</span>`;
-                break;
-            case 'error':
-                statusBadge = `<span class="badge bg-danger">${t('backupStatusError')}</span>`;
-                break;
-            case 'running':
-                statusBadge = `<span class="badge bg-primary">${t('backupStatusRunning')}</span>`;
-                break;
-            case 'warning':
-                statusBadge = `<span class="badge bg-warning">${t('backupStatusWarning')}</span>`;
-                break;
-            default:
-                statusBadge = `<span class="badge bg-secondary">${t('backupStatusUnknown')}</span>`;
+
+    setHTMLIfChanged('backupExecStats', `
+        <div class="col-6 col-md-4 col-lg-2"><div class="stat-card"><div class="stat-value">${exs.shown}</div><div class="stat-label">${t('backupExecShown')}</div></div></div>
+        <div class="col-6 col-md-4 col-lg-2"><div class="stat-card"><div class="stat-value text-success">${exs.success}</div><div class="stat-label">${t('backupSuccess')}</div></div></div>
+        <div class="col-6 col-md-4 col-lg-2"><div class="stat-card"><div class="stat-value text-danger">${exs.error}</div><div class="stat-label">${t('backupError')}</div></div></div>
+        <div class="col-6 col-md-4 col-lg-2"><div class="stat-card"><div class="stat-value text-primary">${exs.running}</div><div class="stat-label">${t('backupRunning')}</div></div></div>
+    `);
+
+    const noJobsRow = `<tr><td colspan="7" class="text-center text-muted py-4">${escapeHtml(t('backupNoData'))}</td></tr>`;
+    if (jobs.length === 0) {
+        if (backupsJobsTable) {
+            backupsJobsTable.destroy();
+            backupsJobsTable = null;
         }
-        
-        const lastRun = job.last_run 
-            ? `<small>${job.last_run.starttime_fmt}<br><span class="${job.last_run.status === 'OK' ? 'text-success' : 'text-danger'}">${job.last_run.exitstatus || job.last_run.status}</span></small>`
-            : t('backupNoData');
-        
-        return `
-            <tr>
-                <td><strong>${job.id}</strong> ${job.enabled ? '' : `<span class="badge bg-secondary">${t('backupDisabled_yes')}</span>`}</td>
-                <td><code>${job.schedule || 'N/A'}</code></td>
-                <td>${statusBadge}</td>
-                <td>${job.storage || 'N/A'}</td>
-                <td>${job.vmid || t('backupAll')}</td>
-                <td><span class="badge bg-info">${job.mode || 'snapshot'}</span></td>
-                <td>${lastRun}</td>
-                <td class="${job.last_run?.status === 'OK' ? 'text-success' : 'text-danger'}">${job.last_run?.exitstatus || 'N/A'}</td>
-                <td><small>${job.next_run || 'N/A'}</small></td>
-            </tr>
-        `;
-    }).join(''));
-    
-    if (!backupsTable) {
-        backupsTable = $('#backupsTable').DataTable({ 
-            pageLength: 10, 
-            order: [[0,'asc']],
-            language: {
-                url: currentLanguage === 'ru' 
-                    ? 'https://cdn.datatables.net/plug-ins/1.13.6/i18n/ru.json'
-                    : 'https://cdn.datatables.net/plug-ins/1.13.6/i18n/en-GB.json'
-            }
-        });
+        setHTMLIfChanged('backupJobsBody', noJobsRow);
     } else {
-        backupsTable.clear().rows.add($('#backupsBody').find('tr')).draw();
+        const jobsHtml = jobs.map(job => {
+            const stateBadge = job.enabled
+                ? `<span class="badge bg-success">${escapeHtml(t('backupEnabled'))}</span>`
+                : `<span class="badge bg-secondary">${escapeHtml(t('backupDisabled_yes'))}</span>`;
+            return `<tr>
+                <td><strong>${escapeHtml(String(job.id))}</strong></td>
+                <td><code>${escapeHtml(job.schedule || '—')}</code></td>
+                <td>${stateBadge}</td>
+                <td>${escapeHtml(job.storage || '—')}</td>
+                <td>${job.vmid != null && job.vmid !== '' ? escapeHtml(String(job.vmid)) : escapeHtml(t('backupAll'))}</td>
+                <td><span class="badge bg-info">${escapeHtml(job.mode || 'snapshot')}</span></td>
+                <td><small>${escapeHtml(job.next_run || '—')}</small></td>
+            </tr>`;
+        }).join('');
+        setHTMLIfChanged('backupJobsBody', jobsHtml);
+        if (!backupsJobsTable) {
+            backupsJobsTable = $('#backupJobsTable').DataTable({
+                pageLength: 10,
+                order: [[0, 'asc']],
+                language: { url: dtLangUrl }
+            });
+        } else {
+            backupsJobsTable.clear().rows.add($('#backupJobsBody').find('tr')).draw();
+        }
     }
+
+    const noExecRow = `<tr><td colspan="8" class="text-center text-muted py-4">${escapeHtml(t('backupNoExecData'))}</td></tr>`;
+    if (execs.length === 0) {
+        if (backupsExecTable) {
+            backupsExecTable.destroy();
+            backupsExecTable = null;
+        }
+        setHTMLIfChanged('backupExecutionsBody', noExecRow);
+    } else {
+        const execHtml = execs.map(tk => {
+            const st = tk.status || '';
+            const ex = tk.exitstatus || '';
+            let badge = `<span class="badge bg-secondary">${escapeHtml(t('backupStatusUnknown'))}</span>`;
+            if (st === 'OK' || String(ex).toLowerCase() === 'ok') {
+                badge = `<span class="badge bg-success">${escapeHtml(t('backupStatusSuccess'))}</span>`;
+            } else if (st === 'error' || String(ex).toLowerCase() === 'error') {
+                badge = `<span class="badge bg-danger">${escapeHtml(t('backupStatusError'))}</span>`;
+            } else if (st === 'running') {
+                badge = `<span class="badge bg-primary">${escapeHtml(t('backupStatusRunning'))}</span>`;
+            } else if (st) {
+                badge = `<span class="badge bg-warning">${escapeHtml(st)}</span>`;
+            }
+            const upid = tk.upid || '';
+            const upidShort = upid.length > 32 ? '…' + upid.slice(-30) : upid;
+            const stOrder = Number(tk.starttime) || 0;
+            const enOrder = Number(tk.endtime) || 0;
+            const resCls = (String(ex).toLowerCase() === 'ok' || st === 'OK') ? 'text-success' : (st === 'error' ? 'text-danger' : '');
+            return `<tr>
+                <td data-order="${stOrder}"><small>${escapeHtml(tk.starttime_fmt || '—')}</small></td>
+                <td data-order="${enOrder}"><small>${escapeHtml(tk.endtime_fmt || '—')}</small></td>
+                <td>${escapeHtml(tk.node || '—')}</td>
+                <td>${tk.id != null && tk.id !== '' ? escapeHtml(String(tk.id)) : '—'}</td>
+                <td>${badge}</td>
+                <td class="${resCls}"><small>${escapeHtml(ex || st || '—')}</small></td>
+                <td><small>${escapeHtml(tk.user || '—')}</small></td>
+                <td><code class="small text-break" style="max-width:12rem" title="${escapeHtml(upid)}">${escapeHtml(upidShort || '—')}</code></td>
+            </tr>`;
+        }).join('');
+        setHTMLIfChanged('backupExecutionsBody', execHtml);
+        if (!backupsExecTable) {
+            backupsExecTable = $('#backupExecutionsTable').DataTable({
+                pageLength: 15,
+                order: [[0, 'desc']],
+                language: { url: dtLangUrl }
+            });
+        } else {
+            backupsExecTable.clear().rows.add($('#backupExecutionsBody').find('tr')).draw();
+        }
+    }
+}
+
+function monitorBackupStripClass(tk) {
+    const st = tk.status || '';
+    const ex = String(tk.exitstatus || '').toLowerCase();
+    if (st === 'OK' || ex === 'ok') return 'monitor-backup-run-strip--ok';
+    if (st === 'error' || ex === 'error') return 'monitor-backup-run-strip--err';
+    if (st === 'running') return 'monitor-backup-run-strip--run';
+    return 'monitor-backup-run-strip--warn';
+}
+
+function monitorBackupBadge(tk) {
+    const st = tk.status || '';
+    const ex = tk.exitstatus || '';
+    if (st === 'OK' || String(ex).toLowerCase() === 'ok') {
+        return `<span class="badge bg-success">${escapeHtml(t('backupStatusSuccess'))}</span>`;
+    }
+    if (st === 'error' || String(ex).toLowerCase() === 'error') {
+        return `<span class="badge bg-danger">${escapeHtml(t('backupStatusError'))}</span>`;
+    }
+    if (st === 'running') {
+        return `<span class="badge bg-primary">${escapeHtml(t('backupStatusRunning'))}</span>`;
+    }
+    if (st) return `<span class="badge bg-warning text-dark">${escapeHtml(st)}</span>`;
+    return `<span class="badge bg-secondary">${escapeHtml(t('backupStatusUnknown'))}</span>`;
+}
+
+/** Короткая дата/время для одной строки на экране монитора */
+function monitorBackupShortTime(fmt) {
+    if (!fmt) return '—';
+    const s = String(fmt).trim();
+    const comma = s.indexOf(',');
+    if (comma > 0) {
+        const datePart = s.slice(0, comma).trim();
+        const timePart = s.slice(comma + 1).trim();
+        const dp = datePart.split('.');
+        const dateShort = dp.length >= 2 ? `${dp[0]}.${dp[1]}` : datePart.slice(0, 5);
+        const tm = timePart.match(/^(\d{1,2}:\d{2})/);
+        return `${dateShort} ${tm ? tm[1] : timePart.slice(0, 5)}`;
+    }
+    return s.length > 14 ? s.slice(0, 14) : s;
+}
+
+const MONITOR_BACKUPS_UI_MAX = 10;
+
+/** Экран бэкапов: до 10 vzdump на узел, без скролла */
+function renderMonitorBackupRuns(data) {
+    const rowEl = document.getElementById('backupsMonitorCardsRow');
+    if (!rowEl) return;
+    if (!data) {
+        rowEl.innerHTML = `<div class="monitor-backup-node-empty w-100">${escapeHtml(t('backupMonitorNoDataYet'))}</div>`;
+        return;
+    }
+    let byNode = data.executions_by_node && typeof data.executions_by_node === 'object' ? { ...data.executions_by_node } : null;
+    if (!byNode || !Object.keys(byNode).length) {
+        byNode = {};
+        const execs = Array.isArray(data.executions) ? data.executions : [];
+        for (const e of execs) {
+            const n = e.node || '?';
+            if (!byNode[n]) byNode[n] = [];
+            byNode[n].push(e);
+        }
+    }
+    const nodeNames = Object.keys(byNode).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+
+    if (!nodeNames.length) {
+        rowEl.innerHTML = `<div class="monitor-backup-node-empty w-100">${escapeHtml(t('backupNoExecData'))}</div>`;
+        return;
+    }
+
+    rowEl.innerHTML = nodeNames.map(node => {
+        const allRuns = byNode[node] || [];
+        const displayRuns = allRuns.slice(0, MONITOR_BACKUPS_UI_MAX);
+        const totalOnNode = allRuns.length;
+        const shown = displayRuns.length;
+        const maxOnNode = Math.min(totalOnNode, 10);
+        const countBadge = totalOnNode
+            ? `<span class="monitor-backup-count-badge badge bg-secondary text-nowrap" title="${escapeHtml(t('backupMonitorFullListHint'))}"><span class="monitor-backup-count-num">${shown}</span><span class="mx-1">/</span><span>${maxOnNode}</span></span>`
+            : '';
+        const thVm = escapeHtml(t('backupMonitorColVm'));
+        const thTime = escapeHtml(t('backupMonitorColTime'));
+        const thSt = escapeHtml(t('backupMonitorColStatus'));
+        const strips = displayRuns.length
+            ? `<div class="monitor-backup-table-scroll">
+                <table class="table monitor-backup-node-table mb-0">
+                <thead><tr>
+                    <th class="monitor-backup-col-vm">${thVm}</th>
+                    <th class="monitor-backup-col-time">${thTime}</th>
+                    <th class="monitor-backup-col-st text-end">${thSt}</th>
+                </tr></thead>
+                <tbody>${displayRuns.map(task => {
+                const vm = task.id != null && task.id !== '' ? String(task.id) : '—';
+                const rowCls = monitorBackupStripClass(task).replace('monitor-backup-run-strip--', 'monitor-backup-tr--');
+                const ts = escapeHtml(monitorBackupShortTime(task.starttime_fmt));
+                const timeTd = task.endtime_fmt
+                    ? `<span class="monitor-backup-time-start">${ts}</span><span class="monitor-backup-time-sep"> → </span><span class="monitor-backup-time-end">${escapeHtml(monitorBackupShortTime(task.endtime_fmt))}</span>`
+                    : `<span class="monitor-backup-time-single">${ts}</span>`;
+                return `<tr class="monitor-backup-tr ${rowCls}" title="${escapeHtml(task.upid || '')}">
+                    <td class="monitor-backup-col-vm">${escapeHtml(vm)}</td>
+                    <td class="monitor-backup-col-time">${timeTd}</td>
+                    <td class="monitor-backup-col-st">${monitorBackupBadge(task)}</td>
+                </tr>`;
+            }).join('')}</tbody></table></div>`
+            : `<div class="monitor-backup-node-empty">${escapeHtml(t('backupMonitorNodeEmpty'))}</div>`;
+        return `<div class="monitor-backup-node-col">
+            <div class="card monitor-backup-node-card border h-100">
+                <div class="card-header d-flex align-items-center gap-2">
+                    <span class="text-truncate min-w-0 flex-grow-1"><i class="bi bi-hdd-network me-1 flex-shrink-0"></i>${escapeHtml(node)}</span>
+                    ${countBadge}
+                </div>
+                <div class="card-body monitor-backup-card-body-table p-0">${strips}</div>
+            </div>
+        </div>`;
+    }).join('');
 }
 
 // ==================== SERVICE MONITORING (отдельная вкладка, TCP/UDP/HTTP) ====================
@@ -2536,6 +2836,10 @@ async function loadSettings() {
     if (data.monitor_theme === 'light' || data.monitor_theme === 'dark') monitorTheme = data.monitor_theme;
     monitorHiddenServiceIds = Array.isArray(data.monitor_hidden_service_ids) ? data.monitor_hidden_service_ids : [];
     monitorHiddenVmIds = Array.isArray(data.monitor_hidden_vm_ids) ? data.monitor_hidden_vm_ids : [];
+    monitorScreensOrder = Array.isArray(data.monitor_screens_order) && data.monitor_screens_order.length
+        ? normalizeMonitorScreensOrder(data.monitor_screens_order)
+        : MONITOR_SCREEN_IDS_ALL.slice();
+    renderSettingsMonitorScreensOrderList();
     if (data.monitor_mode === true || data.monitor_mode === 'true') {
         monitorMode = true;
         document.body.classList.add('monitor-mode');

@@ -244,6 +244,13 @@
                             </button>
                         </div>
                     </div>
+
+                    <hr class="my-4">
+                    <div class="mb-2">
+                        <label class="form-label fw-bold" id="settingsMonitorScreensOrderTitle">Порядок экранов монитора</label>
+                        <p class="text-muted small mb-2" id="settingsMonitorScreensOrderHint">Порядок при перелистывании (свайп, стрелки на панели). Экран бэкапов доступен только при подключении к Proxmox.</p>
+                        <ul class="list-group list-group-flush border rounded overflow-hidden" id="settingsMonitorScreensOrderList"></ul>
+                    </div>
                                 </div>
                             </div>
                             <!-- Пороги -->
@@ -617,25 +624,48 @@
                 </div>
 
                 <div class="tab-pane fade" id="backups" role="tabpanel">
-                    <div class="row mb-4" id="backupStats"></div>
-                    <div class="card">
+                    <div class="card mb-4">
                         <div class="card-body">
+                            <h5 class="card-title mb-3"><i class="bi bi-calendar-check me-2"></i><span id="backupSectionJobsTitle">Существующие задания</span></h5>
+                            <div class="row mb-3 g-2" id="backupJobsStats"></div>
                             <div class="table-responsive">
-                                <table class="table table-hover" id="backupsTable">
+                                <table class="table table-hover" id="backupJobsTable">
                                     <thead>
                                         <tr>
                                             <th id="backupIdHeader">ID</th>
                                             <th id="backupScheduleHeader">Расписание</th>
-                                            <th id="backupStatusHeader">Статус</th>
+                                            <th id="backupJobStateHeader">Состояние</th>
                                             <th id="backupStorageHeader">Хранилище</th>
                                             <th id="backupVmidHeader">VM/CT</th>
                                             <th id="backupModeHeader">Режим</th>
-                                            <th id="backupLastRunHeader">Последний запуск</th>
-                                            <th id="backupResultHeader">Результат</th>
-                                            <th id="backupNextRunHeader">Следующий</th>
+                                            <th id="backupNextRunHeader">Следующий запуск</th>
                                         </tr>
                                     </thead>
-                                    <tbody id="backupsBody"></tbody>
+                                    <tbody id="backupJobsBody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title mb-3"><i class="bi bi-activity me-2"></i><span id="backupSectionExecTitle">Статус выполнения</span></h5>
+                            <p class="text-muted small mb-2" id="backupExecHint">Последние запуски резервного копирования (vzdump) в кластере.</p>
+                            <div class="row mb-3 g-2" id="backupExecStats"></div>
+                            <div class="table-responsive">
+                                <table class="table table-hover" id="backupExecutionsTable">
+                                    <thead>
+                                        <tr>
+                                            <th id="backupExecStartHeader">Начало</th>
+                                            <th id="backupExecEndHeader">Окончание</th>
+                                            <th id="backupExecNodeHeader">Узел</th>
+                                            <th id="backupExecTargetHeader">VM/CT</th>
+                                            <th id="backupExecStatusHeader">Статус</th>
+                                            <th id="backupExecResultHeader">Результат</th>
+                                            <th id="backupExecUserHeader">Пользователь</th>
+                                            <th id="backupExecUpidHeader">UPID</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="backupExecutionsBody"></tbody>
                                 </table>
                             </div>
                         </div>
@@ -728,6 +758,21 @@
                 <div class="card-body">
                     <p class="text-muted small mb-3" id="vmsMonitorHint"></p>
                     <div class="row" id="vmsMonitorCards"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Режим монитора: бэкапы — один экран без скролла -->
+        <div id="backupsMonitorSection" class="monitor-backups-screen" style="display: none;">
+            <div class="card monitor-backups-main-card border-0 shadow-sm">
+                <div class="card-header py-2 px-3 d-flex flex-wrap align-items-center gap-2">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="applyMonitorView('cluster')">
+                        <i class="bi bi-arrow-left me-1"></i><span id="monitorBackupBackText">К кластеру</span>
+                    </button>
+                    <h5 class="mb-0 flex-grow-1 text-center text-md-start"><i class="bi bi-cloud-arrow-down me-2"></i><span id="backupsMonitorTitle">Статус выполнения</span></h5>
+                </div>
+                <div class="card-body d-flex flex-column py-2 px-2 pt-1 monitor-backups-body">
+                    <div class="monitor-backups-nodes-row flex-grow-1 min-h-0" id="backupsMonitorCardsRow"></div>
                 </div>
             </div>
         </div>

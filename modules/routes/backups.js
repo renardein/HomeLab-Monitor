@@ -7,7 +7,7 @@ const checkAuth = require('../middleware/auth');
 
 // Информация о заданиях бэкапа
 router.get('/jobs', checkAuth, async (req, res) => {
-    const cacheKey = `backup_jobs_${req.token}`;
+    const cacheKey = `backup_jobs_v4_${req.token}`;
     const cached = cache.get(cacheKey);
     
     if (cached) {
@@ -16,70 +16,74 @@ router.get('/jobs', checkAuth, async (req, res) => {
     
     try {
         const jobs = await proxmox.getBackupJobs(req.token, req.serverUrl || null);
-        const tasks = await proxmox.getClusterTasks(req.token, 50, req.serverUrl || null);
-        
-        const jobsWithStatus = await Promise.all(
-            jobs.map(async (job) => {
-                const jobTasks = tasks.filter(t => 
-                    t.type === 'vzdump' && 
-                    (t.id === job.id || (job.vmid && t.id && t.id.includes(job.vmid)))
-                );
-                
-                const lastTask = jobTasks.length > 0 ? jobTasks[0] : null;
-                
-                let status = 'unknown';
-                let lastRun = null;
-                
-                if (lastTask) {
-                    lastRun = {
-                        starttime: lastTask.starttime,
-                        starttime_fmt: formatDate(lastTask.starttime),
-                        endtime: lastTask.endtime,
-                        endtime_fmt: formatDate(lastTask.endtime),
-                        status: lastTask.status,
-                        exitstatus: lastTask.exitstatus,
-                        node: lastTask.node
-                    };
-                    
-                    if (lastTask.status === 'OK' || lastTask.exitstatus === 'OK') {
-                        status = 'success';
-                    } else if (lastTask.status === 'error' || lastTask.exitstatus === 'error') {
-                        status = 'error';
-                    } else if (lastTask.status === 'running') {
-                        status = 'running';
-                    } else {
-                        status = 'warning';
-                    }
-                }
-                
-                return {
-                    id: job.id,
-                    schedule: job.schedule,
-                    enabled: job.enabled === 1,
-                    storage: job.storage,
-                    mode: job.mode,
-                    vmid: job.vmid,
-                    compress: job.compress,
-                    mailto: job.mailto,
-                    last_run: lastRun,
-                    status: status,
-                    next_run: calculateNextRun(job.schedule)
-                };
-            })
-        );
-        
-        const stats = {
-            total: jobsWithStatus.length,
-            enabled: jobsWithStatus.filter(j => j.enabled).length,
-            disabled: jobsWithStatus.filter(j => !j.enabled).length,
-            success: jobsWithStatus.filter(j => j.status === 'success').length,
-            error: jobsWithStatus.filter(j => j.status === 'error').length,
-            running: jobsWithStatus.filter(j => j.status === 'running').length
+        const tasksByNode = await proxmox.getVzdumpLastTasksPerNode(req.token, req.serverUrl || null, 10);
+
+        const jobDefinitions = jobs.map(job => ({
+            id: job.id,
+            schedule: job.schedule || '',
+            enabled: job.enabled === 1,
+            storage: job.storage || '',
+            mode: job.mode || 'snapshot',
+            vmid: job.vmid,
+            compress: job.compress,
+            mailto: job.mailto,
+            next_run: calculateNextRun(job.schedule)
+        }));
+
+        const taskStart = (t) => Number(t.starttime) || Number(t.pstart) || 0;
+        const mapExec = (t, nodeName) => {
+            const st = taskStart(t);
+            const en = Number(t.endtime) || 0;
+            return {
+                upid: t.upid || '',
+                node: nodeName || t.node || '',
+                id: t.id,
+                user: t.user || '',
+                starttime: st || t.starttime,
+                starttime_fmt: st ? formatDate(st) : '',
+                endtime: en || t.endtime,
+                endtime_fmt: en ? formatDate(en) : '',
+                status: t.status || '',
+                exitstatus: t.exitstatus != null ? String(t.exitstatus) : ''
+            };
         };
-        
+
+        const executionsByNode = {};
+        for (const [node, arr] of Object.entries(tasksByNode || {})) {
+            executionsByNode[node] = (arr || []).map(t => mapExec(t, node));
+        }
+
+        const vzdumpTasks = Object.values(executionsByNode)
+            .flat()
+            .sort((a, b) => (Number(b.starttime) || 0) - (Number(a.starttime) || 0));
+
+        const execOk = vzdumpTasks.filter(
+            t => t.status === 'OK' || String(t.exitstatus).toLowerCase() === 'ok'
+        ).length;
+        const execErr = vzdumpTasks.filter(
+            t => t.status === 'error' || String(t.exitstatus).toLowerCase() === 'error'
+        ).length;
+        const execRun = vzdumpTasks.filter(t => t.status === 'running').length;
+
+        const stats = {
+            total: jobDefinitions.length,
+            enabled: jobDefinitions.filter(j => j.enabled).length,
+            disabled: jobDefinitions.filter(j => !j.enabled).length
+        };
+
+        const execution_stats = {
+            shown: vzdumpTasks.length,
+            success: execOk,
+            error: execErr,
+            running: execRun
+        };
+
         const result = {
-            jobs: jobsWithStatus,
-            stats: stats
+            jobs: jobDefinitions,
+            executions: vzdumpTasks,
+            executions_by_node: executionsByNode,
+            stats,
+            execution_stats
         };
         
         cache.set(cacheKey, result);

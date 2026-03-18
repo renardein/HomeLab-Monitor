@@ -11,7 +11,8 @@ const SETTING_KEYS = [
     // monitor-mode specific
     'monitor_hidden_service_ids',
     'monitor_vms',
-    'monitor_hidden_vm_ids'
+    'monitor_hidden_vm_ids',
+    'monitor_screens_order'
 ];
 
 // GET /api/settings — все настройки (без пароля), флаг password_required
@@ -28,7 +29,8 @@ router.get('/', (req, res) => {
                     key === 'connection_id_map' ||
                     key === 'monitor_hidden_service_ids' ||
                     key === 'monitor_vms' ||
-                    key === 'monitor_hidden_vm_ids'
+                    key === 'monitor_hidden_vm_ids' ||
+                    key === 'monitor_screens_order'
                 ) {
                     try {
                         payload[key] = JSON.parse(value);
@@ -68,7 +70,8 @@ router.post('/', (req, res) => {
             preferred_language: body.preferred_language ?? body.preferredLanguage,
             monitor_hidden_service_ids: body.monitor_hidden_service_ids ?? body.monitorHiddenServiceIds,
             monitor_vms: body.monitor_vms ?? body.monitorVms,
-            monitor_hidden_vm_ids: body.monitor_hidden_vm_ids ?? body.monitorHiddenVmIds
+            monitor_hidden_vm_ids: body.monitor_hidden_vm_ids ?? body.monitorHiddenVmIds,
+            monitor_screens_order: body.monitor_screens_order ?? body.monitorScreensOrder
         };
         for (const [key, value] of Object.entries(map)) {
             if (value === undefined) continue;

@@ -565,6 +565,11 @@
             padding: 16px 20px 24px;
         }
 
+        /* Вкладки Nodes / Storage / Backups / Quorum — только вне режима монитора */
+        body.monitor-mode #myTab {
+            display: none !important;
+        }
+
         /* Крупные блоки дашборда в режиме монитора */
         body.monitor-mode .stat-card {
             padding: 24px;
@@ -694,8 +699,226 @@
             color: #e2e8f0;
         }
         body.monitor-mode.monitor-theme-dark #servicesMonitorSection .badge,
-        body.monitor-mode.monitor-theme-dark #vmsMonitorSection .badge {
+        body.monitor-mode.monitor-theme-dark #vmsMonitorSection .badge,
+        body.monitor-mode.monitor-theme-dark #backupsMonitorSection .badge {
             color: #fff;
+        }
+        body.monitor-mode.monitor-theme-dark #backupsMonitorSection .card,
+        body.monitor-mode.monitor-theme-dark #backupsMonitorSection .card-header {
+            background: #16213e;
+            color: #fff;
+            border-color: #2d3748;
+        }
+        body.monitor-mode.monitor-theme-dark #backupsMonitorSection .card-header {
+            background: #0f3460;
+        }
+        .min-h-0 {
+            min-height: 0 !important;
+        }
+
+        /* Экран бэкапов: весь viewport под тулбар, без скролла */
+        body.monitor-mode #backupsMonitorSection.monitor-backups-screen {
+            position: fixed;
+            top: 52px;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 1020;
+            margin: 0 !important;
+            padding: 6px 8px 8px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            background: var(--bs-body-bg, #fff);
+        }
+        body.monitor-mode.monitor-theme-dark #backupsMonitorSection.monitor-backups-screen {
+            background: #0d1117;
+        }
+        body.monitor-mode .monitor-backups-main-card {
+            flex: 1;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        body.monitor-mode .monitor-backups-main-card > .card-header {
+            flex-shrink: 0;
+        }
+        /* Иначе колонки узлов схлопываются в 0px — таблицы не видны */
+        body.monitor-mode .monitor-backups-main-card > .card-body.monitor-backups-body {
+            flex: 1 1 0 !important;
+            min-height: 0 !important;
+            display: flex !important;
+            flex-direction: column !important;
+            overflow: hidden;
+        }
+        body.monitor-mode .monitor-backups-body {
+            flex: 1;
+            min-height: 0;
+            overflow: hidden;
+        }
+        .monitor-backups-stats-row .stat-card {
+            padding: 6px 8px;
+            margin-bottom: 0;
+        }
+        body.monitor-mode .monitor-backups-stats-row .stat-value {
+            font-size: 1.35rem !important;
+            line-height: 1.1;
+        }
+        body.monitor-mode .monitor-backups-stats-row .stat-label {
+            font-size: 0.65rem !important;
+            margin-top: 2px;
+            letter-spacing: 0.01em;
+            line-height: 1.2;
+        }
+        .monitor-backup-stat-cell {
+            min-width: 56px;
+            max-width: 22%;
+        }
+        .monitor-backup-count-badge {
+            flex-shrink: 0 !important;
+            font-family: ui-monospace, "Cascadia Mono", "Segoe UI Mono", monospace;
+            font-size: 0.8rem;
+            font-weight: 600;
+            padding: 0.35em 0.5em !important;
+            letter-spacing: 0.02em;
+        }
+        .monitor-backups-explain {
+            font-size: 0.82rem;
+            line-height: 1.35;
+            opacity: 0.92;
+        }
+        .monitor-backups-nodes-row {
+            display: flex;
+            flex-direction: row;
+            flex-wrap: nowrap;
+            gap: 8px;
+            align-items: flex-start;
+            flex: 1 1 0;
+            min-height: 0;
+            overflow-x: auto;
+            overflow-y: hidden;
+            -webkit-overflow-scrolling: touch;
+            padding-bottom: 4px;
+        }
+        .monitor-backup-node-col {
+            flex: 1 1 0;
+            min-width: 140px;
+            max-width: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+        .monitor-backup-node-card {
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.07);
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            max-height: min(calc(100vh - 118px), 920px);
+        }
+        body.monitor-mode.monitor-theme-dark .monitor-backup-node-card {
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+        }
+        .monitor-backup-node-card > .card-header {
+            font-size: 0.95rem;
+            font-weight: 700;
+            padding: 6px 10px !important;
+            flex-shrink: 0;
+        }
+        .monitor-backup-node-card > .card-body.monitor-backup-card-body-table {
+            flex: 1 1 auto;
+            min-height: 0;
+        }
+        .monitor-backup-card-body-table {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .monitor-backup-table-scroll {
+            flex: 1 1 auto;
+            min-height: 80px;
+            overflow: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        .monitor-backup-node-table {
+            table-layout: fixed;
+            width: 100%;
+            border-collapse: collapse;
+            font-size: clamp(0.62rem, 0.9vw, 0.8rem);
+        }
+        .monitor-backup-node-table thead th {
+            position: sticky;
+            top: 0;
+            z-index: 1;
+            padding: 6px 8px 5px !important;
+            font-weight: 700;
+            font-size: 0.62rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            line-height: 1.2;
+            background: rgba(0, 0, 0, 0.06);
+            border-bottom: 2px solid rgba(0, 0, 0, 0.12);
+            vertical-align: bottom;
+        }
+        body.monitor-mode.monitor-theme-dark .monitor-backup-node-table thead th {
+            background: #0f3460;
+            color: #e2e8f0;
+            border-bottom-color: #2d3748;
+        }
+        .monitor-backup-col-vm {
+            width: 20%;
+            text-align: right !important;
+            font-variant-numeric: tabular-nums;
+            font-weight: 700;
+            padding: 6px 8px 6px 10px !important;
+            vertical-align: middle;
+        }
+        .monitor-backup-col-time {
+            width: 50%;
+            text-align: left !important;
+            font-family: ui-monospace, "Cascadia Mono", "Segoe UI Mono", monospace;
+            font-variant-numeric: tabular-nums;
+            padding: 6px 6px !important;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            vertical-align: middle;
+        }
+        .monitor-backup-col-st {
+            width: 30%;
+            text-align: right !important;
+            padding: 6px 8px !important;
+            vertical-align: middle;
+        }
+        .monitor-backup-tr td {
+            border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+        }
+        body.monitor-mode.monitor-theme-dark .monitor-backup-tr td {
+            border-bottom-color: #2d3748;
+            color: #e2e8f0;
+        }
+        .monitor-backup-tr--ok { background: rgba(25, 135, 84, 0.06); }
+        .monitor-backup-tr--err { background: rgba(220, 53, 69, 0.08); }
+        .monitor-backup-tr--run { background: rgba(13, 110, 253, 0.07); }
+        .monitor-backup-tr--warn { background: rgba(255, 193, 7, 0.1); }
+        body.monitor-mode.monitor-theme-dark .monitor-backup-tr--ok { background: rgba(25, 135, 84, 0.12); }
+        body.monitor-mode.monitor-theme-dark .monitor-backup-tr--err { background: rgba(220, 53, 69, 0.15); }
+        body.monitor-mode.monitor-theme-dark .monitor-backup-tr--run { background: rgba(13, 110, 253, 0.12); }
+        body.monitor-mode.monitor-theme-dark .monitor-backup-tr--warn { background: rgba(255, 193, 7, 0.08); }
+        .monitor-backups-nodes-row .badge {
+            font-size: clamp(0.58rem, 0.8vw, 0.72rem);
+            padding: 0.15em 0.4em;
+        }
+        .monitor-backup-node-empty {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            color: var(--bs-secondary);
+            font-size: clamp(0.7rem, 1vw, 0.85rem);
+            padding: 0.5rem;
         }
 
         /* Режим монитора: один экран без скролла, под 1920×1200 */
