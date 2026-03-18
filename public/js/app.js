@@ -512,7 +512,6 @@ document.addEventListener('DOMContentLoaded', async function() {
     renderMonitoredServices();
     renderSettingsMonitoredServices();
     renderSettingsMonitoredVms();
-    fillVmSuggestDatalist();
     const vmIdOrNameInput = document.getElementById('settingsVmIdOrNameInput');
     if (vmIdOrNameInput) {
         vmIdOrNameInput.addEventListener('change', addVmToMonitorByIdOrName);
@@ -728,7 +727,6 @@ async function loadSettingsPanelData() {
         }
     } else {
         renderSettingsMonitoredVms();
-        fillVmSuggestDatalist();
     }
     renderSettingsMonitoredServices();
     renderServerList();
@@ -1897,16 +1895,6 @@ function getClusterVms() {
     return (lastClusterData && Array.isArray(lastClusterData.vms)) ? lastClusterData.vms : [];
 }
 
-function fillVmSuggestDatalist() {
-    const listEl = document.getElementById('settingsVmSuggestList');
-    if (!listEl) return;
-    const vms = getClusterVms();
-    listEl.innerHTML = vms.map(vm => {
-        const label = [vm.name, vm.node, vm.vmid].filter(Boolean).join(' / ');
-        return `<option value="${escapeHtml(label)}">`;
-    }).join('');
-}
-
 async function loadClusterVmsForSettings(options) {
     const silent = options && options.silent === true;
     if (currentServerType !== 'proxmox') return;
@@ -1920,7 +1908,6 @@ async function loadClusterVmsForSettings(options) {
         const data = await res.json();
         if (res.ok && data && Array.isArray(data.vms)) {
             lastClusterData = data;
-            fillVmSuggestDatalist();
             renderSettingsMonitoredVms();
             renderMonitorVmsList();
             if (!silent) showToast(t('dataUpdated') || 'Список обновлён', 'success');
