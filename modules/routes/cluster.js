@@ -32,7 +32,9 @@ router.get('/full', checkAuth, async (req, res) => {
             totalMemory: 0,
             usedMemory: 0,
             totalVMs: 0,
-            totalContainers: 0
+            totalContainers: 0,
+            runningVMs: 0,
+            runningContainers: 0
         };
         
         // Получаем детальную информацию по каждому узлу
@@ -84,10 +86,14 @@ router.get('/full', checkAuth, async (req, res) => {
         const vms = [];
         clusterResources.forEach(resource => {
             if (resource.type === 'qemu' || resource.type === 'lxc') {
+                const st = String(resource.status || '').toLowerCase();
+                const isRun = st === 'running';
                 if (resource.type === 'qemu') {
                     clusterSummary.totalVMs++;
+                    if (isRun) clusterSummary.runningVMs++;
                 } else if (resource.type === 'lxc') {
                     clusterSummary.totalContainers++;
+                    if (isRun) clusterSummary.runningContainers++;
                 }
                 vms.push({
                     vmid: resource.vmid,
@@ -131,7 +137,9 @@ router.get('/full', checkAuth, async (req, res) => {
                         ? Math.round((clusterSummary.usedMemory / clusterSummary.totalMemory) * 100) 
                         : 0,
                     totalVMs: clusterSummary.totalVMs,
-                    totalContainers: clusterSummary.totalContainers
+                    totalContainers: clusterSummary.totalContainers,
+                    runningVMs: clusterSummary.runningVMs,
+                    runningContainers: clusterSummary.runningContainers
                 }
             },
             quorum: {

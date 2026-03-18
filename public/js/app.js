@@ -312,7 +312,6 @@ function updateUILanguage() {
         clusterResources: 'clusterResources',
         cpuLabel: 'cpu',
         memoryLabel: 'memory',
-        virtualizationLabel: 'virtualization',
         tabNodes: 'tabNodes',
         tabStorage: 'tabStorage',
         tabServers: 'tabServers',
@@ -436,11 +435,20 @@ function updateUILanguage() {
         setText('monitorQuorumLabel', t('quorum'));
         setText('monitorNodesTitle', currentServerType === 'truenas' ? t('tabServers') : t('tabNodes'));
         setText('monitorServicesTitle', t('tabServicesMonitor'));
-        setText('monitorVmsLabel', t('virtualization'));
         setText('monitorBackupBackText', t('monitorBackupBackText'));
         setText('backupsMonitorTitle', t('backupSectionExecTitle'));
         updateMonitorToolbarTitleForView();
     }
+    setText('monitorBlockVmTitle', t('monitorBlockVm'));
+    setText('monitorBlockCtTitle', t('monitorBlockCt'));
+    setText('monitorVmTotalLbl', t('monitorGuestTotal'));
+    setText('monitorVmRunningLbl', t('monitorGuestRunning'));
+    setText('monitorCtTotalLbl', t('monitorGuestTotal'));
+    setText('monitorCtRunningLbl', t('monitorGuestRunning'));
+    setText('dashboardClusterVmTitle', t('monitorBlockVm'));
+    setText('dashboardClusterCtTitle', t('monitorBlockCt'));
+    setText('dashboardClusterVmRunningLbl', t('monitorGuestRunning'));
+    setText('dashboardClusterCtRunningLbl', t('monitorGuestRunning'));
     setText('settingsServicesTitle', t('settingsServicesTitle'));
     setText('settingsServicesHint', t('settingsServicesHint'));
     setText('servicesMonitorHint', t('servicesMonitorHint'));
@@ -1419,8 +1427,14 @@ function updateTrueNASDashboard(systemData, poolsData) {
         if (memBar) memBar.style.width = '0%';
     }
 
-    setText('clusterVms', '—');
-    setText('clusterContainers', '—');
+    setText('clusterVmTotal', '—');
+    setText('clusterVmRunning', '—');
+    setText('clusterCtTotal', '—');
+    setText('clusterCtRunning', '—');
+    ['clusterVmRunningBar', 'clusterCtRunningBar'].forEach((id) => {
+        const b = document.getElementById(id);
+        if (b) b.style.width = '0%';
+    });
 
     const serversContainer = document.getElementById('serversContainer') || document.getElementById('nodesContainer');
     if (serversContainer) {
@@ -1494,8 +1508,10 @@ function updateMonitorView(clusterData) {
     const memPct = summary.memoryUsagePercent != null ? summary.memoryUsagePercent : 0;
     setText('monitorCpu', cpuPct + '%');
     setText('monitorMemory', memPct + '%');
-    setText('monitorVms', String(summary.totalVMs || 0));
-    setText('monitorVmsLabel', t('virtualization'));
+    setText('monitorVmTotal', String(summary.totalVMs || 0));
+    setText('monitorVmRunning', String(summary.runningVMs != null ? summary.runningVMs : 0));
+    setText('monitorCtTotal', String(summary.totalContainers || 0));
+    setText('monitorCtRunning', String(summary.runningContainers != null ? summary.runningContainers : 0));
     const cpuBar = el('monitorCpuBar');
     if (cpuBar) cpuBar.style.width = Math.min(100, cpuPct) + '%';
     const memBar = el('monitorMemoryBar');
@@ -1533,8 +1549,10 @@ function updateMonitorViewTrueNAS(systemData, poolsData) {
     }
     setText('monitorCpu', cpuPct + '%');
     setText('monitorMemory', memPct + '%');
-    setText('monitorVms', '—');
-    setText('monitorVmsLabel', t('virtualization'));
+    setText('monitorVmTotal', '—');
+    setText('monitorVmRunning', '—');
+    setText('monitorCtTotal', '—');
+    setText('monitorCtRunning', '—');
     const cpuBar = el('monitorCpuBar');
     if (cpuBar) cpuBar.style.width = cpuPct + '%';
     const memBar = el('monitorMemoryBar');
@@ -1711,8 +1729,18 @@ function updateDashboard(clusterData, storageData, backupsData) {
     const memBar = el('clusterMemoryBar');
     if (memBar) memBar.style.width = summary.memoryUsagePercent + '%';
     
-    setText('clusterVms', String(summary.totalVMs || 0));
-    setText('clusterContainers', (summary.totalContainers || 0) + ' ' + t('containers'));
+    const vmT = summary.totalVMs || 0;
+    const vmR = summary.runningVMs != null ? summary.runningVMs : 0;
+    const ctT = summary.totalContainers || 0;
+    const ctR = summary.runningContainers != null ? summary.runningContainers : 0;
+    setText('clusterVmTotal', String(vmT));
+    setText('clusterVmRunning', String(vmR));
+    setText('clusterCtTotal', String(ctT));
+    setText('clusterCtRunning', String(ctR));
+    const vmBar = el('clusterVmRunningBar');
+    if (vmBar) vmBar.style.width = vmT > 0 ? Math.min(100, Math.round((vmR / vmT) * 100)) + '%' : '0%';
+    const ctBar = el('clusterCtRunningBar');
+    if (ctBar) ctBar.style.width = ctT > 0 ? Math.min(100, Math.round((ctR / ctT) * 100)) + '%' : '0%';
 
     const nodesContainer = el('nodesContainer');
     if (nodesContainer) {

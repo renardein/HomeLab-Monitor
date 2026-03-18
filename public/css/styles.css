@@ -990,6 +990,35 @@
         .monitor-view__res-fill { height: 100%; background: #3b82f6; border-radius: 4px; transition: width 0.2s; }
         .monitor-view__res-fill--mem { background: #22c55e; }
 
+        .monitor-view__res--guest {
+            flex-direction: column;
+            align-items: stretch;
+            align-self: flex-start;
+            gap: 0.2rem;
+            min-width: 118px;
+            padding: 0.45rem 0.8rem;
+        }
+        .monitor-view__res-guest-title {
+            font-size: 0.72rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            opacity: 0.85;
+            margin-bottom: 0.15rem;
+        }
+        .monitor-view__res-guest-line {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            gap: 0.75rem;
+            font-size: 0.8rem;
+            line-height: 1.35;
+        }
+        .monitor-view__res-guest-lbl { opacity: 0.75; flex-shrink: 0; }
+        .monitor-view__res-guest-val { font-weight: 700; font-variant-numeric: tabular-nums; }
+        .monitor-view__res-guest-val--run { color: #198754; }
+        body.monitor-mode.monitor-theme-dark .monitor-view__res-guest-val--run { color: #4ade80; }
+
         .monitor-view__empty {
             padding: 1rem;
             text-align: center;

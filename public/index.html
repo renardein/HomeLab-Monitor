@@ -510,8 +510,8 @@
                                     кластера</span></h5>
                         </div>
                         <div class="card-body">
-                            <div class="row">
-                                <div class="col-md-4">
+                            <div class="row g-2">
+                                <div class="col-md-3 col-6">
                                     <div class="text-center p-3">
                                         <h6><i class="bi bi-cpu me-2"></i><span id="cpuLabel">CPU</span></h6>
                                         <div class="display-6" id="clusterCpu">0</div>
@@ -522,7 +522,7 @@
                                         </div>
                                     </div>
                                 </div>
-                                <div class="col-md-4">
+                                <div class="col-md-3 col-6">
                                     <div class="text-center p-3">
                                         <h6><i class="bi bi-memory me-2"></i><span id="memoryLabel">Память</span></h6>
                                         <div class="display-6" id="clusterMemory">0</div>
@@ -533,12 +533,24 @@
                                         </div>
                                     </div>
                                 </div>
-                                <div class="col-md-4">
+                                <div class="col-md-3 col-6">
                                     <div class="text-center p-3">
-                                        <h6><i class="bi bi-boxes me-2"></i><span
-                                                id="virtualizationLabel">Виртуализация</span></h6>
-                                        <div class="display-6" id="clusterVms">0</div>
-                                        <small class="text-muted" id="clusterContainers">0 контейнеров</small>
+                                        <h6><i class="bi bi-pc-display me-2"></i><span id="dashboardClusterVmTitle">VM</span></h6>
+                                        <div class="display-6" id="clusterVmTotal">0</div>
+                                        <small class="text-muted d-block" id="dashboardClusterVmSub"><span id="dashboardClusterVmRunningLbl">Запущено</span>: <span class="text-success fw-semibold" id="clusterVmRunning">0</span></small>
+                                        <div class="progress mt-2" style="height: 10px;">
+                                            <div class="progress-bar bg-success" id="clusterVmRunningBar" style="width: 0%" title=""></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3 col-6">
+                                    <div class="text-center p-3">
+                                        <h6><i class="bi bi-box-seam me-2"></i><span id="dashboardClusterCtTitle">CT</span></h6>
+                                        <div class="display-6" id="clusterCtTotal">0</div>
+                                        <small class="text-muted d-block" id="dashboardClusterCtSub"><span id="dashboardClusterCtRunningLbl">Запущено</span>: <span class="text-success fw-semibold" id="clusterCtRunning">0</span></small>
+                                        <div class="progress mt-2" style="height: 10px;">
+                                            <div class="progress-bar bg-success" id="clusterCtRunningBar" style="width: 0%" title=""></div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -696,7 +708,16 @@
                 <div class="monitor-view__resources">
                     <div class="monitor-view__res"><span class="monitor-view__res-label">CPU</span><span class="monitor-view__res-value" id="monitorCpu">0%</span><div class="monitor-view__res-bar"><div class="monitor-view__res-fill" id="monitorCpuBar"></div></div></div>
                     <div class="monitor-view__res"><span class="monitor-view__res-label">RAM</span><span class="monitor-view__res-value" id="monitorMemory">0%</span><div class="monitor-view__res-bar"><div class="monitor-view__res-fill monitor-view__res-fill--mem" id="monitorMemoryBar"></div></div></div>
-                    <div class="monitor-view__res"><span class="monitor-view__res-label" id="monitorVmsLabel">VM</span><span class="monitor-view__res-value" id="monitorVms">0</span></div>
+                    <div class="monitor-view__res monitor-view__res--guest" aria-label="VM">
+                        <div class="monitor-view__res-guest-title" id="monitorBlockVmTitle">VM</div>
+                        <div class="monitor-view__res-guest-line"><span class="monitor-view__res-guest-lbl" id="monitorVmTotalLbl">Всего</span><span class="monitor-view__res-guest-val" id="monitorVmTotal">0</span></div>
+                        <div class="monitor-view__res-guest-line"><span class="monitor-view__res-guest-lbl" id="monitorVmRunningLbl">Запущено</span><span class="monitor-view__res-guest-val monitor-view__res-guest-val--run" id="monitorVmRunning">0</span></div>
+                    </div>
+                    <div class="monitor-view__res monitor-view__res--guest" aria-label="CT">
+                        <div class="monitor-view__res-guest-title" id="monitorBlockCtTitle">CT</div>
+                        <div class="monitor-view__res-guest-line"><span class="monitor-view__res-guest-lbl" id="monitorCtTotalLbl">Всего</span><span class="monitor-view__res-guest-val" id="monitorCtTotal">0</span></div>
+                        <div class="monitor-view__res-guest-line"><span class="monitor-view__res-guest-lbl" id="monitorCtRunningLbl">Запущено</span><span class="monitor-view__res-guest-val monitor-view__res-guest-val--run" id="monitorCtRunning">0</span></div>
+                    </div>
                 </div>
                 <div class="monitor-view__body">
                     <div class="monitor-view__panel monitor-view__nodes">
