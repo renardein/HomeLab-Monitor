@@ -170,6 +170,54 @@ function importSettingsAndServices(payload) {
     saveDb();
 }
 
+function parseMonitorVmsFromStored(raw) {
+    if (!raw) return [];
+    try {
+        const p = JSON.parse(raw);
+        if (!Array.isArray(p)) return [];
+        return p
+            .map(x => (typeof x === 'number' ? x : Number(x && (x.vmid ?? x.id))))
+            .filter(n => !Number.isNaN(n));
+    } catch {
+        return [];
+    }
+}
+
+function parseHiddenVmIdsFromStored(raw) {
+    if (!raw) return [];
+    try {
+        const h = JSON.parse(raw);
+        if (!Array.isArray(h)) return [];
+        return h.map(Number).filter(n => !Number.isNaN(n));
+    } catch {
+        return [];
+    }
+}
+
+function getMonitoredVmsExport() {
+    return {
+        monitor_vms: parseMonitorVmsFromStored(getSetting('monitor_vms')),
+        monitor_hidden_vm_ids: parseHiddenVmIdsFromStored(getSetting('monitor_hidden_vm_ids'))
+    };
+}
+
+/** Apply VM/CT monitoring lists; only keys that are arrays are updated. */
+function importMonitoredVmsConfig(payload) {
+    if (!payload || typeof payload !== 'object') return;
+    if (Array.isArray(payload.monitor_vms)) {
+        const arr = payload.monitor_vms
+            .map(x => (typeof x === 'number' ? x : Number(x && (x.vmid ?? x.id))))
+            .filter(n => !Number.isNaN(n));
+        setSetting('monitor_vms', JSON.stringify(arr));
+    }
+    if (Array.isArray(payload.monitor_hidden_vm_ids)) {
+        setSetting(
+            'monitor_hidden_vm_ids',
+            JSON.stringify(payload.monitor_hidden_vm_ids.map(Number).filter(n => !Number.isNaN(n)))
+        );
+    }
+}
+
 module.exports = {
     getSetting,
     setSetting,
@@ -182,5 +230,7 @@ module.exports = {
     removeMonitoredService,
     updateMonitoredServiceStatus,
     exportSettingsAndServices,
-    importSettingsAndServices
+    importSettingsAndServices,
+    getMonitoredVmsExport,
+    importMonitoredVmsConfig
 };

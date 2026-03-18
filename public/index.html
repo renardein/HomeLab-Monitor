@@ -434,6 +434,20 @@
                                         </div>
                                     </div>
                                     <hr>
+                                    <div class="mb-4">
+                                        <h6 class="fw-bold mb-2" id="settingsVmsOnlyTitle">Только VM/CT</h6>
+                                        <p class="text-muted small mb-2" id="settingsVmsOnlyHint">Экспорт или импорт только списков мониторинга VM/CT и скрытых на экране монитора.</p>
+                                        <div class="d-flex flex-wrap gap-2">
+                                            <button class="btn btn-outline-secondary btn-sm" type="button" onclick="exportVmsOnly()">
+                                                <i class="bi bi-download me-1"></i><span id="settingsExportVmsBtn">Экспорт VM/CT</span>
+                                            </button>
+                                            <button class="btn btn-outline-secondary btn-sm" type="button" onclick="triggerImportVms()">
+                                                <i class="bi bi-upload me-1"></i><span id="settingsImportVmsBtn">Импорт VM/CT</span>
+                                            </button>
+                                            <input type="file" id="vmsImportFile" accept="application/json" class="d-none" onchange="handleImportVmsFile(event)">
+                                        </div>
+                                    </div>
+                                    <hr>
                                     <div class="mb-2">
                                         <h6 class="fw-bold mb-2" id="settingsAllTitle">Полная конфигурация</h6>
                                         <p class="text-muted small mb-2" id="settingsAllHint">Экспорт или импорт всех настроек, подключений (включая токены) и списка хостов мониторинга. Используйте осторожно.</p>

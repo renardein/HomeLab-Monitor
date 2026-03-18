@@ -439,8 +439,12 @@ function updateUILanguage() {
     setText('settingsServicesOnlyHint', t('settingsServicesOnlyHint') || 'Экспорт или импорт только списка хостов для мониторинга сервисов.');
     setText('settingsExportServicesBtn', t('settingsExportServicesBtn') || 'Экспорт хостов');
     setText('settingsImportServicesBtn', t('settingsImportServicesBtn') || 'Импорт хостов');
+    setText('settingsVmsOnlyTitle', t('settingsVmsOnlyTitle') || 'Только VM/CT');
+    setText('settingsVmsOnlyHint', t('settingsVmsOnlyHint') || 'Экспорт или импорт только списков мониторинга VM/CT.');
+    setText('settingsExportVmsBtn', t('settingsExportVmsBtn') || 'Экспорт VM/CT');
+    setText('settingsImportVmsBtn', t('settingsImportVmsBtn') || 'Импорт VM/CT');
     setText('settingsAllTitle', t('settingsAllTitle') || 'Полная конфигурация');
-    setText('settingsAllHint', t('settingsAllHint') || 'Экспорт или импорт всех настроек, подключений и списка хостов мониторинга.');
+    setText('settingsAllHint', t('settingsAllHint') || 'Экспорт или импорт всех настроек, подключений, хостов сервисов и списков VM/CT для монитора.');
     setText('settingsExportAllBtn', t('settingsExportAllBtn') || 'Экспорт всех настроек');
     setText('settingsImportAllBtn', t('settingsImportAllBtn') || 'Импорт всех настроек');
     setText('settingsNavConnection', t('settingsNavConnection'));
@@ -2174,6 +2178,80 @@ async function handleImportServicesFile(event) {
     reader.readAsText(file, 'utf-8');
 }
 
+async function exportVmsOnly() {
+    try {
+        const resp = await fetch('/api/settings/export/vms');
+        if (!resp.ok) {
+            const data = await resp.json().catch(() => ({}));
+            throw new Error(data.error || `HTTP ${resp.status}`);
+        }
+        const json = await resp.json();
+        const only = {
+            monitor_vms: Array.isArray(json.monitor_vms) ? json.monitor_vms : [],
+            monitor_hidden_vm_ids: Array.isArray(json.monitor_hidden_vm_ids) ? json.monitor_hidden_vm_ids : []
+        };
+        const blob = new Blob([JSON.stringify(only, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'homelab-monitor-vms.json';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+    } catch (e) {
+        showToast((t('settingsImportError') || t('errorUpdate')) + ': ' + e.message, 'error');
+    }
+}
+
+function triggerImportVms() {
+    const input = document.getElementById('vmsImportFile');
+    if (input) input.click();
+}
+
+async function handleImportVmsFile(event) {
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        let parsed;
+        try {
+            parsed = JSON.parse(String(e.target.result || ''));
+        } catch {
+            showToast(t('settingsImportError') || 'Неверный файл импорта', 'error');
+            return;
+        }
+        const body = {};
+        if (Array.isArray(parsed.monitor_vms)) body.monitor_vms = parsed.monitor_vms;
+        if (Array.isArray(parsed.monitor_hidden_vm_ids)) body.monitor_hidden_vm_ids = parsed.monitor_hidden_vm_ids;
+        if (!body.monitor_vms && !body.monitor_hidden_vm_ids) {
+            showToast(t('settingsImportError') || 'В файле нет monitor_vms или monitor_hidden_vm_ids', 'error');
+            event.target.value = '';
+            return;
+        }
+        try {
+            const resp = await fetch('/api/settings/import/vms', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            const data = await resp.json().catch(() => ({}));
+            if (!resp.ok || data.success === false) {
+                throw new Error(data.error || `HTTP ${resp.status}`);
+            }
+            showToast(t('settingsImportSuccess') || 'Настройки импортированы', 'success');
+            await loadSettings();
+            renderSettingsMonitoredVms();
+            renderMonitorVmsList();
+        } catch (err) {
+            showToast((t('settingsImportError') || t('errorUpdate')) + ': ' + err.message, 'error');
+        } finally {
+            event.target.value = '';
+        }
+    };
+    reader.readAsText(file, 'utf-8');
+}
+
 async function exportAllConfig() {
     try {
         const resp = await fetch('/api/settings/export/all');
@@ -2224,11 +2302,13 @@ async function handleImportAllConfigFile(event) {
                 throw new Error(data.error || `HTTP ${resp.status}`);
             }
             showToast(t('settingsImportSuccess') || 'Настройки импортированы, данные обновлены', 'success');
-            const settingsData = await loadSettings();
+            await loadSettings();
             const servicesData = await fetch('/api/settings/services').then(r => r.json()).catch(() => ({ services: [] }));
             monitoredServices = Array.isArray(servicesData.services) ? servicesData.services : [];
             renderMonitoredServices();
             renderSettingsMonitoredServices();
+            renderSettingsMonitoredVms();
+            renderMonitorVmsList();
         } catch (err) {
             showToast((t('settingsImportError') || t('errorUpdate')) + ': ' + err.message, 'error');
         } finally {

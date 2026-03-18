@@ -204,13 +204,42 @@ router.post('/import/services', (req, res) => {
     }
 });
 
-// GET /api/settings/export/all — все настройки + сервисы + подключения (c секретами)
+// GET /api/settings/export/vms — только списки VM/CT для монитора
+router.get('/export/vms', (req, res) => {
+    try {
+        res.json(store.getMonitoredVmsExport());
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// POST /api/settings/import/vms — только списки VM/CT (поля-массивы перезаписываются)
+router.post('/import/vms', (req, res) => {
+    try {
+        const payload = req.body;
+        if (!payload || typeof payload !== 'object') {
+            return res.status(400).json({ success: false, error: 'invalid_payload' });
+        }
+        const hasMv = Array.isArray(payload.monitor_vms);
+        const hasHidden = Array.isArray(payload.monitor_hidden_vm_ids);
+        if (!hasMv && !hasHidden) {
+            return res.status(400).json({ success: false, error: 'invalid_payload' });
+        }
+        store.importMonitoredVmsConfig(payload);
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// GET /api/settings/export/all — все настройки + сервисы + подключения (c секретами) + явные списки VM/CT
 router.get('/export/all', (req, res) => {
     try {
         const base = store.exportSettingsAndServices();
         const connectionsStore = require('../connection-store');
         const connections = connectionsStore.exportConnectionsWithSecrets();
-        res.json({ ...base, connections });
+        const vmCfg = store.getMonitoredVmsExport();
+        res.json({ ...base, ...vmCfg, connections });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
@@ -228,6 +257,7 @@ router.post('/import/all', (req, res) => {
             connectionsStore.importConnectionsWithSecrets(payload.connections);
         }
         store.importSettingsAndServices(payload);
+        store.importMonitoredVmsConfig(payload);
         res.json({ success: true });
     } catch (e) {
         res.status(500).json({ success: false, error: e.message });
