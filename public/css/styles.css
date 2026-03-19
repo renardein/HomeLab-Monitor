@@ -174,6 +174,43 @@
             color: #667eea;
             font-weight: 600;
         }
+
+        /* UPS settings should match the rest of settings design (no special “monitor” pills) */
+        #upsSettingsCardWrap > .card {
+            border: 1px solid #dee2e6;
+            border-radius: 10px;
+            box-shadow: none;
+            background: #fff;
+            margin-bottom: 20px;
+        }
+
+        #upsSettingsCardWrap > .card .card-header {
+            background: transparent !important;
+            color: inherit;
+            border-radius: 10px 10px 0 0 !important;
+            padding: 16px 20px 0 20px;
+        }
+
+        #upsSettingsCardWrap > .card .card-body {
+            padding: 16px 20px 20px 20px;
+        }
+
+        #upsSettingsCardWrap > .card .card-header h5 {
+            margin-bottom: 12px;
+        }
+
+        body.dark-mode #upsSettingsCardWrap > .card {
+            background: #0f3460;
+            border-color: #533483;
+        }
+
+        body.dark-mode #upsSettingsCardWrap > .card .card-header {
+            color: #fff;
+        }
+
+        body.dark-mode #upsSettingsCardWrap > .card .card-body {
+            color: #fff;
+        }
         .table th {
             background-color: #f8f9fa;
         }

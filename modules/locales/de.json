@@ -297,5 +297,15 @@
     "monVmTypeCol": "Typ",
     "vmStatus_running": "Läuft",
     "vmStatus_stopped": "Gestoppt",
-    "vmStatus_unknown": "Unbekannt"
+    "vmStatus_unknown": "Unbekannt",
+    "upsTitle": "USV",
+    "upsLabelInputVoltage": "Eingang U",
+    "upsLabelOutputVoltage": "Ausgang U",
+    "upsLabelPower": "Leistung",
+    "upsLabelLoad": "Last",
+    "upsLabelFrequency": "Frequenz",
+    "upsLabelCharge": "Ladung",
+    "upsLabelRuntime": "Laufzeit (Batterie)",
+    "upsNotConfigured": "USV nicht konfiguriert",
+    "upsError": "USV-Fehler"
 }

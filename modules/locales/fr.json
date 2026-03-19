@@ -297,5 +297,15 @@
     "monVmTypeCol": "Type",
     "vmStatus_running": "En cours",
     "vmStatus_stopped": "Arrêté",
-    "vmStatus_unknown": "Inconnu"
+    "vmStatus_unknown": "Inconnu",
+    "upsTitle": "Onduleur",
+    "upsLabelInputVoltage": "Entrée U",
+    "upsLabelOutputVoltage": "Sortie U",
+    "upsLabelPower": "Puissance",
+    "upsLabelLoad": "Charge (%)",
+    "upsLabelFrequency": "Fréquence",
+    "upsLabelCharge": "Niveau batterie",
+    "upsLabelRuntime": "Autonomie",
+    "upsNotConfigured": "Onduleur non configuré",
+    "upsError": "Erreur onduleur"
 }

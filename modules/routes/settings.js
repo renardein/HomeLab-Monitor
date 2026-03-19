@@ -9,6 +9,15 @@ const SETTING_KEYS = [
     'proxmox_servers', 'truenas_servers', 'connection_id_map',
     'preferred_language',
     'session_ttl_minutes',
+    // UPS (NUT/SNMP) monitoring settings
+    'ups_enabled', 'ups_type', 'ups_host', 'ups_port', 'ups_name',
+    'nut_var_status', 'nut_var_charge', 'nut_var_runtime',
+    'nut_var_input_voltage', 'nut_var_output_voltage',
+    'nut_var_power', 'nut_var_load', 'nut_var_frequency',
+    'snmp_community',
+    'snmp_oid_status', 'snmp_oid_charge', 'snmp_oid_runtime',
+    'snmp_oid_input_voltage', 'snmp_oid_output_voltage',
+    'snmp_oid_power', 'snmp_oid_load', 'snmp_oid_frequency',
     // monitor-mode specific
     'monitor_hidden_service_ids',
     'monitor_vms',
@@ -140,6 +149,15 @@ router.post('/services', (req, res) => {
     if (t === 'http' || t === 'https') {
         if (!url || !String(url).trim()) {
             return res.status(400).json({ error: 'url required' });
+        }
+    } else if (t === 'snmp' || t === 'nut') {
+        if (!url || !String(url).trim()) {
+            return res.status(400).json({ error: 'url required' });
+        }
+        const h = host != null ? String(host).trim() : '';
+        const p = port != null ? parseInt(port, 10) : null;
+        if (!h || !p || p < 1 || p > 65535) {
+            return res.status(400).json({ error: 'host and port (1-65535) required' });
         }
     } else {
         const h = host != null ? String(host).trim() : '';

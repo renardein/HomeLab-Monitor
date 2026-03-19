@@ -132,6 +132,9 @@
                             <button class="nav-link" id="settings-nav-services" data-bs-toggle="pill" data-bs-target="#settings-tab-services" type="button" role="tab">
                                 <i class="bi bi-activity me-2"></i><span id="settingsNavServices">Мониторинг сервисов</span>
                             </button>
+                            <button class="nav-link" id="settings-nav-ups" data-bs-toggle="pill" data-bs-target="#settings-tab-ups" type="button" role="tab">
+                                <i class="bi bi-lightning me-2"></i><span>UPS</span>
+                            </button>
                             <button class="nav-link" id="settings-nav-security" data-bs-toggle="pill" data-bs-target="#settings-tab-security" type="button" role="tab">
                                 <i class="bi bi-shield-lock me-2"></i><span id="settingsNavSecurity">Безопасность</span>
                             </button>
@@ -396,6 +399,8 @@
                                 <option value="tcp">TCP</option>
                                 <option value="udp">UDP</option>
                                 <option value="http">HTTP(S)</option>
+                                <option value="snmp">SNMP</option>
+                                <option value="nut">NUT</option>
                             </select>
                         </div>
                         <div class="col-md-2" id="settingsServiceHostWrap">
@@ -429,6 +434,216 @@
                             </thead>
                             <tbody id="settingsServicesBody"></tbody>
                         </table>
+                    </div>
+                    <div id="upsSettingsCardWrap">
+                        <div class="card mb-4">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="bi bi-lightning-charge me-2"></i><span>UPS (NUT/SNMP)</span></h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-3 align-items-end mb-3">
+                                    <div class="col-md-3">
+                                    <label class="form-label fw-bold mb-2">Слот UPS</label>
+                                        <div class="nav nav-pills" id="upsSlotTabs" role="tablist">
+                                        <button class="nav-link active py-1" type="button" role="tab"
+                                            data-ups-slot-idx="0" aria-selected="true">1</button>
+                                        <button class="nav-link py-1" type="button" role="tab"
+                                            data-ups-slot-idx="1" aria-selected="false">2</button>
+                                        <button class="nav-link py-1" type="button" role="tab"
+                                            data-ups-slot-idx="2" aria-selected="false">3</button>
+                                        <button class="nav-link py-1" type="button" role="tab"
+                                            data-ups-slot-idx="3" aria-selected="false">4</button>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label fw-bold">Включить</label>
+                                    <select class="form-select" id="upsEnabledSelect">
+                                        <option value="0">Нет</option>
+                                        <option value="1" selected>Да</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label fw-bold" for="upsTypeSelect">Тип</label>
+                                    <select class="form-select" id="upsTypeSelect" onchange="toggleUpsFields()">
+                                        <option value="nut" selected>NUT</option>
+                                        <option value="snmp">SNMP</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label fw-bold" for="upsHostInput">Хост</label>
+                                    <input type="text" class="form-control" id="upsHostInput" placeholder="upsd IP/hostname">
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label fw-bold" for="upsPortInput">Порт</label>
+                                    <input type="number" class="form-control" id="upsPortInput" placeholder="3493" min="1" max="65535">
+                                </div>
+                            </div>
+
+                            <div id="upsNutFields" class="mb-3">
+                                <div class="row g-3">
+                                    <div class="col-md-4">
+                                        <label class="form-label fw-bold" for="upsNutNameInput">NUT имя UPS</label>
+                                        <input type="text" class="form-control" id="upsNutNameInput" placeholder="myups">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label fw-bold" for="upsNutVarStatusInput">VAR статус</label>
+                                        <input type="text" class="form-control" id="upsNutVarStatusInput" placeholder="ups.status" value="ups.status">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label fw-bold" for="upsNutVarChargeInput">VAR заряд</label>
+                                        <input type="text" class="form-control" id="upsNutVarChargeInput" placeholder="battery.charge" value="battery.charge">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label fw-bold" for="upsNutVarRuntimeInput">VAR runtime</label>
+                                        <input type="text" class="form-control" id="upsNutVarRuntimeInput" placeholder="battery.runtime" value="battery.runtime">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label fw-bold" for="upsNutVarInputVoltageInput">VAR вход U</label>
+                                        <input type="text" class="form-control" id="upsNutVarInputVoltageInput" placeholder="input.voltage" value="input.voltage">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label fw-bold" for="upsNutVarOutputVoltageInput">VAR выход U</label>
+                                        <input type="text" class="form-control" id="upsNutVarOutputVoltageInput" placeholder="output.voltage" value="output.voltage">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label fw-bold" for="upsNutVarPowerInput">VAR мощность (Вт)</label>
+                                        <input type="text" class="form-control" id="upsNutVarPowerInput" placeholder="ups.realpower" value="ups.realpower">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label fw-bold" for="upsNutVarLoadInput">VAR нагрузка %</label>
+                                        <input type="text" class="form-control" id="upsNutVarLoadInput" placeholder="ups.load" value="ups.load">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label fw-bold" for="upsNutVarFrequencyInput">VAR частота</label>
+                                        <input type="text" class="form-control" id="upsNutVarFrequencyInput" placeholder="input.frequency" value="input.frequency">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div id="upsSnmpFields" class="mb-3 d-none">
+                                <div class="row g-3">
+                                    <div class="col-md-4">
+                                        <label class="form-label fw-bold" for="upsSnmpCommunityInput">Community</label>
+                                        <input type="text" class="form-control" id="upsSnmpCommunityInput" placeholder="public">
+                                    </div>
+                                    <div class="col-md-8">
+                                        <label class="form-label fw-bold" for="upsSnmpOidStatusInput">OID статус</label>
+                                        <input type="text" class="form-control" id="upsSnmpOidStatusInput" placeholder="1.3.6.1....">
+                                    </div>
+                                    <div class="col-md-8">
+                                        <label class="form-label fw-bold" for="upsSnmpOidChargeInput">OID заряд</label>
+                                        <input type="text" class="form-control" id="upsSnmpOidChargeInput" placeholder="(необязательно)">
+                                    </div>
+                                    <div class="col-md-8">
+                                        <label class="form-label fw-bold" for="upsSnmpOidRuntimeInput">OID runtime</label>
+                                        <input type="text" class="form-control" id="upsSnmpOidRuntimeInput" placeholder="(необязательно)">
+                                    </div>
+                                    <div class="col-md-8">
+                                        <label class="form-label fw-bold" for="upsSnmpOidInputVoltageInput">OID вход U</label>
+                                        <input type="text" class="form-control" id="upsSnmpOidInputVoltageInput" placeholder="(необязательно)">
+                                    </div>
+                                    <div class="col-md-8">
+                                        <label class="form-label fw-bold" for="upsSnmpOidOutputVoltageInput">OID выход U</label>
+                                        <input type="text" class="form-control" id="upsSnmpOidOutputVoltageInput" placeholder="(необязательно)">
+                                    </div>
+                                    <div class="col-md-8">
+                                        <label class="form-label fw-bold" for="upsSnmpOidPowerInput">OID мощность</label>
+                                        <input type="text" class="form-control" id="upsSnmpOidPowerInput" placeholder="(необязательно)">
+                                    </div>
+                                    <div class="col-md-8">
+                                        <label class="form-label fw-bold" for="upsSnmpOidLoadInput">OID нагрузка %</label>
+                                        <input type="text" class="form-control" id="upsSnmpOidLoadInput" placeholder="(необязательно)">
+                                    </div>
+                                    <div class="col-md-8">
+                                        <label class="form-label fw-bold" for="upsSnmpOidFrequencyInput">OID частота</label>
+                                        <input type="text" class="form-control" id="upsSnmpOidFrequencyInput" placeholder="(необязательно)">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <hr class="my-4">
+
+                                <div class="mb-3">
+                                <ul class="nav nav-pills" id="upsDisplayTabs" role="tablist">
+                                    <li class="nav-item" role="presentation">
+                                        <button class="nav-link active" id="upsDisplayDashboardTab" data-bs-toggle="tab"
+                                            data-bs-target="#upsDisplayDashboardPane" type="button" role="tab"
+                                            aria-controls="upsDisplayDashboardPane" aria-selected="true">
+                                            Обычный режим
+                                        </button>
+                                    </li>
+                                    <li class="nav-item" role="presentation">
+                                        <button class="nav-link" id="upsDisplayMonitorTab" data-bs-toggle="tab"
+                                            data-bs-target="#upsDisplayMonitorPane" type="button" role="tab"
+                                            aria-controls="upsDisplayMonitorPane" aria-selected="false">
+                                            Режим монитора
+                                        </button>
+                                    </li>
+                                </ul>
+                                <div class="tab-content p-3" id="upsDisplayTabsContent">
+                                    <div class="tab-pane fade show active" id="upsDisplayDashboardPane" role="tabpanel"
+                                        aria-labelledby="upsDisplayDashboardTab">
+                                        <label class="form-label fw-bold mb-2">Показывать UPS на дашборде</label>
+                                        <div class="d-flex flex-wrap gap-3">
+                                            <div class="form-check">
+                                                <input class="form-check-input upsDisplayDashboardSlot" type="checkbox"
+                                                    id="upsDisplayDashboardSlot1" value="1" checked>
+                                                <label class="form-check-label" for="upsDisplayDashboardSlot1">1</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input upsDisplayDashboardSlot" type="checkbox"
+                                                    id="upsDisplayDashboardSlot2" value="2" checked>
+                                                <label class="form-check-label" for="upsDisplayDashboardSlot2">2</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input upsDisplayDashboardSlot" type="checkbox"
+                                                    id="upsDisplayDashboardSlot3" value="3" checked>
+                                                <label class="form-check-label" for="upsDisplayDashboardSlot3">3</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input upsDisplayDashboardSlot" type="checkbox"
+                                                    id="upsDisplayDashboardSlot4" value="4" checked>
+                                                <label class="form-check-label" for="upsDisplayDashboardSlot4">4</label>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="tab-pane fade" id="upsDisplayMonitorPane" role="tabpanel"
+                                        aria-labelledby="upsDisplayMonitorTab">
+                                        <label class="form-label fw-bold mb-2">Показывать UPS в режиме монитора (экран Cluster)</label>
+                                        <div class="d-flex flex-wrap gap-3">
+                                            <div class="form-check">
+                                                <input class="form-check-input upsDisplayMonitorSlot" type="checkbox"
+                                                    id="upsDisplayMonitorSlot1" value="1" checked>
+                                                <label class="form-check-label" for="upsDisplayMonitorSlot1">1</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input upsDisplayMonitorSlot" type="checkbox"
+                                                    id="upsDisplayMonitorSlot2" value="2" checked>
+                                                <label class="form-check-label" for="upsDisplayMonitorSlot2">2</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input upsDisplayMonitorSlot" type="checkbox"
+                                                    id="upsDisplayMonitorSlot3" value="3" checked>
+                                                <label class="form-check-label" for="upsDisplayMonitorSlot3">3</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input upsDisplayMonitorSlot" type="checkbox"
+                                                    id="upsDisplayMonitorSlot4" value="4" checked>
+                                                <label class="form-check-label" for="upsDisplayMonitorSlot4">4</label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="d-flex justify-content-end">
+                                <button class="btn btn-primary" type="button" onclick="saveUpsSettings()" id="upsSaveBtn">
+                                    <i class="bi bi-save me-2"></i><span>Сохранить UPS</span>
+                                </button>
+                            </div>
+                        </div>
+                        </div>
                     </div>
                     <hr class="my-4">
                     <h5 class="mb-2"><i class="bi bi-hdd-network me-2"></i><span id="settingsVmsTitle">VM/CT для мониторинга</span></h5>
@@ -511,6 +726,12 @@
                                             <input type="file" id="allConfigImportFile" accept="application/json" class="d-none" onchange="handleImportAllConfigFile(event)">
                                         </div>
                                     </div>
+                                </div>
+                            </div>
+                            <!-- UPS -->
+                            <div class="tab-pane fade" id="settings-tab-ups" role="tabpanel">
+                                <div class="settings-section">
+                                    <div id="upsSettingsContainer"></div>
                                 </div>
                             </div>
                             <!-- Отладка -->
@@ -643,6 +864,23 @@
                                     </div>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- UPS на главном дашборде (при включённом UPS в настройках) -->
+            <div class="row mb-4" id="dashboardUpsSection" style="display: none;">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="bi bi-lightning me-2"></i><span id="dashboardUpsTitle">UPS</span></h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="d-flex align-items-center mb-2 flex-wrap gap-2">
+                                <span class="small text-muted" id="dashboardUpsUpdatedAt"></span>
+                            </div>
+                            <div class="row g-2 small" id="dashboardUpsCards"></div>
                         </div>
                     </div>
                 </div>
@@ -868,6 +1106,26 @@
                 <div class="card-body">
                     <p class="text-muted small mb-3" id="vmsMonitorHint"></p>
                     <div class="row" id="vmsMonitorCards"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Режим монитора: UPS — один экран без скролла -->
+        <div id="upsMonitorSection" class="mb-4" style="display: none;">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="applyMonitorView('cluster')">
+                    <i class="bi bi-arrow-left me-1"></i><span id="upsMonitorBackText">К кластеру</span>
+                </button>
+            </div>
+            <div class="card">
+                <div class="card-header py-2 px-3">
+                    <h5 class="mb-0"><i class="bi bi-lightning me-2"></i><span id="upsTitle">UPS</span></h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex align-items-center mb-3">
+                        <span class="small text-muted" id="upsUpdatedAt"> </span>
+                    </div>
+                    <div class="row g-2 small" id="upsMonitorCards"></div>
                 </div>
             </div>
         </div>

@@ -297,5 +297,15 @@
     "monVmTypeCol": "タイプ",
     "vmStatus_running": "実行中",
     "vmStatus_stopped": "停止",
-    "vmStatus_unknown": "不明"
+    "vmStatus_unknown": "不明",
+    "upsTitle": "UPS",
+    "upsLabelInputVoltage": "入力電圧",
+    "upsLabelOutputVoltage": "出力電圧",
+    "upsLabelPower": "電力",
+    "upsLabelLoad": "負荷",
+    "upsLabelFrequency": "周波数",
+    "upsLabelCharge": "充電",
+    "upsLabelRuntime": "バッテリー残時間",
+    "upsNotConfigured": "UPS 未設定",
+    "upsError": "UPS エラー"
 }

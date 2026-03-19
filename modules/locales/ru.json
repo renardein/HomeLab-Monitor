@@ -297,5 +297,16 @@
     "monVmTypeCol": "Тип",
     "vmStatus_running": "Запущена",
     "vmStatus_stopped": "Остановлена",
-    "vmStatus_unknown": "Неизвестно"
+    "vmStatus_unknown": "Неизвестно",
+    "monitorScreenUps": "ИБП",
+    "upsTitle": "ИБП",
+    "upsLabelInputVoltage": "Вход U",
+    "upsLabelOutputVoltage": "Выход U",
+    "upsLabelPower": "Мощность",
+    "upsLabelLoad": "Нагрузка",
+    "upsLabelFrequency": "Частота",
+    "upsLabelCharge": "Заряд",
+    "upsLabelRuntime": "Время на батарее",
+    "upsNotConfigured": "ИБП не настроен",
+    "upsError": "Ошибка ИБП"
 }

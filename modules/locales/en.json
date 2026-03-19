@@ -297,5 +297,16 @@
     "monVmTypeCol": "Type",
     "vmStatus_running": "Running",
     "vmStatus_stopped": "Stopped",
-    "vmStatus_unknown": "Unknown"
+    "vmStatus_unknown": "Unknown",
+    "monitorScreenUps": "UPS",
+    "upsTitle": "UPS",
+    "upsLabelInputVoltage": "Input V",
+    "upsLabelOutputVoltage": "Output V",
+    "upsLabelPower": "Power",
+    "upsLabelLoad": "Load",
+    "upsLabelFrequency": "Frequency",
+    "upsLabelCharge": "Charge",
+    "upsLabelRuntime": "Battery runtime",
+    "upsNotConfigured": "UPS not configured",
+    "upsError": "UPS error"
 }

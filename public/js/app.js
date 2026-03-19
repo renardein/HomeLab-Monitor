@@ -454,6 +454,16 @@ function updateUILanguage() {
     setText('dashboardClusterCtTitle', t('monitorBlockCt'));
     setText('dashboardClusterVmRunningLbl', t('monitorGuestRunning'));
     setText('dashboardClusterCtRunningLbl', t('monitorGuestRunning'));
+    setText('upsTitle', t('upsTitle') || 'UPS');
+    setText('dashboardUpsTitle', t('upsTitle') || 'UPS');
+    setText('upsLabelInputVoltage', t('upsLabelInputVoltage') || 'Вход U');
+    setText('upsLabelOutputVoltage', t('upsLabelOutputVoltage') || 'Выход U');
+    setText('upsLabelPower', t('upsLabelPower') || 'Мощность');
+    setText('upsLabelLoad', t('upsLabelLoad') || 'Нагрузка');
+    setText('upsLabelFrequency', t('upsLabelFrequency') || 'Частота');
+    setText('upsLabelCharge', t('upsLabelCharge') || 'Заряд');
+    setText('upsLabelRuntime', t('upsLabelRuntime') || 'Время на батарее');
+    setText('upsMonitorBackText', t('backToDashboardText') || 'К дашборду');
     setText('settingsServicesTitle', t('settingsServicesTitle'));
     setText('settingsServicesHint', t('settingsServicesHint'));
     setText('servicesMonitorHint', t('servicesMonitorHint'));
@@ -638,12 +648,14 @@ function showConfigSectionOnly() {
     const dashboardSection = document.getElementById('dashboardSection');
     const servicesSection = document.getElementById('servicesMonitorSection');
     const vmsSection = document.getElementById('vmsMonitorSection');
+    const upsMonSection = document.getElementById('upsMonitorSection');
     const backupsMon = document.getElementById('backupsMonitorSection');
     const monitorView = document.getElementById('monitorView');
     if (configSection) configSection.style.display = 'block';
     if (dashboardSection) dashboardSection.style.display = 'none';
     if (servicesSection) servicesSection.style.display = 'none';
     if (vmsSection) vmsSection.style.display = 'none';
+    if (upsMonSection) upsMonSection.style.display = 'none';
     if (backupsMon) backupsMon.style.display = 'none';
     if (monitorView) monitorView.style.display = 'none';
 }
@@ -944,7 +956,286 @@ async function loadSettingsPanelData() {
         renderSettingsMonitoredVms();
     }
     renderSettingsMonitoredServices();
+    await loadUpsSettings();
+    await ensureUpsDisplaySlotsLoaded();
     renderServerList();
+}
+
+// ==================== UPS MONITORING (NUT/SNMP) ====================
+
+function toggleUpsFields() {
+    const enabledSelect = document.getElementById('upsEnabledSelect');
+    const typeSelect = document.getElementById('upsTypeSelect');
+    const nutFieldsWrap = document.getElementById('upsNutFields');
+    const snmpFieldsWrap = document.getElementById('upsSnmpFields');
+    if (!enabledSelect || !typeSelect || !nutFieldsWrap || !snmpFieldsWrap) return;
+
+    const enabled = String(enabledSelect.value || '0') === '1';
+    const type = String(typeSelect.value || 'nut').toLowerCase();
+    nutFieldsWrap.classList.toggle('d-none', !enabled || type !== 'nut');
+    snmpFieldsWrap.classList.toggle('d-none', !enabled || type !== 'snmp');
+}
+
+function getUpsSlotIndex() {
+    const tabsEl = document.getElementById('upsSlotTabs');
+    if (tabsEl) {
+        const activeBtn = tabsEl.querySelector('button.nav-link.active[data-ups-slot-idx]');
+        const idx = activeBtn ? parseInt(activeBtn.dataset.upsSlotIdx, 10) : NaN;
+        if (Number.isFinite(idx)) return idx;
+    }
+
+    // Fallback: старый селект (на случай если где-то ещё остался)
+    const slotSelect = document.getElementById('upsSlotSelect');
+    if (!slotSelect) return 0;
+    const n = parseInt(slotSelect.value, 10);
+    return Number.isFinite(n) ? n : 0;
+}
+
+function createDefaultUpsConfig() {
+    return {
+        enabled: false,
+        type: 'nut',
+        host: '',
+        port: null,
+        name: '',
+        nutVarStatus: 'ups.status',
+        nutVarCharge: 'battery.charge',
+        nutVarRuntime: 'battery.runtime',
+        nutVarInputVoltage: 'input.voltage',
+        nutVarOutputVoltage: 'output.voltage',
+        nutVarPower: 'ups.realpower',
+        nutVarLoad: 'ups.load',
+        nutVarFrequency: 'input.frequency',
+        snmpCommunity: '',
+        snmpOidStatus: '',
+        snmpOidCharge: '',
+        snmpOidRuntime: '',
+        snmpOidInputVoltage: '',
+        snmpOidOutputVoltage: '',
+        snmpOidPower: '',
+        snmpOidLoad: '',
+        snmpOidFrequency: ''
+    };
+}
+
+let upsConfigs = null;
+let upsSlotListenerAttached = false;
+let upsDisplaySlotsMonitor = [1, 2, 3, 4];
+let upsDisplaySlotsDashboard = [1, 2, 3, 4];
+let upsDisplaySlotsLoadedPromise = null;
+let upsDisplaySlotsLoadedOnce = false;
+
+function getCheckedUpsSlotsByClass(checkboxClass) {
+    const boxes = document.querySelectorAll('input.' + checkboxClass + ':checked');
+    const slots = Array.from(boxes)
+        .map((b) => parseInt(b.value, 10))
+        .filter((n) => Number.isFinite(n) && n >= 1 && n <= 4);
+    return Array.from(new Set(slots)).sort((a, b) => a - b);
+}
+
+function setUpsDisplayCheckboxes(dashboardSlots, monitorSlots) {
+    for (let s = 1; s <= 4; s++) {
+        const dashBox = document.getElementById('upsDisplayDashboardSlot' + s);
+        if (dashBox) dashBox.checked = Array.isArray(dashboardSlots) && dashboardSlots.includes(s);
+        const monBox = document.getElementById('upsDisplayMonitorSlot' + s);
+        if (monBox) monBox.checked = Array.isArray(monitorSlots) && monitorSlots.includes(s);
+    }
+}
+
+async function ensureUpsDisplaySlotsLoaded() {
+    if (upsDisplaySlotsLoadedPromise) return upsDisplaySlotsLoadedPromise;
+
+    upsDisplaySlotsLoadedPromise = (async () => {
+        try {
+            const resp = await fetch('/api/ups/display');
+            const data = await resp.json();
+            if (data && data.success) {
+                if (Array.isArray(data.dashboardSlots)) upsDisplaySlotsDashboard = data.dashboardSlots;
+                if (Array.isArray(data.monitorSlots)) upsDisplaySlotsMonitor = data.monitorSlots;
+            }
+        } catch (e) {
+            // Используем дефолтные [1..4]
+        }
+
+        // Обновим чекбоксы в панели настроек (если она есть на странице)
+        try {
+            setUpsDisplayCheckboxes(upsDisplaySlotsDashboard, upsDisplaySlotsMonitor);
+        } catch (_) {}
+
+        upsDisplaySlotsLoadedOnce = true;
+    })();
+
+    return upsDisplaySlotsLoadedPromise;
+}
+
+async function loadUpsSettings() {
+    const enabledSelect = document.getElementById('upsEnabledSelect');
+    const typeSelect = document.getElementById('upsTypeSelect');
+    if (!enabledSelect || !typeSelect) return;
+
+    const hostInput = document.getElementById('upsHostInput');
+    const portInput = document.getElementById('upsPortInput');
+    const nutNameInput = document.getElementById('upsNutNameInput');
+    const nutVarStatusInput = document.getElementById('upsNutVarStatusInput');
+    const nutVarChargeInput = document.getElementById('upsNutVarChargeInput');
+    const nutVarRuntimeInput = document.getElementById('upsNutVarRuntimeInput');
+    const nutVarInputVoltageInput = document.getElementById('upsNutVarInputVoltageInput');
+    const nutVarOutputVoltageInput = document.getElementById('upsNutVarOutputVoltageInput');
+    const nutVarPowerInput = document.getElementById('upsNutVarPowerInput');
+    const nutVarLoadInput = document.getElementById('upsNutVarLoadInput');
+    const nutVarFrequencyInput = document.getElementById('upsNutVarFrequencyInput');
+    const snmpCommunityInput = document.getElementById('upsSnmpCommunityInput');
+    const snmpOidStatusInput = document.getElementById('upsSnmpOidStatusInput');
+    const snmpOidChargeInput = document.getElementById('upsSnmpOidChargeInput');
+    const snmpOidRuntimeInput = document.getElementById('upsSnmpOidRuntimeInput');
+    const snmpOidInputVoltageInput = document.getElementById('upsSnmpOidInputVoltageInput');
+    const snmpOidOutputVoltageInput = document.getElementById('upsSnmpOidOutputVoltageInput');
+    const snmpOidPowerInput = document.getElementById('upsSnmpOidPowerInput');
+    const snmpOidLoadInput = document.getElementById('upsSnmpOidLoadInput');
+    const snmpOidFrequencyInput = document.getElementById('upsSnmpOidFrequencyInput');
+
+    const applySlotToForm = (slotIdx) => {
+        const cfg = (Array.isArray(upsConfigs) && upsConfigs[slotIdx]) ? upsConfigs[slotIdx] : createDefaultUpsConfig();
+        enabledSelect.value = cfg.enabled ? '1' : '0';
+        typeSelect.value = cfg.type || 'nut';
+
+        if (hostInput) hostInput.value = cfg.host || '';
+        if (portInput) portInput.value = cfg.port != null ? String(cfg.port) : '';
+
+        // NUT
+        if (nutNameInput) nutNameInput.value = cfg.name || '';
+        if (nutVarStatusInput) nutVarStatusInput.value = cfg.nutVarStatus || 'ups.status';
+        if (nutVarChargeInput) nutVarChargeInput.value = cfg.nutVarCharge || 'battery.charge';
+        if (nutVarRuntimeInput) nutVarRuntimeInput.value = cfg.nutVarRuntime || 'battery.runtime';
+        if (nutVarInputVoltageInput) nutVarInputVoltageInput.value = cfg.nutVarInputVoltage || 'input.voltage';
+        if (nutVarOutputVoltageInput) nutVarOutputVoltageInput.value = cfg.nutVarOutputVoltage || 'output.voltage';
+        if (nutVarPowerInput) nutVarPowerInput.value = cfg.nutVarPower || 'ups.realpower';
+        if (nutVarLoadInput) nutVarLoadInput.value = cfg.nutVarLoad || 'ups.load';
+        if (nutVarFrequencyInput) nutVarFrequencyInput.value = cfg.nutVarFrequency || 'input.frequency';
+
+        // SNMP
+        if (snmpCommunityInput) snmpCommunityInput.value = cfg.snmpCommunity || '';
+        if (snmpOidStatusInput) snmpOidStatusInput.value = cfg.snmpOidStatus || '';
+        if (snmpOidChargeInput) snmpOidChargeInput.value = cfg.snmpOidCharge || '';
+        if (snmpOidRuntimeInput) snmpOidRuntimeInput.value = cfg.snmpOidRuntime || '';
+        if (snmpOidInputVoltageInput) snmpOidInputVoltageInput.value = cfg.snmpOidInputVoltage || '';
+        if (snmpOidOutputVoltageInput) snmpOidOutputVoltageInput.value = cfg.snmpOidOutputVoltage || '';
+        if (snmpOidPowerInput) snmpOidPowerInput.value = cfg.snmpOidPower || '';
+        if (snmpOidLoadInput) snmpOidLoadInput.value = cfg.snmpOidLoad || '';
+        if (snmpOidFrequencyInput) snmpOidFrequencyInput.value = cfg.snmpOidFrequency || '';
+
+        toggleUpsFields();
+    };
+
+    try {
+        const res = await fetch('/api/ups/settings');
+        const data = await res.json();
+        upsConfigs = Array.isArray(data?.configs) ? data.configs : [];
+        while (upsConfigs.length < 4) upsConfigs.push(createDefaultUpsConfig());
+
+        const slotIdx = getUpsSlotIndex();
+        applySlotToForm(slotIdx);
+    } catch (e) {
+        console.error('Failed to load UPS settings:', e);
+    } finally {
+        const slotIdx = getUpsSlotIndex();
+        if (!upsConfigs) upsConfigs = new Array(4).fill(0).map(createDefaultUpsConfig);
+        applySlotToForm(slotIdx);
+    }
+
+    if (!upsSlotListenerAttached) {
+        const tabsEl = document.getElementById('upsSlotTabs');
+        if (tabsEl) {
+            const btns = tabsEl.querySelectorAll('button[data-ups-slot-idx]');
+            btns.forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    const idx = parseInt(btn.dataset.upsSlotIdx, 10);
+                    if (!Number.isFinite(idx)) return;
+
+                    // Переключаем active-класс, чтобы getUpsSlotIndex() работал
+                    btns.forEach(b => {
+                        b.classList.toggle('active', b === btn);
+                        b.setAttribute('aria-selected', String(b === btn));
+                    });
+                    applySlotToForm(idx);
+                });
+            });
+            upsSlotListenerAttached = true;
+        }
+    }
+}
+
+async function saveUpsSettings() {
+    const enabledSelect = document.getElementById('upsEnabledSelect');
+    const typeSelect = document.getElementById('upsTypeSelect');
+    if (!enabledSelect || !typeSelect) return;
+
+    const enabled = String(enabledSelect.value || '0') === '1';
+    const type = String(typeSelect.value || 'nut').toLowerCase();
+
+    const host = (document.getElementById('upsHostInput')?.value || '').trim();
+    const port = (document.getElementById('upsPortInput')?.value || '').trim();
+
+    const slotIdx = getUpsSlotIndex();
+    const cfg = (Array.isArray(upsConfigs) && upsConfigs[slotIdx]) ? upsConfigs[slotIdx] : createDefaultUpsConfig();
+    cfg.enabled = enabled;
+    cfg.type = type;
+    cfg.host = host;
+    cfg.port = port !== '' ? parseInt(port, 10) : null;
+
+    if (type === 'nut') {
+        cfg.name = (document.getElementById('upsNutNameInput')?.value || '').trim();
+        cfg.nutVarStatus = (document.getElementById('upsNutVarStatusInput')?.value || '').trim() || 'ups.status';
+        cfg.nutVarCharge = (document.getElementById('upsNutVarChargeInput')?.value || '').trim() || 'battery.charge';
+        cfg.nutVarRuntime = (document.getElementById('upsNutVarRuntimeInput')?.value || '').trim() || 'battery.runtime';
+        cfg.nutVarInputVoltage = (document.getElementById('upsNutVarInputVoltageInput')?.value || '').trim() || 'input.voltage';
+        cfg.nutVarOutputVoltage = (document.getElementById('upsNutVarOutputVoltageInput')?.value || '').trim() || 'output.voltage';
+        cfg.nutVarPower = (document.getElementById('upsNutVarPowerInput')?.value || '').trim() || 'ups.realpower';
+        cfg.nutVarLoad = (document.getElementById('upsNutVarLoadInput')?.value || '').trim() || 'ups.load';
+        cfg.nutVarFrequency = (document.getElementById('upsNutVarFrequencyInput')?.value || '').trim() || 'input.frequency';
+    } else if (type === 'snmp') {
+        cfg.snmpCommunity = (document.getElementById('upsSnmpCommunityInput')?.value || '').trim();
+        cfg.snmpOidStatus = (document.getElementById('upsSnmpOidStatusInput')?.value || '').trim();
+        cfg.snmpOidCharge = (document.getElementById('upsSnmpOidChargeInput')?.value || '').trim();
+        cfg.snmpOidRuntime = (document.getElementById('upsSnmpOidRuntimeInput')?.value || '').trim();
+        cfg.snmpOidInputVoltage = (document.getElementById('upsSnmpOidInputVoltageInput')?.value || '').trim();
+        cfg.snmpOidOutputVoltage = (document.getElementById('upsSnmpOidOutputVoltageInput')?.value || '').trim();
+        cfg.snmpOidPower = (document.getElementById('upsSnmpOidPowerInput')?.value || '').trim();
+        cfg.snmpOidLoad = (document.getElementById('upsSnmpOidLoadInput')?.value || '').trim();
+        cfg.snmpOidFrequency = (document.getElementById('upsSnmpOidFrequencyInput')?.value || '').trim();
+    }
+
+    try {
+        const res = await fetch('/api/ups/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ configs: (Array.isArray(upsConfigs) ? upsConfigs : []) })
+        });
+        const data = await res.json();
+        if (!res.ok || !data?.success) throw new Error(data?.error || 'failed to save');
+
+        showToast('UPS настройки сохранены', 'success');
+
+        // Сохраним также, какие слоты UPS показывать на дашборде и в режиме монитора (Cluster)
+        try {
+            const hasDashboardBoxes = document.querySelectorAll('input.upsDisplayDashboardSlot').length > 0;
+            const hasMonitorBoxes = document.querySelectorAll('input.upsDisplayMonitorSlot').length > 0;
+            const dashboardSlots = hasDashboardBoxes ? getCheckedUpsSlotsByClass('upsDisplayDashboardSlot') : [1, 2, 3, 4];
+            const monitorSlots = hasMonitorBoxes ? getCheckedUpsSlotsByClass('upsDisplayMonitorSlot') : [1, 2, 3, 4];
+            await fetch('/api/ups/display', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ dashboardSlots, monitorSlots })
+            });
+        } catch (e) {
+            showToast('Не удалось сохранить настройки отображения UPS', 'error');
+        }
+
+        updateUPSDashboard().catch(() => {});
+        toggleUpsFields();
+    } catch (e) {
+        showToast('Не удалось сохранить UPS: ' + (e.message || String(e)), 'error');
+    }
 }
 
 /** Последний ответ /api/debug для экспорта отчёта */
@@ -1128,6 +1419,8 @@ async function showConfig() {
     document.getElementById('dashboardSection').style.display = 'none';
     const servicesSection = document.getElementById('servicesMonitorSection');
     if (servicesSection) servicesSection.style.display = 'none';
+    // Вынесем UPS в отдельный раздел настроек
+    moveUpsSettingsCardToSeparateTab();
     await loadSettingsPanelData();
     if (autoRefreshInterval) {
         clearInterval(autoRefreshInterval);
@@ -1146,6 +1439,8 @@ async function toggleSettings() {
         configSection.style.display = 'block';
         dashboardSection.style.display = 'none';
         if (servicesSection) servicesSection.style.display = 'none';
+        // Вынесем UPS в отдельный раздел настроек
+        moveUpsSettingsCardToSeparateTab();
         await loadSettingsPanelData();
         if (autoRefreshInterval) {
             clearInterval(autoRefreshInterval);
@@ -1162,7 +1457,21 @@ async function toggleSettings() {
     }
 }
 
-// Toggle monitor mode — используем существующий крупный дашборд как основу, переключаем полноэкранные экраны
+function moveUpsSettingsCardToSeparateTab() {
+    const wrap = document.getElementById('upsSettingsCardWrap');
+    const container = document.getElementById('upsSettingsContainer');
+    if (!wrap || !container) return;
+    if (container.contains(wrap)) return;
+
+    try {
+        container.innerHTML = '';
+        container.appendChild(wrap);
+    } catch (e) {
+        console.warn('Failed to move UPS settings block:', e);
+    }
+}
+
+// Toggle monitor mode — переключаем полноэкранные экраны
 async function toggleMonitorMode() {
     monitorMode = !monitorMode;
     saveSettingsToServer({ monitorMode });
@@ -1172,6 +1481,7 @@ async function toggleMonitorMode() {
     const servicesSection = document.getElementById('servicesMonitorSection');
     const vmsSection = document.getElementById('vmsMonitorSection');
     const monitorView = document.getElementById('monitorView');
+    const upsMonSection = document.getElementById('upsMonitorSection');
 
     document.body.classList.toggle('monitor-mode', monitorMode);
 
@@ -1204,6 +1514,7 @@ async function toggleMonitorMode() {
         if (dashboardContent) dashboardContent.style.display = 'block';
         if (servicesSection) servicesSection.style.display = 'none';
         if (vmsSection) vmsSection.style.display = 'none';
+        if (upsMonSection) upsMonSection.style.display = 'none';
         const backupsMonExit = document.getElementById('backupsMonitorSection');
         if (backupsMonExit) backupsMonExit.style.display = 'none';
         if (monitorView) monitorView.style.display = 'none';
@@ -1234,7 +1545,7 @@ let monitorCurrentView = 'cluster';
 let lastBackupsDataForMonitor = null;
 
 /** Полный порядок экранов монитора (в БД); на TrueNAS экран backupRuns пропускается при листании */
-const MONITOR_SCREEN_IDS_ALL = ['cluster', 'vms', 'services', 'backupRuns'];
+const MONITOR_SCREEN_IDS_ALL = ['cluster', 'ups', 'vms', 'services', 'backupRuns'];
 let monitorScreensOrder = MONITOR_SCREEN_IDS_ALL.slice();
 
 function normalizeMonitorScreensOrder(arr) {
@@ -1263,6 +1574,7 @@ function getMonitorViewsOrder() {
 function monitorScreenSettingsLabel(id) {
     const map = {
         cluster: t('monitorScreenCluster'),
+        ups: t('monitorScreenUps'),
         vms: t('monitorScreenVms'),
         services: t('monitorScreenServices'),
         backupRuns: t('monitorScreenBackupRuns')
@@ -1305,6 +1617,7 @@ function updateMonitorToolbarTitleForView() {
     if (!el || !monitorMode) return;
     const titles = {
         cluster: t('monitorScreenCluster'),
+        ups: t('monitorScreenUps'),
         vms: t('monitorScreenVms'),
         services: t('monitorScreenServices'),
         backupRuns: t('monitorScreenBackupRuns')
@@ -1320,6 +1633,7 @@ function applyMonitorView(view) {
     const dashboardContent = document.getElementById('dashboardContent');
     const servicesSection = document.getElementById('servicesMonitorSection');
     const vmsSection = document.getElementById('vmsMonitorSection');
+    const upsMonSection = document.getElementById('upsMonitorSection');
     const backupsMon = document.getElementById('backupsMonitorSection');
     const monitorView = document.getElementById('monitorView');
 
@@ -1330,6 +1644,7 @@ function applyMonitorView(view) {
         if (dashboardContent) dashboardContent.style.display = 'block';
         if (servicesSection) servicesSection.style.display = 'none';
         if (vmsSection) vmsSection.style.display = 'none';
+        if (upsMonSection) upsMonSection.style.display = 'none';
         if (backupsMon) backupsMon.style.display = 'none';
         return;
     }
@@ -1345,23 +1660,34 @@ function applyMonitorView(view) {
         if (servicesSection) servicesSection.style.display = 'none';
         if (vmsSection) vmsSection.style.display = 'none';
         if (backupsMon) backupsMon.style.display = 'none';
+        if (upsMonSection) upsMonSection.style.display = 'none';
     } else if (view === 'services') {
         if (dashboardSection) dashboardSection.style.display = 'none';
         if (servicesSection) servicesSection.style.display = 'block';
         if (vmsSection) vmsSection.style.display = 'none';
         if (backupsMon) backupsMon.style.display = 'none';
+        if (upsMonSection) upsMonSection.style.display = 'none';
         renderMonitorServicesList();
     } else if (view === 'vms') {
         if (dashboardSection) dashboardSection.style.display = 'none';
         if (servicesSection) servicesSection.style.display = 'none';
         if (vmsSection) vmsSection.style.display = 'block';
         if (backupsMon) backupsMon.style.display = 'none';
+        if (upsMonSection) upsMonSection.style.display = 'none';
         renderMonitorVmsList();
         renderVmsMonitorCards();
+    } else if (view === 'ups') {
+        if (dashboardSection) dashboardSection.style.display = 'none';
+        if (servicesSection) servicesSection.style.display = 'none';
+        if (vmsSection) vmsSection.style.display = 'none';
+        if (backupsMon) backupsMon.style.display = 'none';
+        if (upsMonSection) upsMonSection.style.display = 'block';
+        updateUPSDashboard().catch(() => {});
     } else if (view === 'backupRuns') {
         if (dashboardSection) dashboardSection.style.display = 'none';
         if (servicesSection) servicesSection.style.display = 'none';
         if (vmsSection) vmsSection.style.display = 'none';
+        if (upsMonSection) upsMonSection.style.display = 'none';
         /* flex, не block — иначе .monitor-backups-main-card не растягивается и card-body с flex:1 схлопывается в 0 */
         if (backupsMon) backupsMon.style.display = 'flex';
         renderMonitorBackupRuns(lastBackupsDataForMonitor);
@@ -1628,6 +1954,18 @@ function updateConnectionStatus(connected, type) {
 }
 
 // Refresh data
+/** Форматирование значения UPS из API { raw, value } */
+function formatUpsMetric(m, unitSuffix) {
+    if (!m || (m.raw == null && m.value == null)) return '—';
+    const v = m.value;
+    if (v != null && Number.isFinite(Number(v))) {
+        const n = Number(v);
+        const rounded = Math.abs(n) >= 100 ? Math.round(n) : Math.round(n * 10) / 10;
+        return `${rounded}${unitSuffix || ''}`;
+    }
+    return m.raw != null && String(m.raw).trim() !== '' ? String(m.raw) : '—';
+}
+
 async function refreshData(options = {}) {
     const silent = options === true ? true : !!options.silent;
 
@@ -1657,6 +1995,9 @@ async function refreshData(options = {}) {
             if (!systemRes.ok) throw new Error(systemData?.error || `system: HTTP ${systemRes.status}`);
             if (!poolsRes.ok) throw new Error(poolsData?.error || `pools: HTTP ${poolsRes.status}`);
             updateTrueNASDashboard(systemData, poolsData);
+            if (!monitorMode || monitorCurrentView === 'cluster' || monitorCurrentView === 'ups') {
+                updateUPSDashboard().catch(() => {});
+            }
         } else {
             const serverUrl = getCurrentServerUrl();
             const [clusterRes, storageRes, backupsRes] = await Promise.all([
@@ -1674,6 +2015,9 @@ async function refreshData(options = {}) {
             if (!backupsRes.ok) throw new Error(backupsData?.error || `backups: HTTP ${backupsRes.status}`);
             
             updateDashboard(clusterData, storageData, backupsData, {});
+            if (!monitorMode || monitorCurrentView === 'cluster' || monitorCurrentView === 'ups') {
+                updateUPSDashboard().catch(() => {});
+            }
         }
         
         // Restore scroll/focus to avoid visible "jumps" on full re-render
@@ -1701,6 +2045,289 @@ async function refreshData(options = {}) {
     } finally {
         if (!silent) showLoading(false);
         isRefreshing = false;
+    }
+}
+
+/** Ячейка метрики UPS в стиле блока «Ресурсы кластера» (центр, крупное значение, опционально progress). */
+function upsMetricTile(iconBi, label, valueStr, progressPct, barClass) {
+    const bar =
+        typeof progressPct === 'number' && Number.isFinite(progressPct)
+            ? `<div class="progress mt-2 mx-auto" style="height: 10px; max-width: 160px"><div class="progress-bar ${barClass || 'bg-primary'}" style="width: ${Math.min(100, Math.max(0, progressPct))}%"></div></div>`
+            : '<div class="mt-2" style="height: 10px" aria-hidden="true"></div>';
+    return `
+        <div class="col-6 col-md-4 col-xl-3">
+            <div class="text-center p-3">
+                <h6 class="mb-1"><i class="bi ${iconBi} me-1"></i>${escapeHtml(label)}</h6>
+                <div class="fs-3 fw-semibold lh-sm text-break">${escapeHtml(valueStr)}</div>
+                ${bar}
+            </div>
+        </div>`;
+}
+
+// Компактная “tile” для случая, когда UPS несколько (внутри уже есть отдельная карточка UPS)
+function upsMetricCompactTile(iconBi, label, valueStr, progressPct, barClass, colClass) {
+    const bar =
+        typeof progressPct === 'number' && Number.isFinite(progressPct)
+            ? `<div class="progress mt-2 mx-auto" style="height: 8px; max-width: 120px">
+                    <div class="progress-bar ${barClass || 'bg-primary'}" style="width: ${Math.min(100, Math.max(0, progressPct))}%"></div>
+               </div>`
+            : '';
+
+    return `
+        <div class="${colClass || 'col-6'}">
+            <div class="text-center p-2 h-100">
+                <h6 class="mb-1"><i class="bi ${iconBi} me-1"></i>${escapeHtml(label)}</h6>
+                <div class="fs-5 fw-semibold lh-sm text-break">${escapeHtml(valueStr)}</div>
+                ${bar}
+            </div>
+        </div>`;
+}
+
+function buildUpsCardsHtml(data) {
+    const upsColClass = data.items.length === 1 ? 'col-12' : 'col-md-6';
+    const rowClass =
+        data.items.length === 1
+            ? 'row g-2'
+            : 'row row-cols-1 row-cols-sm-2 g-2 small';
+
+    const labels = {
+        inV: t('upsLabelInputVoltage') || 'Вход U',
+        outV: t('upsLabelOutputVoltage') || 'Выход U',
+        power: t('upsLabelPower') || 'Мощность',
+        load: t('upsLabelLoad') || 'Нагрузка',
+        freq: t('upsLabelFrequency') || 'Частота',
+        charge: t('upsLabelCharge') || 'Заряд',
+        runtime: t('upsLabelRuntime') || 'Время на батарее'
+    };
+
+    if (data.items.length === 1) {
+        const item = data.items[0];
+        const name = item.name || `UPS ${item.slot}`;
+        const backend = item.type ? String(item.type).toUpperCase() : 'UPS';
+        const hostLine = item.host ? `${backend} · ${item.host}` : backend;
+
+        if (item.error) {
+            const html = `
+                <div class="col-12">
+                    <div class="alert alert-warning mb-0 py-2 d-flex flex-wrap justify-content-between align-items-center gap-2">
+                        <span class="fw-semibold text-truncate" title="${escapeHtml(name)}">${escapeHtml(name)}</span>
+                        <span class="small">${escapeHtml(backend)}: ${escapeHtml(item.error)}</span>
+                    </div>
+                </div>`;
+            return { html, rowClass: 'row g-2' };
+        }
+
+        const statusRaw = item.status?.raw ?? null;
+        const statusLabel = item.status?.label ?? (statusRaw != null ? String(statusRaw) : 'unknown');
+        const up = item.status?.up;
+        let badgeClass = 'bg-secondary';
+        const lowStr = String(statusLabel).toLowerCase();
+        if (lowStr.includes('low')) badgeClass = 'bg-danger';
+        else if (up === true) badgeClass = 'bg-success';
+        else if (up === false) badgeClass = 'bg-warning text-dark';
+
+        const electrical = item.electrical || {};
+        const inVText = formatUpsMetric(electrical.inputVoltage, ' V');
+        const outVText = formatUpsMetric(electrical.outputVoltage, ' V');
+        const powerText = formatUpsMetric(electrical.powerW, ' W');
+        const loadText = formatUpsMetric(electrical.loadPercent, ' %');
+        const freqText = formatUpsMetric(electrical.frequencyHz, ' Hz');
+
+        const chargePct = item.battery?.chargePct;
+        const chargeRaw = item.battery?.chargeRaw;
+        const chargeText = (chargePct != null && Number.isFinite(Number(chargePct)))
+            ? `${chargePct}%`
+            : (chargeRaw != null ? String(chargeRaw) : '—');
+
+        const runtimeText = item.battery?.runtimeFormatted != null
+            ? item.battery.runtimeFormatted
+            : (item.battery?.runtimeRaw != null ? String(item.battery.runtimeRaw) : '—');
+
+        const loadPctNum = electrical.loadPercent && typeof electrical.loadPercent.value === 'number'
+            ? electrical.loadPercent.value
+            : null;
+        const chargeBarNum = (chargePct != null && Number.isFinite(Number(chargePct))) ? Number(chargePct) : null;
+
+        const hasVal = (v) => v != null && String(v).trim() !== '' && String(v) !== '—';
+        const tilesHtml = [
+            hasVal(inVText) ? upsMetricTile('bi-plug', labels.inV, inVText, null, null) : null,
+            hasVal(outVText) ? upsMetricTile('bi-outlet', labels.outV, outVText, null, null) : null,
+            hasVal(powerText) ? upsMetricTile('bi-lightning-charge', labels.power, powerText, null, null) : null,
+            hasVal(loadText) ? upsMetricTile('bi-speedometer2', labels.load, loadText, loadPctNum, 'bg-warning') : null,
+            hasVal(freqText) ? upsMetricTile('bi-arrow-repeat', labels.freq, freqText, null, null) : null,
+            hasVal(chargeText) ? upsMetricTile('bi-battery-half', labels.charge, chargeText, chargeBarNum, 'bg-success') : null,
+            hasVal(runtimeText) ? upsMetricTile('bi-clock-history', labels.runtime, runtimeText, null, null) : null
+        ].filter(Boolean).join('');
+
+        const html = `
+            <div class="col-12">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3 pb-3 border-bottom">
+                    <div class="fw-semibold fs-5 text-truncate" title="${escapeHtml(name)}">${escapeHtml(name)}</div>
+                    <span class="badge ${badgeClass}">${escapeHtml(statusLabel)}</span>
+                </div>
+                <div class="row g-2">
+                    ${tilesHtml}
+                </div>
+                <p class="small text-muted text-center mb-0 mt-3">${escapeHtml(hostLine)}</p>
+            </div>`;
+        return { html, rowClass: 'row g-2' };
+    }
+
+    const html = data.items.map((item) => {
+        const statusRaw = item.status?.raw ?? null;
+        const statusLabel = item.status?.label ?? (statusRaw != null ? String(statusRaw) : 'unknown');
+        const up = item.status?.up;
+
+        let badgeClass = 'bg-secondary';
+        const lowStr = String(statusLabel).toLowerCase();
+        if (lowStr.includes('low')) badgeClass = 'bg-danger';
+        else if (up === true) badgeClass = 'bg-success';
+        else if (up === false) badgeClass = 'bg-warning text-dark';
+
+        const electrical = item.electrical || {};
+        const inVText = formatUpsMetric(electrical.inputVoltage, ' V');
+        const outVText = formatUpsMetric(electrical.outputVoltage, ' V');
+        const powerText = formatUpsMetric(electrical.powerW, ' W');
+        const loadText = formatUpsMetric(electrical.loadPercent, ' %');
+        const freqText = formatUpsMetric(electrical.frequencyHz, ' Hz');
+
+        const chargePct = item.battery?.chargePct;
+        const chargeRaw = item.battery?.chargeRaw;
+        const chargeText = (chargePct != null && Number.isFinite(Number(chargePct)))
+            ? `${chargePct}%`
+            : (chargeRaw != null ? String(chargeRaw) : '—');
+
+        const runtimeText = item.battery?.runtimeFormatted != null
+            ? item.battery.runtimeFormatted
+            : (item.battery?.runtimeRaw != null ? String(item.battery.runtimeRaw) : '—');
+
+        const name = item.name || `UPS ${item.slot}`;
+        const backend = item.type ? String(item.type).toUpperCase() : 'UPS';
+
+        const loadPctNum = electrical.loadPercent && typeof electrical.loadPercent.value === 'number'
+            ? electrical.loadPercent.value
+            : null;
+        const chargeBarNum = (chargePct != null && Number.isFinite(Number(chargePct))) ? Number(chargePct) : null;
+
+        const hasVal = (v) => v != null && String(v).trim() !== '' && String(v) !== '—';
+        const tilesHtml = [
+            hasVal(inVText) ? upsMetricCompactTile('bi-plug', labels.inV, inVText, null, null, 'col-6') : null,
+            hasVal(outVText) ? upsMetricCompactTile('bi-outlet', labels.outV, outVText, null, null, 'col-6') : null,
+            hasVal(powerText) ? upsMetricCompactTile('bi-lightning-charge', labels.power, powerText, null, null, 'col-6') : null,
+            hasVal(loadText) ? upsMetricCompactTile('bi-speedometer2', labels.load, loadText, loadPctNum, 'bg-warning', 'col-6') : null,
+            hasVal(freqText) ? upsMetricCompactTile('bi-arrow-repeat', labels.freq, freqText, null, null, 'col-6') : null,
+            hasVal(chargeText) ? upsMetricCompactTile('bi-battery-half', labels.charge, chargeText, chargeBarNum, 'bg-success', 'col-6') : null,
+            hasVal(runtimeText) ? upsMetricCompactTile('bi-clock-history', labels.runtime, runtimeText, null, null, 'col-12') : null
+        ].filter(Boolean).join('');
+
+        if (item.error) {
+            return `
+                    <div class="${upsColClass}">
+                        <div class="card h-100">
+                            <div class="card-header py-2 px-2 d-flex justify-content-between align-items-center">
+                                <div class="fw-semibold text-truncate pe-2" title="${escapeHtml(name)}">${escapeHtml(name)}</div>
+                                <span class="badge bg-secondary">${escapeHtml(t('upsError') || 'Ошибка UPS')}</span>
+                            </div>
+                            <div class="card-body p-2">
+                                <div class="small text-muted">${escapeHtml(backend)}: ${escapeHtml(item.error)}</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+        }
+
+        return `
+                <div class="${upsColClass}">
+                    <div class="card h-100">
+                        <div class="card-header py-2 px-2 d-flex justify-content-between align-items-center">
+                            <div class="fw-semibold text-truncate pe-2" title="${escapeHtml(name)}">${escapeHtml(name)}</div>
+                            <span class="badge ${badgeClass}">${escapeHtml(statusLabel)}</span>
+                        </div>
+                        <div class="card-body p-2">
+                            <div class="row g-2">
+                                ${tilesHtml}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+    }).join('');
+
+    return { html, rowClass };
+}
+
+function paintUpsMount(cardsEl, updatedAtEl, data, options) {
+    const emptyMsg = options && options.emptyMsg;
+    if (!cardsEl) return;
+
+    cardsEl.innerHTML = '';
+    cardsEl.className = 'row g-2 small';
+    if (updatedAtEl) updatedAtEl.textContent = '';
+
+    if (!data || !data.configured || !Array.isArray(data.items) || data.items.length === 0) {
+        const msg = emptyMsg || (t('upsNotConfigured') || 'UPS не настроен');
+        const err = data?.error ? `: ${data.error}` : '';
+        cardsEl.innerHTML = `<div class="col-12"><div class="text-muted small">${escapeHtml(msg + err)}</div></div>`;
+        if (updatedAtEl && data?.updatedAt) updatedAtEl.textContent = new Date(data.updatedAt).toLocaleString();
+        return;
+    }
+
+    if (updatedAtEl && data?.updatedAt) {
+        updatedAtEl.textContent = new Date(data.updatedAt).toLocaleString();
+    }
+
+    const { html, rowClass } = buildUpsCardsHtml(data);
+    cardsEl.className = rowClass;
+    cardsEl.innerHTML = html;
+}
+
+async function updateUPSDashboard() {
+    const monitorCards = document.getElementById('upsMonitorCards');
+    const dashboardCards = document.getElementById('dashboardUpsCards');
+    const dashSection = document.getElementById('dashboardUpsSection');
+
+    if (!monitorCards && !dashboardCards) return;
+
+    const resetRow = (el) => {
+        if (!el) return;
+        el.innerHTML = '';
+        el.className = 'row g-2 small';
+    };
+    resetRow(monitorCards);
+    resetRow(dashboardCards);
+    const upsUpdatedAt = document.getElementById('upsUpdatedAt');
+    const dashboardUpsUpdatedAt = document.getElementById('dashboardUpsUpdatedAt');
+    if (upsUpdatedAt) upsUpdatedAt.textContent = '';
+    if (dashboardUpsUpdatedAt) dashboardUpsUpdatedAt.textContent = '';
+
+    try {
+        const res = await fetch('/api/ups/current');
+        const data = await res.json();
+
+        await ensureUpsDisplaySlotsLoaded();
+        const isMonitorCluster = monitorMode && monitorCurrentView === 'cluster';
+        const slotsForDashboard = isMonitorCluster ? upsDisplaySlotsMonitor : upsDisplaySlotsDashboard;
+        const safeSlotsForDashboard = (Array.isArray(slotsForDashboard) && slotsForDashboard.length > 0)
+            ? slotsForDashboard
+            : (upsDisplaySlotsLoadedOnce ? [] : [1, 2, 3, 4]);
+
+        const dashboardItems = (Array.isArray(safeSlotsForDashboard) && safeSlotsForDashboard.length)
+            ? (data.items || []).filter((it) => safeSlotsForDashboard.includes(it.slot))
+            : data.items;
+
+        const showDash = !!(data && data.configured && Array.isArray(dashboardItems) && dashboardItems.length > 0);
+        if (dashSection) dashSection.style.display = showDash ? '' : 'none';
+
+        paintUpsMount(monitorCards, upsUpdatedAt, data, {});
+        const dashboardData = { ...data, items: dashboardItems };
+        paintUpsMount(dashboardCards, dashboardUpsUpdatedAt, dashboardData, {});
+    } catch (e) {
+        const errHtml = `<div class="col-12"><div class="text-danger small">${escapeHtml((e && e.message) ? e.message : String(e))}</div></div>`;
+        if (monitorCards) monitorCards.innerHTML = errHtml;
+        if (dashboardCards) {
+            dashboardCards.innerHTML = errHtml;
+            if (dashSection) dashSection.style.display = '';
+        }
     }
 }
 
@@ -2459,12 +3086,31 @@ function toggleServiceTypeFields() {
     const hostWrap = document.getElementById('settingsServiceHostWrap');
     const portWrap = document.getElementById('settingsServicePortWrap');
     const urlWrap = document.getElementById('settingsServiceUrlWrap');
+    const urlLabel = document.getElementById('settingsServiceUrlLabel');
+    const urlInput = document.getElementById('settingsServiceUrlInput');
     if (!typeSelect || !hostWrap || !portWrap || !urlWrap) return;
     const type = (typeSelect.value || 'tcp').toLowerCase();
-    const isHttp = type === 'http' || type === 'https';
-    hostWrap.classList.toggle('d-none', isHttp);
-    portWrap.classList.toggle('d-none', isHttp);
-    urlWrap.classList.toggle('d-none', !isHttp);
+    const isHttpUrl = type === 'http' || type === 'https';
+    const needUrl = type === 'http' || type === 'https' || type === 'snmp' || type === 'nut';
+
+    // For http/https: host+port are not needed, only URL is required.
+    // For snmp/nut: host+port are needed + extra params in the URL field.
+    hostWrap.classList.toggle('d-none', isHttpUrl);
+    portWrap.classList.toggle('d-none', isHttpUrl);
+    urlWrap.classList.toggle('d-none', !needUrl);
+
+    if (urlLabel && urlInput) {
+        if (type === 'snmp') {
+            urlLabel.textContent = 'SNMP (community|oid)';
+            urlInput.placeholder = 'public|1.3.6.1.2.1.1.3.0';
+        } else if (type === 'nut') {
+            urlLabel.textContent = 'NUT (upsName|varName)';
+            urlInput.placeholder = 'myups|ups.status';
+        } else {
+            urlLabel.textContent = 'URL';
+            urlInput.placeholder = 'https://example.local/';
+        }
+    }
 }
 
 function getServiceTargetDisplay(s) {
@@ -2479,6 +3125,9 @@ function buildServiceTargetForApi(s) {
     const name = s.name || getServiceTargetDisplay(s);
     if (type === 'http' || type === 'https') {
         return { name, type: 'http', url: (s.url || '').trim() };
+    }
+    if (type === 'snmp' || type === 'nut') {
+        return { name, type, host: (s.host || '').trim(), port: parseInt(s.port, 10) || null, url: (s.url || '').trim() };
     }
     return { name, type: type || 'tcp', host: (s.host || '').trim(), port: parseInt(s.port, 10) };
 }
@@ -2993,6 +3642,21 @@ async function addMonitoredService() {
             return;
         }
         body.url = url;
+    } else if (type === 'snmp' || type === 'nut') {
+        const url = urlInput ? urlInput.value.trim() : '';
+        const host = hostInput ? hostInput.value.trim() : '';
+        const port = portInput ? parseInt(portInput.value, 10) : null;
+        if (!url) {
+            showToast((t('serviceUrlRequired') || 'Укажите параметры') + '', 'error');
+            return;
+        }
+        if (!host || !port || port < 1 || port > 65535) {
+            showToast(t('serviceHostPortRequired') || 'Укажите хост и порт (1–65535)', 'error');
+            return;
+        }
+        body.url = url;
+        body.host = host;
+        body.port = port;
     } else {
         const host = hostInput ? hostInput.value.trim() : '';
         const port = portInput ? parseInt(portInput.value, 10) : null;
