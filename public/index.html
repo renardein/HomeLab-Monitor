@@ -18,6 +18,29 @@
 <body>
     <div class="toast-container" id="toastContainer"></div>
 
+    <!-- Окно авторизации для доступа к настройкам -->
+    <div class="modal fade" id="settingsUnlockModal" tabindex="-1" aria-labelledby="settingsUnlockModalTitle" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="settingsUnlockModalTitle"><i class="bi bi-shield-lock me-2"></i><span id="settingsUnlockModalTitleText">Введите пароль для доступа к настройкам</span></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" id="settingsUnlockModalCloseBtn"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold" for="settingsUnlockPassword" id="settingsUnlockPasswordLabel">Пароль</label>
+                        <input type="password" class="form-control form-control-lg" id="settingsUnlockPassword" placeholder="" autocomplete="current-password">
+                        <div class="invalid-feedback" id="settingsUnlockError"></div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" id="settingsUnlockCancelBtn"><span id="settingsUnlockCancelText">Отмена</span></button>
+                    <button type="button" class="btn btn-primary" id="settingsUnlockSubmitBtn"><i class="bi bi-unlock me-1"></i><span id="settingsUnlockSubmitText">Войти</span></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="container">
         <!-- Навигация -->
         <nav class="navbar navbar-expand-lg bg-white rounded-3 shadow-sm mb-4 p-3">
@@ -95,7 +118,7 @@
         <div id="configSection" class="card" style="display: none;">
             <div class="card-body p-4">
                 <div class="row">
-                    <div class="col-md-3 col-lg-2 mb-3 mb-md-0">
+                    <div class="col-md-3 col-lg-2 mb-3 mb-md-0 d-flex flex-column">
                         <nav class="nav flex-column nav-pills" id="settingsNav" role="tablist">
                             <button class="nav-link active" id="settings-nav-connection" data-bs-toggle="pill" data-bs-target="#settings-tab-connection" type="button" role="tab">
                                 <i class="bi bi-key me-2"></i><span id="settingsNavConnection">Подключение</span>
@@ -119,6 +142,11 @@
                                 <i class="bi bi-bug me-2"></i><span id="settingsNavDebug">Отладка</span>
                             </button>
                         </nav>
+                        <div class="mt-auto pt-3 border-top">
+                            <button class="btn btn-outline-secondary w-100" type="button" onclick="logoutSettings()" id="settingsLogoutBtn">
+                                <i class="bi bi-box-arrow-right me-1"></i><span id="settingsLogoutText">Выйти из настроек</span>
+                            </button>
+                        </div>
                     </div>
                     <div class="col-md-9 col-lg-10">
                         <div class="tab-content" id="settingsTabContent">
@@ -315,6 +343,19 @@
                                 <div class="settings-section">
                                     <h5 class="mb-3"><i class="bi bi-lock me-2"></i><span id="settingsSecurityTitle">Безопасность</span></h5>
                                     <p class="text-muted small mb-3" id="settingsSecurityHint">Вы можете защитить доступ к настройкам паролем.</p>
+                                    <div class="row g-3 mb-3">
+                                        <div class="col-md-4">
+                                            <label class="form-label fw-bold" for="settingsSessionTtlSelect" id="settingsSessionTtlLabel">Время жизни сессии (мин)</label>
+                                            <select class="form-select" id="settingsSessionTtlSelect" aria-describedby="settingsSessionTtlHint">
+                                                <option value="5">5</option>
+                                                <option value="15">15</option>
+                                                <option value="30" selected>30</option>
+                                                <option value="60">60</option>
+                                                <option value="120">120</option>
+                                            </select>
+                                            <div class="form-text" id="settingsSessionTtlHint">Повторный ввод пароля не требуется в течение этого времени после входа.</div>
+                                        </div>
+                                    </div>
                                     <div class="row g-3 mb-3">
                                         <div class="col-md-4">
                                             <label class="form-label fw-bold" for="settingsPasswordCurrent" id="settingsPasswordCurrentLabel">Текущий пароль</label>

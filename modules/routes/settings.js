@@ -8,6 +8,7 @@ const SETTING_KEYS = [
     'current_server_index', 'current_truenas_index',
     'proxmox_servers', 'truenas_servers', 'connection_id_map',
     'preferred_language',
+    'session_ttl_minutes',
     // monitor-mode specific
     'monitor_hidden_service_ids',
     'monitor_vms',
@@ -37,12 +38,15 @@ router.get('/', (req, res) => {
                     } catch {
                         payload[key] = value;
                     }
-                } else if (key === 'refresh_interval' || key === 'current_server_index' || key === 'current_truenas_index') {
+                } else if (key === 'refresh_interval' || key === 'current_server_index' || key === 'current_truenas_index' || key === 'session_ttl_minutes') {
                     payload[key] = parseInt(value, 10);
                 } else {
                     payload[key] = value;
                 }
             }
+        }
+        if (payload.session_ttl_minutes == null || payload.session_ttl_minutes === '') {
+            payload.session_ttl_minutes = 30;
         }
         res.json(payload);
     } catch (e) {
@@ -68,6 +72,7 @@ router.post('/', (req, res) => {
             truenas_servers: body.truenas_servers ?? body.truenasServers,
             connection_id_map: body.connection_id_map ?? body.connectionIdMap,
             preferred_language: body.preferred_language ?? body.preferredLanguage,
+            session_ttl_minutes: body.session_ttl_minutes ?? body.sessionTtlMinutes,
             monitor_hidden_service_ids: body.monitor_hidden_service_ids ?? body.monitorHiddenServiceIds,
             monitor_vms: body.monitor_vms ?? body.monitorVms,
             monitor_hidden_vm_ids: body.monitor_hidden_vm_ids ?? body.monitorHiddenVmIds,

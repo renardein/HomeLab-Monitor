@@ -15,6 +15,9 @@ let monitorTheme = 'dark';
 let settingsUnlocked = false;
 /** Пароль настроек включён (из API) */
 let settingsPasswordRequired = false;
+/** TTL сессии настроек в минутах (из API, по умолчанию 30) */
+let settingsSessionTtlMinutes = 30;
+const SETTINGS_UNLOCK_EXPIRY_KEY = 'settings_unlock_expiry';
 /** Время последнего успешного обновления данных (для раздела отладки) */
 let lastRefreshTime = null;
 let currentServerType = 'proxmox'; // 'proxmox' | 'truenas'
@@ -516,6 +519,13 @@ function updateUILanguage() {
     setText('settingsPasswordRepeatLabel', t('settingsPasswordRepeatLabel'));
     setText('settingsPasswordApplyText', isSettingsPasswordEnabled() ? t('settingsPasswordChange') : t('settingsPasswordEnable'));
     setText('settingsPasswordDisableText', t('settingsPasswordDisable'));
+    setText('settingsUnlockModalTitleText', t('enterSettingsPassword'));
+    setText('settingsUnlockPasswordLabel', t('settingsUnlockPasswordLabel') || t('settingsPasswordCurrentLabel') || 'Пароль');
+    setText('settingsUnlockSubmitText', t('settingsUnlockSubmitText') || 'Войти');
+    setText('settingsUnlockCancelText', t('settingsUnlockCancelText') || 'Отмена');
+    setText('settingsSessionTtlLabel', t('settingsSessionTtlLabel') || 'Время жизни сессии (мин)');
+    setText('settingsSessionTtlHint', t('settingsSessionTtlHint') || 'Повторный ввод пароля не требуется в течение этого времени после входа.');
+    setText('settingsLogoutText', t('settingsLogoutText') || 'Выйти из настроек');
 }
 
 // Available languages (will be populated from server)
@@ -585,6 +595,21 @@ document.addEventListener('DOMContentLoaded', async function() {
             e.stopPropagation();
             reloadApplication();
             return false;
+        });
+    }
+    const ttlSelect = document.getElementById('settingsSessionTtlSelect');
+    if (ttlSelect) {
+        ttlSelect.addEventListener('change', async function () {
+            const val = parseInt(ttlSelect.value, 10);
+            if (!isNaN(val) && val > 0) {
+                settingsSessionTtlMinutes = val;
+                try {
+                    await saveSettingsToServer({ session_ttl_minutes: val });
+                    showToast(t('dataUpdated') || 'Настройки сохранены', 'success');
+                } catch (e) {
+                    showToast((t('connectError') || 'Ошибка') + ': ' + e.message, 'error');
+                }
+            }
         });
     }
 
@@ -756,28 +781,144 @@ function showToast(message, type = 'info') {
     }, 5000);
 }
 
+/** Текущий resolve для модала разблокировки (один активный вызов). */
+let _settingsUnlockResolve = null;
+/** Флаг: обработчики модала разблокировки уже привязаны. */
+let _settingsUnlockModalBound = false;
+
+function _settingsUnlockModalFinish(ok) {
+    if (_settingsUnlockResolve) {
+        _settingsUnlockResolve(ok);
+        _settingsUnlockResolve = null;
+    }
+    const modalEl = document.getElementById('settingsUnlockModal');
+    if (modalEl && typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+        const inst = bootstrap.Modal.getInstance(modalEl);
+        if (inst) inst.hide();
+    }
+}
+
+function _settingsUnlockModalSubmit() {
+    const inputEl = document.getElementById('settingsUnlockPassword');
+    const errorEl = document.getElementById('settingsUnlockError');
+    if (!inputEl) return;
+    const password = inputEl.value.trim();
+    if (!password) {
+        if (errorEl) {
+            errorEl.textContent = t('enterSettingsPassword') || 'Введите пароль';
+            errorEl.style.display = 'block';
+        }
+        inputEl.classList.add('is-invalid');
+        return;
+    }
+    if (errorEl) {
+        errorEl.textContent = '';
+        errorEl.style.display = 'none';
+    }
+    inputEl.classList.remove('is-invalid');
+    fetch('/api/settings/unlock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: password })
+    })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+if (data.success) {
+                    settingsUnlocked = true;
+                    persistSettingsSession();
+                    showToast(t('settingsPasswordUnlocked') || 'Настройки разблокированы', 'success');
+                    inputEl.value = '';
+                    _settingsUnlockModalFinish(true);
+                } else {
+                if (errorEl) {
+                    errorEl.textContent = data.error || t('settingsPasswordIncorrect') || 'Неверный пароль';
+                    errorEl.style.display = 'block';
+                }
+                inputEl.classList.add('is-invalid');
+            }
+        })
+        .catch(function (e) {
+            if (errorEl) {
+                errorEl.textContent = e.message || t('settingsPasswordIncorrect') || 'Неверный пароль';
+                errorEl.style.display = 'block';
+            }
+            inputEl.classList.add('is-invalid');
+        });
+}
+
+function _settingsUnlockModalCancel() {
+    const inputEl = document.getElementById('settingsUnlockPassword');
+    const errorEl = document.getElementById('settingsUnlockError');
+    if (inputEl) inputEl.value = '';
+    if (errorEl) {
+        errorEl.textContent = '';
+        errorEl.style.display = 'none';
+    }
+    if (inputEl) inputEl.classList.remove('is-invalid');
+    _settingsUnlockModalFinish(false);
+}
+
+/** Показать HTML-модал ввода пароля для доступа к настройкам. Возвращает Promise<boolean>: true при успешной разблокировке, false при отмене. */
+function showSettingsUnlockModal() {
+    const modalEl = document.getElementById('settingsUnlockModal');
+    const inputEl = document.getElementById('settingsUnlockPassword');
+    const errorEl = document.getElementById('settingsUnlockError');
+    if (!modalEl || !inputEl) return Promise.resolve(false);
+    const promise = new Promise(function (resolve) {
+        _settingsUnlockResolve = resolve;
+    });
+    if (!_settingsUnlockModalBound) {
+        _settingsUnlockModalBound = true;
+        modalEl.addEventListener('hidden.bs.modal', function () {
+            if (_settingsUnlockResolve) {
+                _settingsUnlockResolve(false);
+                _settingsUnlockResolve = null;
+            }
+        });
+        var submitBtn = document.getElementById('settingsUnlockSubmitBtn');
+        var cancelBtn = document.getElementById('settingsUnlockCancelBtn');
+        var closeBtn = document.getElementById('settingsUnlockModalCloseBtn');
+        if (submitBtn) submitBtn.addEventListener('click', _settingsUnlockModalSubmit);
+        if (cancelBtn) cancelBtn.addEventListener('click', _settingsUnlockModalCancel);
+        if (closeBtn) closeBtn.addEventListener('click', _settingsUnlockModalCancel);
+        inputEl.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                _settingsUnlockModalSubmit();
+            }
+        });
+    }
+    inputEl.value = '';
+    if (errorEl) {
+        errorEl.textContent = '';
+        errorEl.style.display = 'none';
+    }
+    inputEl.classList.remove('is-invalid');
+    if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+        var inst = bootstrap.Modal.getOrCreateInstance(modalEl);
+        inst.show();
+        setTimeout(function () { inputEl.focus(); }, 300);
+    }
+    return promise;
+}
+
+function persistSettingsSession() {
+    try {
+        sessionStorage.setItem(SETTINGS_UNLOCK_EXPIRY_KEY, String(Date.now() + settingsSessionTtlMinutes * 60 * 1000));
+    } catch (_) {}
+}
+
+function clearSettingsSession() {
+    try {
+        sessionStorage.removeItem(SETTINGS_UNLOCK_EXPIRY_KEY);
+    } catch (_) {}
+    settingsUnlocked = false;
+}
+
 async function ensureSettingsUnlocked() {
     if (!isSettingsPasswordEnabled()) return true;
     if (settingsUnlocked) return true;
-    const entered = prompt(t('enterSettingsPassword') || 'Введите пароль для настроек');
-    if (entered === null) return false;
-    try {
-        const resp = await fetch('/api/settings/unlock', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ password: entered })
-        });
-        const data = await resp.json();
-        if (data.success) {
-            settingsUnlocked = true;
-            showToast(t('settingsPasswordUnlocked') || 'Настройки разблокированы', 'success');
-            return true;
-        }
-    } catch (e) {
-        console.error(e);
-    }
-    showToast(t('settingsPasswordIncorrect') || 'Неверный пароль', 'error');
-    return false;
+    return await showSettingsUnlockModal();
 }
 
 // Загрузка данных для таблиц настроек (сервисы + VM/CT)
@@ -2947,6 +3088,7 @@ async function applySettingsPassword() {
         }
         settingsPasswordRequired = true;
         settingsUnlocked = true;
+        persistSettingsSession();
         if (currentEl) currentEl.value = '';
         if (newEl) newEl.value = '';
         if (repeatEl) repeatEl.value = '';
@@ -2981,6 +3123,7 @@ async function disableSettingsPassword() {
         }
         settingsPasswordRequired = false;
         settingsUnlocked = true;
+        persistSettingsSession();
         if (currentEl) currentEl.value = '';
         const newEl = el('settingsPasswordNew');
         const repeatEl = el('settingsPasswordRepeat');
@@ -2991,6 +3134,12 @@ async function disableSettingsPassword() {
     } catch (e) {
         showToast(t('connectError') + ': ' + e.message, 'error');
     }
+}
+
+function logoutSettings() {
+    clearSettingsSession();
+    showToast(t('settingsLogoutDone') || 'Сессия настроек завершена', 'info');
+    showDashboard();
 }
 
 // ==================== NEW SETTINGS FUNCTIONS ====================
@@ -3011,6 +3160,13 @@ async function loadSettings() {
     }
 
     settingsPasswordRequired = !!data.password_required;
+    settingsSessionTtlMinutes = parseInt(data.session_ttl_minutes, 10) || 30;
+    try {
+        const expiry = sessionStorage.getItem(SETTINGS_UNLOCK_EXPIRY_KEY);
+        if (expiry && Date.now() < parseInt(expiry, 10)) {
+            settingsUnlocked = true;
+        }
+    } catch (_) {}
 
     if (data.refresh_interval != null) {
         refreshIntervalMs = parseInt(data.refresh_interval, 10) || 30000;
@@ -3070,6 +3226,12 @@ async function loadSettings() {
         ? normalizeMonitorScreensOrder(data.monitor_screens_order)
         : MONITOR_SCREEN_IDS_ALL.slice();
     renderSettingsMonitorScreensOrderList();
+    const ttlSel = document.getElementById('settingsSessionTtlSelect');
+    if (ttlSel) {
+        const v = String(settingsSessionTtlMinutes);
+        if (ttlSel.querySelector('option[value="' + v + '"]')) ttlSel.value = v;
+        else ttlSel.value = '30';
+    }
     if (data.monitor_mode === true || data.monitor_mode === 'true') {
         monitorMode = true;
         document.body.classList.add('monitor-mode');
