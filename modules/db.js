@@ -122,9 +122,14 @@ function closeDb() {
     }
 }
 
+function getDbPath() {
+    return dbPath;
+}
+
 module.exports = {
     getDb,
     getDbSync,
     saveDb,
-    closeDb
+    closeDb,
+    getDbPath
 };

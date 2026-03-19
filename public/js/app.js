@@ -15,6 +15,8 @@ let monitorTheme = 'dark';
 let settingsUnlocked = false;
 /** Пароль настроек включён (из API) */
 let settingsPasswordRequired = false;
+/** Время последнего успешного обновления данных (для раздела отладки) */
+let lastRefreshTime = null;
 let currentServerType = 'proxmox'; // 'proxmox' | 'truenas'
 let thresholds = {
     cpuGreen: 70,
@@ -496,6 +498,16 @@ function updateUILanguage() {
         renderSettingsMonitorScreensOrderList();
     setText('settingsNavThresholds', t('settingsNavThresholds'));
     setText('settingsNavServices', t('settingsNavServices'));
+    setText('settingsNavDebug', t('settingsNavDebug'));
+    setText('settingsDebugTitle', t('settingsDebugTitle'));
+    setText('settingsDebugHint', t('settingsDebugHint'));
+    setText('settingsDebugServerTitle', t('settingsDebugServerTitle'));
+    setText('settingsDebugClientTitle', t('settingsDebugClientTitle'));
+    setText('settingsDebugRefreshText', t('settingsDebugRefreshText') || 'Refresh metrics');
+    setText('settingsDebugPingText', t('settingsDebugPingText') || 'Ping API');
+    setText('settingsDebugClearCacheText', t('settingsDebugClearCacheText') || 'Clear cache');
+    setText('settingsDebugExportText', t('settingsDebugExportText') || 'Download report');
+    setText('settingsDebugReloadText', t('settingsDebugReloadText') || 'Reload application');
     setText('settingsNavSecurity', t('settingsNavSecurity'));
     setText('settingsSecurityTitle', t('settingsSecurityTitle'));
     setText('settingsSecurityHint', t('settingsSecurityHint'));
@@ -562,7 +574,20 @@ document.addEventListener('DOMContentLoaded', async function() {
         vmIdOrNameInput.addEventListener('change', addVmToMonitorByIdOrName);
         vmIdOrNameInput.addEventListener('keydown', function(e) { if (e.key === 'Enter') { e.preventDefault(); addVmToMonitorByIdOrName(); } });
     }
-    
+    const debugNav = document.getElementById('settings-nav-debug');
+    if (debugNav) {
+        debugNav.addEventListener('shown.bs.tab', () => refreshDebugMetrics());
+    }
+    const reloadBtn = document.getElementById('settingsDebugReloadBtn');
+    if (reloadBtn) {
+        reloadBtn.addEventListener('click', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            reloadApplication();
+            return false;
+        });
+    }
+
     checkServerStatus();
     updateCurrentServerBadge();
 
@@ -777,6 +802,180 @@ async function loadSettingsPanelData() {
     }
     renderSettingsMonitoredServices();
     renderServerList();
+}
+
+/** Последний ответ /api/debug для экспорта отчёта */
+let lastDebugServerData = null;
+
+function getBrowserAndDisplayInfo() {
+    const nav = typeof navigator !== 'undefined' ? navigator : {};
+    const win = typeof window !== 'undefined' ? window : null;
+    const scr = typeof screen !== 'undefined' ? screen : {};
+    return {
+        userAgent: nav.userAgent || '—',
+        language: nav.language || '—',
+        languages: (nav.languages && nav.languages.length) ? nav.languages.join(', ') : '—',
+        platform: nav.platform || '—',
+        hardwareConcurrency: nav.hardwareConcurrency != null ? nav.hardwareConcurrency : '—',
+        deviceMemory: nav.deviceMemory != null ? nav.deviceMemory + ' GB' : '—',
+        cookieEnabled: !!nav.cookieEnabled,
+        screenWidth: scr.width != null ? scr.width : '—',
+        screenHeight: scr.height != null ? scr.height : '—',
+        availWidth: scr.availWidth != null ? scr.availWidth : '—',
+        availHeight: scr.availHeight != null ? scr.availHeight : '—',
+        colorDepth: scr.colorDepth != null ? scr.colorDepth + ' bit' : '—',
+        pixelRatio: win && win.devicePixelRatio != null ? win.devicePixelRatio : '—',
+        innerWidth: win && win.innerWidth != null ? win.innerWidth : '—',
+        innerHeight: win && win.innerHeight != null ? win.innerHeight : '—'
+    };
+}
+
+async function refreshDebugMetrics() {
+    const serverEl = document.getElementById('settingsDebugServerMetrics');
+    const clientEl = document.getElementById('settingsDebugClientMetrics');
+    if (!serverEl || !clientEl) return;
+    serverEl.textContent = '…';
+    clientEl.textContent = '…';
+    let serverText = '—';
+    try {
+        const res = await fetch('/api/debug');
+        const data = await res.json();
+        lastDebugServerData = data;
+        const mem = data.memory || {};
+        const fmt = (n) => (n != null && typeof n === 'number') ? (n / 1024 / 1024).toFixed(2) + ' MB' : '—';
+        const cache = data.cache || {};
+        serverText = [
+            `version: ${data.version ?? '—'}`,
+            `env: ${data.env ?? '—'}`,
+            `node: ${data.nodeVersion ?? '—'}`,
+            `platform: ${data.platform ?? '—'} ${data.arch ?? ''}`,
+            `uptime: ${data.uptimeSeconds != null ? data.uptimeSeconds + ' s' : '—'}`,
+            `startTime: ${data.startTime ?? '—'}`,
+            `dbPath: ${data.dbPath ?? '—'}`,
+            `memory.rss: ${fmt(mem.rss)}`,
+            `memory.heapUsed: ${fmt(mem.heapUsed)}`,
+            `memory.heapTotal: ${fmt(mem.heapTotal)}`,
+            `cache.keys: ${cache.keys ?? '—'}`,
+            `cache.hits: ${cache.hits ?? '—'}`,
+            `cache.misses: ${cache.misses ?? '—'}`,
+            `connectionsCount: ${data.connectionsCount ?? '—'}`,
+            `settingsPasswordSet: ${!!data.settingsPasswordSet}`
+        ].join('\n');
+    } catch (e) {
+        serverText = 'Ошибка: ' + (e.message || String(e));
+        lastDebugServerData = null;
+    }
+    serverEl.textContent = serverText;
+    const connId = getCurrentConnectionId();
+    const lastRefreshStr = lastRefreshTime != null ? new Date(lastRefreshTime).toLocaleString() : '—';
+    const browserDisplay = getBrowserAndDisplayInfo();
+    const clientText = [
+        '--- App ---',
+        `language: ${currentLanguage ?? '—'}`,
+        `serverType: ${currentServerType ?? '—'}`,
+        `connectionId: ${connId ?? '—'}`,
+        `refreshIntervalMs: ${refreshIntervalMs ?? '—'}`,
+        `lastRefreshTime: ${lastRefreshStr}`,
+        `monitorMode: ${!!monitorMode}`,
+        `monitorTheme: ${monitorTheme ?? '—'}`,
+        `settingsPasswordRequired: ${!!settingsPasswordRequired}`,
+        '',
+        '--- Browser ---',
+        `userAgent: ${browserDisplay.userAgent}`,
+        `language: ${browserDisplay.language}`,
+        `languages: ${browserDisplay.languages}`,
+        `platform: ${browserDisplay.platform}`,
+        `hardwareConcurrency: ${browserDisplay.hardwareConcurrency}`,
+        `deviceMemory: ${browserDisplay.deviceMemory}`,
+        `cookieEnabled: ${browserDisplay.cookieEnabled}`,
+        '',
+        '--- Display ---',
+        `screen: ${browserDisplay.screenWidth} × ${browserDisplay.screenHeight}`,
+        `avail: ${browserDisplay.availWidth} × ${browserDisplay.availHeight}`,
+        `colorDepth: ${browserDisplay.colorDepth}`,
+        `devicePixelRatio: ${browserDisplay.pixelRatio}`,
+        `inner (viewport): ${browserDisplay.innerWidth} × ${browserDisplay.innerHeight}`
+    ].join('\n');
+    clientEl.textContent = clientText;
+}
+
+async function pingDebugApi() {
+    const el = document.getElementById('settingsDebugPingResult');
+    if (!el) return;
+    el.textContent = '…';
+    const t0 = performance.now();
+    try {
+        await fetch('/api/debug');
+        const ms = Math.round(performance.now() - t0);
+        el.textContent = (t('settingsDebugPingResult') || 'Пинг: %d ms').replace('%d', String(ms));
+    } catch (e) {
+        el.textContent = (t('errorUpdate') || 'Ошибка') + ': ' + (e.message || String(e));
+    }
+}
+
+async function clearDebugCache() {
+    try {
+        const res = await fetch('/api/cache/clear', { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+            showToast(t('settingsDebugCacheCleared') || 'Кэш очищен', 'success');
+            refreshDebugMetrics();
+        } else {
+            showToast((data.error || 'Error') + '', 'error');
+        }
+    } catch (e) {
+        showToast((e.message || String(e)) + '', 'error');
+    }
+}
+
+function exportDebugReport() {
+    const client = {
+        language: currentLanguage,
+        serverType: currentServerType,
+        connectionId: getCurrentConnectionId(),
+        refreshIntervalMs,
+        lastRefreshTime: lastRefreshTime != null ? new Date(lastRefreshTime).toISOString() : null,
+        monitorMode: !!monitorMode,
+        monitorTheme,
+        settingsPasswordRequired: !!settingsPasswordRequired,
+        browser: getBrowserAndDisplayInfo()
+    };
+    const report = {
+        exportedAt: new Date().toISOString(),
+        server: lastDebugServerData,
+        client
+    };
+    const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'debug-report-' + new Date().toISOString().slice(0, 19).replace(/:/g, '-') + '.json';
+    a.click();
+    URL.revokeObjectURL(a.href);
+}
+
+function reloadApplication() {
+    // Перезапуск Node.js-сервера через API; после ответа сервер завершится (PM2/nodemon перезапустят)
+    var url = window.location.href;
+    fetch('/api/restart', { method: 'POST' })
+        .then(function () {
+            showToast(t('settingsDebugRestarting') || 'Перезапуск сервера…', 'info');
+            // Ждём завершения сервера и пробуем перезагрузить страницу, когда он поднимется
+            var attempts = 0;
+            var maxAttempts = 30;
+            function poll() {
+                attempts++;
+                fetch(url, { method: 'HEAD', mode: 'same-origin' }).then(function () {
+                    window.location.reload();
+                }).catch(function () {
+                    if (attempts < maxAttempts) setTimeout(poll, 1000);
+                    else window.location.href = url;
+                });
+            }
+            setTimeout(poll, 2000);
+        })
+        .catch(function (err) {
+            showToast((t('settingsDebugRestartError') || 'Ошибка перезапуска') + ': ' + (err.message || err), 'error');
+        });
 }
 
 // Show settings section
@@ -1342,6 +1541,7 @@ async function refreshData(options = {}) {
                 if (a && typeof a.focus === 'function') a.focus({ preventScroll: true });
             }
         });
+        lastRefreshTime = Date.now();
         if (monitorMode) {
             const toolbarEl = document.getElementById('monitorToolbarUpdate');
             if (toolbarEl) {

@@ -69,6 +69,61 @@ app.get('/api/translations', (req, res) => {
     res.json({ translations: allTranslations });
 });
 
+// Метрики для раздела отладки в настройках
+app.get('/api/debug', (req, res) => {
+    const mem = process.memoryUsage();
+    const uptime = process.uptime();
+    const cache = require('./modules/cache');
+    const db = require('./modules/db');
+    const connStore = require('./modules/connection-store');
+    const settingsStore = require('./modules/settings-store');
+    const cacheStats = cache.stats && typeof cache.stats === 'function' ? cache.stats() : {};
+    const cacheKeys = cache.keys && typeof cache.keys === 'function' ? cache.keys() : [];
+    res.json({
+        version: config.version,
+        env: config.env,
+        nodeVersion: process.version,
+        platform: process.platform,
+        arch: process.arch,
+        uptimeSeconds: Math.floor(uptime),
+        startTime: new Date(Date.now() - uptime * 1000).toISOString(),
+        dbPath: typeof db.getDbPath === 'function' ? db.getDbPath() : null,
+        memory: {
+            rss: mem.rss,
+            heapUsed: mem.heapUsed,
+            heapTotal: mem.heapTotal,
+            external: mem.external
+        },
+        cache: {
+            keys: cacheKeys.length,
+            hits: cacheStats.hits ?? 0,
+            misses: cacheStats.misses ?? 0
+        },
+        connectionsCount: (() => { try { const L = connStore.listConnections(); return Array.isArray(L) ? L.length : 0; } catch (_) { return 0; } })(),
+        settingsPasswordSet: !!settingsStore.hasSettingsPassword()
+    });
+});
+
+app.post('/api/cache/clear', (req, res) => {
+    try {
+        const cache = require('./modules/cache');
+        if (typeof cache.flush === 'function') cache.flush();
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// Перезапуск Node.js-приложения (процесс завершается, PM2/nodemon/systemd перезапустят)
+app.post('/api/restart', (req, res) => {
+    res.json({ success: true, message: 'Restarting...' });
+    res.end();
+    setTimeout(() => {
+        closeDb();
+        process.exit(0);
+    }, 300);
+});
+
 // Тестовый эндпоинт для диагностики
 app.get('/api/diagnose', (req, res) => {
     res.json({
