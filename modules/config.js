@@ -1,7 +1,14 @@
+const path = require('path');
 const dotenv = require('dotenv');
 
 // Загружаем переменные окружения
 dotenv.config();
+
+let appVersion = '1.0.0';
+try {
+    const pkg = require(path.join(__dirname, '..', 'package.json'));
+    if (pkg && typeof pkg.version === 'string') appVersion = pkg.version;
+} catch (_) {}
 
 module.exports = {
     // Сервер
@@ -38,8 +45,8 @@ module.exports = {
     // Язык по умолчанию
     defaultLanguage: process.env.DEFAULT_LANGUAGE || 'ru',
     
-    // Версия
-    version: '1.0.0',
+    // Версия (из package.json)
+    version: appVersion,
     
     // Сетевые интерфейсы для мониторинга скорости линка
     networkInterfaces: process.env.NETWORK_INTERFACES ? 

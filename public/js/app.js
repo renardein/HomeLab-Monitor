@@ -701,6 +701,8 @@ async function checkServerStatus() {
         const response = await fetch('/api/status');
         const data = await response.json();
         setHTML('serverStatus', '<i class="bi bi-check-circle"></i> <span id="serverStatusText">' + t('serverWorking') + '</span>');
+        const verEl = document.getElementById('footerVersion');
+        if (verEl && data.version) verEl.textContent = 'v' + data.version;
     } catch (error) {
         setHTML('serverStatus', '<i class="bi bi-exclamation-circle"></i> <span id="serverStatusText">' + t('serverError') + '</span>');
     }
