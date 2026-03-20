@@ -78,6 +78,31 @@ function setDisplay(id, display) {
     if (e) e.style.display = display;
 }
 
+// Proxmox token parts (backward compatible with old single-field format)
+function syncProxmoxApiTokenFromParts() {
+    const idEl = document.getElementById('apiTokenId');
+    const secretEl = document.getElementById('apiTokenSecret');
+    const hiddenEl = document.getElementById('apiToken');
+    if (!idEl || !secretEl || !hiddenEl) return;
+
+    const part1 = (idEl.value || '').trim();
+    const part2 = (secretEl.value || '').trim();
+
+    let full = '';
+    if (part1) {
+        // If user pastes full token into part1 field, allow it for compatibility.
+        if (!part2 && part1.includes('=')) {
+            full = part1;
+        } else if (part2) {
+            full = part1 + '=' + part2;
+        } else {
+            full = part1;
+        }
+    }
+
+    hiddenEl.value = full;
+}
+
 function isSettingsPasswordEnabled() {
     return !!settingsPasswordRequired;
 }
@@ -585,6 +610,17 @@ document.addEventListener('DOMContentLoaded', async function() {
     setLanguage(chosenLang);
     setServerType(currentServerType);
 
+    // Proxmox token parts -> keep hidden legacy input in sync
+    try {
+        const idEl = document.getElementById('apiTokenId');
+        const secretEl = document.getElementById('apiTokenSecret');
+        if (idEl && secretEl) {
+            idEl.addEventListener('input', syncProxmoxApiTokenFromParts);
+            secretEl.addEventListener('input', syncProxmoxApiTokenFromParts);
+            syncProxmoxApiTokenFromParts();
+        }
+    } catch (_) {}
+
     toggleServiceTypeFields();
     renderMonitoredServices();
     renderSettingsMonitoredServices();
@@ -720,6 +756,13 @@ async function logout() {
         const tokenInputId = currentServerType === 'truenas' ? 'apiTokenTrueNAS' : 'apiToken';
         const logoutContainerId = currentServerType === 'truenas' ? 'logoutContainerTrueNAS' : 'logoutContainerProxmox';
         setValue(tokenInputId, '');
+        if (currentServerType === 'proxmox') {
+            const idEl = document.getElementById('apiTokenId');
+            const secretEl = document.getElementById('apiTokenSecret');
+            if (idEl) setValue('apiTokenId', '');
+            if (secretEl) setValue('apiTokenSecret', '');
+            if (idEl || secretEl) syncProxmoxApiTokenFromParts();
+        }
         setDisplay(logoutContainerId, 'none');
         showConfig();
     } catch (error) {
@@ -958,6 +1001,8 @@ async function loadSettingsPanelData() {
     renderSettingsMonitoredServices();
     await loadUpsSettings();
     await ensureUpsDisplaySlotsLoaded();
+    await loadNetdevSettings();
+    await ensureNetdevDisplaySlotsLoaded();
     renderServerList();
 }
 
@@ -1238,6 +1283,780 @@ async function saveUpsSettings() {
     }
 }
 
+// ==================== SNMP NETWORK DEVICES (UPS-like UI) ====================
+
+const NETDEV_MAX_CONFIGS = 10;
+const NETDEV_MAX_FIELDS = 15;
+const NETDEV_FIELD_FORMAT_ALLOWED = ['text', 'time', 'mb', 'gb', 'boot', 'bool', 'status'];
+
+let netdevConfigs = null;
+let netdevSlotListenerAttached = false;
+let netdevDisplaySlotsMonitor = Array.from({ length: NETDEV_MAX_CONFIGS }, (_, i) => i + 1);
+let netdevDisplaySlotsDashboard = Array.from({ length: NETDEV_MAX_CONFIGS }, (_, i) => i + 1);
+let netdevDisplaySlotsLoadedPromise = null;
+let netdevDisplaySlotsLoadedOnce = false;
+
+function createDefaultNetdevConfig() {
+    return {
+        enabled: false,
+        host: '',
+        port: null,
+        community: '',
+        name: '',
+        nameOid: '',
+        fields: []
+    };
+}
+
+function createEmptyNetdevField() {
+    return {
+        label: '',
+        oid: '',
+        format: 'text',
+        enabled: true,
+        statusUpValues: [],
+        statusDownValues: []
+    };
+}
+
+function normalizeFieldForEditor(f) {
+    const x = f && typeof f === 'object' ? f : {};
+    let fmtRaw = String(x.format || 'text').trim().toLowerCase();
+    let format = NETDEV_FIELD_FORMAT_ALLOWED.includes(fmtRaw) ? fmtRaw : 'text';
+    if (format === 'bool') format = 'boot';
+    return {
+        label: x.label != null ? String(x.label) : '',
+        oid: x.oid != null ? String(x.oid) : '',
+        format,
+        enabled: x.enabled !== false,
+        statusUpValues: Array.isArray(x.statusUpValues) ? x.statusUpValues : [],
+        statusDownValues: Array.isArray(x.statusDownValues) ? x.statusDownValues : []
+    };
+}
+
+function getNetdevFieldsFromDom() {
+    const root = document.getElementById('netdevFieldsEditorsRoot');
+    if (!root) return [];
+    const blocks = root.querySelectorAll('.netdev-field-block[data-netdev-row]');
+    const out = [];
+    blocks.forEach((block) => {
+        const i = parseInt(block.getAttribute('data-netdev-row'), 10);
+        if (!Number.isFinite(i)) return;
+        const labelEl = document.getElementById('netdevFieldLabel' + i + 'Input');
+        const oidEl = document.getElementById('netdevFieldOid' + i + 'Input');
+        const formatEl = document.getElementById('netdevFieldFormat' + i + 'Select');
+        const upIn = document.getElementById('netdevFieldStatusUp' + i + 'Input');
+        const downIn = document.getElementById('netdevFieldStatusDown' + i + 'Input');
+        const enEl = document.getElementById('netdevFieldEnabled' + i + 'Checkbox');
+        const fmtRaw = formatEl ? String(formatEl.value || 'text').trim().toLowerCase() : 'text';
+        let formatVal = NETDEV_FIELD_FORMAT_ALLOWED.includes(fmtRaw) ? fmtRaw : 'text';
+        if (formatVal === 'bool') formatVal = 'boot';
+        out.push({
+            label: labelEl ? labelEl.value.trim() : '',
+            oid: oidEl ? oidEl.value.trim() : '',
+            format: formatVal,
+            enabled: enEl ? !!enEl.checked : true,
+            statusUpValues: parseNetdevStatusListInput(upIn ? upIn.value : ''),
+            statusDownValues: parseNetdevStatusListInput(downIn ? downIn.value : '')
+        });
+    });
+    return out;
+}
+
+function ensureNetdevSlotTabsRendered() {
+    const tabsEl = document.getElementById('netdevSlotTabs');
+    if (!tabsEl) return;
+    if (tabsEl.dataset.rendered === '1') return;
+
+    tabsEl.innerHTML = '';
+    tabsEl.dataset.rendered = '1';
+
+    for (let idx = 0; idx < NETDEV_MAX_CONFIGS; idx++) {
+        const slotNum = idx + 1;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'nav-link py-1' + (idx === 0 ? ' active' : '');
+        btn.setAttribute('role', 'tab');
+        btn.dataset.netdevSlotIdx = String(idx);
+        btn.setAttribute('aria-selected', idx === 0 ? 'true' : 'false');
+        btn.textContent = String(slotNum);
+        tabsEl.appendChild(btn);
+    }
+}
+
+function getNetdevSlotIndex() {
+    const tabsEl = document.getElementById('netdevSlotTabs');
+    if (tabsEl) {
+        const activeBtn = tabsEl.querySelector('button.nav-link.active[data-netdev-slot-idx]');
+        const idx = activeBtn ? parseInt(activeBtn.dataset.netdevSlotIdx, 10) : NaN;
+        if (Number.isFinite(idx)) return idx;
+    }
+    return 0;
+}
+
+function parseNetdevStatusListInput(str) {
+    return String(str || '')
+        .split(/[,;|]/)
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean);
+}
+
+function updateNetdevStatusMapRowVisibility(fieldIndex) {
+    const row = document.getElementById('netdevFieldStatusMapRow' + fieldIndex);
+    const sel = document.getElementById('netdevFieldFormat' + fieldIndex + 'Select');
+    const hint = document.getElementById('netdevFieldStatusMapHint' + fieldIndex);
+    if (!row || !sel) return;
+    const show = sel.value === 'status' || sel.value === 'boot';
+    row.classList.toggle('d-none', !show);
+    if (hint && show) {
+        if (sel.value === 'boot') {
+            hint.textContent =
+                t('netdevStatusMapHintBoot') ||
+                'Опционально: перечислите значения SNMP для подключён/отключён; если пусто — правила 0/1, true/false, up/down и др.';
+        } else {
+            hint.textContent =
+                t('netdevStatusMapHintStatus') ||
+                'Укажите списки значений SNMP; только они определяют подключён/отключён (без авто-правил).';
+        }
+    }
+}
+
+function refreshAllNetdevStatusMapRows() {
+    const root = document.getElementById('netdevFieldsEditorsRoot');
+    if (!root) return;
+    root.querySelectorAll('.netdev-field-block[data-netdev-row]').forEach((block) => {
+        const idx = parseInt(block.getAttribute('data-netdev-row'), 10);
+        if (Number.isFinite(idx)) updateNetdevStatusMapRowVisibility(idx);
+    });
+}
+
+function initNetdevFieldFormatUi() {
+    const wrap = document.getElementById('netdevFieldsInputsWrap');
+    if (!wrap || wrap.dataset.netdevFormatUi === '1') return;
+    wrap.dataset.netdevFormatUi = '1';
+    wrap.addEventListener('change', (ev) => {
+        const el = ev.target;
+        if (!el || !el.id) return;
+        const m = el.id.match(/^netdevFieldFormat(\d+)Select$/);
+        if (m) updateNetdevStatusMapRowVisibility(parseInt(m[1], 10));
+    });
+}
+
+function renderNetdevFieldsEditors(fields) {
+    const root = document.getElementById('netdevFieldsEditorsRoot');
+    const hint = document.getElementById('netdevFieldsCountHint');
+    const addBtn = document.getElementById('netdevAddFieldBtn');
+    if (!root) return;
+
+    const list = Array.isArray(fields) ? fields.map(normalizeFieldForEditor) : [];
+    const lblUp = t('netdevStatusConnected') || 'Подключён';
+    const lblDown = t('netdevStatusDisconnected') || 'Отключён';
+    const lblEnabled = t('netdevFieldEnabled') || 'Опрашивать';
+    const lblRemove = t('netdevFieldRemove') || 'Удалить';
+    const lblField = t('netdevFieldNumber') || 'Поле';
+    const emptyHint = t('netdevFieldsEmptyHint') || 'Нет полей OID. Добавьте поле кнопкой ниже (до 15).';
+
+    let html = '';
+    if (list.length === 0) {
+        html += `<div class="text-muted small py-2 mb-2 border rounded px-3 bg-light">${escapeHtml(emptyHint)}</div>`;
+    }
+
+    list.forEach((f, i) => {
+        const mutedRow = f.enabled ? '' : ' opacity-50';
+        const fmtBootSel = f.format === 'boot' ? ' selected' : '';
+        const fmtStatusSel = f.format === 'status' ? ' selected' : '';
+        const fmtTextSel = f.format === 'text' ? ' selected' : '';
+        const fmtTimeSel = f.format === 'time' ? ' selected' : '';
+        const fmtMbSel = f.format === 'mb' ? ' selected' : '';
+        const fmtGbSel = f.format === 'gb' ? ' selected' : '';
+        const upStr = Array.isArray(f.statusUpValues) ? f.statusUpValues.join(', ') : '';
+        const downStr = Array.isArray(f.statusDownValues) ? f.statusDownValues.join(', ') : '';
+        html += `
+            <div class="netdev-field-block border-bottom pb-3 mb-3${mutedRow}" data-netdev-row="${i}">
+                <div class="row g-2 align-items-center mb-2 flex-wrap">
+                    <div class="col">
+                        <span class="fw-semibold">${escapeHtml(lblField)} ${i + 1}</span>
+                    </div>
+                    <div class="col-auto">
+                        <div class="form-check form-switch m-0">
+                            <input class="form-check-input" type="checkbox" role="switch" id="netdevFieldEnabled${i}Checkbox" ${f.enabled ? 'checked' : ''}>
+                            <label class="form-check-label small" for="netdevFieldEnabled${i}Checkbox">${escapeHtml(lblEnabled)}</label>
+                        </div>
+                    </div>
+                    <div class="col-auto">
+                        <button type="button" class="btn btn-sm btn-outline-danger" data-netdev-remove-row="${i}">${escapeHtml(lblRemove)}</button>
+                    </div>
+                </div>
+                <div class="row g-3 align-items-end">
+                    <div class="col-lg-3 col-md-4">
+                        <label class="form-label fw-bold" for="netdevFieldLabel${i}Input">${escapeHtml(lblField)} ${i + 1} (имя)</label>
+                        <input type="text" class="form-control" id="netdevFieldLabel${i}Input" placeholder="Напр. Port status" value="${escapeHtml(f.label)}">
+                    </div>
+                    <div class="col-lg-5 col-md-5">
+                        <label class="form-label fw-bold" for="netdevFieldOid${i}Input">OID</label>
+                        <input type="text" class="form-control" id="netdevFieldOid${i}Input" placeholder="1.3.6...." value="${escapeHtml(f.oid)}">
+                    </div>
+                    <div class="col-lg-4 col-md-3">
+                        <label class="form-label fw-bold" for="netdevFieldFormat${i}Select">Отображение</label>
+                        <select class="form-select" id="netdevFieldFormat${i}Select">
+                            <option value="text"${fmtTextSel}>Текст</option>
+                            <option value="time"${fmtTimeSel}>Время (SNMP TimeTicks)</option>
+                            <option value="mb"${fmtMbSel}>МБ (из байт)</option>
+                            <option value="gb"${fmtGbSel}>ГБ (из байт)</option>
+                            <option value="boot"${fmtBootSel}>Статус (bool, 0/1 — авто)</option>
+                            <option value="status"${fmtStatusSel}>Статус (только вручную)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="row g-2 mt-1 d-none" id="netdevFieldStatusMapRow${i}">
+                    <div class="col-12 small text-muted mb-0" id="netdevFieldStatusMapHint${i}"></div>
+                    <div class="col-md-6">
+                        <label class="form-label small mb-1" for="netdevFieldStatusUp${i}Input">«${escapeHtml(lblUp)}» (через запятую)</label>
+                        <input type="text" class="form-control form-control-sm" id="netdevFieldStatusUp${i}Input" placeholder="1, up, true" value="${escapeHtml(upStr)}">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small mb-1" for="netdevFieldStatusDown${i}Input">«${escapeHtml(lblDown)}» (через запятую)</label>
+                        <input type="text" class="form-control form-control-sm" id="netdevFieldStatusDown${i}Input" placeholder="0, 2, down" value="${escapeHtml(downStr)}">
+                    </div>
+                </div>
+            </div>`;
+    });
+
+    root.innerHTML = html;
+
+    root.querySelectorAll('.netdev-field-block').forEach((block) => {
+        const i = parseInt(block.getAttribute('data-netdev-row'), 10);
+        const en = document.getElementById('netdevFieldEnabled' + i + 'Checkbox');
+        if (en) {
+            en.addEventListener('change', () => {
+                block.classList.toggle('opacity-50', !en.checked);
+            });
+        }
+    });
+
+    if (hint) {
+        hint.textContent = `${list.length} / ${NETDEV_MAX_FIELDS}`;
+    }
+    if (addBtn) {
+        addBtn.disabled = list.length >= NETDEV_MAX_FIELDS;
+    }
+    refreshAllNetdevStatusMapRows();
+}
+
+function netdevAddFieldRow() {
+    const cur = getNetdevFieldsFromDom();
+    if (cur.length >= NETDEV_MAX_FIELDS) {
+        showToast(t('netdevFieldsMaxToast') || `Не больше ${NETDEV_MAX_FIELDS} полей`, 'warning');
+        return;
+    }
+    cur.push(createEmptyNetdevField());
+    renderNetdevFieldsEditors(cur);
+}
+
+function netdevRemoveFieldRow(rowIdx) {
+    const cur = getNetdevFieldsFromDom();
+    if (rowIdx < 0 || rowIdx >= cur.length) return;
+    cur.splice(rowIdx, 1);
+    renderNetdevFieldsEditors(cur);
+}
+
+function ensureNetdevFieldsInfrastructure() {
+    const wrap = document.getElementById('netdevFieldsInputsWrap');
+    if (!wrap) return;
+    const INFRA_VER = '6';
+    if (wrap.dataset.netdevInfraVer !== INFRA_VER) {
+        wrap.dataset.netdevInfraVer = INFRA_VER;
+        const addLbl = t('netdevFieldAdd') || 'Добавить поле';
+        wrap.innerHTML = `
+            <div id="netdevFieldsEditorsRoot"></div>
+            <div class="mt-2 d-flex flex-wrap align-items-center gap-2">
+                <button type="button" class="btn btn-outline-primary btn-sm" id="netdevAddFieldBtn">${escapeHtml(addLbl)}</button>
+                <span class="small text-muted" id="netdevFieldsCountHint"></span>
+            </div>`;
+        const addBtn = document.getElementById('netdevAddFieldBtn');
+        if (addBtn) addBtn.addEventListener('click', () => netdevAddFieldRow());
+        wrap.addEventListener('click', (e) => {
+            const rm = e.target.closest('[data-netdev-remove-row]');
+            if (!rm) return;
+            e.preventDefault();
+            const idx = parseInt(rm.getAttribute('data-netdev-remove-row'), 10);
+            if (Number.isFinite(idx)) netdevRemoveFieldRow(idx);
+        });
+    }
+    initNetdevFieldFormatUi();
+}
+
+function renderNetdevDisplayCheckboxes() {
+    const dashWrap = document.getElementById('netdevDisplayDashboardSlotsWrap');
+    const monWrap = document.getElementById('netdevDisplayMonitorSlotsWrap');
+    if (!dashWrap || !monWrap) return;
+
+    if (dashWrap.dataset.rendered === '1' && monWrap.dataset.rendered === '1') return;
+
+    dashWrap.innerHTML = '';
+    monWrap.innerHTML = '';
+
+    dashWrap.dataset.rendered = '1';
+    monWrap.dataset.rendered = '1';
+
+    for (let s = 1; s <= NETDEV_MAX_CONFIGS; s++) {
+        dashWrap.insertAdjacentHTML('beforeend', `
+            <div class="form-check">
+                <input class="form-check-input netdevDisplayDashboardSlot" type="checkbox" id="netdevDisplayDashboardSlot${s}" value="${s}">
+                <label class="form-check-label" for="netdevDisplayDashboardSlot${s}">${s}</label>
+            </div>
+        `);
+        monWrap.insertAdjacentHTML('beforeend', `
+            <div class="form-check">
+                <input class="form-check-input netdevDisplayMonitorSlot" type="checkbox" id="netdevDisplayMonitorSlot${s}" value="${s}">
+                <label class="form-check-label" for="netdevDisplayMonitorSlot${s}">${s}</label>
+            </div>
+        `);
+    }
+}
+
+function getCheckedNetdevSlotsByClass(checkboxClass) {
+    const boxes = document.querySelectorAll('input.' + checkboxClass + ':checked');
+    const slots = Array.from(boxes)
+        .map((b) => parseInt(b.value, 10))
+        .filter((n) => Number.isFinite(n) && n >= 1 && n <= NETDEV_MAX_CONFIGS);
+    return Array.from(new Set(slots)).sort((a, b) => a - b);
+}
+
+function setNetdevDisplayCheckboxes(dashboardSlots, monitorSlots) {
+    for (let s = 1; s <= NETDEV_MAX_CONFIGS; s++) {
+        const dashBox = document.getElementById('netdevDisplayDashboardSlot' + s);
+        if (dashBox) dashBox.checked = Array.isArray(dashboardSlots) && dashboardSlots.includes(s);
+        const monBox = document.getElementById('netdevDisplayMonitorSlot' + s);
+        if (monBox) monBox.checked = Array.isArray(monitorSlots) && monitorSlots.includes(s);
+    }
+}
+
+async function ensureNetdevDisplaySlotsLoaded() {
+    if (netdevDisplaySlotsLoadedPromise) return netdevDisplaySlotsLoadedPromise;
+
+    netdevDisplaySlotsLoadedPromise = (async () => {
+        try {
+            const resp = await fetch('/api/netdevices/display');
+            const data = await resp.json();
+            if (data && data.success) {
+                if (Array.isArray(data.dashboardSlots)) netdevDisplaySlotsDashboard = data.dashboardSlots;
+                if (Array.isArray(data.monitorSlots)) netdevDisplaySlotsMonitor = data.monitorSlots;
+            }
+        } catch (e) {
+            // Defaults are already set
+        }
+
+        // Update checkboxes
+        try {
+            setNetdevDisplayCheckboxes(netdevDisplaySlotsDashboard, netdevDisplaySlotsMonitor);
+        } catch (_) {}
+
+        netdevDisplaySlotsLoadedOnce = true;
+    })();
+
+    return netdevDisplaySlotsLoadedPromise;
+}
+
+async function loadNetdevSettings() {
+    // Render dynamic parts once
+    ensureNetdevSlotTabsRendered();
+    ensureNetdevFieldsInfrastructure();
+    renderNetdevDisplayCheckboxes();
+
+    const enabledSelect = document.getElementById('netdevEnabledSelect');
+    const hostInput = document.getElementById('netdevHostInput');
+    const portInput = document.getElementById('netdevPortInput');
+    const communityInput = document.getElementById('netdevCommunityInput');
+    const nameInput = document.getElementById('netdevNameInput');
+    const nameOidInput = document.getElementById('netdevNameOidInput');
+    if (!enabledSelect || !hostInput || !portInput || !communityInput || !nameInput || !nameOidInput) return;
+
+    const applySlotToForm = (slotIdx) => {
+        const cfg = (Array.isArray(netdevConfigs) && netdevConfigs[slotIdx]) ? netdevConfigs[slotIdx] : createDefaultNetdevConfig();
+
+        enabledSelect.value = cfg.enabled ? '1' : '0';
+        if (hostInput) hostInput.value = cfg.host || '';
+        if (portInput) portInput.value = cfg.port != null ? String(cfg.port) : '';
+        if (communityInput) communityInput.value = cfg.community || '';
+        if (nameInput) nameInput.value = cfg.name || '';
+        if (nameOidInput) nameOidInput.value = cfg.nameOid || '';
+
+        const fields = Array.isArray(cfg.fields) ? cfg.fields : [];
+        renderNetdevFieldsEditors(fields);
+    };
+
+    try {
+        const res = await fetch('/api/netdevices/settings');
+        const data = await res.json();
+        if (Array.isArray(data?.configs)) {
+            netdevConfigs = data.configs;
+        } else {
+            netdevConfigs = [];
+        }
+        while (netdevConfigs.length < NETDEV_MAX_CONFIGS) netdevConfigs.push(createDefaultNetdevConfig());
+
+        const slotIdx = getNetdevSlotIndex();
+        applySlotToForm(slotIdx);
+    } catch (e) {
+        console.error('Failed to load Netdev settings:', e);
+        netdevConfigs = Array.from({ length: NETDEV_MAX_CONFIGS }, () => createDefaultNetdevConfig());
+        applySlotToForm(0);
+    }
+
+    if (!netdevSlotListenerAttached) {
+        const tabsEl = document.getElementById('netdevSlotTabs');
+        if (tabsEl) {
+            const btns = tabsEl.querySelectorAll('button.nav-link[data-netdev-slot-idx]');
+            btns.forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    const idx = parseInt(btn.dataset.netdevSlotIdx, 10);
+                    if (!Number.isFinite(idx)) return;
+
+                    btns.forEach(b => {
+                        b.classList.toggle('active', b === btn);
+                        b.setAttribute('aria-selected', String(b === btn));
+                    });
+                    applySlotToForm(idx);
+                });
+            });
+            netdevSlotListenerAttached = true;
+        }
+    }
+}
+
+async function saveNetdevSettings() {
+    const enabledSelect = document.getElementById('netdevEnabledSelect');
+    const hostInput = document.getElementById('netdevHostInput');
+    const portInput = document.getElementById('netdevPortInput');
+    const communityInput = document.getElementById('netdevCommunityInput');
+    const nameInput = document.getElementById('netdevNameInput');
+    const nameOidInput = document.getElementById('netdevNameOidInput');
+    if (!enabledSelect || !hostInput || !portInput || !communityInput || !nameInput || !nameOidInput) return;
+
+    const enabled = String(enabledSelect.value || '0') === '1';
+    const host = hostInput.value.trim();
+    const port = portInput.value.trim() !== '' ? parseInt(portInput.value.trim(), 10) : null;
+    const community = communityInput.value.trim();
+    const name = nameInput.value.trim();
+    const nameOid = nameOidInput.value.trim();
+
+    const slotIdx = getNetdevSlotIndex();
+    const cfg = (Array.isArray(netdevConfigs) && netdevConfigs[slotIdx]) ? netdevConfigs[slotIdx] : createDefaultNetdevConfig();
+
+    cfg.enabled = enabled;
+    cfg.host = host;
+    cfg.port = port != null && Number.isFinite(port) ? port : null;
+    cfg.community = community;
+    cfg.name = name;
+    cfg.nameOid = nameOid;
+
+    cfg.fields = getNetdevFieldsFromDom();
+
+    if (!Array.isArray(netdevConfigs)) netdevConfigs = [];
+    while (netdevConfigs.length < NETDEV_MAX_CONFIGS) netdevConfigs.push(createDefaultNetdevConfig());
+    netdevConfigs[slotIdx] = cfg;
+
+    try {
+        const res = await fetch('/api/netdevices/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ configs: Array.isArray(netdevConfigs) ? netdevConfigs : [] })
+        });
+        const data = await res.json();
+        if (!res.ok || !data?.success) throw new Error(data?.error || 'failed to save');
+
+        // Save display slots
+        try {
+            const hasDashboardBoxes = document.querySelectorAll('input.netdevDisplayDashboardSlot').length > 0;
+            const hasMonitorBoxes = document.querySelectorAll('input.netdevDisplayMonitorSlot').length > 0;
+            const dashboardSlots = hasDashboardBoxes ? getCheckedNetdevSlotsByClass('netdevDisplayDashboardSlot') : netdevDisplaySlotsDashboard;
+            const monitorSlots = hasMonitorBoxes ? getCheckedNetdevSlotsByClass('netdevDisplayMonitorSlot') : netdevDisplaySlotsMonitor;
+
+            await fetch('/api/netdevices/display', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ dashboardSlots, monitorSlots })
+            });
+        } catch (e) {
+            showToast('Не удалось сохранить настройки отображения сетевых устройств', 'error');
+        }
+
+        showToast('Настройки сетевых устройств сохранены', 'success');
+        await updateNetdevDashboard();
+    } catch (e) {
+        showToast('Не удалось сохранить сетевые устройства: ' + (e.message || String(e)), 'error');
+    }
+}
+
+function formatNetdevMetricValue(v) {
+    if (v == null || (typeof v === 'string' && v.trim() === '')) return '—';
+    const s = String(v).trim();
+    const n = Number(s);
+    if (Number.isFinite(n)) {
+        const rounded = Math.abs(n) >= 100 ? Math.round(n) : Math.round(n * 10) / 10;
+        return `${rounded}`;
+    }
+    return s;
+}
+
+function netdevMetricTile(label, valueStr) {
+    return `
+        <div class="col-6 col-md-4 col-xl-3">
+            <div class="text-center p-3">
+                <h6 class="mb-1"><i class="bi bi-diagram-3 me-1"></i>${escapeHtml(label)}</h6>
+                <div class="fs-3 fw-semibold lh-sm text-break">${escapeHtml(valueStr)}</div>
+            </div>
+        </div>`;
+}
+
+function netdevMetricCompactTile(label, valueStr, colClass) {
+    return `
+        <div class="${colClass || 'col-6'}">
+            <div class="text-center p-2 h-100">
+                <h6 class="mb-1"><i class="bi bi-diagram-3 me-1"></i>${escapeHtml(label)}</h6>
+                <div class="fs-5 fw-semibold lh-sm text-break">${escapeHtml(valueStr)}</div>
+            </div>
+        </div>`;
+}
+
+/** innerHtml уже безопасен (escapeHtml внутри) */
+function netdevMetricTileHtml(label, innerHtml) {
+    return `
+        <div class="col-6 col-md-4 col-xl-3">
+            <div class="text-center p-3">
+                <h6 class="mb-1"><i class="bi bi-diagram-3 me-1"></i>${escapeHtml(label)}</h6>
+                <div class="fs-3 fw-semibold lh-sm text-break">${innerHtml}</div>
+            </div>
+        </div>`;
+}
+
+function netdevMetricCompactTileHtml(label, innerHtml, colClass) {
+    return `
+        <div class="${colClass || 'col-6'}">
+            <div class="text-center p-2 h-100">
+                <h6 class="mb-1"><i class="bi bi-diagram-3 me-1"></i>${escapeHtml(label)}</h6>
+                <div class="fs-5 fw-semibold lh-sm text-break">${innerHtml}</div>
+            </div>
+        </div>`;
+}
+
+function netdevStatusDisplayInnerHtml(statusKey, displayText, rawVal) {
+    const esc = escapeHtml(displayText);
+    if (statusKey === 'connected') return `<span class="text-success fw-semibold">${esc}</span>`;
+    if (statusKey === 'disconnected') return `<span class="text-danger fw-semibold">${esc}</span>`;
+    if (statusKey === 'unknown') {
+        const rawTrim = rawVal != null ? String(rawVal).trim() : '';
+        const raw =
+            rawTrim !== ''
+                ? ` <span class="text-muted small fw-normal">(${escapeHtml(rawTrim)})</span>`
+                : '';
+        return `<span class="text-muted fw-semibold">${esc}</span>${raw}`;
+    }
+    return esc;
+}
+
+function buildNetdevCardsHtml(data) {
+    const items = Array.isArray(data?.items) ? data.items : [];
+    const netdevColClass = items.length === 1 ? 'col-12' : 'col-md-6';
+    const rowClass = items.length === 1 ? 'row g-2' : 'row row-cols-1 row-cols-sm-2 g-2 small';
+
+    const buildFieldsTiles = (fields, opts) => {
+        const useCompact = !!opts?.compact;
+        const tiles = [];
+        for (const f of Array.isArray(fields) ? fields : []) {
+            if (f && f.enabled === false) continue;
+            const oid = f?.oid ? String(f.oid).trim() : '';
+            if (!oid) continue; // Skip unconfigured fields
+            const label = f?.label ? String(f.label).trim() : lastFallbackLabel(oid);
+            const rawVal = f?.value != null ? String(f.value) : null;
+            const disp = f?.displayValue != null && String(f.displayValue).trim() !== ''
+                ? String(f.displayValue).trim()
+                : null;
+            const st = f?.statusDisplay;
+            let innerHtml;
+            if (st === 'connected' || st === 'disconnected' || st === 'unknown') {
+                let valueStr;
+                if (st === 'connected') {
+                    valueStr = t('netdevStatusConnected') || 'Подключён';
+                } else if (st === 'disconnected') {
+                    valueStr = t('netdevStatusDisconnected') || 'Отключён';
+                } else {
+                    valueStr = t('netdevStatusUnknown') || 'Неизвестно';
+                }
+                innerHtml = netdevStatusDisplayInnerHtml(st, valueStr, rawVal);
+            } else {
+                let valueStr;
+                if (disp != null) {
+                    valueStr = disp;
+                } else {
+                    valueStr =
+                        rawVal != null && rawVal.trim() !== '' ? formatNetdevMetricValue(rawVal) : '—';
+                }
+                innerHtml = escapeHtml(valueStr);
+            }
+            if (useCompact) tiles.push(netdevMetricCompactTileHtml(label, innerHtml));
+            else tiles.push(netdevMetricTileHtml(label, innerHtml));
+        }
+        return tiles.join('');
+    };
+
+    const lastFallbackLabel = (oid) => {
+        const s = String(oid || '').trim();
+        const parts = s.split('.').filter(Boolean);
+        return parts.length ? parts[parts.length - 1] : 'Field';
+    };
+
+    if (items.length === 1) {
+        const item = items[0] || {};
+        const name = item.name || `Устройство ${item.slot || 1}`;
+        if (item.error) {
+            const html = `
+                <div class="col-12">
+                    <div class="alert alert-warning mb-0 py-2 d-flex flex-wrap justify-content-between align-items-center gap-2">
+                        <span class="fw-semibold text-truncate" title="${escapeHtml(name)}">${escapeHtml(name)}</span>
+                        <span class="small">SNMP: ${escapeHtml(item.error)}</span>
+                    </div>
+                </div>`;
+            return { html, rowClass: 'row g-2' };
+        }
+
+        const badgeClass = item.up ? 'bg-success' : 'bg-secondary';
+        const statusLabel = item.up ? 'OK' : '—';
+
+        const fieldsHtml = buildFieldsTiles(item.fields, {});
+        const hostLine = item.host ? `SNMP · ${item.host}` : 'SNMP';
+
+        const html = `
+            <div class="col-12">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3 pb-3 border-bottom">
+                    <div class="fw-semibold fs-5 text-truncate" title="${escapeHtml(name)}">${escapeHtml(name)}</div>
+                    <span class="badge ${badgeClass}">${escapeHtml(statusLabel)}</span>
+                </div>
+                <div class="row g-2">
+                    ${fieldsHtml}
+                </div>
+                <p class="small text-muted text-center mb-0 mt-3">${escapeHtml(hostLine)}</p>
+            </div>`;
+
+        return { html, rowClass: 'row g-2' };
+    }
+
+    const html = items.map((item) => {
+        const name = item.name || `Устройство ${item.slot || ''}`.trim();
+        const badgeClass = item.up ? 'bg-success' : 'bg-secondary';
+        const statusLabel = item.up ? 'OK' : '—';
+        const fieldsHtml = buildFieldsTiles(item.fields, { compact: true });
+
+        if (item.error) {
+            return `
+                <div class="${netdevColClass}">
+                    <div class="card h-100">
+                        <div class="card-header py-2 px-2 d-flex justify-content-between align-items-center">
+                            <div class="fw-semibold text-truncate pe-2" title="${escapeHtml(name)}">${escapeHtml(name)}</div>
+                            <span class="badge bg-secondary">SNMP</span>
+                        </div>
+                        <div class="card-body p-2">
+                            <div class="small text-muted">Ошибка: ${escapeHtml(item.error)}</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        return `
+            <div class="${netdevColClass}">
+                <div class="card h-100">
+                    <div class="card-header py-2 px-2 d-flex justify-content-between align-items-center">
+                        <div class="fw-semibold text-truncate pe-2" title="${escapeHtml(name)}">${escapeHtml(name)}</div>
+                        <span class="badge ${badgeClass}">${escapeHtml(statusLabel)}</span>
+                    </div>
+                    <div class="card-body p-2">
+                        <div class="row g-2">
+                            ${fieldsHtml}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    return { html, rowClass };
+}
+
+async function updateNetdevDashboard() {
+    const dashboardCards = document.getElementById('dashboardNetdevCards');
+    const dashSection = document.getElementById('dashboardNetdevSection');
+    const updatedAtEl = document.getElementById('dashboardNetdevUpdatedAt');
+
+    const netdevMonitorCards = document.getElementById('netdevMonitorCards');
+    const netdevMonSection = document.getElementById('netdevMonitorSection');
+    const netdevUpdatedAtEl = document.getElementById('netdevUpdatedAt');
+
+    const isNetdevMonitorScreen = monitorMode && monitorCurrentView === 'netdev';
+    const cardsEl = isNetdevMonitorScreen ? netdevMonitorCards : dashboardCards;
+    const sectionEl = isNetdevMonitorScreen ? netdevMonSection : dashSection;
+    const updatedAtTargetEl = isNetdevMonitorScreen ? netdevUpdatedAtEl : updatedAtEl;
+
+    if (!cardsEl || !sectionEl) return;
+
+    cardsEl.innerHTML = '';
+    cardsEl.className = 'row g-2 small';
+    if (updatedAtTargetEl) updatedAtTargetEl.textContent = '';
+
+    try {
+        const res = await fetch('/api/netdevices/current');
+        const data = await res.json();
+
+        let items = Array.isArray(data?.items) ? data.items : [];
+
+        if (!isNetdevMonitorScreen) {
+            // В monitor-mode на экране Cluster сетка берёт слоты “монитора”, а в обычном режиме — слоты “дашборда”
+            const isMonitorCluster = monitorMode && monitorCurrentView === 'cluster';
+            const slotsForDashboard = isMonitorCluster ? netdevDisplaySlotsMonitor : netdevDisplaySlotsDashboard;
+            const safeSlotsForDashboard = (Array.isArray(slotsForDashboard) && slotsForDashboard.length > 0)
+                ? slotsForDashboard
+                : (netdevDisplaySlotsLoadedOnce ? [] : Array.from({ length: NETDEV_MAX_CONFIGS }, (_, i) => i + 1));
+
+            items = (Array.isArray(safeSlotsForDashboard) && safeSlotsForDashboard.length > 0)
+                ? items.filter((it) => safeSlotsForDashboard.includes(it.slot))
+                : items;
+        } else {
+            // На экране netdev используем слот(ы) “монитора”, чтобы чекбоксы из настроек работали и тут.
+            const slotsForMonitor = netdevDisplaySlotsMonitor;
+            const safeSlotsForMonitor = (Array.isArray(slotsForMonitor) && slotsForMonitor.length > 0)
+                ? slotsForMonitor
+                : (netdevDisplaySlotsLoadedOnce ? [] : Array.from({ length: NETDEV_MAX_CONFIGS }, (_, i) => i + 1));
+
+            items = (Array.isArray(safeSlotsForMonitor) && safeSlotsForMonitor.length > 0)
+                ? items.filter((it) => safeSlotsForMonitor.includes(it.slot))
+                : items;
+        }
+
+        const showSection = !!(data && data.configured && Array.isArray(items) && items.length > 0);
+        sectionEl.style.display = showSection ? '' : 'none';
+
+        if (!showSection) {
+            cardsEl.innerHTML = `
+                <div class="col-12">
+                    <div class="text-muted small">Сетевые устройства не настроены</div>
+                </div>`;
+            if (updatedAtTargetEl && data?.updatedAt) updatedAtTargetEl.textContent = new Date(data.updatedAt).toLocaleString();
+            return;
+        }
+
+        if (updatedAtTargetEl && data?.updatedAt) updatedAtTargetEl.textContent = new Date(data.updatedAt).toLocaleString();
+
+        const payload = { ...data, items };
+        const { html, rowClass } = buildNetdevCardsHtml(payload);
+        cardsEl.className = rowClass || 'row g-2 small';
+        cardsEl.innerHTML = html;
+    } catch (e) {
+        cardsEl.innerHTML = `<div class="col-12"><div class="text-danger small">${escapeHtml((e && e.message) ? e.message : String(e))}</div></div>`;
+        sectionEl.style.display = '';
+    }
+}
+
 /** Последний ответ /api/debug для экспорта отчёта */
 let lastDebugServerData = null;
 
@@ -1421,6 +2240,8 @@ async function showConfig() {
     if (servicesSection) servicesSection.style.display = 'none';
     // Вынесем UPS в отдельный раздел настроек
     moveUpsSettingsCardToSeparateTab();
+    // Вынесем сетевые устройства (SNMP) в отдельный раздел настроек
+    moveNetdevSettingsCardToSeparateTab();
     await loadSettingsPanelData();
     if (autoRefreshInterval) {
         clearInterval(autoRefreshInterval);
@@ -1441,6 +2262,8 @@ async function toggleSettings() {
         if (servicesSection) servicesSection.style.display = 'none';
         // Вынесем UPS в отдельный раздел настроек
         moveUpsSettingsCardToSeparateTab();
+        // Вынесем сетевые устройства (SNMP) в отдельный раздел настроек
+        moveNetdevSettingsCardToSeparateTab();
         await loadSettingsPanelData();
         if (autoRefreshInterval) {
             clearInterval(autoRefreshInterval);
@@ -1468,6 +2291,20 @@ function moveUpsSettingsCardToSeparateTab() {
         container.appendChild(wrap);
     } catch (e) {
         console.warn('Failed to move UPS settings block:', e);
+    }
+}
+
+function moveNetdevSettingsCardToSeparateTab() {
+    const wrap = document.getElementById('netdevSettingsCardWrap');
+    const container = document.getElementById('netdevSettingsContainer');
+    if (!wrap || !container) return;
+    if (container.contains(wrap)) return;
+
+    try {
+        container.innerHTML = '';
+        container.appendChild(wrap);
+    } catch (e) {
+        console.warn('Failed to move Netdev settings block:', e);
     }
 }
 
@@ -1539,13 +2376,13 @@ async function toggleMonitorMode() {
 
 let monitorSwipeStartX = null;
 let monitorSwipeHandlersAttached = false;
-/** Текущий экран режима монитора: 'cluster' | 'vms' | 'services' | 'backupRuns' (только Proxmox) */
+/** Текущий экран режима монитора: 'cluster' | 'ups' | 'netdev' | 'vms' | 'services' | 'backupRuns' (только Proxmox) */
 let monitorCurrentView = 'cluster';
 /** Последние данные бэкапов для экрана монитора */
 let lastBackupsDataForMonitor = null;
 
 /** Полный порядок экранов монитора (в БД); на TrueNAS экран backupRuns пропускается при листании */
-const MONITOR_SCREEN_IDS_ALL = ['cluster', 'ups', 'vms', 'services', 'backupRuns'];
+const MONITOR_SCREEN_IDS_ALL = ['cluster', 'ups', 'netdev', 'vms', 'services', 'backupRuns'];
 let monitorScreensOrder = MONITOR_SCREEN_IDS_ALL.slice();
 
 function normalizeMonitorScreensOrder(arr) {
@@ -1575,6 +2412,7 @@ function monitorScreenSettingsLabel(id) {
     const map = {
         cluster: t('monitorScreenCluster'),
         ups: t('monitorScreenUps'),
+        netdev: t('monitorScreenNetdev'),
         vms: t('monitorScreenVms'),
         services: t('monitorScreenServices'),
         backupRuns: t('monitorScreenBackupRuns')
@@ -1618,6 +2456,7 @@ function updateMonitorToolbarTitleForView() {
     const titles = {
         cluster: t('monitorScreenCluster'),
         ups: t('monitorScreenUps'),
+        netdev: t('monitorScreenNetdev'),
         vms: t('monitorScreenVms'),
         services: t('monitorScreenServices'),
         backupRuns: t('monitorScreenBackupRuns')
@@ -1634,6 +2473,7 @@ function applyMonitorView(view) {
     const servicesSection = document.getElementById('servicesMonitorSection');
     const vmsSection = document.getElementById('vmsMonitorSection');
     const upsMonSection = document.getElementById('upsMonitorSection');
+    const netdevMonSection = document.getElementById('netdevMonitorSection');
     const backupsMon = document.getElementById('backupsMonitorSection');
     const monitorView = document.getElementById('monitorView');
 
@@ -1645,6 +2485,7 @@ function applyMonitorView(view) {
         if (servicesSection) servicesSection.style.display = 'none';
         if (vmsSection) vmsSection.style.display = 'none';
         if (upsMonSection) upsMonSection.style.display = 'none';
+        if (netdevMonSection) netdevMonSection.style.display = 'none';
         if (backupsMon) backupsMon.style.display = 'none';
         return;
     }
@@ -1661,12 +2502,14 @@ function applyMonitorView(view) {
         if (vmsSection) vmsSection.style.display = 'none';
         if (backupsMon) backupsMon.style.display = 'none';
         if (upsMonSection) upsMonSection.style.display = 'none';
+        if (netdevMonSection) netdevMonSection.style.display = 'none';
     } else if (view === 'services') {
         if (dashboardSection) dashboardSection.style.display = 'none';
         if (servicesSection) servicesSection.style.display = 'block';
         if (vmsSection) vmsSection.style.display = 'none';
         if (backupsMon) backupsMon.style.display = 'none';
         if (upsMonSection) upsMonSection.style.display = 'none';
+        if (netdevMonSection) netdevMonSection.style.display = 'none';
         renderMonitorServicesList();
     } else if (view === 'vms') {
         if (dashboardSection) dashboardSection.style.display = 'none';
@@ -1674,6 +2517,7 @@ function applyMonitorView(view) {
         if (vmsSection) vmsSection.style.display = 'block';
         if (backupsMon) backupsMon.style.display = 'none';
         if (upsMonSection) upsMonSection.style.display = 'none';
+        if (netdevMonSection) netdevMonSection.style.display = 'none';
         renderMonitorVmsList();
         renderVmsMonitorCards();
     } else if (view === 'ups') {
@@ -1682,12 +2526,22 @@ function applyMonitorView(view) {
         if (vmsSection) vmsSection.style.display = 'none';
         if (backupsMon) backupsMon.style.display = 'none';
         if (upsMonSection) upsMonSection.style.display = 'block';
+        if (netdevMonSection) netdevMonSection.style.display = 'none';
         updateUPSDashboard().catch(() => {});
+    } else if (view === 'netdev') {
+        if (dashboardSection) dashboardSection.style.display = 'none';
+        if (servicesSection) servicesSection.style.display = 'none';
+        if (vmsSection) vmsSection.style.display = 'none';
+        if (backupsMon) backupsMon.style.display = 'none';
+        if (upsMonSection) upsMonSection.style.display = 'none';
+        if (netdevMonSection) netdevMonSection.style.display = 'block';
+        updateNetdevDashboard().catch(() => {});
     } else if (view === 'backupRuns') {
         if (dashboardSection) dashboardSection.style.display = 'none';
         if (servicesSection) servicesSection.style.display = 'none';
         if (vmsSection) vmsSection.style.display = 'none';
         if (upsMonSection) upsMonSection.style.display = 'none';
+        if (netdevMonSection) netdevMonSection.style.display = 'none';
         /* flex, не block — иначе .monitor-backups-main-card не растягивается и card-body с flex:1 схлопывается в 0 */
         if (backupsMon) backupsMon.style.display = 'flex';
         renderMonitorBackupRuns(lastBackupsDataForMonitor);
@@ -1782,6 +2636,8 @@ function showDashboard() {
     const backupsMon = document.getElementById('backupsMonitorSection');
     if (servicesSection) servicesSection.style.display = 'none';
     if (backupsMon) backupsMon.style.display = 'none';
+    const netdevMonSection = document.getElementById('netdevMonitorSection');
+    if (netdevMonSection) netdevMonSection.style.display = 'none';
     // Refresh only when authenticated
     if (apiToken) {
         refreshData();
@@ -1800,6 +2656,7 @@ async function connect() {
     const tokenInput = currentServerType === 'truenas'
         ? document.getElementById('apiTokenTrueNAS')
         : document.getElementById('apiToken');
+    if (currentServerType === 'proxmox') syncProxmoxApiTokenFromParts();
     const rawToken = tokenInput ? tokenInput.value.trim() : '';
     const token = (rawToken && rawToken.includes('•')) ? (apiToken || '') : rawToken;
 
@@ -1872,6 +2729,7 @@ async function testConnection() {
     const tokenInput = currentServerType === 'truenas'
         ? document.getElementById('apiTokenTrueNAS')
         : document.getElementById('apiToken');
+    if (currentServerType === 'proxmox') syncProxmoxApiTokenFromParts();
     const rawToken = tokenInput ? tokenInput.value.trim() : '';
     const token = (rawToken && rawToken.includes('•')) ? (apiToken || '') : rawToken;
 
@@ -1998,6 +2856,9 @@ async function refreshData(options = {}) {
             if (!monitorMode || monitorCurrentView === 'cluster' || monitorCurrentView === 'ups') {
                 updateUPSDashboard().catch(() => {});
             }
+            if (!monitorMode || monitorCurrentView === 'cluster' || monitorCurrentView === 'netdev') {
+                updateNetdevDashboard().catch(() => {});
+            }
         } else {
             const serverUrl = getCurrentServerUrl();
             const [clusterRes, storageRes, backupsRes] = await Promise.all([
@@ -2017,6 +2878,9 @@ async function refreshData(options = {}) {
             updateDashboard(clusterData, storageData, backupsData, {});
             if (!monitorMode || monitorCurrentView === 'cluster' || monitorCurrentView === 'ups') {
                 updateUPSDashboard().catch(() => {});
+            }
+            if (!monitorMode || monitorCurrentView === 'cluster' || monitorCurrentView === 'netdev') {
+                updateNetdevDashboard().catch(() => {});
             }
         }
         

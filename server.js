@@ -49,6 +49,7 @@ app.use('/api/truenas', require('./modules/routes/truenas-status'));
 app.use('/api/connections', require('./modules/routes/connections'));
 app.use('/api/settings', require('./modules/routes/settings'));
 app.use('/api/ups', require('./modules/routes/ups'));
+app.use('/api/netdevices', require('./modules/routes/netdevices-snmp'));
 
 // Доступные языки
 app.get('/api/languages', (req, res) => {

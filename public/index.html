@@ -135,6 +135,9 @@
                             <button class="nav-link" id="settings-nav-ups" data-bs-toggle="pill" data-bs-target="#settings-tab-ups" type="button" role="tab">
                                 <i class="bi bi-lightning me-2"></i><span>UPS</span>
                             </button>
+                            <button class="nav-link" id="settings-nav-netdevices" data-bs-toggle="pill" data-bs-target="#settings-tab-netdevices" type="button" role="tab">
+                                <i class="bi bi-diagram-3 me-2"></i><span>Сетевые устройства (SNMP)</span>
+                            </button>
                             <button class="nav-link" id="settings-nav-security" data-bs-toggle="pill" data-bs-target="#settings-tab-security" type="button" role="tab">
                                 <i class="bi bi-shield-lock me-2"></i><span id="settingsNavSecurity">Безопасность</span>
                             </button>
@@ -165,7 +168,18 @@
                                         </div>
                                         <div class="mb-3">
                                             <label class="form-label fw-bold" id="tokenLabel">API токен</label>
-                                            <input type="password" class="form-control form-control-lg" id="apiToken" placeholder="root@pam!monitoring=UUID">
+                                            <div class="row g-2">
+                                                <div class="col-md-7">
+                                                    <input type="text" class="form-control form-control-lg" id="apiTokenId" placeholder="root@pam!monitoring">
+                                                    <div class="form-text">Часть до `=`</div>
+                                                </div>
+                                                <div class="col-md-5">
+                                                    <input type="password" class="form-control form-control-lg" id="apiTokenSecret" placeholder="UUID">
+                                                    <div class="form-text">Секрет (после `=`)</div>
+                                                </div>
+                                            </div>
+                                            <!-- Hidden: полный токен в старом формате для обратной совместимости -->
+                                            <input type="hidden" id="apiToken">
                                             <div class="form-text" id="tokenHint">Формат: пользователь@область!идентификатор_токена=секрет</div>
                                         </div>
                                         <div class="mb-3">
@@ -645,6 +659,97 @@
                         </div>
                         </div>
                     </div>
+                    <div id="netdevSettingsCardWrap">
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h5 class="mb-0"><i class="bi bi-diagram-3 me-2"></i><span>Сетевые устройства (SNMP)</span></h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row g-3 align-items-end mb-3">
+                                    <div class="col-md-3">
+                                        <label class="form-label fw-bold mb-2">Слот сетевого устройства</label>
+                                        <div class="nav nav-pills" id="netdevSlotTabs" role="tablist"></div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label fw-bold">Включить</label>
+                                        <select class="form-select" id="netdevEnabledSelect">
+                                            <option value="0">Нет</option>
+                                            <option value="1" selected>Да</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label fw-bold" for="netdevHostInput">Хост</label>
+                                        <input type="text" class="form-control" id="netdevHostInput" placeholder="router IP/hostname">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label fw-bold" for="netdevPortInput">Порт SNMP</label>
+                                        <input type="number" class="form-control" id="netdevPortInput" placeholder="161" min="1" max="65535">
+                                    </div>
+                                </div>
+
+                                <div class="row g-3 align-items-end mb-3">
+                                    <div class="col-md-4">
+                                        <label class="form-label fw-bold" for="netdevCommunityInput">Community</label>
+                                        <input type="text" class="form-control" id="netdevCommunityInput" placeholder="public">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label fw-bold" for="netdevNameInput">Имя устройства</label>
+                                        <input type="text" class="form-control" id="netdevNameInput" placeholder="router1">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label fw-bold" for="netdevNameOidInput">OID имени (опционально)</label>
+                                        <input type="text" class="form-control" id="netdevNameOidInput" placeholder="1.3.6....">
+                                    </div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <h6 class="fw-semibold mb-2"><i class="bi bi-list-columns me-2"></i>Поля (до 15)</h6>
+                                    <div id="netdevFieldsInputsWrap"></div>
+                                    <div class="form-text">Добавляйте и удаляйте поля кнопками; переключатель «Опрашивать» отключает SNMP по строке без удаления. Пустой OID на дашборде не показывается. «Время» — SNMP TimeTicks; «МБ/ГБ» — значение в <strong>байтах</strong>, единицы из настроек «Единицы измерения». «Статус (bool, 0/1 — авто)» и «Статус (вручную)» — как в подсказках под списками значений.</div>
+                                </div>
+
+                                <hr class="my-4">
+
+                                <div class="mb-3">
+                                    <ul class="nav nav-pills" id="netdevDisplayTabs" role="tablist">
+                                        <li class="nav-item" role="presentation">
+                                            <button class="nav-link active" id="netdevDisplayDashboardTab" data-bs-toggle="tab"
+                                                data-bs-target="#netdevDisplayDashboardPane" type="button" role="tab"
+                                                aria-controls="netdevDisplayDashboardPane" aria-selected="true">
+                                                Обычный режим
+                                            </button>
+                                        </li>
+                                        <li class="nav-item" role="presentation">
+                                            <button class="nav-link" id="netdevDisplayMonitorTab" data-bs-toggle="tab"
+                                                data-bs-target="#netdevDisplayMonitorPane" type="button" role="tab"
+                                                aria-controls="netdevDisplayMonitorPane" aria-selected="false">
+                                                Режим монитора
+                                            </button>
+                                        </li>
+                                    </ul>
+                                    <div class="tab-content p-3" id="netdevDisplayTabsContent">
+                                        <div class="tab-pane fade show active" id="netdevDisplayDashboardPane" role="tabpanel"
+                                            aria-labelledby="netdevDisplayDashboardTab">
+                                            <label class="form-label fw-bold mb-2">Показывать на дашборде</label>
+                                            <div class="d-flex flex-wrap gap-3" id="netdevDisplayDashboardSlotsWrap"></div>
+                                        </div>
+
+                                        <div class="tab-pane fade" id="netdevDisplayMonitorPane" role="tabpanel"
+                                            aria-labelledby="netdevDisplayMonitorTab">
+                                            <label class="form-label fw-bold mb-2">Показывать в режиме монитора (экран Cluster)</label>
+                                            <div class="d-flex flex-wrap gap-3" id="netdevDisplayMonitorSlotsWrap"></div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="d-flex justify-content-end">
+                                    <button class="btn btn-primary" type="button" onclick="saveNetdevSettings()" id="netdevSaveBtn">
+                                        <i class="bi bi-save me-2"></i><span>Сохранить сетевые устройства</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                     <hr class="my-4">
                     <h5 class="mb-2"><i class="bi bi-hdd-network me-2"></i><span id="settingsVmsTitle">VM/CT для мониторинга</span></h5>
                     <p class="text-muted small mb-3" id="settingsVmsHint">Введите ID или имя VM/CT и нажмите «Добавить» — гость будет отображаться в режиме монитора. Список загружается с Proxmox по кнопке «Обновить».</p>
@@ -732,6 +837,12 @@
                             <div class="tab-pane fade" id="settings-tab-ups" role="tabpanel">
                                 <div class="settings-section">
                                     <div id="upsSettingsContainer"></div>
+                                </div>
+                            </div>
+                            <!-- Сетевые устройства -->
+                            <div class="tab-pane fade" id="settings-tab-netdevices" role="tabpanel">
+                                <div class="settings-section">
+                                    <div id="netdevSettingsContainer"></div>
                                 </div>
                             </div>
                             <!-- Отладка -->
@@ -881,6 +992,23 @@
                                 <span class="small text-muted" id="dashboardUpsUpdatedAt"></span>
                             </div>
                             <div class="row g-2 small" id="dashboardUpsCards"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Сетевые устройства (SNMP) на главном дашборде -->
+            <div class="row mb-4" id="dashboardNetdevSection" style="display: none;">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="bi bi-diagram-3 me-2"></i><span id="dashboardNetdevTitle">Сетевые устройства (SNMP)</span></h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="d-flex align-items-center mb-2 flex-wrap gap-2">
+                                <span class="small text-muted" id="dashboardNetdevUpdatedAt"></span>
+                            </div>
+                            <div class="row g-2 small" id="dashboardNetdevCards"></div>
                         </div>
                     </div>
                 </div>
@@ -1126,6 +1254,26 @@
                         <span class="small text-muted" id="upsUpdatedAt"> </span>
                     </div>
                     <div class="row g-2 small" id="upsMonitorCards"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Режим монитора: сетевые устройства (SNMP) — один экран без скролла -->
+        <div id="netdevMonitorSection" class="mb-4" style="display: none;">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="applyMonitorView('cluster')">
+                    <i class="bi bi-arrow-left me-1"></i><span id="netdevMonitorBackText">К кластеру</span>
+                </button>
+            </div>
+            <div class="card">
+                <div class="card-header py-2 px-3">
+                    <h5 class="mb-0"><i class="bi bi-diagram-3 me-2"></i><span id="netdevTitle">Сетевые устройства (SNMP)</span></h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex align-items-center mb-3">
+                        <span class="small text-muted" id="netdevUpdatedAt"> </span>
+                    </div>
+                    <div class="row g-2 small" id="netdevMonitorCards"></div>
                 </div>
             </div>
         </div>
