@@ -64,6 +64,19 @@ function initSchema(database) {
             last_latency INTEGER
         )
     `);
+    database.run(`
+        CREATE TABLE IF NOT EXISTS speedtest_results (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            run_at TEXT NOT NULL,
+            download_mbps REAL,
+            upload_mbps REAL,
+            ping_ms REAL,
+            server_id TEXT,
+            server_name TEXT,
+            error TEXT
+        )
+    `);
+    database.run(`CREATE INDEX IF NOT EXISTS idx_speedtest_run_at ON speedtest_results(run_at)`);
 }
 
 function saveDb() {

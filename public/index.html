@@ -138,6 +138,9 @@
                             <button class="nav-link" id="settings-nav-netdevices" data-bs-toggle="pill" data-bs-target="#settings-tab-netdevices" type="button" role="tab">
                                 <i class="bi bi-diagram-3 me-2"></i><span id="settingsNavNetdevices">Сетевые устройства (SNMP)</span>
                             </button>
+                            <button class="nav-link" id="settings-nav-speedtest" data-bs-toggle="pill" data-bs-target="#settings-tab-speedtest" type="button" role="tab">
+                                <i class="bi bi-wifi me-2"></i><span id="settingsNavSpeedtest">Speedtest</span>
+                            </button>
                             <button class="nav-link" id="settings-nav-security" data-bs-toggle="pill" data-bs-target="#settings-tab-security" type="button" role="tab">
                                 <i class="bi bi-shield-lock me-2"></i><span id="settingsNavSecurity">Безопасность</span>
                             </button>
@@ -845,6 +848,39 @@
                                     <div id="netdevSettingsContainer"></div>
                                 </div>
                             </div>
+                            <!-- Speedtest -->
+                            <div class="tab-pane fade" id="settings-tab-speedtest" role="tabpanel">
+                                <div class="settings-section card mb-4">
+                                    <div class="card-body">
+                                        <h5 class="mb-3"><i class="bi bi-speedometer2 me-2"></i><span id="speedtestSettingsTitle">Speedtest</span></h5>
+                                        <p class="text-muted small mb-3" id="speedtestSettingsHint">Требуется официальный CLI Ookla Speedtest в PATH на сервере (команда <code>speedtest</code>).</p>
+                                        <div class="row g-3 align-items-end mb-3">
+                                            <div class="col-md-3">
+                                                <label class="form-label fw-bold" for="speedtestEnabledSelect" id="speedtestEnabledLabel">Замер</label>
+                                                <select class="form-select" id="speedtestEnabledSelect" onchange="saveSpeedtestSettings()">
+                                                    <option value="0" selected>Выключено</option>
+                                                    <option value="1">Включено</option>
+                                                </select>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <label class="form-label fw-bold" for="speedtestServerInput" id="speedtestServerLabel">Сервер измерения</label>
+                                                <input type="text" class="form-control" id="speedtestServerInput" placeholder="" onchange="saveSpeedtestSettings()" onblur="saveSpeedtestSettings()">
+                                                <div class="form-text" id="speedtestServerHint">ID сервера Ookla (число). Пусто — авто.</div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <label class="form-label fw-bold" for="speedtestPerDayInput" id="speedtestPerDayLabel">Замеров в сутки</label>
+                                                <input type="number" class="form-control" id="speedtestPerDayInput" min="1" max="48" value="4" onchange="saveSpeedtestSettings()">
+                                            </div>
+                                            <div class="col-md-2 d-grid">
+                                                <button type="button" class="btn btn-outline-primary" id="speedtestRunNowBtn" onclick="runSpeedtestNow()">
+                                                    <i class="bi bi-play-fill me-1"></i><span id="speedtestRunNowText">Сейчас</span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div class="small" id="speedtestCliStatus"></div>
+                                    </div>
+                                </div>
+                            </div>
                             <!-- Отладка -->
                             <div class="tab-pane fade" id="settings-tab-debug" role="tabpanel">
                                 <div class="settings-section">
@@ -1009,6 +1045,38 @@
                                 <span class="small text-muted" id="dashboardNetdevUpdatedAt"></span>
                             </div>
                             <div class="row g-2 small" id="dashboardNetdevCards"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Speedtest на дашборде -->
+            <div class="row mb-4" id="dashboardSpeedtestSection" style="display: none;">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="bi bi-speedometer2 me-2"></i><span id="dashboardSpeedtestTitle">Speedtest</span></h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-3 small">
+                                <div class="col-md-4 col-6">
+                                    <div class="text-muted" id="speedtestLastRunLabel">Последний замер</div>
+                                    <div class="fs-5 fw-semibold" id="dashboardSpeedtestLastRun">—</div>
+                                </div>
+                                <div class="col-md-4 col-6">
+                                    <div class="text-muted" id="speedtestAvgLabel">Средняя скорость (сегодня)</div>
+                                    <div class="fs-5 fw-semibold" id="dashboardSpeedtestAvg">—</div>
+                                </div>
+                                <div class="col-md-2 col-6">
+                                    <div class="text-muted" id="speedtestMinLabel">Минимум</div>
+                                    <div class="fs-6 fw-semibold" id="dashboardSpeedtestMin">—</div>
+                                </div>
+                                <div class="col-md-2 col-6">
+                                    <div class="text-muted" id="speedtestMaxLabel">Максимум</div>
+                                    <div class="fs-6 fw-semibold" id="dashboardSpeedtestMax">—</div>
+                                </div>
+                            </div>
+                            <div class="mt-2 small text-muted" id="dashboardSpeedtestExtra"></div>
                         </div>
                     </div>
                 </div>
@@ -1274,6 +1342,41 @@
                         <span class="small text-muted" id="netdevUpdatedAt"> </span>
                     </div>
                     <div class="row g-2 small" id="netdevMonitorCards"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Режим монитора: Speedtest -->
+        <div id="speedtestMonitorSection" class="mb-4" style="display: none;">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="applyMonitorView('cluster')">
+                    <i class="bi bi-arrow-left me-1"></i><span id="speedtestMonitorBackText">К кластеру</span>
+                </button>
+            </div>
+            <div class="card">
+                <div class="card-header py-2 px-3">
+                    <h5 class="mb-0"><i class="bi bi-speedometer2 me-2"></i><span id="speedtestMonitorTitle">Speedtest</span></h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3 small">
+                        <div class="col-md-4 col-6">
+                            <div class="text-muted" id="speedtestMonitorLastRunLabel">Последний замер</div>
+                            <div class="fs-5 fw-semibold" id="speedtestMonitorLastRun">—</div>
+                        </div>
+                        <div class="col-md-4 col-6">
+                            <div class="text-muted" id="speedtestMonitorAvgLabel">Средняя скорость (сегодня)</div>
+                            <div class="fs-5 fw-semibold" id="speedtestMonitorAvg">—</div>
+                        </div>
+                        <div class="col-md-2 col-6">
+                            <div class="text-muted" id="speedtestMonitorMinLabel">Минимум</div>
+                            <div class="fs-6 fw-semibold" id="speedtestMonitorMin">—</div>
+                        </div>
+                        <div class="col-md-2 col-6">
+                            <div class="text-muted" id="speedtestMonitorMaxLabel">Максимум</div>
+                            <div class="fs-6 fw-semibold" id="speedtestMonitorMax">—</div>
+                        </div>
+                    </div>
+                    <div class="mt-2 small text-muted" id="speedtestMonitorExtra"></div>
                 </div>
             </div>
         </div>

@@ -187,6 +187,9 @@ async function saveSettingsToServer(payload) {
     if (payload.monitorHiddenVmIds !== undefined) body.monitorHiddenVmIds = payload.monitorHiddenVmIds;
     if (payload.monitorVms !== undefined) body.monitorVms = payload.monitorVms;
     if (payload.monitorScreensOrder !== undefined) body.monitorScreensOrder = payload.monitorScreensOrder;
+    if (payload.speedtestEnabled !== undefined) body.speedtestEnabled = !!payload.speedtestEnabled;
+    if (payload.speedtestServer !== undefined) body.speedtestServer = payload.speedtestServer;
+    if (payload.speedtestPerDay !== undefined) body.speedtestPerDay = payload.speedtestPerDay;
     try {
         await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     } catch (e) {
@@ -505,7 +508,8 @@ function updateUILanguage() {
         monitorModeText: 'monitorMode',
         menuVmsMonitorText: 'menuVmsMonitorText',
         settingsNavUps: 'settingsNavUps',
-        settingsNavNetdevices: 'settingsNavNetdevices'
+        settingsNavNetdevices: 'settingsNavNetdevices',
+        settingsNavSpeedtest: 'settingsNavSpeedtest'
     };
     
     for (const [id, key] of Object.entries(elements)) {
@@ -690,10 +694,30 @@ function updateUILanguage() {
     setText('netdevShowOnMonitorLabel', t('netdevShowOnMonitorLabel'));
     setText('netdevSaveButtonText', t('netdevSaveButton'));
 
+    setText('speedtestSettingsTitle', t('speedtestSettingsTitle'));
+    setText('speedtestSettingsHint', t('speedtestSettingsHint'));
+    setText('speedtestEnabledLabel', t('speedtestEnabledLabel'));
+    setText('speedtestServerLabel', t('speedtestServerLabel'));
+    setText('speedtestServerHint', t('speedtestServerHint'));
+    setText('speedtestPerDayLabel', t('speedtestPerDayLabel'));
+    setText('speedtestRunNowText', t('speedtestRunNowText'));
+    setText('dashboardSpeedtestTitle', t('dashboardSpeedtestTitle'));
+    setText('speedtestMonitorTitle', t('dashboardSpeedtestTitle'));
+    setText('speedtestLastRunLabel', t('speedtestLastRunLabel'));
+    setText('speedtestAvgLabel', t('speedtestAvgLabel'));
+    setText('speedtestMinLabel', t('speedtestMinLabel'));
+    setText('speedtestMaxLabel', t('speedtestMaxLabel'));
+    setText('speedtestMonitorLastRunLabel', t('speedtestLastRunLabel'));
+    setText('speedtestMonitorAvgLabel', t('speedtestAvgLabel'));
+    setText('speedtestMonitorMinLabel', t('speedtestMinLabel'));
+    setText('speedtestMonitorMaxLabel', t('speedtestMaxLabel'));
+    setText('speedtestMonitorBackText', t('speedtestMonitorBackText'));
+
     setPlaceholder('settingsServiceNameInput', t('settingsServicePlaceholderName'));
     setPlaceholder('settingsServiceHostInput', t('settingsServicePlaceholderHost'));
     setPlaceholder('upsHostInput', t('upsHostPlaceholder'));
     setPlaceholder('netdevHostInput', t('netdevHostPlaceholder'));
+    setPlaceholder('speedtestServerInput', t('speedtestServerPlaceholder'));
 
     [
         'upsSnmpOidChargeInput',
@@ -708,6 +732,7 @@ function updateUILanguage() {
     localizeRefreshIntervalSelect();
     localizeYesNoSelect('upsEnabledSelect');
     localizeYesNoSelect('netdevEnabledSelect');
+    localizeYesNoSelect('speedtestEnabledSelect');
     localizeServiceTypeSelect();
     localizeUpsTypeSelect();
     syncSettingsConnectionStatusText();
@@ -2227,6 +2252,115 @@ async function updateNetdevDashboard() {
     }
 }
 
+function formatSpeedtestMbps(v) {
+    if (v == null || !Number.isFinite(Number(v))) return '—';
+    const n = Math.round(Number(v) * 10) / 10;
+    return `${n} Mbps`;
+}
+
+async function updateSpeedtestDashboard() {
+    const dashSection = document.getElementById('dashboardSpeedtestSection');
+    const setEl = (id, text) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = text;
+    };
+    try {
+        const res = await fetch('/api/speedtest/summary');
+        const summary = await res.json();
+        if (!res.ok) throw new Error(summary.error || `HTTP ${res.status}`);
+
+        const enabled = !!(summary.enabled === true || summary.enabled === '1' || summary.enabled === 1);
+        if (dashSection) dashSection.style.display = enabled ? '' : 'none';
+
+        const last = summary.last;
+        const lastTime = last && last.runAt ? new Date(last.runAt).toLocaleString() : '—';
+        let lastMain = lastTime;
+        if (last && last.error) {
+            lastMain = `${lastTime}: ${last.error}`;
+        } else if (last && last.downloadMbps != null) {
+            lastMain = `${lastTime} · ${formatSpeedtestMbps(last.downloadMbps)} ↓`;
+        }
+
+        const td = summary.today || {};
+        const dl = td.download || {};
+        const ul = td.upload || {};
+
+        setEl('dashboardSpeedtestLastRun', lastMain);
+        setEl('dashboardSpeedtestAvg', formatSpeedtestMbps(dl.avg));
+        setEl('dashboardSpeedtestMin', formatSpeedtestMbps(dl.min));
+        setEl('dashboardSpeedtestMax', formatSpeedtestMbps(dl.max));
+
+        let extra = '';
+        if (last && !last.error && last.uploadMbps != null) {
+            extra += `${t('speedtestUploadShort')}: ${formatSpeedtestMbps(last.uploadMbps)}`;
+        }
+        if (last && last.pingMs != null) {
+            extra += (extra ? ' · ' : '') + `Ping: ${Math.round(Number(last.pingMs) * 10) / 10} ms`;
+        }
+        if (last && last.serverName) {
+            extra += (extra ? ' · ' : '') + String(last.serverName);
+        }
+        if (ul.avg != null) {
+            extra += (extra ? ' · ' : '') + `${t('speedtestUploadAvgToday')}: ${formatSpeedtestMbps(ul.avg)}`;
+        }
+        setEl('dashboardSpeedtestExtra', extra);
+
+        setEl('speedtestMonitorLastRun', lastMain);
+        setEl('speedtestMonitorAvg', formatSpeedtestMbps(dl.avg));
+        setEl('speedtestMonitorMin', formatSpeedtestMbps(dl.min));
+        setEl('speedtestMonitorMax', formatSpeedtestMbps(dl.max));
+        setEl('speedtestMonitorExtra', extra);
+
+        const cliEl = document.getElementById('speedtestCliStatus');
+        if (cliEl) {
+            cliEl.textContent = summary.cliAvailable
+                ? (t('speedtestCliOk') || 'CLI: OK')
+                : (t('speedtestCliMissing') || 'CLI: not found');
+            cliEl.className = 'small ' + (summary.cliAvailable ? 'text-success' : 'text-warning');
+        }
+    } catch (e) {
+        if (dashSection) dashSection.style.display = 'none';
+    }
+}
+
+async function saveSpeedtestSettings() {
+    const en = document.getElementById('speedtestEnabledSelect') && document.getElementById('speedtestEnabledSelect').value === '1';
+    speedtestClientEnabled = en;
+    const server = (document.getElementById('speedtestServerInput')?.value || '').trim();
+    let perDay = parseInt(document.getElementById('speedtestPerDayInput')?.value, 10);
+    if (!Number.isFinite(perDay) || perDay < 1) perDay = 4;
+    if (perDay > 48) perDay = 48;
+    const dayInput = document.getElementById('speedtestPerDayInput');
+    if (dayInput) dayInput.value = String(perDay);
+    await saveSettingsToServer({
+        speedtestEnabled: en,
+        speedtestServer: server,
+        speedtestPerDay: perDay
+    });
+    renderSettingsMonitorScreensOrderList();
+    showToast(t('speedtestSaved') || t('dataUpdated'), 'success');
+    updateSpeedtestDashboard().catch(() => {});
+}
+
+async function runSpeedtestNow() {
+    const btn = document.getElementById('speedtestRunNowBtn');
+    if (btn) btn.disabled = true;
+    try {
+        const res = await fetch('/api/speedtest/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+        const data = await res.json();
+        if (!res.ok) {
+            throw new Error(data.error || data.message || `HTTP ${res.status}`);
+        }
+        showToast(t('speedtestRunDone') || t('dataUpdated'), 'success');
+        updateSpeedtestDashboard().catch(() => {});
+    } catch (e) {
+        const msg = (e && e.message) ? e.message : String(e);
+        showToast((t('speedtestRunError') || 'Speedtest: {msg}').replace('{msg}', msg), 'error');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
 /** Последний ответ /api/debug для экспорта отчёта */
 let lastDebugServerData = null;
 
@@ -2546,14 +2680,16 @@ async function toggleMonitorMode() {
 
 let monitorSwipeStartX = null;
 let monitorSwipeHandlersAttached = false;
-/** Текущий экран режима монитора: 'cluster' | 'ups' | 'netdev' | 'vms' | 'services' | 'backupRuns' (только Proxmox) */
+/** Текущий экран режима монитора: 'cluster' | 'ups' | 'netdev' | 'speedtest' | 'vms' | 'services' | 'backupRuns' (только Proxmox) */
 let monitorCurrentView = 'cluster';
 /** Последние данные бэкапов для экрана монитора */
 let lastBackupsDataForMonitor = null;
 
 /** Полный порядок экранов монитора (в БД); на TrueNAS экран backupRuns пропускается при листании */
-const MONITOR_SCREEN_IDS_ALL = ['cluster', 'ups', 'netdev', 'vms', 'services', 'backupRuns'];
+const MONITOR_SCREEN_IDS_ALL = ['cluster', 'ups', 'netdev', 'speedtest', 'vms', 'services', 'backupRuns'];
 let monitorScreensOrder = MONITOR_SCREEN_IDS_ALL.slice();
+/** Speedtest включён в настройках (для скрытия экрана в режиме монитора) */
+let speedtestClientEnabled = false;
 
 function normalizeMonitorScreensOrder(arr) {
     const valid = new Set(MONITOR_SCREEN_IDS_ALL);
@@ -2575,7 +2711,11 @@ function normalizeMonitorScreensOrder(arr) {
 
 function getMonitorViewsOrder() {
     const order = normalizeMonitorScreensOrder(monitorScreensOrder);
-    return order.filter((id) => id !== 'backupRuns' || currentServerType === 'proxmox');
+    return order.filter((id) => {
+        if (id === 'backupRuns' && currentServerType !== 'proxmox') return false;
+        if (id === 'speedtest' && !speedtestClientEnabled) return false;
+        return true;
+    });
 }
 
 function monitorScreenSettingsLabel(id) {
@@ -2583,6 +2723,7 @@ function monitorScreenSettingsLabel(id) {
         cluster: t('monitorScreenCluster'),
         ups: t('monitorScreenUps'),
         netdev: t('monitorScreenNetdev'),
+        speedtest: t('monitorScreenSpeedtest'),
         vms: t('monitorScreenVms'),
         services: t('monitorScreenServices'),
         backupRuns: t('monitorScreenBackupRuns')
@@ -2627,6 +2768,7 @@ function updateMonitorToolbarTitleForView() {
         cluster: t('monitorScreenCluster'),
         ups: t('monitorScreenUps'),
         netdev: t('monitorScreenNetdev'),
+        speedtest: t('monitorScreenSpeedtest'),
         vms: t('monitorScreenVms'),
         services: t('monitorScreenServices'),
         backupRuns: t('monitorScreenBackupRuns')
@@ -2644,6 +2786,7 @@ function applyMonitorView(view) {
     const vmsSection = document.getElementById('vmsMonitorSection');
     const upsMonSection = document.getElementById('upsMonitorSection');
     const netdevMonSection = document.getElementById('netdevMonitorSection');
+    const speedtestMonSection = document.getElementById('speedtestMonitorSection');
     const backupsMon = document.getElementById('backupsMonitorSection');
     const monitorView = document.getElementById('monitorView');
 
@@ -2656,6 +2799,7 @@ function applyMonitorView(view) {
         if (vmsSection) vmsSection.style.display = 'none';
         if (upsMonSection) upsMonSection.style.display = 'none';
         if (netdevMonSection) netdevMonSection.style.display = 'none';
+        if (speedtestMonSection) speedtestMonSection.style.display = 'none';
         if (backupsMon) backupsMon.style.display = 'none';
         return;
     }
@@ -2673,6 +2817,7 @@ function applyMonitorView(view) {
         if (backupsMon) backupsMon.style.display = 'none';
         if (upsMonSection) upsMonSection.style.display = 'none';
         if (netdevMonSection) netdevMonSection.style.display = 'none';
+        if (speedtestMonSection) speedtestMonSection.style.display = 'none';
     } else if (view === 'services') {
         if (dashboardSection) dashboardSection.style.display = 'none';
         if (servicesSection) servicesSection.style.display = 'block';
@@ -2680,6 +2825,7 @@ function applyMonitorView(view) {
         if (backupsMon) backupsMon.style.display = 'none';
         if (upsMonSection) upsMonSection.style.display = 'none';
         if (netdevMonSection) netdevMonSection.style.display = 'none';
+        if (speedtestMonSection) speedtestMonSection.style.display = 'none';
         renderMonitorServicesList();
     } else if (view === 'vms') {
         if (dashboardSection) dashboardSection.style.display = 'none';
@@ -2688,6 +2834,7 @@ function applyMonitorView(view) {
         if (backupsMon) backupsMon.style.display = 'none';
         if (upsMonSection) upsMonSection.style.display = 'none';
         if (netdevMonSection) netdevMonSection.style.display = 'none';
+        if (speedtestMonSection) speedtestMonSection.style.display = 'none';
         renderMonitorVmsList();
         renderVmsMonitorCards();
     } else if (view === 'ups') {
@@ -2697,6 +2844,7 @@ function applyMonitorView(view) {
         if (backupsMon) backupsMon.style.display = 'none';
         if (upsMonSection) upsMonSection.style.display = 'block';
         if (netdevMonSection) netdevMonSection.style.display = 'none';
+        if (speedtestMonSection) speedtestMonSection.style.display = 'none';
         updateUPSDashboard().catch(() => {});
     } else if (view === 'netdev') {
         if (dashboardSection) dashboardSection.style.display = 'none';
@@ -2705,13 +2853,24 @@ function applyMonitorView(view) {
         if (backupsMon) backupsMon.style.display = 'none';
         if (upsMonSection) upsMonSection.style.display = 'none';
         if (netdevMonSection) netdevMonSection.style.display = 'block';
+        if (speedtestMonSection) speedtestMonSection.style.display = 'none';
         updateNetdevDashboard().catch(() => {});
+    } else if (view === 'speedtest') {
+        if (dashboardSection) dashboardSection.style.display = 'none';
+        if (servicesSection) servicesSection.style.display = 'none';
+        if (vmsSection) vmsSection.style.display = 'none';
+        if (backupsMon) backupsMon.style.display = 'none';
+        if (upsMonSection) upsMonSection.style.display = 'none';
+        if (netdevMonSection) netdevMonSection.style.display = 'none';
+        if (speedtestMonSection) speedtestMonSection.style.display = 'block';
+        updateSpeedtestDashboard().catch(() => {});
     } else if (view === 'backupRuns') {
         if (dashboardSection) dashboardSection.style.display = 'none';
         if (servicesSection) servicesSection.style.display = 'none';
         if (vmsSection) vmsSection.style.display = 'none';
         if (upsMonSection) upsMonSection.style.display = 'none';
         if (netdevMonSection) netdevMonSection.style.display = 'none';
+        if (speedtestMonSection) speedtestMonSection.style.display = 'none';
         /* flex, не block — иначе .monitor-backups-main-card не растягивается и card-body с flex:1 схлопывается в 0 */
         if (backupsMon) backupsMon.style.display = 'flex';
         renderMonitorBackupRuns(lastBackupsDataForMonitor);
@@ -3029,6 +3188,9 @@ async function refreshData(options = {}) {
             if (!monitorMode || monitorCurrentView === 'cluster' || monitorCurrentView === 'netdev') {
                 updateNetdevDashboard().catch(() => {});
             }
+            if (!monitorMode || monitorCurrentView === 'cluster' || monitorCurrentView === 'speedtest') {
+                updateSpeedtestDashboard().catch(() => {});
+            }
         } else {
             const serverUrl = getCurrentServerUrl();
             const [clusterRes, storageRes, backupsRes] = await Promise.all([
@@ -3051,6 +3213,9 @@ async function refreshData(options = {}) {
             }
             if (!monitorMode || monitorCurrentView === 'cluster' || monitorCurrentView === 'netdev') {
                 updateNetdevDashboard().catch(() => {});
+            }
+            if (!monitorMode || monitorCurrentView === 'cluster' || monitorCurrentView === 'speedtest') {
+                updateSpeedtestDashboard().catch(() => {});
             }
         }
         
@@ -4923,6 +5088,19 @@ async function loadSettings() {
     monitorScreensOrder = Array.isArray(data.monitor_screens_order) && data.monitor_screens_order.length
         ? normalizeMonitorScreensOrder(data.monitor_screens_order)
         : MONITOR_SCREEN_IDS_ALL.slice();
+    speedtestClientEnabled = !!(data.speedtest_enabled === true || data.speedtest_enabled === '1'
+        || data.speedtest_enabled === 1 || data.speedtest_enabled === 'true');
+    const spEn = document.getElementById('speedtestEnabledSelect');
+    if (spEn) spEn.value = speedtestClientEnabled ? '1' : '0';
+    const spSrv = document.getElementById('speedtestServerInput');
+    if (spSrv) spSrv.value = data.speedtest_server != null ? String(data.speedtest_server) : '';
+    const spDay = document.getElementById('speedtestPerDayInput');
+    if (spDay) {
+        let n = parseInt(data.speedtest_per_day, 10);
+        if (!Number.isFinite(n) || n < 1) n = 4;
+        if (n > 48) n = 48;
+        spDay.value = String(n);
+    }
     renderSettingsMonitorScreensOrderList();
     const ttlSel = document.getElementById('settingsSessionTtlSelect');
     if (ttlSel) {

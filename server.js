@@ -50,6 +50,7 @@ app.use('/api/connections', require('./modules/routes/connections'));
 app.use('/api/settings', require('./modules/routes/settings'));
 app.use('/api/ups', require('./modules/routes/ups'));
 app.use('/api/netdevices', require('./modules/routes/netdevices-snmp'));
+app.use('/api/speedtest', require('./modules/routes/speedtest'));
 
 // Доступные языки
 app.get('/api/languages', (req, res) => {
@@ -211,6 +212,11 @@ app.use((err, req, res, next) => {
 // Запуск сервера после инициализации SQLite
 getDb()
     .then(() => {
+        try {
+            require('./modules/speedtest').startScheduler();
+        } catch (e) {
+            log('warn', `Speedtest scheduler: ${e.message}`);
+        }
         app.listen(config.port, '0.0.0.0', () => {
             console.log('=================================');
             console.log(`HomeLab Monitor запущен на порту ${config.port}`);

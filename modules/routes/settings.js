@@ -22,7 +22,11 @@ const SETTING_KEYS = [
     'monitor_hidden_service_ids',
     'monitor_vms',
     'monitor_hidden_vm_ids',
-    'monitor_screens_order'
+    'monitor_screens_order',
+    // Speedtest (Ookla CLI)
+    'speedtest_enabled',
+    'speedtest_server',
+    'speedtest_per_day'
 ];
 
 // GET /api/settings — все настройки (без пароля), флаг password_required
@@ -47,6 +51,9 @@ router.get('/', (req, res) => {
                     } catch {
                         payload[key] = value;
                     }
+                } else if (key === 'speedtest_per_day') {
+                    const n = parseInt(value, 10);
+                    payload[key] = Number.isFinite(n) ? n : 4;
                 } else if (key === 'refresh_interval' || key === 'current_server_index' || key === 'current_truenas_index' || key === 'session_ttl_minutes') {
                     payload[key] = parseInt(value, 10);
                 } else {
@@ -85,7 +92,18 @@ router.post('/', (req, res) => {
             monitor_hidden_service_ids: body.monitor_hidden_service_ids ?? body.monitorHiddenServiceIds,
             monitor_vms: body.monitor_vms ?? body.monitorVms,
             monitor_hidden_vm_ids: body.monitor_hidden_vm_ids ?? body.monitorHiddenVmIds,
-            monitor_screens_order: body.monitor_screens_order ?? body.monitorScreensOrder
+            monitor_screens_order: body.monitor_screens_order ?? body.monitorScreensOrder,
+            speedtest_enabled: (() => {
+                const v = body.speedtest_enabled ?? body.speedtestEnabled;
+                if (v === undefined) return undefined;
+                return v === true || v === '1' || v === 1 || v === 'true' ? '1' : '0';
+            })(),
+            speedtest_server: (() => {
+                const v = body.speedtest_server ?? body.speedtestServer;
+                if (v === undefined) return undefined;
+                return String(v).trim();
+            })(),
+            speedtest_per_day: body.speedtest_per_day ?? body.speedtestPerDay
         };
         for (const [key, value] of Object.entries(map)) {
             if (value === undefined) continue;
