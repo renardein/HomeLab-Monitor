@@ -132,13 +132,13 @@
                             <button class="nav-link" id="settings-nav-thresholds" data-bs-toggle="pill" data-bs-target="#settings-tab-thresholds" type="button" role="tab">
                                 <i class="bi bi-speedometer2 me-2"></i><span id="settingsNavThresholds">Пороги</span>
                             </button>
-                            <button class="nav-link" id="settings-nav-services" data-bs-toggle="pill" data-bs-target="#settings-tab-services" type="button" role="tab">
+                            <button class="nav-link" id="settings-nav-services" data-bs-toggle="pill" data-bs-target="#settings-tab-services" type="button" role="tab" onclick="onSettingsNavSectionChange('services')">
                                 <i class="bi bi-activity me-2"></i><span id="settingsNavServices">Мониторинг сервисов</span>
                             </button>
-                            <button class="nav-link" id="settings-nav-ups" data-bs-toggle="pill" data-bs-target="#settings-tab-ups" type="button" role="tab">
+                            <button class="nav-link" id="settings-nav-ups" data-bs-toggle="pill" data-bs-target="#settings-tab-services" type="button" role="tab" onclick="onSettingsNavSectionChange('ups')">
                                 <i class="bi bi-lightning me-2"></i><span id="settingsNavUps">UPS</span>
                             </button>
-                            <button class="nav-link" id="settings-nav-netdevices" data-bs-toggle="pill" data-bs-target="#settings-tab-netdevices" type="button" role="tab">
+                            <button class="nav-link" id="settings-nav-netdevices" data-bs-toggle="pill" data-bs-target="#settings-tab-services" type="button" role="tab" onclick="onSettingsNavSectionChange('netdev')">
                                 <i class="bi bi-diagram-3 me-2"></i><span id="settingsNavNetdevices">Сетевые устройства (SNMP)</span>
                             </button>
                             <button class="nav-link" id="settings-nav-speedtest" data-bs-toggle="pill" data-bs-target="#settings-tab-speedtest" type="button" role="tab">
@@ -508,7 +508,7 @@
                             </div>
                             <!-- Хосты для мониторинга -->
                             <div class="tab-pane fade" id="settings-tab-services" role="tabpanel">
-                                <div class="settings-section mb-4">
+                                <div class="settings-section mb-4" id="servicesHostsSettingsWrap">
                                     <h5 class="mb-3"><i class="bi bi-activity me-2"></i><span id="settingsServicesTitle">Хосты для мониторинга</span></h5>
                     <p class="text-muted small mb-3" id="settingsServicesHint">Добавьте хосты или URL для проверки доступности. В разделе «Мониторинг сервисов» отображается только список и статус.</p>
                     <div class="row g-3 align-items-end mb-3">
@@ -852,7 +852,7 @@
                                 </div>
                         </div>
                     </div>
-                                <div class="settings-section">
+                                <div class="settings-section" id="vmsForMonitoringSettingsWrap">
                                     <h5 class="mb-3"><i class="bi bi-hdd-network me-2"></i><span id="settingsVmsTitle">VM/CT для мониторинга</span></h5>
                     <p class="text-muted small mb-3" id="settingsVmsHint">Введите ID или имя VM/CT и нажмите «Добавить» — гость будет отображаться в режиме монитора. Список загружается с Proxmox по кнопке «Обновить».</p>
                     <div class="row g-3 align-items-end mb-3">

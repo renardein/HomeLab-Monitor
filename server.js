@@ -74,6 +74,7 @@ app.get('/api/translations', (req, res) => {
 
 // Метрики для раздела отладки в настройках
 app.get('/api/debug', (req, res) => {
+    const fs = require('fs');
     const mem = process.memoryUsage();
     const uptime = process.uptime();
     const cache = require('./modules/cache');
@@ -82,6 +83,13 @@ app.get('/api/debug', (req, res) => {
     const settingsStore = require('./modules/settings-store');
     const cacheStats = cache.stats && typeof cache.stats === 'function' ? cache.stats() : {};
     const cacheKeys = cache.keys && typeof cache.keys === 'function' ? cache.keys() : [];
+    const logDir = process.env.LOG_DIR
+        ? String(process.env.LOG_DIR)
+        : path.join(__dirname, 'data', 'logs');
+    const logFilePath = path.join(logDir, 'app.log');
+    const rotated1Path = path.join(logDir, 'app.log.1');
+    const logFileSizeBytes = fs.existsSync(logFilePath) ? fs.statSync(logFilePath).size : 0;
+    const logRotated1SizeBytes = fs.existsSync(rotated1Path) ? fs.statSync(rotated1Path).size : 0;
     res.json({
         version: config.version,
         env: config.env,
@@ -103,7 +111,12 @@ app.get('/api/debug', (req, res) => {
             misses: cacheStats.misses ?? 0
         },
         connectionsCount: (() => { try { const L = connStore.listConnections(); return Array.isArray(L) ? L.length : 0; } catch (_) { return 0; } })(),
-        settingsPasswordSet: !!settingsStore.hasSettingsPassword()
+        settingsPasswordSet: !!settingsStore.hasSettingsPassword(),
+        logs: {
+            dir: logDir,
+            appLogSizeBytes: logFileSizeBytes,
+            appLog1SizeBytes: logRotated1SizeBytes
+        }
     });
 });
 
@@ -218,20 +231,18 @@ getDb()
             log('warn', `Speedtest scheduler: ${e.message}`);
         }
         app.listen(config.port, '0.0.0.0', () => {
-            console.log('=================================');
-            console.log(`HomeLab Monitor запущен на порту ${config.port}`);
-            console.log('=================================');
-            console.log(`Режим: ${config.env}`);
-            console.log(`БД: SQLite (data/app.db)`);
-            console.log(`Proxmox: ${config.proxmox.host}:${config.proxmox.port}`);
-            console.log(`Cookies: ${config.env === 'production' ? 'Secure' : 'Development'}`);
-            console.log('=================================');
-            console.log(`URL: http://localhost:${config.port}`);
-            console.log('=================================');
+            log('info', '[Server] started', {
+                port: config.port,
+                env: config.env,
+                db: 'SQLite (data/app.db)',
+                proxmox: `${config.proxmox.host}:${config.proxmox.port}`,
+                cookies: config.env === 'production' ? 'Secure' : 'Development',
+                url: `http://localhost:${config.port}`
+            });
         });
     })
     .catch((err) => {
-        console.error('Ошибка инициализации БД:', err);
+        log('error', '[Server] DB init failed', { error: err?.message || String(err) });
         process.exit(1);
     });
 

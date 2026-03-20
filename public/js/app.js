@@ -1404,6 +1404,10 @@ async function loadUpsSettings() {
 
     try {
         const res = await fetch('/api/ups/settings');
+        if (!res.ok) {
+            const maybe = await res.json().catch(() => ({}));
+            throw new Error(maybe.error || maybe.message || `HTTP ${res.status}`);
+        }
         const data = await res.json();
         upsConfigs = Array.isArray(data?.configs) ? data.configs : [];
         while (upsConfigs.length < 4) upsConfigs.push(createDefaultUpsConfig());
@@ -1412,10 +1416,21 @@ async function loadUpsSettings() {
         applySlotToForm(slotIdx);
     } catch (e) {
         console.error('Failed to load UPS settings:', e);
+        // UX: если не смогли загрузить с сервера, не “прячем” поля в пустоту.
+        try {
+            const slotIdx = getUpsSlotIndex();
+            if (!upsConfigs) upsConfigs = new Array(4).fill(0).map(createDefaultUpsConfig);
+            // Покажем поля формы, чтобы пользователь мог настроить вручную даже при проблемах с API.
+            upsConfigs[slotIdx] = {
+                ...createDefaultUpsConfig(),
+                enabled: true,
+                type: 'nut'
+            };
+            applySlotToForm(slotIdx);
+        } catch (_) {}
+        showToast((t('connectError') || 'Ошибка загрузки') + ': ' + ((e && e.message) ? e.message : String(e)), 'error');
     } finally {
-        const slotIdx = getUpsSlotIndex();
         if (!upsConfigs) upsConfigs = new Array(4).fill(0).map(createDefaultUpsConfig);
-        applySlotToForm(slotIdx);
     }
 
     if (!upsSlotListenerAttached) {
@@ -2292,7 +2307,12 @@ async function updateNetdevDashboard() {
         }
 
         const showSection = !!(data && data.configured && Array.isArray(items) && items.length > 0);
-        sectionEl.style.display = showSection ? '' : 'none';
+        if (isNetdevMonitorScreen) {
+            // UX: в monitor-mode не прячем экран целиком — иначе получится пустая зона.
+            sectionEl.style.display = '';
+        } else {
+            sectionEl.style.display = showSection ? '' : 'none';
+        }
 
         if (!showSection) {
             cardsEl.innerHTML = `
@@ -2338,6 +2358,22 @@ async function updateSpeedtestDashboard() {
         speedtestMonitorConfigured = enabled;
 
         if (dashSection) dashSection.style.display = enabled ? '' : 'none';
+        if (!enabled) {
+            // Чтобы на экране монитора не оставались “старые” значения.
+            setEl('speedtestMonitorLastRun', '—');
+            setEl('speedtestMonitorAvg', '—');
+            setEl('speedtestMonitorMin', '—');
+            setEl('speedtestMonitorMax', '—');
+            setEl('speedtestMonitorExtra', t('backupNoData') || 'Нет данных');
+
+            // На главном дашборде оставим “—” на полях, если они есть.
+            setEl('dashboardSpeedtestLastRun', '—');
+            setEl('dashboardSpeedtestAvg', '—');
+            setEl('dashboardSpeedtestMin', '—');
+            setEl('dashboardSpeedtestMax', '—');
+            setEl('dashboardSpeedtestExtra', '');
+            return;
+        }
 
         const last = summary.last;
         const lastTime = last && last.runAt ? new Date(last.runAt).toLocaleString() : '—';
@@ -2386,7 +2422,15 @@ async function updateSpeedtestDashboard() {
             cliEl.className = 'small ' + (summary.cliAvailable ? 'text-success' : 'text-warning');
         }
     } catch (e) {
+        // If speedtest fetch fails, show clear placeholders on the monitor screen.
         if (dashSection) dashSection.style.display = 'none';
+        setEl('speedtestMonitorLastRun', '—');
+        setEl('speedtestMonitorAvg', '—');
+        setEl('speedtestMonitorMin', '—');
+        setEl('speedtestMonitorMax', '—');
+        const fallback = t('backupNoData') || 'Нет данных';
+        const msg = (e && e.message) ? String(e.message) : null;
+        setEl('speedtestMonitorExtra', msg ? `${fallback}: ${msg}` : fallback);
     }
 }
 
@@ -2643,10 +2687,6 @@ async function showConfig() {
     document.getElementById('dashboardSection').style.display = 'none';
     const servicesSection = document.getElementById('servicesMonitorSection');
     if (servicesSection) servicesSection.style.display = 'none';
-    // Вынесем UPS в отдельный раздел настроек
-    moveUpsSettingsCardToSeparateTab();
-    // Вынесем сетевые устройства (SNMP) в отдельный раздел настроек
-    moveNetdevSettingsCardToSeparateTab();
     await loadSettingsPanelData();
     if (autoRefreshInterval) {
         clearInterval(autoRefreshInterval);
@@ -2665,10 +2705,6 @@ async function toggleSettings() {
         configSection.style.display = 'block';
         dashboardSection.style.display = 'none';
         if (servicesSection) servicesSection.style.display = 'none';
-        // Вынесем UPS в отдельный раздел настроек
-        moveUpsSettingsCardToSeparateTab();
-        // Вынесем сетевые устройства (SNMP) в отдельный раздел настроек
-        moveNetdevSettingsCardToSeparateTab();
         await loadSettingsPanelData();
         if (autoRefreshInterval) {
             clearInterval(autoRefreshInterval);
@@ -2682,6 +2718,36 @@ async function toggleSettings() {
             refreshData();
             startAutoRefresh();
         }
+    }
+}
+
+function onSettingsNavSectionChange(section) {
+    // Мы держим все настройки UPS/Netdev внутри settings-tab-services по разметке,
+    // но по клику слева показываем "только нужный блок", чтобы экраны не выглядели одинаково.
+    // section: 'services' | 'ups' | 'netdev'
+    const servicesHosts = document.getElementById('servicesHostsSettingsWrap');
+    const upsWrap = document.getElementById('upsSettingsCardWrap');
+    const netdevWrap = document.getElementById('netdevSettingsCardWrap');
+    const vmsWrap = document.getElementById('vmsForMonitoringSettingsWrap');
+
+    if (!servicesHosts || !upsWrap || !netdevWrap || !vmsWrap) return;
+
+    if (section === 'ups') {
+        servicesHosts.style.display = 'none';
+        upsWrap.style.display = '';
+        netdevWrap.style.display = 'none';
+        vmsWrap.style.display = 'none';
+    } else if (section === 'netdev') {
+        servicesHosts.style.display = 'none';
+        upsWrap.style.display = 'none';
+        netdevWrap.style.display = '';
+        vmsWrap.style.display = 'none';
+    } else {
+        // Service monitoring: только Hosts + VM/CT, без UPS/Netdev.
+        servicesHosts.style.display = '';
+        upsWrap.style.display = 'none';
+        netdevWrap.style.display = 'none';
+        vmsWrap.style.display = '';
     }
 }
 

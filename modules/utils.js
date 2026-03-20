@@ -30,13 +30,60 @@ function formatUptime(seconds) {
     return `${minutes}м`;
 }
 
-// Логирование с меткой времени
+const fs = require('fs');
+const path = require('path');
+
+// Логирование с меткой времени + запись на диск с ротацией.
 function log(level, message, data = null) {
     const timestamp = new Date().toISOString();
     const logEntry = `[${timestamp}] [${level.toUpperCase()}] ${message}`;
+
+    // 1) Always keep console output (dev/operator convenience)
     console.log(logEntry);
-    if (data) {
-        console.log(JSON.stringify(data, null, 2));
+    if (data) console.log(JSON.stringify(data, null, 2));
+
+    // 2) Best-effort file append with rotation
+    try {
+        const logDir = process.env.LOG_DIR
+            ? String(process.env.LOG_DIR)
+            : path.join(__dirname, '..', 'data', 'logs');
+        const maxBytes = parseInt(process.env.LOG_MAX_BYTES || String(5 * 1024 * 1024), 10);
+        const backups = parseInt(process.env.LOG_BACKUPS || String(5), 10);
+
+        if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
+
+        const basePath = path.join(logDir, 'app.log');
+        const rotatedPath = (i) => (i === 0 ? basePath : `${basePath}.${i}`);
+
+        // Rotate if needed
+        if (fs.existsSync(basePath)) {
+            const st = fs.statSync(basePath);
+            if (st.size >= maxBytes) {
+                // Remove oldest backup to avoid rename collisions on Windows.
+                if (backups >= 1) {
+                    const oldest = rotatedPath(backups);
+                    if (fs.existsSync(oldest)) fs.unlinkSync(oldest);
+                }
+
+                for (let i = backups - 1; i >= 1; i--) {
+                    const from = rotatedPath(i);
+                    const to = rotatedPath(i + 1);
+                    if (fs.existsSync(from)) {
+                        if (fs.existsSync(to)) fs.unlinkSync(to);
+                        fs.renameSync(from, to);
+                    }
+                }
+
+                // Move current app.log -> app.log.1
+                if (fs.existsSync(rotatedPath(1))) fs.unlinkSync(rotatedPath(1));
+                fs.renameSync(basePath, rotatedPath(1));
+            }
+        }
+
+        const filePayload = data ? `${logEntry}\n${JSON.stringify(data).slice(0, 20000)}\n` : `${logEntry}\n`;
+        fs.appendFileSync(basePath, filePayload, 'utf8');
+    } catch (_) {
+        // Do not fail the app due to logging issues.
     }
 }
 

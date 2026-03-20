@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const { log } = require('../utils');
 const store = require('../settings-store');
 
 const SETTING_KEYS = [
@@ -113,13 +114,27 @@ router.post('/', (req, res) => {
             })(),
             speedtest_per_day: body.speedtest_per_day ?? body.speedtestPerDay
         };
+        const savedKeys = [];
         for (const [key, value] of Object.entries(map)) {
             if (value === undefined) continue;
             if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
                 store.setSetting(key, JSON.stringify(value));
+                savedKeys.push(key);
             } else {
                 store.setSetting(key, value);
+                savedKeys.push(key);
             }
+        }
+        if (savedKeys.length) {
+            log('info', '[Settings] updated', {
+                keys: savedKeys,
+                monitorMode: map.monitor_mode ?? map.monitorMode,
+                theme: map.theme,
+                monitorTheme: map.monitor_theme ?? map.monitorTheme,
+                serverType: map.server_type ?? map.serverType
+            });
+        } else {
+            log('info', '[Settings] updated (no keys)');
         }
         res.json({ success: true });
     } catch (e) {
@@ -165,8 +180,14 @@ router.post('/reset', (req, res) => {
         store.clearMonitoredServices();
         const connectionsStore = require('../connection-store');
         connectionsStore.clearConnections();
+        log('warn', '[Settings] reset', {
+            preservePassword: true,
+            clearedMonitoredServices: true,
+            clearedConnections: true
+        });
         res.json({ success: true });
     } catch (e) {
+        log('error', '[Settings] reset failed', { error: e.message });
         res.status(500).json({ success: false, error: e.message });
     }
 });
