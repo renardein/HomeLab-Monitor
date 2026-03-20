@@ -12,6 +12,10 @@ const { getDb, closeDb } = require('./modules/db');
 // Создаем приложение
 const app = express();
 
+// EJS templates (for splitting index.html into partials safely)
+app.set('views', path.join(__dirname, 'views'));
+app.set('view engine', 'ejs');
+
 // Middleware
 app.use(helmet({
     contentSecurityPolicy: false
@@ -204,7 +208,7 @@ app.post('/api/auth/logout', (req, res) => {
 
 // Все остальные запросы отдаем index.html
 app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+    res.render('index');
 });
 
 // Обработка ошибок

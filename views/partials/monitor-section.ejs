@@ -1,0 +1,38 @@
+<!-- Панель режима монитора (тип сервера + навигация экранов + темы + выход) -->
+        <div id="monitorToolbar" class="monitor-toolbar">
+            <div class="monitor-toolbar-left">
+                <select class="form-select form-select-sm monitor-toolbar-select" id="monitorServerTypeSelect" onchange="setServerType(this.value)">
+                    <option value="proxmox">Proxmox</option>
+                    <option value="truenas">TrueNAS</option>
+                </select>
+            </div>
+            <div class="monitor-toolbar-center">
+                <span class="monitor-toolbar-title" id="monitorToolbarTitle">Монитор</span>
+                <span class="monitor-toolbar-update text-muted small" id="monitorToolbarUpdate"></span>
+            </div>
+            <div class="monitor-toolbar-theme">
+                <button type="button" class="btn btn-sm monitor-toolbar-nav-btn" id="monitorPrevBtn" onclick="goMonitorView('prev')" title="←">
+                    <i class="bi bi-chevron-left"></i>
+                </button>
+                <button type="button" class="btn btn-sm monitor-toolbar-nav-btn" id="monitorNextBtn" onclick="goMonitorView('next')" title="→">
+                    <i class="bi bi-chevron-right"></i>
+                </button>
+                <button type="button" class="btn btn-sm monitor-toolbar-theme-btn" id="monitorRefreshBtn" onclick="refreshData()" title="">
+                    <i class="bi bi-arrow-repeat"></i>
+                </button>
+                <button type="button" class="btn btn-sm monitor-toolbar-theme-btn" id="monitorThemeLight" onclick="setMonitorTheme('light')" title="">
+                    <i class="bi bi-sun-fill"></i>
+                </button>
+                <button type="button" class="btn btn-sm monitor-toolbar-theme-btn active" id="monitorThemeDark" onclick="setMonitorTheme('dark')" title="">
+                    <i class="bi bi-moon-stars-fill"></i>
+                </button>
+            </div>
+            <div class="monitor-toolbar-right">
+                <button type="button" class="btn btn-sm monitor-toolbar-exit" id="monitorExitBtnFixed" onclick="toggleMonitorMode()" title="">
+                    <i class="bi bi-fullscreen-exit me-1"></i><span id="monitorExitBtnText">Выход</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    

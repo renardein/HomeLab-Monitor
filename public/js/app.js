@@ -337,6 +337,70 @@ function closeVmsMonitor() {
     if (dashboardSection) dashboardSection.style.display = '';
 }
 
+function openNetdevMonitorFromMenu() {
+    const dashboardSection = document.getElementById('dashboardSection');
+    const servicesSection = document.getElementById('servicesMonitorSection');
+    const vmsSection = document.getElementById('vmsMonitorSection');
+    const netdevSection = document.getElementById('netdevMonitorSection');
+    const upsMonSection = document.getElementById('upsMonitorSection');
+    const speedtestSection = document.getElementById('speedtestMonitorSection');
+    const backupsMon = document.getElementById('backupsMonitorSection');
+    const configSection = document.getElementById('configSection');
+
+    if (dashboardSection) dashboardSection.style.display = 'none';
+    if (configSection) configSection.style.display = 'none';
+    if (servicesSection) servicesSection.style.display = 'none';
+    if (vmsSection) vmsSection.style.display = 'none';
+    if (upsMonSection) upsMonSection.style.display = 'none';
+    if (speedtestSection) speedtestSection.style.display = 'none';
+    if (backupsMon) backupsMon.style.display = 'none';
+    if (netdevSection) netdevSection.style.display = 'block';
+
+    updateNetdevDashboard().catch(() => {});
+}
+
+function closeNetdevMonitor() {
+    const dashboardSection = document.getElementById('dashboardSection');
+    const netdevSection = document.getElementById('netdevMonitorSection');
+    const backupsMon = document.getElementById('backupsMonitorSection');
+    if (netdevSection) netdevSection.style.display = 'none';
+    if (backupsMon) backupsMon.style.display = 'none';
+    if (dashboardSection) dashboardSection.style.display = '';
+    updateNetdevDashboard().catch(() => {});
+}
+
+function openSpeedtestMonitorFromMenu() {
+    const dashboardSection = document.getElementById('dashboardSection');
+    const servicesSection = document.getElementById('servicesMonitorSection');
+    const vmsSection = document.getElementById('vmsMonitorSection');
+    const speedtestSection = document.getElementById('speedtestMonitorSection');
+    const netdevSection = document.getElementById('netdevMonitorSection');
+    const upsMonSection = document.getElementById('upsMonitorSection');
+    const backupsMon = document.getElementById('backupsMonitorSection');
+    const configSection = document.getElementById('configSection');
+
+    if (dashboardSection) dashboardSection.style.display = 'none';
+    if (configSection) configSection.style.display = 'none';
+    if (servicesSection) servicesSection.style.display = 'none';
+    if (vmsSection) vmsSection.style.display = 'none';
+    if (netdevSection) netdevSection.style.display = 'none';
+    if (upsMonSection) upsMonSection.style.display = 'none';
+    if (backupsMon) backupsMon.style.display = 'none';
+    if (speedtestSection) speedtestSection.style.display = 'block';
+
+    updateSpeedtestDashboard().catch(() => {});
+}
+
+function closeSpeedtestMonitor() {
+    const dashboardSection = document.getElementById('dashboardSection');
+    const speedtestSection = document.getElementById('speedtestMonitorSection');
+    const backupsMon = document.getElementById('backupsMonitorSection');
+    if (speedtestSection) speedtestSection.style.display = 'none';
+    if (backupsMon) backupsMon.style.display = 'none';
+    if (dashboardSection) dashboardSection.style.display = '';
+    updateSpeedtestDashboard().catch(() => {});
+}
+
 // Language switch function
 function setLanguage(lang) {
     currentLanguage = lang;
@@ -516,6 +580,8 @@ function updateUILanguage() {
         currentServer: 'currentServer',
         monitorModeText: 'monitorMode',
         menuVmsMonitorText: 'menuVmsMonitorText',
+        menuNetdevMonitorText: 'monitorScreenNetdev',
+        menuSpeedtestMonitorText: 'monitorScreenSpeedtest',
         settingsNavUps: 'settingsNavUps',
         settingsNavNetdevices: 'settingsNavNetdevices',
         settingsNavSpeedtest: 'settingsNavSpeedtest'
@@ -2207,7 +2273,7 @@ function buildNetdevCardsHtml(data) {
                 <p class="small text-muted text-center mb-0 mt-3">${escapeHtml(hostLine)}</p>
             </div>`;
 
-        return { html, rowClass: 'row g-2' };
+        return { html, rowClass };
     }
 
     const html = items.map((item) => {
@@ -2262,7 +2328,10 @@ async function updateNetdevDashboard() {
     const netdevMonSection = document.getElementById('netdevMonitorSection');
     const netdevUpdatedAtEl = document.getElementById('netdevUpdatedAt');
 
-    const isNetdevMonitorScreen = monitorMode && monitorCurrentView === 'netdev';
+    // В режиме монитора это определяется monitorCurrentView.
+    // В обычном UX (открыто из меню) — по видимости блока.
+    const isNetdevMonitorScreen = (monitorMode && monitorCurrentView === 'netdev')
+        || (!!netdevMonSection && netdevMonSection.style.display !== 'none');
     const cardsEl = isNetdevMonitorScreen ? netdevMonitorCards : dashboardCards;
     const sectionEl = isNetdevMonitorScreen ? netdevMonSection : dashSection;
     const updatedAtTargetEl = isNetdevMonitorScreen ? netdevUpdatedAtEl : updatedAtEl;
@@ -2343,6 +2412,9 @@ function formatSpeedtestMbps(v) {
 
 async function updateSpeedtestDashboard() {
     const dashSection = document.getElementById('dashboardSpeedtestSection');
+    const speedtestMonSection = document.getElementById('speedtestMonitorSection');
+    const isSpeedtestMonitorScreen = (monitorMode && monitorCurrentView === 'speedtest')
+        || (!!speedtestMonSection && speedtestMonSection.style.display !== 'none');
     const setEl = (id, text) => {
         const el = document.getElementById(id);
         if (el) el.textContent = text;
@@ -2357,7 +2429,8 @@ async function updateSpeedtestDashboard() {
         // Обновляем кеш доступности экрана для корректного свайп-порядка.
         speedtestMonitorConfigured = enabled;
 
-        if (dashSection) dashSection.style.display = enabled ? '' : 'none';
+        // Если открыли Speedtest из меню (как отдельный экран), не показываем/не скрываем основной dashboard блок.
+        if (dashSection) dashSection.style.display = isSpeedtestMonitorScreen ? 'none' : (enabled ? '' : 'none');
         if (!enabled) {
             // Чтобы на экране монитора не оставались “старые” значения.
             setEl('speedtestMonitorLastRun', '—');
@@ -4060,12 +4133,14 @@ function upsMetricCompactTile(iconBi, label, valueStr, progressPct, barClass, co
         </div>`;
 }
 
-function buildUpsCardsHtml(data) {
-    const upsColClass = data.items.length === 1 ? 'col-12' : 'col-md-6';
-    const rowClass =
-        data.items.length === 1
-            ? 'row g-2'
-            : 'row row-cols-1 row-cols-sm-2 g-2 small';
+function buildUpsCardsHtml(data, options = {}) {
+    const singleUpsColClass = options.singleUpsColClass || 'col-12';
+    const multiUpsColClass = options.multiUpsColClass || 'col-md-6';
+    const singleRowClass = options.singleRowClass || 'row g-2';
+    const multiRowClass = options.multiRowClass || 'row row-cols-1 row-cols-sm-2 g-2 small';
+
+    const upsColClass = data.items.length === 1 ? singleUpsColClass : multiUpsColClass;
+    const rowClass = data.items.length === 1 ? singleRowClass : multiRowClass;
 
     const labels = {
         inV: t('upsLabelInputVoltage') || 'Вход U',
@@ -4085,13 +4160,13 @@ function buildUpsCardsHtml(data) {
 
         if (item.error) {
             const html = `
-                <div class="col-12">
+                <div class="${upsColClass}">
                     <div class="alert alert-warning mb-0 py-2 d-flex flex-wrap justify-content-between align-items-center gap-2">
                         <span class="fw-semibold text-truncate" title="${escapeHtml(name)}">${escapeHtml(name)}</span>
                         <span class="small">${escapeHtml(backend)}: ${escapeHtml(item.error)}</span>
                     </div>
                 </div>`;
-            return { html, rowClass: 'row g-2' };
+            return { html, rowClass };
         }
 
         const statusRaw = item.status?.raw ?? null;
@@ -4137,7 +4212,7 @@ function buildUpsCardsHtml(data) {
         ].filter(Boolean).join('');
 
         const html = `
-            <div class="col-12">
+            <div class="${upsColClass}">
                 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3 pb-3 border-bottom">
                     <div class="fw-semibold fs-5 text-truncate" title="${escapeHtml(name)}">${escapeHtml(name)}</div>
                     <span class="badge ${badgeClass}">${escapeHtml(statusLabel)}</span>
@@ -4253,7 +4328,7 @@ function paintUpsMount(cardsEl, updatedAtEl, data, options) {
         updatedAtEl.textContent = new Date(data.updatedAt).toLocaleString();
     }
 
-    const { html, rowClass } = buildUpsCardsHtml(data);
+    const { html, rowClass } = buildUpsCardsHtml(data, options || {});
     cardsEl.className = rowClass;
     cardsEl.innerHTML = html;
 }
@@ -4300,7 +4375,11 @@ async function updateUPSDashboard() {
 
         paintUpsMount(monitorCards, upsUpdatedAt, data, {});
         const dashboardData = { ...data, items: dashboardItems };
-        paintUpsMount(dashboardCards, dashboardUpsUpdatedAt, dashboardData, {});
+        paintUpsMount(dashboardCards, dashboardUpsUpdatedAt, dashboardData, {
+            // На дашборде одиночный UPS должен выглядеть “как карточка”, а не растягиваться на всю ширину.
+            singleUpsColClass: 'col-12 col-md-6 col-lg-4',
+            singleRowClass: 'row g-2 justify-content-center'
+        });
     } catch (e) {
         const errHtml = `<div class="col-12"><div class="text-danger small">${escapeHtml((e && e.message) ? e.message : String(e))}</div></div>`;
         if (monitorCards) monitorCards.innerHTML = errHtml;
@@ -5131,7 +5210,7 @@ function renderMonitoredServices() {
         const target = getServiceTargetDisplay(s);
         return `
             <div class="col-md-4 col-lg-3 mb-3">
-                <div class="node-card h-100">
+                <div class="node-card">
                     <div class="d-flex justify-content-between align-items-center mb-2">
                         <h6 class="mb-0">${escapeHtml(s.name || target)}</h6>
                         ${statusBadge}

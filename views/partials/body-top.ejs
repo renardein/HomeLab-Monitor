@@ -1,0 +1,110 @@
+<body>
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Окно авторизации для доступа к настройкам -->
+    <div class="modal fade" id="settingsUnlockModal" tabindex="-1" aria-labelledby="settingsUnlockModalTitle" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="settingsUnlockModalTitle"><i class="bi bi-shield-lock me-2"></i><span id="settingsUnlockModalTitleText">Введите пароль для доступа к настройкам</span></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" id="settingsUnlockModalCloseBtn"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold" for="settingsUnlockPassword" id="settingsUnlockPasswordLabel">Пароль</label>
+                        <input type="password" class="form-control form-control-lg" id="settingsUnlockPassword" placeholder="" autocomplete="current-password">
+                        <div class="invalid-feedback" id="settingsUnlockError"></div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" id="settingsUnlockCancelBtn"><span id="settingsUnlockCancelText">Отмена</span></button>
+                    <button type="button" class="btn btn-primary" id="settingsUnlockSubmitBtn"><i class="bi bi-unlock me-1"></i><span id="settingsUnlockSubmitText">Войти</span></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Навигация -->
+        <nav class="navbar navbar-expand-lg bg-white rounded-3 shadow-sm mb-4 p-3">
+            <div class="container-fluid">
+                <a class="navbar-brand fw-bold" href="#">
+                    <i class="bi bi-diagram-3 text-primary me-2"></i>
+                    <span id="appName">HomeLab Monitor</span>
+                </a>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="collapse navbar-collapse justify-content-end" id="navbarNav">
+                    <ul class="navbar-nav align-items-center">
+                        <li class="nav-item me-3">
+                            <button class="btn btn-outline-primary btn-sm" onclick="toggleSettings()" id="settingsBtn">
+                                <i class="bi bi-sliders"></i> <span id="settingsText">Settings</span>
+                            </button>
+                        </li>
+                        <li class="nav-item dropdown me-2">
+                            <a class="btn btn-outline-secondary btn-sm dropdown-toggle" href="#" id="serverMenuDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="bi bi-server me-1"></i><span id="serverMenuTitle">Proxmox</span>
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="serverMenuDropdown">
+                                <li><button class="dropdown-item" type="button" onclick="setServerType('proxmox')"><i class="bi bi-diagram-3 me-2"></i>Proxmox</button></li>
+                                <li><button class="dropdown-item" type="button" onclick="setServerType('truenas')"><i class="bi bi-hdd-stack me-2"></i>TrueNAS</button></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <button class="dropdown-item" type="button" onclick="openServicesMonitorFromMenu()">
+                                        <i class="bi bi-activity me-2"></i><span id="menuServicesMonitorText">Мониторинг сервисов</span>
+                                    </button>
+                                </li>
+                                <li>
+                                    <button class="dropdown-item" type="button" onclick="openVmsMonitorFromMenu()">
+                                        <i class="bi bi-hdd-network me-2"></i><span id="menuVmsMonitorText">Статус VM/CT</span>
+                                    </button>
+                                </li>
+                                <li>
+                                    <button class="dropdown-item" type="button" onclick="openNetdevMonitorFromMenu()">
+                                        <i class="bi bi-diagram-3 me-2"></i><span id="menuNetdevMonitorText">Сетевые устройства (SNMP)</span>
+                                    </button>
+                                </li>
+                                <li>
+                                    <button class="dropdown-item" type="button" onclick="openSpeedtestMonitorFromMenu()">
+                                        <i class="bi bi-wifi me-2"></i><span id="menuSpeedtestMonitorText">Speedtest</span>
+                                    </button>
+                                </li>
+                            </ul>
+                        </li>
+                        <li class="nav-item me-2">
+                            <button class="btn btn-outline-info btn-sm" onclick="toggleMonitorMode()" id="monitorModeBtn" title="Режим монитора">
+                                <i class="bi bi-display"></i> <span id="monitorModeText">Монитор</span>
+                            </button>
+                        </li>
+                        <li class="nav-item">
+                            <span class="badge bg-success" id="serverStatus">
+                                <i class="bi bi-check-circle"></i> <span id="serverStatusText">Server OK</span>
+                            </span>
+                        </li>
+                        <li class="nav-item">
+                            <span class="badge bg-light text-dark me-2" id="connectionStatus">
+                                <i class="bi bi-wifi-off"></i> <span id="notConnectedText">Не подключено</span>
+                            </span>
+                        </li>
+                        <li class="nav-item me-3">
+                            <span class="badge bg-info" id="currentServerBadge" style="display: none;">
+                                <i class="bi bi-server me-1"></i> <span id="currentServerName"></span>
+                            </span>
+                        </li>
+                        <li class="nav-item">
+                            <button class="btn btn-primary" onclick="refreshData()" id="refreshBtn">
+                                <i class="bi bi-arrow-repeat me-2"></i><span id="refreshText">Обновить</span>
+                            </button>
+                        </li>
+
+
+
+
+
+                    </ul>
+                </div>
+            </div>
+        </nav>
+
+        
