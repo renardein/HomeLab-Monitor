@@ -11,6 +11,13 @@ let currentUnits = 'decimal'; // 'decimal' (GB) or 'binary' (GiB)
 let monitorMode = false; // Monitor (display) mode flag
 /** Тема режима монитора: 'light' | 'dark' (независимо от общей темы) */
 let monitorTheme = 'dark';
+/** Пользовательские CSS-стили для 2 режимов x 2 тем */
+let customThemeCss = {
+    normal: { light: '', dark: '' },
+    monitor: { light: '', dark: '' }
+};
+let customThemeStyleSettings = null; // plain settings object (generated -> CSS)
+const CUSTOM_THEME_STYLE_EL_ID = 'customThemeCssStyle';
 /** Разблокированы ли настройки в этой сессии (для защиты паролем) */
 let settingsUnlocked = false;
 /** Пароль настроек включён (из API) */
@@ -175,6 +182,8 @@ async function saveSettingsToServer(payload) {
     if (payload.units !== undefined) body.units = payload.units;
     if (payload.thresholds !== undefined) body.thresholds = payload.thresholds;
     if (payload.monitorTheme !== undefined) body.monitorTheme = payload.monitorTheme;
+    if (payload.customThemeCss !== undefined) body.customThemeCss = payload.customThemeCss;
+    if (payload.customThemeStyleSettings !== undefined) body.customThemeStyleSettings = payload.customThemeStyleSettings;
     if (payload.monitorMode !== undefined) body.monitorMode = payload.monitorMode;
     if (payload.serverType !== undefined) body.serverType = payload.serverType;
     if (payload.currentServerIndex !== undefined) body.currentServerIndex = payload.currentServerIndex;
@@ -612,6 +621,42 @@ function updateUILanguage() {
     setText('settingsImportAllBtn', t('settingsImportAllBtn') || 'Импорт всех настроек');
     setText('settingsNavConnection', t('settingsNavConnection'));
         setText('settingsNavDisplay', t('settingsNavDisplay'));
+        setText('settingsNavStyles', t('settingsNavStyles'));
+        setText('settingsStylesTitle', t('settingsStylesTitle') || 'Стили');
+        setText('settingsStylesVariantLabel', t('settingsStylesVariantLabel') || 'Вариант для редактирования');
+        setText('settingsStylesHint', t('settingsStylesHint') || 'Настройки меняют оверрайды для карточек, заголовков, таблиц и прогресса. Оверрайды применяются только к выбранному варианту.');
+        setText('settingsStylesCardBgLabel', t('settingsStylesCardBgLabel') || 'Фон карточек (`.card`)');
+        setText('settingsStylesCardTextColorLabel', t('settingsStylesCardTextColorLabel') || 'Цвет текста карточек');
+        setText('settingsStylesCardHeaderFromLabel', t('settingsStylesCardHeaderFromLabel') || 'Градиент заголовка (`.card-header`) — старт');
+        setText('settingsStylesCardHeaderToLabel', t('settingsStylesCardHeaderToLabel') || 'Градиент заголовка (`.card-header`) — конец');
+        setText('settingsStylesCardHeaderTextColorLabel', t('settingsStylesCardHeaderTextColorLabel') || 'Цвет текста заголовка (`.card-header`)');
+        setText('settingsStylesStatValueColorLabel', t('settingsStylesStatValueColorLabel') || 'Цвет значений (`.stat-value` / `monitor-view__stat-value`)');
+        setText('settingsStylesStatLabelColorLabel', t('settingsStylesStatLabelColorLabel') || 'Цвет подписей (`.stat-label` / `monitor-view__stat-label`)');
+        setText('settingsStylesTableHeaderBgLabel', t('settingsStylesTableHeaderBgLabel') || 'Заголовок таблицы (`.table th`) — bg');
+        setText('settingsStylesTableHeaderTextColorLabel', t('settingsStylesTableHeaderTextColorLabel') || 'Заголовок таблицы (`.table th`) — text');
+        setText('settingsStylesTableCellTextColorLabel', t('settingsStylesTableCellTextColorLabel') || 'Текст таблицы (`.table td`)');
+        setText('settingsStylesTableBorderColorLabel', t('settingsStylesTableBorderColorLabel') || 'Цвет границ таблицы');
+        setText('settingsStylesTableHoverTdBgLabel', t('settingsStylesTableHoverTdBgLabel') || 'Фон таблицы при hover (`tr:hover td`)');
+        setText('settingsStylesProgressBgLabel', t('settingsStylesProgressBgLabel') || 'Фон прогресса (`.progress`)');
+        setText('settingsStylesMonitorViewCardBgLabel', t('settingsStylesMonitorViewCardBgLabel') || 'Фон карточек монитора (`.monitor-view__card`)');
+        setText('settingsStylesSaveBtnText', t('settingsStylesSaveBtnText') || 'Сохранить');
+        setText('settingsStylesResetBtnText', t('settingsStylesResetBtnText') || 'Сбросить вариант');
+        setText('settingsStylesExportBtnText', t('settingsStylesExportBtnText') || 'Выгрузить (JSON)');
+        setText('settingsStylesImportBtnText', t('settingsStylesImportBtnText') || 'Загрузить (JSON)');
+        setText('settingsStylesDisableBtnText', t('settingsStylesDisableBtnText') || 'Отключить кастомные стили');
+
+        // Localize select options for the styles tab.
+        const stylesVariantSelect = document.getElementById('customThemeVariantSelect');
+        if (stylesVariantSelect) {
+            const setOptionText = (value, key) => {
+                const opt = stylesVariantSelect.querySelector('option[value="' + value + '"]');
+                if (opt) opt.textContent = t(key);
+            };
+            setOptionText('normalLight', 'settingsStylesVariantNormalLight');
+            setOptionText('normalDark', 'settingsStylesVariantNormalDark');
+            setOptionText('monitorLight', 'settingsStylesVariantMonitorLight');
+            setOptionText('monitorDark', 'settingsStylesVariantMonitorDark');
+        }
         setText('settingsMonitorScreensOrderTitle', t('settingsMonitorScreensOrderTitle'));
         setText('settingsMonitorScreensOrderHint', t('settingsMonitorScreensOrderHint'));
         renderSettingsMonitorScreensOrderList();
@@ -625,8 +670,10 @@ function updateUILanguage() {
     setText('settingsDebugRefreshText', t('settingsDebugRefreshText') || 'Refresh metrics');
     setText('settingsDebugPingText', t('settingsDebugPingText') || 'Ping API');
     setText('settingsDebugClearCacheText', t('settingsDebugClearCacheText') || 'Clear cache');
+    setText('settingsDebugResetAllText', t('settingsDebugResetAllText') || 'Reset all settings');
     setText('settingsDebugExportText', t('settingsDebugExportText') || 'Download report');
     setText('settingsDebugReloadText', t('settingsDebugReloadText') || 'Reload application');
+    setText('settingsDebugResetAllConfirmLabel', t('settingsDebugResetAllConfirmLabel') || 'Confirm by checkbox to reset all settings');
     setText('settingsNavSecurity', t('settingsNavSecurity'));
     setText('settingsSecurityTitle', t('settingsSecurityTitle'));
     setText('settingsSecurityHint', t('settingsSecurityHint'));
@@ -2511,6 +2558,34 @@ async function clearDebugCache() {
     }
 }
 
+async function resetAllSettings() {
+    const btn = document.getElementById('settingsDebugResetAllBtn');
+    const cb = document.getElementById('settingsDebugResetAllConfirmCheckbox');
+    if (btn) btn.disabled = true;
+
+    if (cb && !cb.checked) {
+        showToast(t('settingsDebugResetAllNeedCheckboxText') || 'Please confirm by checkbox', 'error');
+        if (btn) btn.disabled = false;
+        return;
+    }
+
+    try {
+        const res = await fetch('/api/settings/reset', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.success !== false) {
+            showToast(t('settingsDebugResetAllDone') || 'All settings reset', 'success');
+            window.location.reload();
+        } else {
+            const msg = data.error || t('settingsDebugResetAllError') || 'Reset failed';
+            showToast(String(msg), 'error');
+        }
+    } catch (e) {
+        showToast((t('settingsDebugResetAllError') || 'Reset failed') + ': ' + (e.message || String(e)), 'error');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
 function exportDebugReport() {
     const client = {
         language: currentLanguage,
@@ -2947,6 +3022,586 @@ function applyMonitorTheme() {
     const darkBtn = document.getElementById('monitorThemeDark');
     if (lightBtn) lightBtn.classList.toggle('active', monitorTheme === 'light');
     if (darkBtn) darkBtn.classList.toggle('active', monitorTheme === 'dark');
+}
+
+// ==================== CUSTOM THEME CSS (normal/monitor x light/dark) ====================
+function ensureCustomThemeStyleEl() {
+    let el = document.getElementById(CUSTOM_THEME_STYLE_EL_ID);
+    if (!el) {
+        el = document.createElement('style');
+        el.id = CUSTOM_THEME_STYLE_EL_ID;
+        document.head.appendChild(el);
+    }
+    return el;
+}
+
+function normalizeCustomThemeCssInput(input) {
+    const base = {
+        normal: { light: '', dark: '' },
+        monitor: { light: '', dark: '' }
+    };
+    if (!input || typeof input !== 'object') return base;
+
+    // Accept both nested and flat shapes (for forward/backward compatibility)
+    const nested = input.normal || input.monitor ? input : null;
+    const flat = !nested ? input : null;
+
+    const normalSource = nested ? nested.normal : input.normal;
+    const monitorSource = nested ? nested.monitor : input.monitor;
+
+    const getStr = (obj, key) => (obj && typeof obj[key] === 'string') ? obj[key] : '';
+    if (flat) {
+        return {
+            normal: {
+                light: typeof input.normalLight === 'string' ? input.normalLight : '',
+                dark: typeof input.normalDark === 'string' ? input.normalDark : ''
+            },
+            monitor: {
+                light: typeof input.monitorLight === 'string' ? input.monitorLight : '',
+                dark: typeof input.monitorDark === 'string' ? input.monitorDark : ''
+            }
+        };
+    }
+
+    return {
+        normal: {
+            light: getStr(normalSource, 'light'),
+            dark: getStr(normalSource, 'dark')
+        },
+        monitor: {
+            light: getStr(monitorSource, 'light'),
+            dark: getStr(monitorSource, 'dark')
+        }
+    };
+}
+
+function getCustomThemeVariantScope(variantKey) {
+    // Note: monitor-mode and dark theme are independent.
+    if (variantKey === 'normalLight') return 'body:not(.dark-mode):not(.monitor-mode)';
+    if (variantKey === 'normalDark') return 'body.dark-mode:not(.monitor-mode)';
+    if (variantKey === 'monitorLight') return 'body.monitor-mode:not(.monitor-theme-dark)';
+    if (variantKey === 'monitorDark') return 'body.monitor-mode.monitor-theme-dark';
+    return '';
+}
+
+function expandCustomCssSnippet(snippet, scope) {
+    const s = String(snippet ?? '').trim();
+    if (!s) return '';
+    const scopeReplaced = s
+        .replaceAll('{{SCOPE}}', scope)
+        .replaceAll('{{scope}}', scope);
+    const t = scopeReplaced.trim();
+    if (!t) return '';
+    if (t.startsWith('@')) {
+        // Heuristic: don't try to scope at-rules. Use {{SCOPE}} in user CSS for full control.
+        return t;
+    }
+    if (t.includes(scope) || s.includes('{{SCOPE}}') || s.includes('{{scope}}')) return t;
+    // Best-effort heuristic: prefix the snippet with the scope selector.
+    return scope + ' ' + t;
+}
+
+function applyCustomThemeCss() {
+    const styleEl = ensureCustomThemeStyleEl();
+    const normalized = normalizeCustomThemeCssInput(customThemeCss);
+
+    const variants = [
+        { key: 'normalLight', scope: getCustomThemeVariantScope('normalLight'), css: normalized.normal.light },
+        { key: 'normalDark', scope: getCustomThemeVariantScope('normalDark'), css: normalized.normal.dark },
+        { key: 'monitorLight', scope: getCustomThemeVariantScope('monitorLight'), css: normalized.monitor.light },
+        { key: 'monitorDark', scope: getCustomThemeVariantScope('monitorDark'), css: normalized.monitor.dark }
+    ];
+
+    const parts = variants
+        .map(v => expandCustomCssSnippet(v.css, v.scope))
+        .filter(Boolean);
+
+    styleEl.textContent = parts.join('\n\n');
+}
+
+// ==================== CUSTOM THEME PLAIN SETTINGS ====================
+const CUSTOM_THEME_STYLE_DEFAULTS = {
+    normal: {
+        light: {
+            cardBg: '#ffffff',
+            cardTextColor: '#2d3748',
+            cardHeaderFrom: '#667eea',
+            cardHeaderTo: '#764ba2',
+            cardHeaderTextColor: '#ffffff',
+            statValueColor: '#333333',
+            statLabelColor: '#666666',
+            statCardBg: '#ffffff',
+            nodeCardBg: '#ffffff',
+            nodeCardTextColor: '#2d3748',
+            tableHeaderBg: '#f8f9fa',
+            tableHeaderTextColor: '#2d3748',
+            tableCellTextColor: '#2d3748',
+            tableBorderColor: 'rgba(0,0,0,0.125)',
+            tableHoverTdBg: 'rgba(0,0,0,0.03)',
+            progressBg: '#e2e8f0',
+            monitorViewCardBg: 'rgba(255, 255, 255, 0.95)'
+        },
+        dark: {
+            cardBg: '#16213e',
+            cardTextColor: '#eeeeee',
+            cardHeaderFrom: '#0f3460',
+            cardHeaderTo: '#533483',
+            cardHeaderTextColor: '#ffffff',
+            statValueColor: '#eeeeee',
+            statLabelColor: '#aaaaaa',
+            statCardBg: '#16213e',
+            nodeCardBg: '#16213e',
+            nodeCardTextColor: '#eeeeee',
+            tableHeaderBg: '#0f3460',
+            tableHeaderTextColor: '#ffffff',
+            tableCellTextColor: '#e2e8f0',
+            tableBorderColor: '#2d3748',
+            tableHoverTdBg: 'rgba(255, 255, 255, 0.06)',
+            progressBg: '#0f3460',
+            monitorViewCardBg: 'rgba(0,0,0,0)'
+        }
+    },
+    monitor: {
+        light: {
+            cardBg: '#ffffff',
+            cardTextColor: '#2d3748',
+            cardHeaderFrom: '#edf2f7',
+            cardHeaderTo: '#e2e8f0',
+            cardHeaderTextColor: '#2d3748',
+            statValueColor: '#2d3748',
+            statLabelColor: '#4a5568',
+            statCardBg: '#ffffff',
+            nodeCardBg: '#ffffff',
+            nodeCardTextColor: '#2d3748',
+            tableHeaderBg: '#edf2f7',
+            tableHeaderTextColor: '#2d3748',
+            tableCellTextColor: '#2d3748',
+            tableBorderColor: '#e2e8f0',
+            tableHoverTdBg: 'rgba(0,0,0,0.03)',
+            progressBg: '#e2e8f0',
+            monitorViewCardBg: 'rgba(255, 255, 255, 0.95)'
+        },
+        dark: {
+            cardBg: '#16213e',
+            cardTextColor: '#ffffff',
+            cardHeaderFrom: '#0f3460',
+            cardHeaderTo: '#533483',
+            cardHeaderTextColor: '#ffffff',
+            statValueColor: '#ffffff',
+            statLabelColor: '#a0aec0',
+            statCardBg: '#16213e',
+            nodeCardBg: '#1a2740',
+            nodeCardTextColor: '#e2e8f0',
+            tableHeaderBg: '#0f3460',
+            tableHeaderTextColor: '#ffffff',
+            tableCellTextColor: '#e2e8f0',
+            tableBorderColor: '#2d3748',
+            tableHoverTdBg: 'rgba(255, 255, 255, 0.06)',
+            progressBg: '#2d3748',
+            monitorViewCardBg: '#1a2740'
+        }
+    }
+};
+
+function normalizeCustomThemeStyleSettingsInput(input) {
+    if (!input || typeof input !== 'object') return null;
+    const out = JSON.parse(JSON.stringify(CUSTOM_THEME_STYLE_DEFAULTS));
+
+    const normal = input.normal || {};
+    const monitor = input.monitor || {};
+
+    const applyVariant = (target, src) => {
+        if (!src || typeof src !== 'object') return;
+        Object.keys(target).forEach((k) => {
+            if (src[k] !== undefined && src[k] !== null && src[k] !== '') target[k] = String(src[k]);
+        });
+    };
+
+    applyVariant(out.normal.light, normal.light);
+    applyVariant(out.normal.dark, normal.dark);
+    applyVariant(out.monitor.light, monitor.light);
+    applyVariant(out.monitor.dark, monitor.dark);
+
+    return out;
+}
+
+function buildCustomThemeCssSnippetFromStyle(styleVariant) {
+    const s = styleVariant || {};
+    const safe = (v) => (v == null ? '' : String(v));
+
+    // Snippets are written without {{SCOPE}}; applyCustomThemeCss will prefix by scope automatically.
+    return [
+        `.card { background: ${safe(s.cardBg)} !important; color: ${safe(s.cardTextColor)} !important; border-color: ${safe(s.tableBorderColor)} !important; }`,
+        `.card-header { background: linear-gradient(135deg, ${safe(s.cardHeaderFrom)} 0%, ${safe(s.cardHeaderTo)} 100%) !important; color: ${safe(s.cardHeaderTextColor)} !important; }`,
+        `.stat-card { background: ${safe(s.statCardBg)} !important; }`,
+        `.stat-value { color: ${safe(s.statValueColor)} !important; }`,
+        `.stat-label { color: ${safe(s.statLabelColor)} !important; }`,
+        `.node-card { background: ${safe(s.nodeCardBg)} !important; color: ${safe(s.nodeCardTextColor)} !important; border-color: ${safe(s.tableBorderColor)} !important; }`,
+        `.table { color: ${safe(s.tableCellTextColor)} !important; border-color: ${safe(s.tableBorderColor)} !important; }`,
+        `.table th { background-color: ${safe(s.tableHeaderBg)} !important; color: ${safe(s.tableHeaderTextColor)} !important; border-color: ${safe(s.tableBorderColor)} !important; }`,
+        `.table tbody td { color: ${safe(s.tableCellTextColor)} !important; border-color: ${safe(s.tableBorderColor)} !important; }`,
+        `.table tbody tr:hover td { background-color: ${safe(s.tableHoverTdBg)} !important; }`,
+        `.progress { background: ${safe(s.progressBg)} !important; }`,
+        `.monitor-view__card { background: ${safe(s.monitorViewCardBg)} !important; border-color: ${safe(s.tableBorderColor)} !important; }`,
+        `.monitor-view__panel-title { color: ${safe(s.cardHeaderTextColor)} !important; }`,
+        `.monitor-view__stat-value, .monitor-view__res-value { color: ${safe(s.statValueColor)} !important; }`,
+        `.monitor-view__stat-label, .monitor-view__res-label { color: ${safe(s.statLabelColor)} !important; }`
+    ].join('\n');
+}
+
+function applyCustomThemeStyleSettings() {
+    // If unset/null: remove overrides completely (back to base CSS).
+    if (customThemeStyleSettings == null) {
+        customThemeCss = {
+            normal: { light: '', dark: '' },
+            monitor: { light: '', dark: '' }
+        };
+        applyCustomThemeCss();
+        return;
+    }
+
+    const normalized = normalizeCustomThemeStyleSettingsInput(customThemeStyleSettings);
+    if (!normalized) {
+        customThemeStyleSettings = null;
+        applyCustomThemeStyleSettings();
+        return;
+    }
+
+    customThemeCss = {
+        normal: {
+            light: buildCustomThemeCssSnippetFromStyle(normalized.normal.light),
+            dark: buildCustomThemeCssSnippetFromStyle(normalized.normal.dark)
+        },
+        monitor: {
+            light: buildCustomThemeCssSnippetFromStyle(normalized.monitor.light),
+            dark: buildCustomThemeCssSnippetFromStyle(normalized.monitor.dark)
+        }
+    };
+    applyCustomThemeCss();
+    // Update UI if the styles editor is present in DOM.
+    syncCustomThemeStyleSettingsUI();
+}
+
+function getCustomThemeStyleVariantDefaults(variantKey) {
+    const isNormal = variantKey.startsWith('normal');
+    const isMonitor = variantKey.startsWith('monitor');
+    const isLight = variantKey.endsWith('Light');
+
+    if (isNormal && isLight) return CUSTOM_THEME_STYLE_DEFAULTS.normal.light;
+    if (isNormal && !isLight) return CUSTOM_THEME_STYLE_DEFAULTS.normal.dark;
+    if (isMonitor && isLight) return CUSTOM_THEME_STYLE_DEFAULTS.monitor.light;
+    if (isMonitor && !isLight) return CUSTOM_THEME_STYLE_DEFAULTS.monitor.dark;
+    return CUSTOM_THEME_STYLE_DEFAULTS.normal.light;
+}
+
+function getCustomThemeStyleVariantFromSelect() {
+    const sel = document.getElementById('customThemeVariantSelect');
+    if (!sel) return 'normalLight';
+    return String(sel.value || 'normalLight');
+}
+
+function readCustomThemeStyleVariantFromInputs() {
+    const read = (id) => {
+        const el = document.getElementById(id);
+        return el ? String(el.value ?? '').trim() : '';
+    };
+
+    return {
+        cardBg: read('customThemeStyleCardBg'),
+        cardTextColor: read('customThemeStyleCardTextColor'),
+        cardHeaderFrom: read('customThemeStyleCardHeaderFrom'),
+        cardHeaderTo: read('customThemeStyleCardHeaderTo'),
+        cardHeaderTextColor: read('customThemeStyleCardHeaderTextColor'),
+        statValueColor: read('customThemeStyleStatValueColor'),
+        statLabelColor: read('customThemeStyleStatLabelColor'),
+        tableHeaderBg: read('customThemeStyleTableHeaderBg'),
+        tableHeaderTextColor: read('customThemeStyleTableHeaderTextColor'),
+        tableCellTextColor: read('customThemeStyleTableCellTextColor'),
+        tableBorderColor: read('customThemeStyleTableBorderColor'),
+        tableHoverTdBg: read('customThemeStyleTableHoverTdBg'),
+        progressBg: read('customThemeStyleProgressBg'),
+        monitorViewCardBg: read('customThemeStyleMonitorViewCardBg')
+    };
+}
+
+function applyCustomThemeStyleVariantToInputs(variantKey) {
+    const variantDefaults = getCustomThemeStyleVariantDefaults(variantKey);
+    const haveStored = customThemeStyleSettings != null;
+    const storedVariant = (() => {
+        const isNormal = variantKey.startsWith('normal');
+        const isMonitor = variantKey.startsWith('monitor');
+        const isLight = variantKey.endsWith('Light');
+        if (!haveStored) return null;
+        if (isNormal && isLight) return customThemeStyleSettings?.normal?.light ?? null;
+        if (isNormal && !isLight) return customThemeStyleSettings?.normal?.dark ?? null;
+        if (isMonitor && isLight) return customThemeStyleSettings?.monitor?.light ?? null;
+        if (isMonitor && !isLight) return customThemeStyleSettings?.monitor?.dark ?? null;
+        return null;
+    })();
+
+    const s = storedVariant ? storedVariant : variantDefaults;
+    const set = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.value = String(val ?? '');
+    };
+
+    set('customThemeStyleCardBg', s.cardBg);
+    set('customThemeStyleCardTextColor', s.cardTextColor);
+    set('customThemeStyleCardHeaderFrom', s.cardHeaderFrom);
+    set('customThemeStyleCardHeaderTo', s.cardHeaderTo);
+    set('customThemeStyleCardHeaderTextColor', s.cardHeaderTextColor);
+    set('customThemeStyleStatValueColor', s.statValueColor);
+    set('customThemeStyleStatLabelColor', s.statLabelColor);
+    set('customThemeStyleTableHeaderBg', s.tableHeaderBg);
+    set('customThemeStyleTableHeaderTextColor', s.tableHeaderTextColor);
+    set('customThemeStyleTableCellTextColor', s.tableCellTextColor);
+    set('customThemeStyleTableBorderColor', s.tableBorderColor);
+    set('customThemeStyleTableHoverTdBg', s.tableHoverTdBg);
+    set('customThemeStyleProgressBg', s.progressBg);
+    set('customThemeStyleMonitorViewCardBg', s.monitorViewCardBg);
+}
+
+function syncCustomThemeStyleSettingsUI() {
+    const variantKey = getCustomThemeStyleVariantFromSelect();
+    applyCustomThemeStyleVariantToInputs(variantKey);
+}
+
+function onCustomThemeStyleVariantChange() {
+    syncCustomThemeStyleSettingsUI();
+}
+
+async function saveCustomThemeStyleSettingsVariant() {
+    const variantKey = getCustomThemeStyleVariantFromSelect();
+    const variantValues = readCustomThemeStyleVariantFromInputs();
+
+    const normalized = normalizeCustomThemeStyleSettingsInput(customThemeStyleSettings || {});
+    if (!normalized) return;
+
+    const isNormal = variantKey.startsWith('normal');
+    const isMonitor = variantKey.startsWith('monitor');
+    const isLight = variantKey.endsWith('Light');
+
+    if (isNormal && isLight) normalized.normal.light = variantValues;
+    else if (isNormal && !isLight) normalized.normal.dark = variantValues;
+    else if (isMonitor && isLight) normalized.monitor.light = variantValues;
+    else if (isMonitor && !isLight) normalized.monitor.dark = variantValues;
+
+    // Preserve default values for fields not represented in the plain-settings UI.
+    if (isNormal && isLight) normalized.normal.light = { ...getCustomThemeStyleVariantDefaults('normalLight'), ...normalized.normal.light, ...variantValues };
+    if (isNormal && !isLight) normalized.normal.dark = { ...getCustomThemeStyleVariantDefaults('normalDark'), ...normalized.normal.dark, ...variantValues };
+    if (isMonitor && isLight) normalized.monitor.light = { ...getCustomThemeStyleVariantDefaults('monitorLight'), ...normalized.monitor.light, ...variantValues };
+    if (isMonitor && !isLight) normalized.monitor.dark = { ...getCustomThemeStyleVariantDefaults('monitorDark'), ...normalized.monitor.dark, ...variantValues };
+
+    customThemeStyleSettings = normalized;
+    applyCustomThemeStyleSettings();
+    saveSettingsToServer({ customThemeStyleSettings });
+    showToast('Стили сохранены', 'success');
+}
+
+async function resetCustomThemeStyleSettingsVariant() {
+    const variantKey = getCustomThemeStyleVariantFromSelect();
+    const defaults = getCustomThemeStyleVariantDefaults(variantKey);
+
+    const normalized = normalizeCustomThemeStyleSettingsInput(customThemeStyleSettings || {});
+    if (!normalized) return;
+
+    const isNormal = variantKey.startsWith('normal');
+    const isMonitor = variantKey.startsWith('monitor');
+    const isLight = variantKey.endsWith('Light');
+
+    if (isNormal && isLight) normalized.normal.light = defaults;
+    else if (isNormal && !isLight) normalized.normal.dark = defaults;
+    else if (isMonitor && isLight) normalized.monitor.light = defaults;
+    else if (isMonitor && !isLight) normalized.monitor.dark = defaults;
+
+    customThemeStyleSettings = normalized;
+    applyCustomThemeStyleSettings();
+    saveSettingsToServer({ customThemeStyleSettings });
+    syncCustomThemeStyleSettingsUI();
+    showToast('Вариант сброшен к значениям по умолчанию', 'info');
+}
+
+async function unloadCustomThemeStyleSettingsAll() {
+    customThemeStyleSettings = null;
+    applyCustomThemeStyleSettings();
+    // Also clear legacy `custom_theme_css` so the disable action persists after reload.
+    saveSettingsToServer({
+        customThemeStyleSettings: null,
+        customThemeCss: {
+            normal: { light: '', dark: '' },
+            monitor: { light: '', dark: '' }
+        }
+    });
+    syncCustomThemeStyleSettingsUI();
+    showToast('Кастомные стили отключены', 'info');
+}
+
+function exportCustomThemeStyleSettings() {
+    const data = {
+        exportedAt: new Date().toISOString(),
+        type: 'customThemeStyleSettings',
+        version: 1,
+        customThemeStyleSettings
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'custom-theme-style-settings-' + new Date().toISOString().slice(0, 10) + '.json';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    showToast('Экспорт готов', 'success');
+}
+
+function triggerCustomThemeStyleImportFilePicker() {
+    const inp = document.getElementById('customThemeStyleImportFile');
+    if (!inp) return;
+    inp.value = '';
+    inp.click();
+}
+
+async function importCustomThemeStyleSettingsFromFile(file) {
+    if (!file) return;
+    const text = await file.text();
+    let parsed = null;
+    try {
+        parsed = JSON.parse(text);
+    } catch (_) {
+        showToast('Невалидный JSON', 'error');
+        return;
+    }
+
+    const incoming = parsed?.customThemeStyleSettings ?? parsed;
+    const normalized = normalizeCustomThemeStyleSettingsInput(incoming);
+    if (!normalized) {
+        customThemeStyleSettings = null;
+        applyCustomThemeStyleSettings();
+        saveSettingsToServer({ customThemeStyleSettings: null });
+        showToast('Импорт: стили отключены', 'info');
+        return;
+    }
+
+    customThemeStyleSettings = normalized;
+    applyCustomThemeStyleSettings();
+    syncCustomThemeStyleSettingsUI();
+    await saveSettingsToServer({ customThemeStyleSettings });
+    showToast('Импорт стилей выполнен', 'success');
+}
+
+function getCustomThemeVariantFromSelect() {
+    const sel = document.getElementById('customThemeVariantSelect');
+    if (!sel) return 'normalLight';
+    const v = String(sel.value || 'normalLight');
+    return v;
+}
+
+function syncCustomThemeCssEditorUI() {
+    const textarea = document.getElementById('customThemeCssEditor');
+    if (!textarea) return;
+
+    const normalized = normalizeCustomThemeCssInput(customThemeCss);
+    const variant = getCustomThemeVariantFromSelect();
+
+    if (variant === 'normalLight') textarea.value = normalized.normal.light || '';
+    else if (variant === 'normalDark') textarea.value = normalized.normal.dark || '';
+    else if (variant === 'monitorLight') textarea.value = normalized.monitor.light || '';
+    else if (variant === 'monitorDark') textarea.value = normalized.monitor.dark || '';
+}
+
+function onCustomThemeVariantChange() {
+    syncCustomThemeCssEditorUI();
+}
+
+async function saveCustomThemeCssVariant() {
+    const variant = getCustomThemeVariantFromSelect();
+    const textarea = document.getElementById('customThemeCssEditor');
+    if (!textarea) return;
+
+    const value = String(textarea.value ?? '');
+    const normalized = normalizeCustomThemeCssInput(customThemeCss);
+
+    if (variant === 'normalLight') normalized.normal.light = value;
+    else if (variant === 'normalDark') normalized.normal.dark = value;
+    else if (variant === 'monitorLight') normalized.monitor.light = value;
+    else if (variant === 'monitorDark') normalized.monitor.dark = value;
+
+    customThemeCss = normalized;
+    applyCustomThemeCss();
+    saveSettingsToServer({ customThemeCss });
+    showToast('Стили сохранены', 'success');
+}
+
+async function clearCustomThemeCssVariant() {
+    const variant = getCustomThemeVariantFromSelect();
+    const textarea = document.getElementById('customThemeCssEditor');
+    if (!textarea) return;
+
+    const normalized = normalizeCustomThemeCssInput(customThemeCss);
+    if (variant === 'normalLight') normalized.normal.light = '';
+    else if (variant === 'normalDark') normalized.normal.dark = '';
+    else if (variant === 'monitorLight') normalized.monitor.light = '';
+    else if (variant === 'monitorDark') normalized.monitor.dark = '';
+
+    customThemeCss = normalized;
+    textarea.value = '';
+    applyCustomThemeCss();
+    saveSettingsToServer({ customThemeCss });
+    showToast('Стили этого варианта удалены', 'info');
+}
+
+async function unloadCustomThemeCssAll() {
+    customThemeCss = {
+        normal: { light: '', dark: '' },
+        monitor: { light: '', dark: '' }
+    };
+    const textarea = document.getElementById('customThemeCssEditor');
+    if (textarea) textarea.value = '';
+    applyCustomThemeCss();
+    saveSettingsToServer({ customThemeCss });
+    showToast('Пользовательские стили удалены', 'info');
+}
+
+function exportCustomThemeCss() {
+    const normalized = normalizeCustomThemeCssInput(customThemeCss);
+    const data = {
+        exportedAt: new Date().toISOString(),
+        type: 'customThemeCss',
+        version: 1,
+        customThemeCss: normalized
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'custom-theme-css-' + new Date().toISOString().slice(0, 10) + '.json';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    showToast('Экспорт готов', 'success');
+}
+
+function triggerCustomThemeImportFilePicker() {
+    const inp = document.getElementById('customThemeImportFile');
+    if (!inp) return;
+    inp.value = '';
+    inp.click();
+}
+
+async function importCustomThemeCssFromFile(file) {
+    if (!file) return;
+    const text = await file.text();
+    let parsed = null;
+    try {
+        parsed = JSON.parse(text);
+    } catch (e) {
+        showToast('Невалидный JSON файла', 'error');
+        return;
+    }
+
+    const incoming = parsed?.customThemeCss ?? parsed;
+    const normalized = normalizeCustomThemeCssInput(incoming);
+    customThemeCss = normalized;
+    applyCustomThemeCss();
+    syncCustomThemeCssEditorUI();
+    saveSettingsToServer({ customThemeCss });
+    showToast('Импорт стилей выполнен', 'success');
 }
 
 function goMonitorView(direction) {
@@ -5143,6 +5798,14 @@ async function loadSettings() {
     if (data.current_truenas_index != null) currentTrueNASServerIndex = parseInt(data.current_truenas_index, 10) || 0;
     if (data.server_type) currentServerType = data.server_type === 'truenas' ? 'truenas' : 'proxmox';
     if (data.monitor_theme === 'light' || data.monitor_theme === 'dark') monitorTheme = data.monitor_theme;
+    if (data.custom_theme_style_settings !== undefined) {
+        customThemeStyleSettings = data.custom_theme_style_settings;
+        applyCustomThemeStyleSettings();
+    } else if (data.custom_theme_css) {
+        customThemeCss = normalizeCustomThemeCssInput(data.custom_theme_css);
+        applyCustomThemeCss();
+    }
+    syncCustomThemeCssEditorUI();
     monitorHiddenServiceIds = Array.isArray(data.monitor_hidden_service_ids) ? data.monitor_hidden_service_ids : [];
     monitorHiddenVmIds = Array.isArray(data.monitor_hidden_vm_ids) ? data.monitor_hidden_vm_ids : [];
     monitorScreensOrder = Array.isArray(data.monitor_screens_order) && data.monitor_screens_order.length

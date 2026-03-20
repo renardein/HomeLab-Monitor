@@ -65,6 +65,19 @@ function clearSettingsPassword() {
     setSetting(PASSWORD_KEY, '');
 }
 
+function resetAllSettingsPreservingPassword() {
+    const db = getDbSync();
+    // Preserve settings password itself; clear everything else.
+    db.run('DELETE FROM app_settings WHERE key != ?', [PASSWORD_KEY]);
+    saveDb();
+}
+
+function clearMonitoredServices() {
+    const db = getDbSync();
+    db.run('DELETE FROM monitored_services');
+    saveDb();
+}
+
 // Monitored services
 function listMonitoredServices() {
     const db = getDbSync();
@@ -225,6 +238,8 @@ module.exports = {
     verifySettingsPassword,
     setSettingsPassword,
     clearSettingsPassword,
+    resetAllSettingsPreservingPassword,
+    clearMonitoredServices,
     listMonitoredServices,
     addMonitoredService,
     removeMonitoredService,

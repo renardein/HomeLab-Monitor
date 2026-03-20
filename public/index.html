@@ -126,6 +126,9 @@
                             <button class="nav-link" id="settings-nav-display" data-bs-toggle="pill" data-bs-target="#settings-tab-display" type="button" role="tab">
                                 <i class="bi bi-eye me-2"></i><span id="settingsNavDisplay">Отображение</span>
                             </button>
+                            <button class="nav-link" id="settings-nav-styles" data-bs-toggle="pill" data-bs-target="#settings-tab-styles" type="button" role="tab">
+                                <i class="bi bi-palette me-2"></i><span id="settingsNavStyles">Стили</span>
+                            </button>
                             <button class="nav-link" id="settings-nav-thresholds" data-bs-toggle="pill" data-bs-target="#settings-tab-thresholds" type="button" role="tab">
                                 <i class="bi bi-speedometer2 me-2"></i><span id="settingsNavThresholds">Пороги</span>
                             </button>
@@ -300,6 +303,113 @@
                     </div>
                                 </div>
                             </div>
+                            <!-- Стили -->
+                            <div class="tab-pane fade" id="settings-tab-styles" role="tabpanel">
+                                <div class="settings-section">
+                                    <h5 class="mb-3"><i class="bi bi-palette me-2"></i><span id="settingsStylesTitle">Стили</span></h5>
+
+                                    <div class="mb-3">
+                                        <label class="form-label fw-bold" id="settingsStylesVariantLabel">Вариант для редактирования</label>
+                                        <select class="form-select" id="customThemeVariantSelect" onchange="onCustomThemeStyleVariantChange()">
+                                            <option value="normalLight">normalLight</option>
+                                            <option value="normalDark">normalDark</option>
+                                            <option value="monitorLight">monitorLight</option>
+                                            <option value="monitorDark">monitorDark</option>
+                                        </select>
+                                        <div class="form-text" id="settingsStylesHint">Настройки меняют оверрайды для карточек, заголовков, таблиц и прогресса. Оверрайды применяются только к выбранному варианту.</div>
+                                    </div>
+
+                                    <hr class="my-4">
+
+                                    <div class="row g-3">
+                                        <div class="col-md-6">
+                                            <label class="form-label fw-bold" id="settingsStylesCardBgLabel">Фон карточек (`.card`)</label>
+                                            <input type="text" class="form-control" id="customThemeStyleCardBg" placeholder="#ffffff или rgba(255,255,255,0.95)">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label fw-bold" id="settingsStylesCardTextColorLabel">Цвет текста карточек</label>
+                                            <input type="text" class="form-control" id="customThemeStyleCardTextColor" placeholder="#2d3748">
+                                        </div>
+
+                                        <div class="col-md-6">
+                                            <label class="form-label fw-bold" id="settingsStylesCardHeaderFromLabel">Градиент заголовка (`.card-header`) — старт</label>
+                                            <input type="text" class="form-control" id="customThemeStyleCardHeaderFrom" placeholder="#667eea">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label fw-bold" id="settingsStylesCardHeaderToLabel">Градиент заголовка (`.card-header`) — конец</label>
+                                            <input type="text" class="form-control" id="customThemeStyleCardHeaderTo" placeholder="#764ba2">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label fw-bold" id="settingsStylesCardHeaderTextColorLabel">Цвет текста заголовка (`.card-header`)</label>
+                                            <input type="text" class="form-control" id="customThemeStyleCardHeaderTextColor" placeholder="#ffffff">
+                                        </div>
+
+                                        <div class="col-md-6">
+                                            <label class="form-label fw-bold" id="settingsStylesStatValueColorLabel">Цвет значений (`.stat-value` / `monitor-view__stat-value`)</label>
+                                            <input type="text" class="form-control" id="customThemeStyleStatValueColor" placeholder="#333333">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label fw-bold" id="settingsStylesStatLabelColorLabel">Цвет подписей (`.stat-label` / `monitor-view__stat-label`)</label>
+                                            <input type="text" class="form-control" id="customThemeStyleStatLabelColor" placeholder="#666666">
+                                        </div>
+
+                                        <div class="col-md-6">
+                                            <label class="form-label fw-bold" id="settingsStylesTableHeaderBgLabel">Заголовок таблицы (`.table th`) — bg</label>
+                                            <input type="text" class="form-control" id="customThemeStyleTableHeaderBg" placeholder="#f8f9fa">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label fw-bold" id="settingsStylesTableHeaderTextColorLabel">Заголовок таблицы (`.table th`) — text</label>
+                                            <input type="text" class="form-control" id="customThemeStyleTableHeaderTextColor" placeholder="#2d3748">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label fw-bold" id="settingsStylesTableCellTextColorLabel">Текст таблицы (`.table td`)</label>
+                                            <input type="text" class="form-control" id="customThemeStyleTableCellTextColor" placeholder="#2d3748">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label fw-bold" id="settingsStylesTableBorderColorLabel">Цвет границ таблицы</label>
+                                            <input type="text" class="form-control" id="customThemeStyleTableBorderColor" placeholder="rgba(0,0,0,0.125)">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label fw-bold" id="settingsStylesTableHoverTdBgLabel">Фон таблицы при hover (`tr:hover td`)</label>
+                                            <input type="text" class="form-control" id="customThemeStyleTableHoverTdBg" placeholder="rgba(0,0,0,0.03)">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label fw-bold" id="settingsStylesProgressBgLabel">Фон прогресса (`.progress`)</label>
+                                            <input type="text" class="form-control" id="customThemeStyleProgressBg" placeholder="#e2e8f0">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label fw-bold" id="settingsStylesMonitorViewCardBgLabel">Фон карточек монитора (`.monitor-view__card`)</label>
+                                            <input type="text" class="form-control" id="customThemeStyleMonitorViewCardBg" placeholder="#1a2740 или #ffffff">
+                                        </div>
+                                    </div>
+
+                                    <div class="d-flex gap-2 flex-wrap mt-4 mb-2">
+                                        <button class="btn btn-primary btn-sm" type="button" onclick="saveCustomThemeStyleSettingsVariant()">
+                                            <i class="bi bi-save me-1"></i><span id="settingsStylesSaveBtnText">Сохранить</span>
+                                        </button>
+                                        <button class="btn btn-outline-secondary btn-sm" type="button" onclick="resetCustomThemeStyleSettingsVariant()">
+                                            <i class="bi bi-eraser me-1"></i><span id="settingsStylesResetBtnText">Сбросить вариант</span>
+                                        </button>
+                                    </div>
+
+                                    <hr class="my-4">
+
+                                    <div class="d-flex gap-2 flex-wrap mb-2">
+                                        <button class="btn btn-outline-primary btn-sm" type="button" onclick="exportCustomThemeStyleSettings()">
+                                            <i class="bi bi-box-arrow-down me-1"></i><span id="settingsStylesExportBtnText">Выгрузить (JSON)</span>
+                                        </button>
+                                        <input type="file" id="customThemeStyleImportFile" accept="application/json" style="display:none"
+                                            onchange="importCustomThemeStyleSettingsFromFile(this.files && this.files[0] ? this.files[0] : null)">
+                                        <button class="btn btn-outline-primary btn-sm" type="button" onclick="triggerCustomThemeStyleImportFilePicker()">
+                                            <i class="bi bi-box-arrow-in-up me-1"></i><span id="settingsStylesImportBtnText">Загрузить (JSON)</span>
+                                        </button>
+                                        <button class="btn btn-outline-danger btn-sm" type="button" onclick="unloadCustomThemeStyleSettingsAll()">
+                                            <i class="bi bi-trash me-1"></i><span id="settingsStylesDisableBtnText">Отключить кастомные стили</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
                             <!-- Пороги -->
                             <div class="tab-pane fade" id="settings-tab-thresholds" role="tabpanel">
                                 <div class="settings-section">
@@ -900,12 +1010,19 @@
                                         <button type="button" class="btn btn-outline-warning btn-sm" onclick="clearDebugCache()" id="settingsDebugClearCacheBtn">
                                             <i class="bi bi-trash me-1"></i><span id="settingsDebugClearCacheText">Очистить кэш</span>
                                         </button>
+                                        <button type="button" class="btn btn-outline-danger btn-sm" onclick="resetAllSettings()" id="settingsDebugResetAllBtn">
+                                            <i class="bi bi-arrow-counterclockwise me-1"></i><span id="settingsDebugResetAllText">Сбросить все настройки</span>
+                                        </button>
                                         <button type="button" class="btn btn-outline-secondary btn-sm" onclick="exportDebugReport()" id="settingsDebugExportBtn">
                                             <i class="bi bi-download me-1"></i><span id="settingsDebugExportText">Скачать отчёт</span>
                                         </button>
                                         <button type="button" class="btn btn-outline-primary btn-sm" onclick="reloadApplication()" id="settingsDebugReloadBtn">
                                             <i class="bi bi-arrow-repeat me-1"></i><span id="settingsDebugReloadText">Перезагрузить приложение</span>
                                         </button>
+                                    </div>
+                                    <div class="form-check mt-2">
+                                        <input class="form-check-input" type="checkbox" id="settingsDebugResetAllConfirmCheckbox">
+                                        <label class="form-check-label small text-muted" for="settingsDebugResetAllConfirmCheckbox" id="settingsDebugResetAllConfirmLabel">Подтвердите галочкой, чтобы сбросить все настройки</label>
                                     </div>
                                 </div>
                             </div>

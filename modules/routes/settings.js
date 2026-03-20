@@ -9,6 +9,10 @@ const SETTING_KEYS = [
     'proxmox_servers', 'truenas_servers', 'connection_id_map',
     'preferred_language',
     'session_ttl_minutes',
+    // Custom theme CSS (import/export)
+    'custom_theme_css',
+    // Custom theme plain settings (import/export)
+    'custom_theme_style_settings',
     // UPS (NUT/SNMP) monitoring settings
     'ups_enabled', 'ups_type', 'ups_host', 'ups_port', 'ups_name',
     'nut_var_status', 'nut_var_charge', 'nut_var_runtime',
@@ -41,6 +45,8 @@ router.get('/', (req, res) => {
                     key === 'proxmox_servers' ||
                     key === 'truenas_servers' ||
                     key === 'connection_id_map' ||
+                    key === 'custom_theme_css' ||
+                    key === 'custom_theme_style_settings' ||
                     key === 'monitor_hidden_service_ids' ||
                     key === 'monitor_vms' ||
                     key === 'monitor_hidden_vm_ids' ||
@@ -89,6 +95,8 @@ router.post('/', (req, res) => {
             connection_id_map: body.connection_id_map ?? body.connectionIdMap,
             preferred_language: body.preferred_language ?? body.preferredLanguage,
             session_ttl_minutes: body.session_ttl_minutes ?? body.sessionTtlMinutes,
+            custom_theme_css: body.custom_theme_css ?? body.customThemeCss,
+            custom_theme_style_settings: body.custom_theme_style_settings ?? body.customThemeStyleSettings,
             monitor_hidden_service_ids: body.monitor_hidden_service_ids ?? body.monitorHiddenServiceIds,
             monitor_vms: body.monitor_vms ?? body.monitorVms,
             monitor_hidden_vm_ids: body.monitor_hidden_vm_ids ?? body.monitorHiddenVmIds,
@@ -148,6 +156,19 @@ router.post('/password', (req, res) => {
     }
     store.setSettingsPassword(String(newPassword));
     res.json({ success: true });
+});
+
+// POST /api/settings/reset — сброс всех настроек (без пароля настроек), плюс мониторы сервисов и подключений
+router.post('/reset', (req, res) => {
+    try {
+        store.resetAllSettingsPreservingPassword();
+        store.clearMonitoredServices();
+        const connectionsStore = require('../connection-store');
+        connectionsStore.clearConnections();
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
 });
 
 // GET /api/settings/services — список сервисов для мониторинга

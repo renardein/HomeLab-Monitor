@@ -139,6 +139,12 @@ function importConnectionsWithSecrets(list) {
     saveDb();
 }
 
+function clearConnections() {
+    const db = getDbSync();
+    db.run('DELETE FROM connections');
+    saveDb();
+}
+
 module.exports = {
     listConnections,
     getConnectionById,
@@ -146,5 +152,6 @@ module.exports = {
     upsertConnection,
     deleteConnection,
     exportConnectionsWithSecrets,
-    importConnectionsWithSecrets
+    importConnectionsWithSecrets,
+    clearConnections
 };
