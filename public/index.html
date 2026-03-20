@@ -162,8 +162,7 @@
                             <!-- Подключение -->
                             <div class="tab-pane fade show active" id="settings-tab-connection" role="tabpanel">
                                 <!-- Блок Proxmox -->
-                                <div class="settings-section card mb-4">
-                                    <div class="card-body">
+                                <div class="settings-section mb-4">
                                         <h5 class="mb-3"><i class="bi bi-diagram-3 me-2"></i><span id="connectTitle">Подключение к Proxmox</span></h5>
                                         <div class="alert alert-info py-2">
                                             <i class="bi bi-info-circle me-2"></i>
@@ -203,11 +202,9 @@
                                         <div class="mt-3 text-center" id="connectionStatusDisplayProxmox" style="display: none;">
                                             <span class="badge" id="connectionStatusBadgeProxmox"><i class="bi bi-circle-fill me-1"></i><span id="connectionStatusTextProxmox">Не подключено</span></span>
                                         </div>
-                                    </div>
                                 </div>
                                 <!-- Блок TrueNAS -->
-                                <div class="settings-section card">
-                                    <div class="card-body">
+                                <div class="settings-section">
                                         <h5 class="mb-3"><i class="bi bi-hdd-stack me-2"></i><span id="truenasConnectTitle">Подключение к TrueNAS</span></h5>
                                         <div class="alert alert-info py-2">
                                             <i class="bi bi-info-circle me-2"></i>
@@ -236,7 +233,6 @@
                                         <div class="mt-3 text-center" id="connectionStatusDisplayTrueNAS" style="display: none;">
                                             <span class="badge" id="connectionStatusBadgeTrueNAS"><i class="bi bi-circle-fill me-1"></i><span id="connectionStatusTextTrueNAS">Не подключено</span></span>
                                         </div>
-                                    </div>
                                 </div>
                             </div>
                             <!-- Отображение -->
@@ -361,7 +357,7 @@
                             <!-- Безопасность -->
                             <div class="tab-pane fade" id="settings-tab-security" role="tabpanel">
                                 <div class="settings-section">
-                                    <h5 class="mb-3"><i class="bi bi-lock me-2"></i><span id="settingsSecurityTitle">Безопасность</span></h5>
+                                    <h5 class="mb-3"><i class="bi bi-shield-lock me-2"></i><span id="settingsSecurityTitle">Безопасность</span></h5>
                                     <p class="text-muted small mb-3" id="settingsSecurityHint">Вы можете защитить доступ к настройкам паролем.</p>
                                     <div class="row g-3 mb-3">
                                         <div class="col-md-4">
@@ -402,7 +398,7 @@
                             </div>
                             <!-- Хосты для мониторинга -->
                             <div class="tab-pane fade" id="settings-tab-services" role="tabpanel">
-                                <div class="settings-section">
+                                <div class="settings-section mb-4">
                                     <h5 class="mb-3"><i class="bi bi-activity me-2"></i><span id="settingsServicesTitle">Хосты для мониторинга</span></h5>
                     <p class="text-muted small mb-3" id="settingsServicesHint">Добавьте хосты или URL для проверки доступности. В разделе «Мониторинг сервисов» отображается только список и статус.</p>
                     <div class="row g-3 align-items-end mb-3">
@@ -439,7 +435,7 @@
                         </div>
                     </div>
                     <div class="table-responsive mb-4">
-                        <table class="table table-sm align-middle">
+                        <table class="table table-sm table-hover align-middle mb-0">
                             <thead>
                                 <tr>
                                     <th id="settingsServiceNameHeader">Имя</th>
@@ -452,12 +448,10 @@
                             <tbody id="settingsServicesBody"></tbody>
                         </table>
                     </div>
+                                </div>
                     <div id="upsSettingsCardWrap">
-                        <div class="card mb-4">
-                        <div class="card-header">
-                            <h5 class="mb-0"><i class="bi bi-lightning-charge me-2"></i><span id="upsSettingsCardTitle">UPS (NUT/SNMP)</span></h5>
-                        </div>
-                        <div class="card-body">
+                        <div class="settings-section mb-4">
+                            <h5 class="mb-3"><i class="bi bi-lightning-charge me-2"></i><span id="upsSettingsCardTitle">UPS (NUT/SNMP)</span></h5>
                             <div class="row g-3 align-items-end mb-3">
                                     <div class="col-md-3">
                                     <label class="form-label fw-bold mb-2" id="upsSlotLabel">Слот UPS</label>
@@ -660,14 +654,10 @@
                                 </button>
                             </div>
                         </div>
-                        </div>
                     </div>
                     <div id="netdevSettingsCardWrap">
-                        <div class="card mb-4">
-                            <div class="card-header">
-                                <h5 class="mb-0"><i class="bi bi-diagram-3 me-2"></i><span id="netdevSettingsCardTitle">Сетевые устройства (SNMP)</span></h5>
-                            </div>
-                            <div class="card-body">
+                        <div class="settings-section mb-4">
+                            <h5 class="mb-3"><i class="bi bi-diagram-3 me-2"></i><span id="netdevSettingsCardTitle">Сетевые устройства (SNMP)</span></h5>
                                 <div class="row g-3 align-items-end mb-3">
                                     <div class="col-md-3">
                                         <label class="form-label fw-bold mb-2" id="netdevSlotLabel">Слот сетевого устройства</label>
@@ -750,11 +740,10 @@
                                         <i class="bi bi-save me-2"></i><span id="netdevSaveButtonText">Сохранить сетевые устройства</span>
                                     </button>
                                 </div>
-                            </div>
                         </div>
                     </div>
-                    <hr class="my-4">
-                    <h5 class="mb-2"><i class="bi bi-hdd-network me-2"></i><span id="settingsVmsTitle">VM/CT для мониторинга</span></h5>
+                                <div class="settings-section">
+                                    <h5 class="mb-3"><i class="bi bi-hdd-network me-2"></i><span id="settingsVmsTitle">VM/CT для мониторинга</span></h5>
                     <p class="text-muted small mb-3" id="settingsVmsHint">Введите ID или имя VM/CT и нажмите «Добавить» — гость будет отображаться в режиме монитора. Список загружается с Proxmox по кнопке «Обновить».</p>
                     <div class="row g-3 align-items-end mb-3">
                         <div class="col-md-5">
@@ -773,7 +762,7 @@
                         </div>
                     </div>
                     <div class="table-responsive">
-                        <table class="table table-sm align-middle">
+                        <table class="table table-sm table-hover align-middle mb-0">
                             <thead>
                                 <tr>
                                     <th id="settingsVmNameHeader">Имя</th>
@@ -794,7 +783,7 @@
                                 <div class="settings-section">
                                     <h5 class="mb-3"><i class="bi bi-upload me-2"></i><span id="settingsImportExportTitle">Импорт / экспорт</span></h5>
                                     <div class="mb-4">
-                                        <h6 class="fw-bold mb-2" id="settingsServicesOnlyTitle">Только хосты мониторинга</h6>
+                                        <h6 class="fw-semibold mb-2 text-body" id="settingsServicesOnlyTitle">Только хосты мониторинга</h6>
                                         <p class="text-muted small mb-2" id="settingsServicesOnlyHint">Экспорт или импорт только списка хостов для мониторинга сервисов.</p>
                                         <div class="d-flex flex-wrap gap-2">
                                             <button class="btn btn-outline-secondary btn-sm" type="button" onclick="exportServicesOnly()">
@@ -808,7 +797,7 @@
                                     </div>
                                     <hr>
                                     <div class="mb-4">
-                                        <h6 class="fw-bold mb-2" id="settingsVmsOnlyTitle">Только VM/CT</h6>
+                                        <h6 class="fw-semibold mb-2 text-body" id="settingsVmsOnlyTitle">Только VM/CT</h6>
                                         <p class="text-muted small mb-2" id="settingsVmsOnlyHint">Экспорт или импорт только списков мониторинга VM/CT и скрытых на экране монитора.</p>
                                         <div class="d-flex flex-wrap gap-2">
                                             <button class="btn btn-outline-secondary btn-sm" type="button" onclick="exportVmsOnly()">
@@ -822,7 +811,7 @@
                                     </div>
                                     <hr>
                                     <div class="mb-2">
-                                        <h6 class="fw-bold mb-2" id="settingsAllTitle">Полная конфигурация</h6>
+                                        <h6 class="fw-semibold mb-2 text-body" id="settingsAllTitle">Полная конфигурация</h6>
                                         <p class="text-muted small mb-2" id="settingsAllHint">Экспорт или импорт всех настроек, подключений (включая токены) и списка хостов мониторинга. Используйте осторожно.</p>
                                         <div class="d-flex flex-wrap gap-2">
                                             <button class="btn btn-outline-danger btn-sm" type="button" onclick="exportAllConfig()">
@@ -838,21 +827,16 @@
                             </div>
                             <!-- UPS -->
                             <div class="tab-pane fade" id="settings-tab-ups" role="tabpanel">
-                                <div class="settings-section">
                                     <div id="upsSettingsContainer"></div>
-                                </div>
                             </div>
                             <!-- Сетевые устройства -->
                             <div class="tab-pane fade" id="settings-tab-netdevices" role="tabpanel">
-                                <div class="settings-section">
                                     <div id="netdevSettingsContainer"></div>
-                                </div>
                             </div>
                             <!-- Speedtest -->
                             <div class="tab-pane fade" id="settings-tab-speedtest" role="tabpanel">
-                                <div class="settings-section card mb-4">
-                                    <div class="card-body">
-                                        <h5 class="mb-3"><i class="bi bi-speedometer2 me-2"></i><span id="speedtestSettingsTitle">Speedtest</span></h5>
+                                <div class="settings-section">
+                                        <h5 class="mb-3"><i class="bi bi-wifi me-2"></i><span id="speedtestSettingsTitle">Speedtest</span></h5>
                                         <p class="text-muted small mb-3" id="speedtestSettingsHint">Требуется официальный CLI Ookla Speedtest в PATH на сервере (команда <code>speedtest</code>).</p>
                                         <div class="row g-3 align-items-end mb-3">
                                             <div class="col-md-3">
@@ -878,7 +862,6 @@
                                             </div>
                                         </div>
                                         <div class="small" id="speedtestCliStatus"></div>
-                                    </div>
                                 </div>
                             </div>
                             <!-- Отладка -->

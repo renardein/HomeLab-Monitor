@@ -275,9 +275,25 @@
             margin-bottom: 20px;
             background: #fff;
         }
+        /* Единые отступы: последняя панель во вкладке не дублирует нижний зазор */
+        #settingsTabContent .tab-pane > .settings-section:last-child,
+        #settingsTabContent .tab-pane > *:last-child .settings-section {
+            margin-bottom: 0;
+        }
+        #upsDisplayTabsContent,
+        #netdevDisplayTabsContent {
+            border: 1px solid rgba(0, 0, 0, 0.08);
+            border-radius: 8px;
+            background: rgba(0, 0, 0, 0.02);
+        }
         body.dark-mode .settings-section {
             background: #0f3460;
             border-color: #533483;
+        }
+        body.dark-mode #upsDisplayTabsContent,
+        body.dark-mode #netdevDisplayTabsContent {
+            border-color: rgba(255, 255, 255, 0.12);
+            background: rgba(0, 0, 0, 0.15);
         }
         body.dark-mode .toast {
             background: #16213e;
