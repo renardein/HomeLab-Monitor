@@ -67,6 +67,67 @@ function setValue(id, value) {
     if (e) e.value = value;
 }
 
+function setPlaceholder(id, value) {
+    const e = el(id);
+    if (e && 'placeholder' in e) e.placeholder = value;
+}
+
+function localizeRefreshIntervalSelect() {
+    const sel = document.getElementById('refreshIntervalSelect');
+    if (!sel) return;
+    const map = {
+        5000: 'refreshInterval5s',
+        10000: 'refreshInterval10s',
+        30000: 'refreshInterval30s',
+        60000: 'refreshInterval1m'
+    };
+    for (let i = 0; i < sel.options.length; i++) {
+        const o = sel.options[i];
+        const k = map[Number(o.value)];
+        if (k) o.textContent = t(k);
+    }
+}
+
+function localizeYesNoSelect(selectId) {
+    const sel = document.getElementById(selectId);
+    if (!sel || sel.options.length < 2) return;
+    sel.options[0].textContent = t('optionNo');
+    sel.options[1].textContent = t('optionYes');
+}
+
+function localizeServiceTypeSelect() {
+    const sel = document.getElementById('settingsServiceTypeSelect');
+    if (!sel) return;
+    const map = { tcp: 'TCP', udp: 'UDP', http: 'HTTP(S)', snmp: 'SNMP', nut: t('serviceTypeNut') };
+    for (let i = 0; i < sel.options.length; i++) {
+        const o = sel.options[i];
+        if (map[o.value]) o.textContent = map[o.value];
+    }
+}
+
+function localizeUpsTypeSelect() {
+    const sel = document.getElementById('upsTypeSelect');
+    if (!sel) return;
+    for (let i = 0; i < sel.options.length; i++) {
+        const o = sel.options[i];
+        if (o.value === 'nut') o.textContent = t('serviceTypeNut');
+        if (o.value === 'snmp') o.textContent = 'SNMP';
+    }
+}
+
+function syncSettingsConnectionStatusText() {
+    ['Proxmox', 'TrueNAS'].forEach((suf) => {
+        const tel = document.getElementById('connectionStatusText' + suf);
+        const badge = document.getElementById('connectionStatusBadge' + suf);
+        if (!tel || !badge) return;
+        if (badge.classList.contains('bg-success')) {
+            tel.textContent = t('connectionStatusConnected');
+        } else {
+            tel.textContent = t('connectionStatusDisconnected');
+        }
+    });
+}
+
 function escapeHtml(s) {
     if (s == null) return '';
     const t = String(s);
@@ -171,6 +232,16 @@ function t(key) {
     return dict[currentLanguage]?.[key] ?? dict.ru?.[key] ?? key;
 }
 
+/** Подстановка {name} в строку перевода (клиент). */
+function tParams(key, vars) {
+    let s = t(key);
+    if (!vars || typeof vars !== 'object') return s;
+    Object.keys(vars).forEach((k) => {
+        s = s.split('{' + k + '}').join(String(vars[k]));
+    });
+    return s;
+}
+
 function setServerType(type) {
     currentServerType = (type === 'truenas') ? 'truenas' : 'proxmox';
     saveSettingsToServer({ serverType: currentServerType });
@@ -257,7 +328,10 @@ function closeVmsMonitor() {
 // Language switch function
 function setLanguage(lang) {
     currentLanguage = lang;
-    
+    try {
+        document.documentElement.lang = lang || 'ru';
+    } catch (_) {}
+
     document.querySelectorAll('.language-switcher').forEach(btn => {
         btn.classList.remove('active');
         if (btn.dataset.lang === lang) {
@@ -428,7 +502,10 @@ function updateUILanguage() {
         testConnectionBtnTextTrueNAS: 'testConnectionBtn',
         removeServer: 'removeServer',
         currentServer: 'currentServer',
-        monitorModeText: 'monitorMode'
+        monitorModeText: 'monitorMode',
+        menuVmsMonitorText: 'menuVmsMonitorText',
+        settingsNavUps: 'settingsNavUps',
+        settingsNavNetdevices: 'settingsNavNetdevices'
     };
     
     for (const [id, key] of Object.entries(elements)) {
@@ -526,7 +603,7 @@ function updateUILanguage() {
     setText('settingsExportVmsBtn', t('settingsExportVmsBtn') || 'Экспорт VM/CT');
     setText('settingsImportVmsBtn', t('settingsImportVmsBtn') || 'Импорт VM/CT');
     setText('settingsAllTitle', t('settingsAllTitle') || 'Полная конфигурация');
-    setText('settingsAllHint', t('settingsAllHint') || 'Экспорт или импорт всех настроек, подключений, хостов сервисов и списков VM/CT для монитора.');
+    setText('settingsAllHint', t('settingsAllHintTokens') || t('settingsAllHint') || '');
     setText('settingsExportAllBtn', t('settingsExportAllBtn') || 'Экспорт всех настроек');
     setText('settingsImportAllBtn', t('settingsImportAllBtn') || 'Импорт всех настроек');
     setText('settingsNavConnection', t('settingsNavConnection'));
@@ -561,6 +638,87 @@ function updateUILanguage() {
     setText('settingsSessionTtlLabel', t('settingsSessionTtlLabel') || 'Время жизни сессии (мин)');
     setText('settingsSessionTtlHint', t('settingsSessionTtlHint') || 'Повторный ввод пароля не требуется в течение этого времени после входа.');
     setText('settingsLogoutText', t('settingsLogoutText') || 'Выйти из настроек');
+
+    const unlockClose = document.getElementById('settingsUnlockModalCloseBtn');
+    if (unlockClose) unlockClose.setAttribute('aria-label', t('ariaClose'));
+
+    setText('apiTokenIdPartHint', t('tokenPartBeforeEquals'));
+    setText('apiTokenSecretHint', t('tokenPartSecretHint'));
+
+    setText('upsSettingsCardTitle', t('upsSettingsCardTitle'));
+    setText('upsSlotLabel', t('upsSlotLabel'));
+    setText('upsEnabledLabel', t('upsEnabledLabel'));
+    setText('upsTypeLabel', t('serviceTypeLabel'));
+    setText('upsHostLabel', t('serviceHostLabel'));
+    setText('upsPortLabel', t('servicePortLabel'));
+    setText('upsDisplayDashboardTabLabel', t('upsDisplayNormalModeTab'));
+    setText('upsDisplayMonitorTabLabel', t('upsDisplayMonitorModeTab'));
+    setText('upsShowOnDashboardLabel', t('upsShowOnDashboardLabel'));
+    setText('upsShowOnMonitorClusterLabel', t('upsShowOnMonitorClusterLabel'));
+    setText('upsSaveButtonText', t('upsSaveButton'));
+    setText('upsNutVarStatusLabel', t('upsNutVarStatus'));
+    setText('upsNutVarChargeLabel', t('upsNutVarCharge'));
+    setText('upsNutVarRuntimeLabel', t('upsNutVarRuntime'));
+    setText('upsNutVarInputVoltageLabel', t('upsNutVarInputVoltage'));
+    setText('upsNutVarOutputVoltageLabel', t('upsNutVarOutputVoltage'));
+    setText('upsNutVarPowerLabel', t('upsNutVarPower'));
+    setText('upsNutVarLoadLabel', t('upsNutVarLoad'));
+    setText('upsNutVarFrequencyLabel', t('upsNutVarFrequency'));
+    setText('upsSnmpOidStatusLabel', t('upsSnmpOidStatus'));
+    setText('upsSnmpOidChargeLabel', t('upsSnmpOidCharge'));
+    setText('upsSnmpOidRuntimeLabel', t('upsSnmpOidRuntime'));
+    setText('upsSnmpOidInputVoltageLabel', t('upsSnmpOidInputVoltage'));
+    setText('upsSnmpOidOutputVoltageLabel', t('upsSnmpOidOutputVoltage'));
+    setText('upsSnmpOidPowerLabel', t('upsSnmpOidPower'));
+    setText('upsSnmpOidLoadLabel', t('upsSnmpOidLoad'));
+    setText('upsSnmpOidFrequencyLabel', t('upsSnmpOidFrequency'));
+    setText('upsNutNameLabel', t('upsNutNameLabel'));
+
+    setText('netdevSettingsCardTitle', t('netdevSettingsCardTitle'));
+    setText('netdevSlotLabel', t('netdevSlotLabel'));
+    setText('netdevEnabledLabel', t('netdevEnabledLabel'));
+    setText('netdevHostLabel', t('serviceHostLabel'));
+    setText('netdevSnmpPortLabel', t('netdevSnmpPortLabel'));
+    setText('netdevCommunityLabel', t('netdevCommunityLabel'));
+    setText('netdevDeviceNameLabel', t('netdevDeviceNameLabel'));
+    setText('netdevNameOidLabel', t('netdevNameOidLabel'));
+    setText('netdevFieldsSectionTitle', t('netdevFieldsSectionTitle'));
+    setText('netdevFieldsHelpText', t('netdevFieldsHelpText'));
+    setText('netdevDisplayDashboardTabLabel', t('netdevDisplayNormalTab'));
+    setText('netdevDisplayMonitorTabLabel', t('netdevDisplayMonitorTab'));
+    setText('netdevShowOnDashboardLabel', t('netdevShowOnDashboardLabel'));
+    setText('netdevShowOnMonitorLabel', t('netdevShowOnMonitorLabel'));
+    setText('netdevSaveButtonText', t('netdevSaveButton'));
+
+    setPlaceholder('settingsServiceNameInput', t('settingsServicePlaceholderName'));
+    setPlaceholder('settingsServiceHostInput', t('settingsServicePlaceholderHost'));
+    setPlaceholder('upsHostInput', t('upsHostPlaceholder'));
+    setPlaceholder('netdevHostInput', t('netdevHostPlaceholder'));
+
+    [
+        'upsSnmpOidChargeInput',
+        'upsSnmpOidRuntimeInput',
+        'upsSnmpOidInputVoltageInput',
+        'upsSnmpOidOutputVoltageInput',
+        'upsSnmpOidPowerInput',
+        'upsSnmpOidLoadInput',
+        'upsSnmpOidFrequencyInput'
+    ].forEach((pid) => setPlaceholder(pid, t('placeholderOptional')));
+
+    localizeRefreshIntervalSelect();
+    localizeYesNoSelect('upsEnabledSelect');
+    localizeYesNoSelect('netdevEnabledSelect');
+    localizeServiceTypeSelect();
+    localizeUpsTypeSelect();
+    syncSettingsConnectionStatusText();
+
+    try {
+        const root = document.getElementById('netdevFieldsEditorsRoot');
+        if (root && root.querySelector('.netdev-field-block')) {
+            const cur = getNetdevFieldsFromDom();
+            if (cur.length) renderNetdevFieldsEditors(cur);
+        }
+    } catch (_) {}
 }
 
 // Available languages (will be populated from server)
@@ -766,7 +924,7 @@ async function logout() {
         setDisplay(logoutContainerId, 'none');
         showConfig();
     } catch (error) {
-        showToast('Ошибка при выходе: ' + error.message, 'error');
+        showToast(tParams('toastLogoutError', { msg: error.message }), 'error');
     }
 }
 
@@ -1259,7 +1417,7 @@ async function saveUpsSettings() {
         const data = await res.json();
         if (!res.ok || !data?.success) throw new Error(data?.error || 'failed to save');
 
-        showToast('UPS настройки сохранены', 'success');
+        showToast(t('toastUpsSaved'), 'success');
 
         // Сохраним также, какие слоты UPS показывать на дашборде и в режиме монитора (Cluster)
         try {
@@ -1273,13 +1431,13 @@ async function saveUpsSettings() {
                 body: JSON.stringify({ dashboardSlots, monitorSlots })
             });
         } catch (e) {
-            showToast('Не удалось сохранить настройки отображения UPS', 'error');
+            showToast(t('toastUpsDisplaySaveError'), 'error');
         }
 
         updateUPSDashboard().catch(() => {});
         toggleUpsFields();
     } catch (e) {
-        showToast('Не удалось сохранить UPS: ' + (e.message || String(e)), 'error');
+        showToast(tParams('toastUpsSaveError', { msg: e.message || String(e) }), 'error');
     }
 }
 
@@ -1455,6 +1613,17 @@ function renderNetdevFieldsEditors(fields) {
     const lblRemove = t('netdevFieldRemove') || 'Удалить';
     const lblField = t('netdevFieldNumber') || 'Поле';
     const emptyHint = t('netdevFieldsEmptyHint') || 'Нет полей OID. Добавьте поле кнопкой ниже (до 15).';
+    const oidLbl = t('netdevOidLabel');
+    const fmtLbl = t('netdevFormatLabel');
+    const phEx = t('netdevFieldPlaceholderExample');
+    const lblNameSuffix = t('netdevFieldNameSuffix');
+    const commaHint = t('commaSeparatedValues');
+    const fmtOptText = t('netdevFmtText');
+    const fmtOptTime = t('netdevFmtTime');
+    const fmtOptMb = t('netdevFmtMb');
+    const fmtOptGb = t('netdevFmtGb');
+    const fmtOptBoot = t('netdevFmtBoot');
+    const fmtOptStatus = t('netdevFmtStatus');
 
     let html = '';
     if (list.length === 0) {
@@ -1489,33 +1658,33 @@ function renderNetdevFieldsEditors(fields) {
                 </div>
                 <div class="row g-3 align-items-end">
                     <div class="col-lg-3 col-md-4">
-                        <label class="form-label fw-bold" for="netdevFieldLabel${i}Input">${escapeHtml(lblField)} ${i + 1} (имя)</label>
-                        <input type="text" class="form-control" id="netdevFieldLabel${i}Input" placeholder="Напр. Port status" value="${escapeHtml(f.label)}">
+                        <label class="form-label fw-bold" for="netdevFieldLabel${i}Input">${escapeHtml(lblField)} ${i + 1} ${escapeHtml(lblNameSuffix)}</label>
+                        <input type="text" class="form-control" id="netdevFieldLabel${i}Input" placeholder="${escapeHtml(phEx)}" value="${escapeHtml(f.label)}">
                     </div>
                     <div class="col-lg-5 col-md-5">
-                        <label class="form-label fw-bold" for="netdevFieldOid${i}Input">OID</label>
+                        <label class="form-label fw-bold" for="netdevFieldOid${i}Input">${escapeHtml(oidLbl)}</label>
                         <input type="text" class="form-control" id="netdevFieldOid${i}Input" placeholder="1.3.6...." value="${escapeHtml(f.oid)}">
                     </div>
                     <div class="col-lg-4 col-md-3">
-                        <label class="form-label fw-bold" for="netdevFieldFormat${i}Select">Отображение</label>
+                        <label class="form-label fw-bold" for="netdevFieldFormat${i}Select">${escapeHtml(fmtLbl)}</label>
                         <select class="form-select" id="netdevFieldFormat${i}Select">
-                            <option value="text"${fmtTextSel}>Текст</option>
-                            <option value="time"${fmtTimeSel}>Время (SNMP TimeTicks)</option>
-                            <option value="mb"${fmtMbSel}>МБ (из байт)</option>
-                            <option value="gb"${fmtGbSel}>ГБ (из байт)</option>
-                            <option value="boot"${fmtBootSel}>Статус (bool, 0/1 — авто)</option>
-                            <option value="status"${fmtStatusSel}>Статус (только вручную)</option>
+                            <option value="text"${fmtTextSel}>${escapeHtml(fmtOptText)}</option>
+                            <option value="time"${fmtTimeSel}>${escapeHtml(fmtOptTime)}</option>
+                            <option value="mb"${fmtMbSel}>${escapeHtml(fmtOptMb)}</option>
+                            <option value="gb"${fmtGbSel}>${escapeHtml(fmtOptGb)}</option>
+                            <option value="boot"${fmtBootSel}>${escapeHtml(fmtOptBoot)}</option>
+                            <option value="status"${fmtStatusSel}>${escapeHtml(fmtOptStatus)}</option>
                         </select>
                     </div>
                 </div>
                 <div class="row g-2 mt-1 d-none" id="netdevFieldStatusMapRow${i}">
                     <div class="col-12 small text-muted mb-0" id="netdevFieldStatusMapHint${i}"></div>
                     <div class="col-md-6">
-                        <label class="form-label small mb-1" for="netdevFieldStatusUp${i}Input">«${escapeHtml(lblUp)}» (через запятую)</label>
+                        <label class="form-label small mb-1" for="netdevFieldStatusUp${i}Input">«${escapeHtml(lblUp)}» ${escapeHtml(commaHint)}</label>
                         <input type="text" class="form-control form-control-sm" id="netdevFieldStatusUp${i}Input" placeholder="1, up, true" value="${escapeHtml(upStr)}">
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label small mb-1" for="netdevFieldStatusDown${i}Input">«${escapeHtml(lblDown)}» (через запятую)</label>
+                        <label class="form-label small mb-1" for="netdevFieldStatusDown${i}Input">«${escapeHtml(lblDown)}» ${escapeHtml(commaHint)}</label>
                         <input type="text" class="form-control form-control-sm" id="netdevFieldStatusDown${i}Input" placeholder="0, 2, down" value="${escapeHtml(downStr)}">
                     </div>
                 </div>
@@ -1779,13 +1948,13 @@ async function saveNetdevSettings() {
                 body: JSON.stringify({ dashboardSlots, monitorSlots })
             });
         } catch (e) {
-            showToast('Не удалось сохранить настройки отображения сетевых устройств', 'error');
+            showToast(t('toastNetdevDisplaySaveError'), 'error');
         }
 
-        showToast('Настройки сетевых устройств сохранены', 'success');
+        showToast(t('toastNetdevSaved'), 'success');
         await updateNetdevDashboard();
     } catch (e) {
-        showToast('Не удалось сохранить сетевые устройства: ' + (e.message || String(e)), 'error');
+        showToast(tParams('toastNetdevSaveError', { msg: e.message || String(e) }), 'error');
     }
 }
 
@@ -1904,28 +2073,28 @@ function buildNetdevCardsHtml(data) {
     const lastFallbackLabel = (oid) => {
         const s = String(oid || '').trim();
         const parts = s.split('.').filter(Boolean);
-        return parts.length ? parts[parts.length - 1] : 'Field';
+        return parts.length ? parts[parts.length - 1] : t('netdevFieldFallbackLabel');
     };
 
     if (items.length === 1) {
         const item = items[0] || {};
-        const name = item.name || `Устройство ${item.slot || 1}`;
+        const name = item.name || tParams('netdevDeviceFallback', { n: String(item.slot || 1) });
         if (item.error) {
             const html = `
                 <div class="col-12">
                     <div class="alert alert-warning mb-0 py-2 d-flex flex-wrap justify-content-between align-items-center gap-2">
                         <span class="fw-semibold text-truncate" title="${escapeHtml(name)}">${escapeHtml(name)}</span>
-                        <span class="small">SNMP: ${escapeHtml(item.error)}</span>
+                        <span class="small">${escapeHtml(t('netdevSnmpPrefix'))}: ${escapeHtml(item.error)}</span>
                     </div>
                 </div>`;
             return { html, rowClass: 'row g-2' };
         }
 
         const badgeClass = item.up ? 'bg-success' : 'bg-secondary';
-        const statusLabel = item.up ? 'OK' : '—';
+        const statusLabel = item.up ? t('statusOkShort') : t('statusDash');
 
         const fieldsHtml = buildFieldsTiles(item.fields, {});
-        const hostLine = item.host ? `SNMP · ${item.host}` : 'SNMP';
+        const hostLine = item.host ? tParams('netdevSnmpWithHost', { host: item.host }) : t('netdevSnmpPrefix');
 
         const html = `
             <div class="col-12">
@@ -1943,9 +2112,10 @@ function buildNetdevCardsHtml(data) {
     }
 
     const html = items.map((item) => {
-        const name = item.name || `Устройство ${item.slot || ''}`.trim();
+        const slotStr = String(item.slot || '').trim();
+        const name = item.name || tParams('netdevDeviceFallback', { n: slotStr || '?' });
         const badgeClass = item.up ? 'bg-success' : 'bg-secondary';
-        const statusLabel = item.up ? 'OK' : '—';
+        const statusLabel = item.up ? t('statusOkShort') : t('statusDash');
         const fieldsHtml = buildFieldsTiles(item.fields, { compact: true });
 
         if (item.error) {
@@ -1954,10 +2124,10 @@ function buildNetdevCardsHtml(data) {
                     <div class="card h-100">
                         <div class="card-header py-2 px-2 d-flex justify-content-between align-items-center">
                             <div class="fw-semibold text-truncate pe-2" title="${escapeHtml(name)}">${escapeHtml(name)}</div>
-                            <span class="badge bg-secondary">SNMP</span>
+                            <span class="badge bg-secondary">${escapeHtml(t('netdevSnmpPrefix'))}</span>
                         </div>
                         <div class="card-body p-2">
-                            <div class="small text-muted">Ошибка: ${escapeHtml(item.error)}</div>
+                            <div class="small text-muted">${escapeHtml(tParams('netdevErrorWithMessage', { msg: item.error }))}</div>
                         </div>
                     </div>
                 </div>
@@ -3965,10 +4135,10 @@ function toggleServiceTypeFields() {
 
     if (urlLabel && urlInput) {
         if (type === 'snmp') {
-            urlLabel.textContent = 'SNMP (community|oid)';
+            urlLabel.textContent = t('serviceUrlLabelSnmp');
             urlInput.placeholder = 'public|1.3.6.1.2.1.1.3.0';
         } else if (type === 'nut') {
-            urlLabel.textContent = 'NUT (upsName|varName)';
+            urlLabel.textContent = t('serviceUrlLabelNutHint');
             urlInput.placeholder = 'myups|ups.status';
         } else {
             urlLabel.textContent = 'URL';
@@ -4001,7 +4171,7 @@ function renderMonitoredServices() {
     if (!container) return;
     const list = Array.isArray(monitoredServices) ? monitoredServices : [];
     if (!list.length) {
-        container.innerHTML = '<div class="col-12 text-muted small">' + (t('servicesListTitle') || 'Сервисы не настроены') + '</div>';
+        container.innerHTML = '<div class="col-12 text-muted small">' + escapeHtml(t('servicesNotConfigured')) + '</div>';
         return;
     }
     const cards = list.map((s, idx) => {
@@ -4101,7 +4271,7 @@ async function loadClusterVmsForSettings(options) {
     } catch (e) {
         if (!silent) showToast((t('connectError') || 'Ошибка') + ': ' + e.message, 'error');
     }
-    if (btn) { btn.disabled = false; setText('loadClusterVmsBtnText', t('loadClusterVmsBtnText') || 'Обновить список VM/CT'); }
+    if (btn) { btn.disabled = false; setText('loadClusterVmsBtnText', t('loadClusterVmsBtnText')); }
 }
 
 /** Добавить VM/CT в монитор по введённому ID или имени */
@@ -5012,7 +5182,7 @@ function setCurrentServerByType(type, index) {
 function removeServerByType(type, index) {
     const servers = type === 'truenas' ? truenasServers : proxmoxServers;
     if (servers.length <= 1) {
-        showToast(currentLanguage === 'ru' ? 'Нельзя удалить последний сервер' : 'Cannot remove the last server', 'warning');
+        showToast(t('toastCannotRemoveLastServer'), 'warning');
         return;
     }
     servers.splice(index, 1);

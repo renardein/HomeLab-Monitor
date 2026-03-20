@@ -1,0 +1,20 @@
+{
+    "truenasKeyLabel": "Ключ API TrueNAS",
+    "upsSettingsCardTitle": "ИБП (NUT/SNMP)",
+    "upsHostPlaceholder": "IP/имя хоста upsd",
+    "upsNutVarRuntime": "VAR время на батарее",
+    "upsSnmpOidRuntime": "OID времени на батарее",
+    "netdevHostPlaceholder": "IP/имя маршрутизатора",
+    "backupExecTargetHeader": "ВМ/КТ",
+    "backupExecUpidHeader": "UPID",
+    "backupMonitorColVm": "ВМ/КТ",
+    "monitorScreenVms": "ВМ / CT",
+    "nodeCpu": "ЦПУ",
+    "nodeRam": "ОЗУ",
+    "monitorBlockVm": "VM",
+    "monitorBlockCt": "CT",
+    "settingsNavUps": "ИБП",
+    "serviceUrlLabelNutHint": "NUT (имяUPS|имяПеременной)",
+    "netdevCommunityLabel": "Community (SNMP)",
+    "backupId": "Ид."
+}

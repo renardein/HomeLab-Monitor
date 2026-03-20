@@ -133,10 +133,10 @@
                                 <i class="bi bi-activity me-2"></i><span id="settingsNavServices">Мониторинг сервисов</span>
                             </button>
                             <button class="nav-link" id="settings-nav-ups" data-bs-toggle="pill" data-bs-target="#settings-tab-ups" type="button" role="tab">
-                                <i class="bi bi-lightning me-2"></i><span>UPS</span>
+                                <i class="bi bi-lightning me-2"></i><span id="settingsNavUps">UPS</span>
                             </button>
                             <button class="nav-link" id="settings-nav-netdevices" data-bs-toggle="pill" data-bs-target="#settings-tab-netdevices" type="button" role="tab">
-                                <i class="bi bi-diagram-3 me-2"></i><span>Сетевые устройства (SNMP)</span>
+                                <i class="bi bi-diagram-3 me-2"></i><span id="settingsNavNetdevices">Сетевые устройства (SNMP)</span>
                             </button>
                             <button class="nav-link" id="settings-nav-security" data-bs-toggle="pill" data-bs-target="#settings-tab-security" type="button" role="tab">
                                 <i class="bi bi-shield-lock me-2"></i><span id="settingsNavSecurity">Безопасность</span>
@@ -171,11 +171,11 @@
                                             <div class="row g-2">
                                                 <div class="col-md-7">
                                                     <input type="text" class="form-control form-control-lg" id="apiTokenId" placeholder="root@pam!monitoring">
-                                                    <div class="form-text">Часть до `=`</div>
+                                                    <div class="form-text" id="apiTokenIdPartHint">Часть до `=`</div>
                                                 </div>
                                                 <div class="col-md-5">
                                                     <input type="password" class="form-control form-control-lg" id="apiTokenSecret" placeholder="UUID">
-                                                    <div class="form-text">Секрет (после `=`)</div>
+                                                    <div class="form-text" id="apiTokenSecretHint">Секрет (после `=`)</div>
                                                 </div>
                                             </div>
                                             <!-- Hidden: полный токен в старом формате для обратной совместимости -->
@@ -452,12 +452,12 @@
                     <div id="upsSettingsCardWrap">
                         <div class="card mb-4">
                         <div class="card-header">
-                            <h5 class="mb-0"><i class="bi bi-lightning-charge me-2"></i><span>UPS (NUT/SNMP)</span></h5>
+                            <h5 class="mb-0"><i class="bi bi-lightning-charge me-2"></i><span id="upsSettingsCardTitle">UPS (NUT/SNMP)</span></h5>
                         </div>
                         <div class="card-body">
                             <div class="row g-3 align-items-end mb-3">
                                     <div class="col-md-3">
-                                    <label class="form-label fw-bold mb-2">Слот UPS</label>
+                                    <label class="form-label fw-bold mb-2" id="upsSlotLabel">Слот UPS</label>
                                         <div class="nav nav-pills" id="upsSlotTabs" role="tablist">
                                         <button class="nav-link active py-1" type="button" role="tab"
                                             data-ups-slot-idx="0" aria-selected="true">1</button>
@@ -470,25 +470,25 @@
                                     </div>
                                 </div>
                                 <div class="col-md-3">
-                                    <label class="form-label fw-bold">Включить</label>
+                                    <label class="form-label fw-bold" id="upsEnabledLabel">Включить</label>
                                     <select class="form-select" id="upsEnabledSelect">
                                         <option value="0">Нет</option>
                                         <option value="1" selected>Да</option>
                                     </select>
                                 </div>
                                 <div class="col-md-3">
-                                    <label class="form-label fw-bold" for="upsTypeSelect">Тип</label>
+                                    <label class="form-label fw-bold" for="upsTypeSelect" id="upsTypeLabel">Тип</label>
                                     <select class="form-select" id="upsTypeSelect" onchange="toggleUpsFields()">
                                         <option value="nut" selected>NUT</option>
                                         <option value="snmp">SNMP</option>
                                     </select>
                                 </div>
                                 <div class="col-md-3">
-                                    <label class="form-label fw-bold" for="upsHostInput">Хост</label>
+                                    <label class="form-label fw-bold" for="upsHostInput" id="upsHostLabel">Хост</label>
                                     <input type="text" class="form-control" id="upsHostInput" placeholder="upsd IP/hostname">
                                 </div>
                                 <div class="col-md-3">
-                                    <label class="form-label fw-bold" for="upsPortInput">Порт</label>
+                                    <label class="form-label fw-bold" for="upsPortInput" id="upsPortLabel">Порт</label>
                                     <input type="number" class="form-control" id="upsPortInput" placeholder="3493" min="1" max="65535">
                                 </div>
                             </div>
@@ -496,39 +496,39 @@
                             <div id="upsNutFields" class="mb-3">
                                 <div class="row g-3">
                                     <div class="col-md-4">
-                                        <label class="form-label fw-bold" for="upsNutNameInput">NUT имя UPS</label>
+                                        <label class="form-label fw-bold" for="upsNutNameInput" id="upsNutNameLabel">NUT имя UPS</label>
                                         <input type="text" class="form-control" id="upsNutNameInput" placeholder="myups">
                                     </div>
                                     <div class="col-md-4">
-                                        <label class="form-label fw-bold" for="upsNutVarStatusInput">VAR статус</label>
+                                        <label class="form-label fw-bold" for="upsNutVarStatusInput" id="upsNutVarStatusLabel">VAR статус</label>
                                         <input type="text" class="form-control" id="upsNutVarStatusInput" placeholder="ups.status" value="ups.status">
                                     </div>
                                     <div class="col-md-4">
-                                        <label class="form-label fw-bold" for="upsNutVarChargeInput">VAR заряд</label>
+                                        <label class="form-label fw-bold" for="upsNutVarChargeInput" id="upsNutVarChargeLabel">VAR заряд</label>
                                         <input type="text" class="form-control" id="upsNutVarChargeInput" placeholder="battery.charge" value="battery.charge">
                                     </div>
                                     <div class="col-md-4">
-                                        <label class="form-label fw-bold" for="upsNutVarRuntimeInput">VAR runtime</label>
+                                        <label class="form-label fw-bold" for="upsNutVarRuntimeInput" id="upsNutVarRuntimeLabel">VAR runtime</label>
                                         <input type="text" class="form-control" id="upsNutVarRuntimeInput" placeholder="battery.runtime" value="battery.runtime">
                                     </div>
                                     <div class="col-md-4">
-                                        <label class="form-label fw-bold" for="upsNutVarInputVoltageInput">VAR вход U</label>
+                                        <label class="form-label fw-bold" for="upsNutVarInputVoltageInput" id="upsNutVarInputVoltageLabel">VAR вход U</label>
                                         <input type="text" class="form-control" id="upsNutVarInputVoltageInput" placeholder="input.voltage" value="input.voltage">
                                     </div>
                                     <div class="col-md-4">
-                                        <label class="form-label fw-bold" for="upsNutVarOutputVoltageInput">VAR выход U</label>
+                                        <label class="form-label fw-bold" for="upsNutVarOutputVoltageInput" id="upsNutVarOutputVoltageLabel">VAR выход U</label>
                                         <input type="text" class="form-control" id="upsNutVarOutputVoltageInput" placeholder="output.voltage" value="output.voltage">
                                     </div>
                                     <div class="col-md-4">
-                                        <label class="form-label fw-bold" for="upsNutVarPowerInput">VAR мощность (Вт)</label>
+                                        <label class="form-label fw-bold" for="upsNutVarPowerInput" id="upsNutVarPowerLabel">VAR мощность (Вт)</label>
                                         <input type="text" class="form-control" id="upsNutVarPowerInput" placeholder="ups.realpower" value="ups.realpower">
                                     </div>
                                     <div class="col-md-4">
-                                        <label class="form-label fw-bold" for="upsNutVarLoadInput">VAR нагрузка %</label>
+                                        <label class="form-label fw-bold" for="upsNutVarLoadInput" id="upsNutVarLoadLabel">VAR нагрузка %</label>
                                         <input type="text" class="form-control" id="upsNutVarLoadInput" placeholder="ups.load" value="ups.load">
                                     </div>
                                     <div class="col-md-4">
-                                        <label class="form-label fw-bold" for="upsNutVarFrequencyInput">VAR частота</label>
+                                        <label class="form-label fw-bold" for="upsNutVarFrequencyInput" id="upsNutVarFrequencyLabel">VAR частота</label>
                                         <input type="text" class="form-control" id="upsNutVarFrequencyInput" placeholder="input.frequency" value="input.frequency">
                                     </div>
                                 </div>
@@ -541,35 +541,35 @@
                                         <input type="text" class="form-control" id="upsSnmpCommunityInput" placeholder="public">
                                     </div>
                                     <div class="col-md-8">
-                                        <label class="form-label fw-bold" for="upsSnmpOidStatusInput">OID статус</label>
+                                        <label class="form-label fw-bold" for="upsSnmpOidStatusInput" id="upsSnmpOidStatusLabel">OID статус</label>
                                         <input type="text" class="form-control" id="upsSnmpOidStatusInput" placeholder="1.3.6.1....">
                                     </div>
                                     <div class="col-md-8">
-                                        <label class="form-label fw-bold" for="upsSnmpOidChargeInput">OID заряд</label>
+                                        <label class="form-label fw-bold" for="upsSnmpOidChargeInput" id="upsSnmpOidChargeLabel">OID заряд</label>
                                         <input type="text" class="form-control" id="upsSnmpOidChargeInput" placeholder="(необязательно)">
                                     </div>
                                     <div class="col-md-8">
-                                        <label class="form-label fw-bold" for="upsSnmpOidRuntimeInput">OID runtime</label>
+                                        <label class="form-label fw-bold" for="upsSnmpOidRuntimeInput" id="upsSnmpOidRuntimeLabel">OID runtime</label>
                                         <input type="text" class="form-control" id="upsSnmpOidRuntimeInput" placeholder="(необязательно)">
                                     </div>
                                     <div class="col-md-8">
-                                        <label class="form-label fw-bold" for="upsSnmpOidInputVoltageInput">OID вход U</label>
+                                        <label class="form-label fw-bold" for="upsSnmpOidInputVoltageInput" id="upsSnmpOidInputVoltageLabel">OID вход U</label>
                                         <input type="text" class="form-control" id="upsSnmpOidInputVoltageInput" placeholder="(необязательно)">
                                     </div>
                                     <div class="col-md-8">
-                                        <label class="form-label fw-bold" for="upsSnmpOidOutputVoltageInput">OID выход U</label>
+                                        <label class="form-label fw-bold" for="upsSnmpOidOutputVoltageInput" id="upsSnmpOidOutputVoltageLabel">OID выход U</label>
                                         <input type="text" class="form-control" id="upsSnmpOidOutputVoltageInput" placeholder="(необязательно)">
                                     </div>
                                     <div class="col-md-8">
-                                        <label class="form-label fw-bold" for="upsSnmpOidPowerInput">OID мощность</label>
+                                        <label class="form-label fw-bold" for="upsSnmpOidPowerInput" id="upsSnmpOidPowerLabel">OID мощность</label>
                                         <input type="text" class="form-control" id="upsSnmpOidPowerInput" placeholder="(необязательно)">
                                     </div>
                                     <div class="col-md-8">
-                                        <label class="form-label fw-bold" for="upsSnmpOidLoadInput">OID нагрузка %</label>
+                                        <label class="form-label fw-bold" for="upsSnmpOidLoadInput" id="upsSnmpOidLoadLabel">OID нагрузка %</label>
                                         <input type="text" class="form-control" id="upsSnmpOidLoadInput" placeholder="(необязательно)">
                                     </div>
                                     <div class="col-md-8">
-                                        <label class="form-label fw-bold" for="upsSnmpOidFrequencyInput">OID частота</label>
+                                        <label class="form-label fw-bold" for="upsSnmpOidFrequencyInput" id="upsSnmpOidFrequencyLabel">OID частота</label>
                                         <input type="text" class="form-control" id="upsSnmpOidFrequencyInput" placeholder="(необязательно)">
                                     </div>
                                 </div>
@@ -583,21 +583,21 @@
                                         <button class="nav-link active" id="upsDisplayDashboardTab" data-bs-toggle="tab"
                                             data-bs-target="#upsDisplayDashboardPane" type="button" role="tab"
                                             aria-controls="upsDisplayDashboardPane" aria-selected="true">
-                                            Обычный режим
+                                            <span id="upsDisplayDashboardTabLabel">Обычный режим</span>
                                         </button>
                                     </li>
                                     <li class="nav-item" role="presentation">
                                         <button class="nav-link" id="upsDisplayMonitorTab" data-bs-toggle="tab"
                                             data-bs-target="#upsDisplayMonitorPane" type="button" role="tab"
                                             aria-controls="upsDisplayMonitorPane" aria-selected="false">
-                                            Режим монитора
+                                            <span id="upsDisplayMonitorTabLabel">Режим монитора</span>
                                         </button>
                                     </li>
                                 </ul>
                                 <div class="tab-content p-3" id="upsDisplayTabsContent">
                                     <div class="tab-pane fade show active" id="upsDisplayDashboardPane" role="tabpanel"
                                         aria-labelledby="upsDisplayDashboardTab">
-                                        <label class="form-label fw-bold mb-2">Показывать UPS на дашборде</label>
+                                        <label class="form-label fw-bold mb-2" id="upsShowOnDashboardLabel">Показывать UPS на дашборде</label>
                                         <div class="d-flex flex-wrap gap-3">
                                             <div class="form-check">
                                                 <input class="form-check-input upsDisplayDashboardSlot" type="checkbox"
@@ -624,7 +624,7 @@
 
                                     <div class="tab-pane fade" id="upsDisplayMonitorPane" role="tabpanel"
                                         aria-labelledby="upsDisplayMonitorTab">
-                                        <label class="form-label fw-bold mb-2">Показывать UPS в режиме монитора (экран Cluster)</label>
+                                        <label class="form-label fw-bold mb-2" id="upsShowOnMonitorClusterLabel">Показывать UPS в режиме монитора (экран Cluster)</label>
                                         <div class="d-flex flex-wrap gap-3">
                                             <div class="form-check">
                                                 <input class="form-check-input upsDisplayMonitorSlot" type="checkbox"
@@ -653,7 +653,7 @@
 
                             <div class="d-flex justify-content-end">
                                 <button class="btn btn-primary" type="button" onclick="saveUpsSettings()" id="upsSaveBtn">
-                                    <i class="bi bi-save me-2"></i><span>Сохранить UPS</span>
+                                    <i class="bi bi-save me-2"></i><span id="upsSaveButtonText">Сохранить UPS</span>
                                 </button>
                             </div>
                         </div>
@@ -662,50 +662,50 @@
                     <div id="netdevSettingsCardWrap">
                         <div class="card mb-4">
                             <div class="card-header">
-                                <h5 class="mb-0"><i class="bi bi-diagram-3 me-2"></i><span>Сетевые устройства (SNMP)</span></h5>
+                                <h5 class="mb-0"><i class="bi bi-diagram-3 me-2"></i><span id="netdevSettingsCardTitle">Сетевые устройства (SNMP)</span></h5>
                             </div>
                             <div class="card-body">
                                 <div class="row g-3 align-items-end mb-3">
                                     <div class="col-md-3">
-                                        <label class="form-label fw-bold mb-2">Слот сетевого устройства</label>
+                                        <label class="form-label fw-bold mb-2" id="netdevSlotLabel">Слот сетевого устройства</label>
                                         <div class="nav nav-pills" id="netdevSlotTabs" role="tablist"></div>
                                     </div>
                                     <div class="col-md-3">
-                                        <label class="form-label fw-bold">Включить</label>
+                                        <label class="form-label fw-bold" id="netdevEnabledLabel">Включить</label>
                                         <select class="form-select" id="netdevEnabledSelect">
                                             <option value="0">Нет</option>
                                             <option value="1" selected>Да</option>
                                         </select>
                                     </div>
                                     <div class="col-md-3">
-                                        <label class="form-label fw-bold" for="netdevHostInput">Хост</label>
+                                        <label class="form-label fw-bold" for="netdevHostInput" id="netdevHostLabel">Хост</label>
                                         <input type="text" class="form-control" id="netdevHostInput" placeholder="router IP/hostname">
                                     </div>
                                     <div class="col-md-3">
-                                        <label class="form-label fw-bold" for="netdevPortInput">Порт SNMP</label>
+                                        <label class="form-label fw-bold" for="netdevPortInput" id="netdevSnmpPortLabel">Порт SNMP</label>
                                         <input type="number" class="form-control" id="netdevPortInput" placeholder="161" min="1" max="65535">
                                     </div>
                                 </div>
 
                                 <div class="row g-3 align-items-end mb-3">
                                     <div class="col-md-4">
-                                        <label class="form-label fw-bold" for="netdevCommunityInput">Community</label>
+                                        <label class="form-label fw-bold" for="netdevCommunityInput" id="netdevCommunityLabel">Community</label>
                                         <input type="text" class="form-control" id="netdevCommunityInput" placeholder="public">
                                     </div>
                                     <div class="col-md-4">
-                                        <label class="form-label fw-bold" for="netdevNameInput">Имя устройства</label>
+                                        <label class="form-label fw-bold" for="netdevNameInput" id="netdevDeviceNameLabel">Имя устройства</label>
                                         <input type="text" class="form-control" id="netdevNameInput" placeholder="router1">
                                     </div>
                                     <div class="col-md-4">
-                                        <label class="form-label fw-bold" for="netdevNameOidInput">OID имени (опционально)</label>
+                                        <label class="form-label fw-bold" for="netdevNameOidInput" id="netdevNameOidLabel">OID имени (опционально)</label>
                                         <input type="text" class="form-control" id="netdevNameOidInput" placeholder="1.3.6....">
                                     </div>
                                 </div>
 
                                 <div class="mb-3">
-                                    <h6 class="fw-semibold mb-2"><i class="bi bi-list-columns me-2"></i>Поля (до 15)</h6>
+                                    <h6 class="fw-semibold mb-2"><i class="bi bi-list-columns me-2"></i><span id="netdevFieldsSectionTitle">Поля (до 15)</span></h6>
                                     <div id="netdevFieldsInputsWrap"></div>
-                                    <div class="form-text">Добавляйте и удаляйте поля кнопками; переключатель «Опрашивать» отключает SNMP по строке без удаления. Пустой OID на дашборде не показывается. «Время» — SNMP TimeTicks; «МБ/ГБ» — значение в <strong>байтах</strong>, единицы из настроек «Единицы измерения». «Статус (bool, 0/1 — авто)» и «Статус (вручную)» — как в подсказках под списками значений.</div>
+                                    <div class="form-text" id="netdevFieldsHelpText">Добавляйте и удаляйте поля кнопками; переключатель «Опрашивать» отключает SNMP по строке без удаления. Пустой OID на дашборде не показывается. «Время» — SNMP TimeTicks; «МБ/ГБ» — значение в <strong>байтах</strong>, единицы из настроек «Единицы измерения». «Статус (bool, 0/1 — авто)» и «Статус (вручную)» — как в подсказках под списками значений.</div>
                                 </div>
 
                                 <hr class="my-4">
@@ -716,27 +716,27 @@
                                             <button class="nav-link active" id="netdevDisplayDashboardTab" data-bs-toggle="tab"
                                                 data-bs-target="#netdevDisplayDashboardPane" type="button" role="tab"
                                                 aria-controls="netdevDisplayDashboardPane" aria-selected="true">
-                                                Обычный режим
+                                                <span id="netdevDisplayDashboardTabLabel">Обычный режим</span>
                                             </button>
                                         </li>
                                         <li class="nav-item" role="presentation">
                                             <button class="nav-link" id="netdevDisplayMonitorTab" data-bs-toggle="tab"
                                                 data-bs-target="#netdevDisplayMonitorPane" type="button" role="tab"
                                                 aria-controls="netdevDisplayMonitorPane" aria-selected="false">
-                                                Режим монитора
+                                                <span id="netdevDisplayMonitorTabLabel">Режим монитора</span>
                                             </button>
                                         </li>
                                     </ul>
                                     <div class="tab-content p-3" id="netdevDisplayTabsContent">
                                         <div class="tab-pane fade show active" id="netdevDisplayDashboardPane" role="tabpanel"
                                             aria-labelledby="netdevDisplayDashboardTab">
-                                            <label class="form-label fw-bold mb-2">Показывать на дашборде</label>
+                                            <label class="form-label fw-bold mb-2" id="netdevShowOnDashboardLabel">Показывать на дашборде</label>
                                             <div class="d-flex flex-wrap gap-3" id="netdevDisplayDashboardSlotsWrap"></div>
                                         </div>
 
                                         <div class="tab-pane fade" id="netdevDisplayMonitorPane" role="tabpanel"
                                             aria-labelledby="netdevDisplayMonitorTab">
-                                            <label class="form-label fw-bold mb-2">Показывать в режиме монитора (экран Cluster)</label>
+                                            <label class="form-label fw-bold mb-2" id="netdevShowOnMonitorLabel">Показывать в режиме монитора (экран Cluster)</label>
                                             <div class="d-flex flex-wrap gap-3" id="netdevDisplayMonitorSlotsWrap"></div>
                                         </div>
                                     </div>
@@ -744,7 +744,7 @@
 
                                 <div class="d-flex justify-content-end">
                                     <button class="btn btn-primary" type="button" onclick="saveNetdevSettings()" id="netdevSaveBtn">
-                                        <i class="bi bi-save me-2"></i><span>Сохранить сетевые устройства</span>
+                                        <i class="bi bi-save me-2"></i><span id="netdevSaveButtonText">Сохранить сетевые устройства</span>
                                     </button>
                                 </div>
                             </div>
