@@ -612,10 +612,34 @@
             padding: 0;
             padding-top: 52px;
             overflow: hidden;
+            box-sizing: border-box;
         }
 
         body.monitor-mode #dashboardContent {
             padding: 16px 20px 24px;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        body.monitor-mode #myTabContent {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        body.monitor-mode #nodes {
+            height: 100%;
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        body.monitor-mode #nodesContainer {
+            height: 100%;
+            min-height: 0;
+            overflow: hidden;
         }
 
         /* Вкладки Nodes / Storage / Backups / Quorum — только вне режима монитора */
@@ -625,49 +649,49 @@
 
         /* Крупные блоки дашборда в режиме монитора */
         body.monitor-mode .stat-card {
-            padding: 24px;
-            border-radius: 12px;
+            padding: 20px;
+            border-radius: 10px;
         }
         body.monitor-mode .stat-value {
-            font-size: 3.2rem;
+            font-size: 2rem;
             font-weight: bold;
-            line-height: 1.1;
+            line-height: 1.2;
         }
         body.monitor-mode .stat-label {
-            font-size: 1.1rem;
+            font-size: 0.9rem;
             text-transform: uppercase;
-            margin-top: 4px;
+            margin-top: 0;
         }
         body.monitor-mode .card {
-            border-radius: 12px;
-            margin-bottom: 24px;
+            border-radius: 15px;
+            margin-bottom: 20px;
         }
         body.monitor-mode .card-header {
-            font-size: 1.4rem;
-            padding: 16px 20px;
+            font-size: inherit;
+            padding: 15px 20px;
         }
         body.monitor-mode .card-body {
-            padding: 20px;
+            padding: 1rem;
         }
         body.monitor-mode .node-card {
-            padding: 20px;
-            border-radius: 12px;
+            padding: 15px;
+            border-radius: 10px;
         }
         body.monitor-mode .display-6 {
-            font-size: 2.4rem;
+            font-size: inherit;
         }
         body.monitor-mode .table {
-            font-size: 1.05rem;
+            font-size: inherit;
         }
         body.monitor-mode .table th {
-            padding: 14px;
-            font-size: 1.1rem;
+            padding: inherit;
+            font-size: inherit;
         }
         body.monitor-mode .table td {
-            padding: 12px;
+            padding: inherit;
         }
         body.monitor-mode .progress {
-            height: 24px;
+            height: 8px;
             border-radius: 6px;
         }
         body.monitor-mode .nav-tabs .nav-link {
@@ -677,18 +701,18 @@
 
         /* Тёмная тема режима монитора (выбор в панели) */
         body.monitor-mode.monitor-theme-dark {
-            background: #0d1117;
+            background: #1a1a2e;
         }
         body.monitor-mode.monitor-theme-dark .stat-card {
-            background: #1a1a2e;
-            color: #fff;
-            border: 2px solid #667eea;
+            background: #16213e;
+            color: #eee;
+            border: none;
         }
-        body.monitor-mode.monitor-theme-dark .stat-label { color: #a0aec0; }
+        body.monitor-mode.monitor-theme-dark .stat-label { color: #aaa; }
         body.monitor-mode.monitor-theme-dark .card {
             background: #16213e;
             color: #fff;
-            border: 1px solid #2d3748;
+            border: none;
         }
         body.monitor-mode.monitor-theme-dark .card-header {
             background: linear-gradient(135deg, #0f3460 0%, #533483 100%);
@@ -697,7 +721,7 @@
         body.monitor-mode.monitor-theme-dark .node-card {
             background: #16213e;
             color: #fff;
-            border: 1px solid #2d3748;
+            border: none;
         }
         body.monitor-mode.monitor-theme-dark .table {
             color: #e2e8f0;
@@ -741,10 +765,11 @@
             background-color: #1a2740;
             border-color: #2d3748;
             color: #e2e8f0;
+            box-shadow: none;
         }
         body.monitor-mode.monitor-theme-dark .monitor-view__stat-value,
         body.monitor-mode.monitor-theme-dark .monitor-view__res-value,
-        body.monitor-mode.monitor-theme-dark .monitor-view__panel-title { color: #e2e8f0; }
+        body.monitor-mode.monitor-theme-dark .monitor-view__panel-title { color: #fff; }
         body.monitor-mode.monitor-theme-dark .monitor-view__stat-label,
         body.monitor-mode.monitor-theme-dark .monitor-view__res-label { color: #a0aec0; }
         body.monitor-mode.monitor-theme-dark #servicesMonitorSection code {
@@ -974,17 +999,72 @@
             padding: 0.5rem;
         }
 
+        /* Полноэкранные окна монитора: нет внешних отступов и “пустых” зон */
+        body.monitor-mode #servicesMonitorSection,
+        body.monitor-mode #vmsMonitorSection,
+        body.monitor-mode #upsMonitorSection,
+        body.monitor-mode #netdevMonitorSection,
+        body.monitor-mode #speedtestMonitorSection {
+            position: fixed;
+            top: 52px;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 1020;
+            margin: 0 !important;
+            padding: 6px 8px 8px;
+            overflow: hidden;
+        }
+
+        body.monitor-mode #servicesMonitorSection .card,
+        body.monitor-mode #vmsMonitorSection .card,
+        body.monitor-mode #upsMonitorSection .card,
+        body.monitor-mode #netdevMonitorSection .card,
+        body.monitor-mode #speedtestMonitorSection .card {
+            height: 100%;
+            min-height: 0;
+            overflow: hidden;
+            margin-bottom: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        body.monitor-mode #servicesMonitorSection .card-body,
+        body.monitor-mode #vmsMonitorSection .card-body,
+        body.monitor-mode #upsMonitorSection .card-body,
+        body.monitor-mode #netdevMonitorSection .card-body,
+        body.monitor-mode #speedtestMonitorSection .card-body {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        body.monitor-mode #upsMonitorCards,
+        body.monitor-mode #netdevMonitorCards,
+        body.monitor-mode #servicesCards,
+        body.monitor-mode #vmsMonitorCards {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow: hidden;
+            height: 100%;
+        }
+
         /* Режим монитора: один экран без скролла, под 1920×1200 */
         .monitor-view {
             margin: 0;
-            padding: 1rem 56px 1.5rem;
+            padding: 0.75rem 1rem 1rem;
             border-radius: 0;
             background: transparent;
             color: inherit;
             height: calc(100vh - 52px);
             max-height: calc(100vh - 52px);
             overflow: hidden;
-            position: relative;
+            position: fixed;
+            top: 52px;
+            left: 0;
+            right: 0;
             display: flex;
             flex-direction: column;
         }
@@ -1001,18 +1081,29 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            padding: 0.5rem 1rem;
-            border-radius: 0.5rem;
-            background: rgba(0, 0, 0, 0.06);
+            padding: 0.55rem 0.9rem;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.95);
+            border: 1px solid rgba(226, 232, 240, 1);
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05);
             min-width: 100px;
         }
 
         body.monitor-mode.monitor-theme-dark .monitor-view__stat {
-            background: rgba(255, 255, 255, 0.08);
+            background: #16213e;
+            color: #e2e8f0;
+            border-color: #2d3748;
+            box-shadow: none;
         }
 
         .monitor-view__stat-value { font-size: 1.5rem; font-weight: 700; line-height: 1.2; }
-        .monitor-view__stat-label { font-size: 0.8rem; opacity: 0.9; margin-top: 0.15rem; }
+        .monitor-view__stat-label {
+            font-size: 0.8rem;
+            opacity: 0.9;
+            margin-top: 0.15rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
 
         .monitor-view__resources {
             flex: 0 0 auto;
@@ -1027,16 +1118,26 @@
             align-items: center;
             gap: 0.5rem;
             padding: 0.4rem 0.75rem;
-            border-radius: 0.4rem;
-            background: rgba(0, 0, 0, 0.06);
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.95);
+            border: 1px solid rgba(226, 232, 240, 1);
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05);
             min-width: 120px;
         }
 
         body.monitor-mode.monitor-theme-dark .monitor-view__res {
-            background: rgba(255, 255, 255, 0.08);
+            background: #16213e;
+            color: #e2e8f0;
+            border-color: #2d3748;
+            box-shadow: none;
         }
 
-        .monitor-view__res-label { font-size: 0.8rem; flex-shrink: 0; }
+        .monitor-view__res-label {
+            font-size: 0.8rem;
+            flex-shrink: 0;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
         .monitor-view__res-value { font-weight: 600; font-size: 0.95rem; }
         .monitor-view__res-bar { flex: 1; min-width: 40px; height: 8px; background: rgba(0,0,0,0.15); border-radius: 4px; overflow: hidden; }
         body.monitor-mode.monitor-theme-dark .monitor-view__res-bar { background: rgba(255,255,255,0.2); }
@@ -1099,7 +1200,12 @@
 
         .monitor-view__panel-title {
             flex: 0 0 auto;
-            font-size: 1.1rem;
+            font-size: 1.0rem;
+            color: #fff;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 10px;
+            padding: 0.45rem 0.75rem;
+            margin-bottom: 0.6rem;
         }
 
         .monitor-view__list {
@@ -1129,12 +1235,16 @@
             align-items: center;
             justify-content: space-between;
             padding: 0.5rem 0.75rem;
-            border-radius: 0.4rem;
-            background: rgba(0, 0, 0, 0.08);
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.95);
+            border: 1px solid rgba(226, 232, 240, 1);
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05);
         }
 
         body.monitor-mode.monitor-theme-dark .monitor-view__node-row {
-            background: rgba(255, 255, 255, 0.08);
+            background: #16213e;
+            border-color: #2d3748;
+            box-shadow: none;
         }
 
         .monitor-view__node-name { font-weight: 500; }
@@ -1143,10 +1253,12 @@
         .monitor-view__node-status.offline { background: #ef4444; }
 
         .monitor-view__card {
-            background: rgba(15, 23, 42, 0.85);
-            border-radius: 0.5rem;
-            padding: 0.5rem 0.75rem;
-            margin-bottom: 0.4rem;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 10px;
+            padding: 0.45rem 0.6rem;
+            border: 1px solid rgba(226, 232, 240, 1);
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05);
+            margin-bottom: 0;
         }
 
         /* Кнопки навигации режимов монитора теперь в тулбаре, а не в отдельной панели */
@@ -1212,7 +1324,7 @@
         body.monitor-mode:not(.monitor-theme-dark) .monitor-view__res-value { color: #2d3748; }
         body.monitor-mode:not(.monitor-theme-dark) .monitor-view__stat-label,
         body.monitor-mode:not(.monitor-theme-dark) .monitor-view__res-label { color: #4a5568; }
-        body.monitor-mode:not(.monitor-theme-dark) .monitor-view__panel-title { color: #2d3748; }
+        body.monitor-mode:not(.monitor-theme-dark) .monitor-view__panel-title { color: #fff; }
         body.monitor-mode:not(.monitor-theme-dark) .monitor-view__node-row { color: #2d3748; }
 
         /* Панель инструментов монитора */
@@ -1375,7 +1487,7 @@
             }
             .monitor-view {
                 height: calc(100vh - 52px);
-                padding: 1.25rem 2rem 1.5rem;
+                padding: 1rem 1.25rem 1.25rem;
             }
             .monitor-view__stat-value { font-size: 2rem; }
             .monitor-view__stat-label { font-size: 0.9rem; }

@@ -1464,6 +1464,12 @@ async function saveUpsSettings() {
     } catch (e) {
         showToast(tParams('toastUpsSaveError', { msg: e.message || String(e) }), 'error');
     }
+
+    // После изменения UPS обновим доступность экрана в monitor-mode.
+    await refreshMonitorScreensAvailability();
+    if (monitorMode && monitorCurrentView === 'ups' && upsMonitorConfigured === false) {
+        applyMonitorView('cluster');
+    }
 }
 
 // ==================== SNMP NETWORK DEVICES (UPS-like UI) ====================
@@ -1981,6 +1987,12 @@ async function saveNetdevSettings() {
     } catch (e) {
         showToast(tParams('toastNetdevSaveError', { msg: e.message || String(e) }), 'error');
     }
+
+    // После изменения SNMP обновим доступность экрана в monitor-mode.
+    await refreshMonitorScreensAvailability();
+    if (monitorMode && monitorCurrentView === 'netdev' && netdevMonitorConfigured === false) {
+        applyMonitorView('cluster');
+    }
 }
 
 function formatNetdevMetricValue(v) {
@@ -2205,6 +2217,10 @@ async function updateNetdevDashboard() {
 
         let items = Array.isArray(data?.items) ? data.items : [];
 
+        // Обновляем кеш доступности экрана для корректного свайп-порядка.
+        // Используем “вычисленную” доступность, т.е. configured + есть хотя бы 1 доступный слот.
+        netdevMonitorConfigured = !!(data && data.configured && Array.isArray(data.items) && data.items.length > 0);
+
         if (!isNetdevMonitorScreen) {
             // В monitor-mode на экране Cluster сетка берёт слоты “монитора”, а в обычном режиме — слоты “дашборда”
             const isMonitorCluster = monitorMode && monitorCurrentView === 'cluster';
@@ -2270,6 +2286,10 @@ async function updateSpeedtestDashboard() {
         if (!res.ok) throw new Error(summary.error || `HTTP ${res.status}`);
 
         const enabled = !!(summary.enabled === true || summary.enabled === '1' || summary.enabled === 1);
+
+        // Обновляем кеш доступности экрана для корректного свайп-порядка.
+        speedtestMonitorConfigured = enabled;
+
         if (dashSection) dashSection.style.display = enabled ? '' : 'none';
 
         const last = summary.last;
@@ -2340,6 +2360,12 @@ async function saveSpeedtestSettings() {
     renderSettingsMonitorScreensOrderList();
     showToast(t('speedtestSaved') || t('dataUpdated'), 'success');
     updateSpeedtestDashboard().catch(() => {});
+
+    // После изменения включения refresh'им доступность экрана в monitor-mode.
+    await refreshMonitorScreensAvailability();
+    if (monitorMode && monitorCurrentView === 'speedtest' && speedtestMonitorConfigured === false) {
+        applyMonitorView('cluster');
+    }
 }
 
 async function runSpeedtestNow() {
@@ -2638,7 +2664,10 @@ async function toggleMonitorMode() {
         monitorCurrentView = 'cluster';
         applyMonitorTheme();
         initMonitorSwipes();
-        if (monitorView) monitorView.style.display = 'none';
+
+        // Определяем доступность ups/netdev/speedtest, чтобы свайп-циклы не включали “пустые/не настроенные” экраны.
+        await refreshMonitorScreensAvailability();
+
         applyMonitorView(monitorCurrentView);
     } else {
         // Выходим из режима монитора: возвращаем обычный дашборд
@@ -2691,6 +2720,51 @@ let monitorScreensOrder = MONITOR_SCREEN_IDS_ALL.slice();
 /** Speedtest включён в настройках (для скрытия экрана в режиме монитора) */
 let speedtestClientEnabled = false;
 
+// Доступность экранов зависит от реальной конфигурации (а не только от порядка в настройках).
+// Значение: null = неизвестно (не грузили/ошибка), true/false = известная доступность.
+let upsMonitorConfigured = null;
+let netdevMonitorConfigured = null;
+let speedtestMonitorConfigured = null;
+
+async function refreshMonitorScreensAvailability() {
+    // Если пользователь ещё не подключился к серверу/кластеру — не пытаемся определять доступность,
+    // чтобы не “обнулить” экраны из-за ошибок авторизации.
+    if (!apiToken && !getCurrentConnectionId()) return;
+
+    const safeSet = (key, val) => {
+        if (val === true || val === false) {
+            if (key === 'ups') upsMonitorConfigured = val;
+            if (key === 'netdev') netdevMonitorConfigured = val;
+            if (key === 'speedtest') speedtestMonitorConfigured = val;
+        }
+    };
+
+    try {
+        const [upsRes, netdevRes, speedRes] = await Promise.allSettled([
+            fetch('/api/ups/current'),
+            fetch('/api/netdevices/current'),
+            fetch('/api/speedtest/summary')
+        ]);
+
+        if (upsRes.status === 'fulfilled' && upsRes.value?.ok) {
+            const data = await upsRes.value.json();
+            safeSet('ups', !!(data && data.configured && Array.isArray(data.items) && data.items.length > 0));
+        }
+        if (netdevRes.status === 'fulfilled' && netdevRes.value?.ok) {
+            const data = await netdevRes.value.json();
+            safeSet('netdev', !!(data && data.configured && Array.isArray(data.items) && data.items.length > 0));
+        }
+        if (speedRes.status === 'fulfilled' && speedRes.value?.ok) {
+            const data = await speedRes.value.json();
+            const enabled = !!(data?.enabled === true || data?.enabled === '1' || data?.enabled === 1);
+            safeSet('speedtest', enabled);
+        }
+    } catch (e) {
+        // Оставляем значения как есть (null/предыдущие), чтобы не скрыть экраны “по ошибке сети”.
+        console.warn('Failed to detect monitor screens availability:', e);
+    }
+}
+
 function normalizeMonitorScreensOrder(arr) {
     const valid = new Set(MONITOR_SCREEN_IDS_ALL);
     if (!Array.isArray(arr)) return MONITOR_SCREEN_IDS_ALL.slice();
@@ -2714,6 +2788,9 @@ function getMonitorViewsOrder() {
     return order.filter((id) => {
         if (id === 'backupRuns' && currentServerType !== 'proxmox') return false;
         if (id === 'speedtest' && !speedtestClientEnabled) return false;
+        if (id === 'ups' && upsMonitorConfigured === false) return false;
+        if (id === 'netdev' && netdevMonitorConfigured === false) return false;
+        if (id === 'speedtest' && speedtestMonitorConfigured === false) return false;
         return true;
     });
 }
@@ -2777,32 +2854,44 @@ function updateMonitorToolbarTitleForView() {
 }
 
 // Переключение экранов в режиме монитора:
-// cluster  -> дашборд; vms / services / backupRuns -> отдельные полноэкранные блоки
+// cluster/services/vms -> компактный #monitorView (без скролла/пустых зон)
+// ups/netdev/speedtest/backupRuns -> полноэкранные секции
 function applyMonitorView(view) {
     monitorCurrentView = view;
+
     const dashboardSection = document.getElementById('dashboardSection');
     const dashboardContent = document.getElementById('dashboardContent');
-    const servicesSection = document.getElementById('servicesMonitorSection');
-    const vmsSection = document.getElementById('vmsMonitorSection');
+    const servicesMonSection = document.getElementById('servicesMonitorSection');
+    const vmsMonSection = document.getElementById('vmsMonitorSection');
     const upsMonSection = document.getElementById('upsMonitorSection');
     const netdevMonSection = document.getElementById('netdevMonitorSection');
     const speedtestMonSection = document.getElementById('speedtestMonitorSection');
     const backupsMon = document.getElementById('backupsMonitorSection');
     const monitorView = document.getElementById('monitorView');
 
-    if (monitorView) monitorView.style.display = 'none';
-
     if (!monitorMode) {
         if (dashboardSection) dashboardSection.style.display = 'block';
         if (dashboardContent) dashboardContent.style.display = 'block';
-        if (servicesSection) servicesSection.style.display = 'none';
-        if (vmsSection) vmsSection.style.display = 'none';
+        if (servicesMonSection) servicesMonSection.style.display = 'none';
+        if (vmsMonSection) vmsMonSection.style.display = 'none';
         if (upsMonSection) upsMonSection.style.display = 'none';
         if (netdevMonSection) netdevMonSection.style.display = 'none';
         if (speedtestMonSection) speedtestMonSection.style.display = 'none';
         if (backupsMon) backupsMon.style.display = 'none';
+        if (monitorView) monitorView.style.display = 'none';
         return;
     }
+
+    // Выключаем все экраны монитора, затем включаем нужный.
+    if (dashboardSection) dashboardSection.style.display = 'none';
+    if (dashboardContent) dashboardContent.style.display = 'none';
+    if (servicesMonSection) servicesMonSection.style.display = 'none';
+    if (vmsMonSection) vmsMonSection.style.display = 'none';
+    if (upsMonSection) upsMonSection.style.display = 'none';
+    if (netdevMonSection) netdevMonSection.style.display = 'none';
+    if (speedtestMonSection) speedtestMonSection.style.display = 'none';
+    if (backupsMon) backupsMon.style.display = 'none';
+    if (monitorView) monitorView.style.display = 'none';
 
     if (view === 'backupRuns' && currentServerType !== 'proxmox') {
         applyMonitorView('cluster');
@@ -2812,69 +2901,37 @@ function applyMonitorView(view) {
     if (view === 'cluster') {
         if (dashboardSection) dashboardSection.style.display = 'block';
         if (dashboardContent) dashboardContent.style.display = 'block';
-        if (servicesSection) servicesSection.style.display = 'none';
-        if (vmsSection) vmsSection.style.display = 'none';
-        if (backupsMon) backupsMon.style.display = 'none';
-        if (upsMonSection) upsMonSection.style.display = 'none';
-        if (netdevMonSection) netdevMonSection.style.display = 'none';
-        if (speedtestMonSection) speedtestMonSection.style.display = 'none';
+
+        // Гарантируем, что в “кластер” активна панель узлов (как в основном режиме).
+        const myTabContent = document.getElementById('myTabContent');
+        if (myTabContent) {
+            myTabContent.querySelectorAll('.tab-pane').forEach((pane) => {
+                pane.classList.remove('show', 'active');
+            });
+            const nodesPane = document.getElementById('nodes');
+            if (nodesPane) nodesPane.classList.add('show', 'active');
+        }
     } else if (view === 'services') {
-        if (dashboardSection) dashboardSection.style.display = 'none';
-        if (servicesSection) servicesSection.style.display = 'block';
-        if (vmsSection) vmsSection.style.display = 'none';
-        if (backupsMon) backupsMon.style.display = 'none';
-        if (upsMonSection) upsMonSection.style.display = 'none';
-        if (netdevMonSection) netdevMonSection.style.display = 'none';
-        if (speedtestMonSection) speedtestMonSection.style.display = 'none';
-        renderMonitorServicesList();
+        if (servicesMonSection) servicesMonSection.style.display = 'block';
+        renderMonitoredServices();
     } else if (view === 'vms') {
-        if (dashboardSection) dashboardSection.style.display = 'none';
-        if (servicesSection) servicesSection.style.display = 'none';
-        if (vmsSection) vmsSection.style.display = 'block';
-        if (backupsMon) backupsMon.style.display = 'none';
-        if (upsMonSection) upsMonSection.style.display = 'none';
-        if (netdevMonSection) netdevMonSection.style.display = 'none';
-        if (speedtestMonSection) speedtestMonSection.style.display = 'none';
-        renderMonitorVmsList();
+        if (vmsMonSection) vmsMonSection.style.display = 'block';
         renderVmsMonitorCards();
     } else if (view === 'ups') {
-        if (dashboardSection) dashboardSection.style.display = 'none';
-        if (servicesSection) servicesSection.style.display = 'none';
-        if (vmsSection) vmsSection.style.display = 'none';
-        if (backupsMon) backupsMon.style.display = 'none';
         if (upsMonSection) upsMonSection.style.display = 'block';
-        if (netdevMonSection) netdevMonSection.style.display = 'none';
-        if (speedtestMonSection) speedtestMonSection.style.display = 'none';
         updateUPSDashboard().catch(() => {});
     } else if (view === 'netdev') {
-        if (dashboardSection) dashboardSection.style.display = 'none';
-        if (servicesSection) servicesSection.style.display = 'none';
-        if (vmsSection) vmsSection.style.display = 'none';
-        if (backupsMon) backupsMon.style.display = 'none';
-        if (upsMonSection) upsMonSection.style.display = 'none';
         if (netdevMonSection) netdevMonSection.style.display = 'block';
-        if (speedtestMonSection) speedtestMonSection.style.display = 'none';
         updateNetdevDashboard().catch(() => {});
     } else if (view === 'speedtest') {
-        if (dashboardSection) dashboardSection.style.display = 'none';
-        if (servicesSection) servicesSection.style.display = 'none';
-        if (vmsSection) vmsSection.style.display = 'none';
-        if (backupsMon) backupsMon.style.display = 'none';
-        if (upsMonSection) upsMonSection.style.display = 'none';
-        if (netdevMonSection) netdevMonSection.style.display = 'none';
         if (speedtestMonSection) speedtestMonSection.style.display = 'block';
         updateSpeedtestDashboard().catch(() => {});
     } else if (view === 'backupRuns') {
-        if (dashboardSection) dashboardSection.style.display = 'none';
-        if (servicesSection) servicesSection.style.display = 'none';
-        if (vmsSection) vmsSection.style.display = 'none';
-        if (upsMonSection) upsMonSection.style.display = 'none';
-        if (netdevMonSection) netdevMonSection.style.display = 'none';
-        if (speedtestMonSection) speedtestMonSection.style.display = 'none';
         /* flex, не block — иначе .monitor-backups-main-card не растягивается и card-body с flex:1 схлопывается в 0 */
         if (backupsMon) backupsMon.style.display = 'flex';
         renderMonitorBackupRuns(lastBackupsDataForMonitor);
     }
+
     updateMonitorToolbarTitleForView();
 }
 
@@ -3502,6 +3559,9 @@ async function updateUPSDashboard() {
     try {
         const res = await fetch('/api/ups/current');
         const data = await res.json();
+
+        // Обновляем кеш доступности экрана для корректного свайп-порядка.
+        upsMonitorConfigured = !!(data && data.configured && Array.isArray(data.items) && data.items.length > 0);
 
         await ensureUpsDisplaySlotsLoaded();
         const isMonitorCluster = monitorMode && monitorCurrentView === 'cluster';
