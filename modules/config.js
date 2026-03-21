@@ -47,6 +47,13 @@ module.exports = {
     
     // Версия (из package.json)
     version: appVersion,
+
+    // GitHub releases
+    github: {
+        repoUrl: 'https://github.com/renardein/HomeLab-Monitor',
+        owner: 'renardein',
+        repo: 'HomeLab-Monitor'
+    },
     
     // Сетевые интерфейсы для мониторинга скорости линка
     networkInterfaces: process.env.NETWORK_INTERFACES ? 

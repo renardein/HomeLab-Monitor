@@ -70,6 +70,9 @@ let dashboardWeatherError = '';
 let dashboardWeatherLastFetchMs = 0;
 let dashboardWeatherFetchPromise = null;
 let dashboardClockInterval = null;
+const UPDATE_NOTICE_STORAGE_KEY = 'update_notice_seen_version';
+let updateCheckPromise = null;
+let latestUpdateInfo = null;
 let lastClusterData = null;   // for monitor view (Proxmox)
 let lastTrueNASData = null;   // { system, pools } for monitor view (TrueNAS)
 let lastHostMetricsData = null; // { configured, items } for Proxmox host metrics
@@ -242,6 +245,51 @@ function escapeHtml(s) {
     if (s == null) return '';
     const t = String(s);
     return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function getSeenUpdateVersion() {
+    try {
+        return localStorage.getItem(UPDATE_NOTICE_STORAGE_KEY) || '';
+    } catch (_) {
+        return '';
+    }
+}
+
+function markUpdateVersionAsSeen(version) {
+    try {
+        localStorage.setItem(UPDATE_NOTICE_STORAGE_KEY, String(version || ''));
+    } catch (_) {}
+}
+
+function renderFooterUpdateStatus() {
+    const el = document.getElementById('footerUpdateStatus');
+    if (!el) return;
+
+    if (!latestUpdateInfo) {
+        el.textContent = t('statusDash') || '—';
+        return;
+    }
+
+    if (latestUpdateInfo.error) {
+        el.textContent = t('updateStatusCheckFailed') || 'Update check failed';
+        return;
+    }
+
+    if (latestUpdateInfo.updateAvailable && latestUpdateInfo.latestVersion) {
+        const label = tParams('updateStatusAvailableShort', { latest: latestUpdateInfo.latestVersion });
+        const url = latestUpdateInfo.releaseUrl || latestUpdateInfo.repoUrl || '';
+        el.innerHTML = url
+            ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(label)}</a>`
+            : escapeHtml(label);
+        return;
+    }
+
+    if (latestUpdateInfo.latestVersion) {
+        el.textContent = tParams('updateStatusCurrentShort', { version: latestUpdateInfo.latestVersion });
+        return;
+    }
+
+    el.textContent = t('statusDash') || '—';
 }
 
 function normalizeDashboardWeatherCity(value) {
@@ -1099,6 +1147,7 @@ function setLanguage(lang) {
         localStorage.setItem('preferred_language', lang);
     } catch (_) {}
     updateUILanguage();
+    renderFooterUpdateStatus();
     
     // Re-render server list to update translated tooltips and text
     renderServerList();
@@ -1685,6 +1734,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
 
     checkServerStatus();
+    checkForAppUpdates().catch(() => {});
     updateCurrentServerBadge();
 
     // Показать дашборд или настройки: при сохранённом подключении — загрузить данные и показать контент, иначе — форму входа
@@ -1822,6 +1872,42 @@ async function checkServerStatus() {
     } catch (error) {
         setHTML('serverStatus', '<i class="bi bi-exclamation-circle"></i> <span id="serverStatusText">' + t('serverError') + '</span>');
     }
+}
+
+async function checkForAppUpdates(force = false) {
+    if (!force && updateCheckPromise) return updateCheckPromise;
+
+    updateCheckPromise = (async () => {
+        try {
+            const response = await fetch('/api/updates');
+            const data = await response.json();
+            latestUpdateInfo = data || null;
+            renderFooterUpdateStatus();
+            if (!response.ok || !data || !data.updateAvailable || !data.latestVersion) return data;
+
+            if (getSeenUpdateVersion() === data.latestVersion) return data;
+
+            const message = `${escapeHtml(tParams('updateAvailableToast', {
+                latest: data.latestVersion,
+                current: data.currentVersion || 'unknown'
+            }))} <a href="${escapeHtml(data.releaseUrl || data.repoUrl || '#')}" target="_blank" rel="noopener noreferrer">${escapeHtml(t('updateAvailableOpenRelease'))}</a>`;
+
+            showToast(message, 'warning');
+            markUpdateVersionAsSeen(data.latestVersion);
+            return data;
+        } catch (error) {
+            latestUpdateInfo = {
+                error: error && error.message ? error.message : String(error)
+            };
+            renderFooterUpdateStatus();
+            console.warn('Update check failed:', error);
+            throw error;
+        } finally {
+            updateCheckPromise = null;
+        }
+    })();
+
+    return updateCheckPromise;
 }
 
 // Show notification
@@ -4202,14 +4288,32 @@ async function refreshDebugMetrics() {
     clientEl.textContent = '…';
     let serverText = '—';
     try {
-        const res = await fetch('/api/debug');
+        const [res, updatesData] = await Promise.all([
+            fetch('/api/debug'),
+            checkForAppUpdates().catch((error) => ({
+                error: error && error.message ? error.message : String(error)
+            }))
+        ]);
         const data = await res.json();
         lastDebugServerData = data;
         const mem = data.memory || {};
         const fmt = (n) => (n != null && typeof n === 'number') ? (n / 1024 / 1024).toFixed(2) + ' MB' : '—';
         const cache = data.cache || {};
+        const updateStatus = updatesData && updatesData.error
+            ? (t('updateStatusCheckFailed') || 'Update check failed')
+            : (updatesData && updatesData.updateAvailable && updatesData.latestVersion)
+                ? tParams('updateStatusAvailableShort', { latest: updatesData.latestVersion })
+                : (updatesData && updatesData.latestVersion)
+                    ? tParams('updateStatusCurrentShort', { version: updatesData.latestVersion })
+                    : (t('statusDash') || '—');
         serverText = [
             `version: ${data.version ?? '—'}`,
+            `update.status: ${updateStatus}`,
+            `update.currentVersion: ${updatesData?.currentVersion ?? data.version ?? '—'}`,
+            `update.latestVersion: ${updatesData?.latestVersion ?? '—'}`,
+            `update.available: ${updatesData?.updateAvailable != null ? updatesData.updateAvailable : '—'}`,
+            `update.checkedAt: ${updatesData?.checkedAt ?? '—'}`,
+            `update.releaseUrl: ${updatesData?.releaseUrl ?? updatesData?.repoUrl ?? '—'}`,
             `env: ${data.env ?? '—'}`,
             `node: ${data.nodeVersion ?? '—'}`,
             `platform: ${data.platform ?? '—'} ${data.arch ?? ''}`,

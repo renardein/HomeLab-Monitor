@@ -53,6 +53,7 @@ app.use('/api/truenas', require('./modules/routes/truenas-status'));
 app.use('/api/connections', require('./modules/routes/connections'));
 app.use('/api/settings', require('./modules/routes/settings'));
 app.use('/api/about', require('./modules/routes/about'));
+app.use('/api/updates', require('./modules/routes/updates'));
 app.use('/api/ups', require('./modules/routes/ups'));
 app.use('/api/netdevices', require('./modules/routes/netdevices-snmp'));
 app.use('/api/host-metrics', require('./modules/routes/host-metrics'));
