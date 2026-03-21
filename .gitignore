@@ -1,34 +1,36 @@
-# Compiled JavaScript (if any)
-*.js.map
-*.min.js
-
-# Build artifacts
-dist/
-build/
-*.bundle.js
+```
+# Compiled and build artifacts
+*.pyc
+__pycache__/
 
 # Dependencies
 node_modules/
+venv/
+.venv/
+.npm/
+.yarn/
 
-# Logs
+# Logs and temp files
 *.log
+*.tmp
+*.swp
 
-# Environment variables
+# Environment
 .env
 .env.local
 *.env.*
 
-# Editor files
+# Editors
 .vscode/
 .idea/
-*.swp
 *.swo
-*.tmp
 
-# System files
+# OS generated files
 .DS_Store
 Thumbs.db
-# Local data (DB created automatically if missing)
-data/connections.json
-data/app.db
-data/*.db
+
+# Build outputs
+dist/
+build/
+target/
+```

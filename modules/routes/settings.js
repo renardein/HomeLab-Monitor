@@ -31,7 +31,10 @@ const SETTING_KEYS = [
     // Speedtest (Ookla CLI)
     'speedtest_enabled',
     'speedtest_server',
-    'speedtest_per_day'
+    'speedtest_per_day',
+    // Host metrics settings and configs
+    'host_metrics_settings',
+    'host_metrics_configs'
 ];
 
 // GET /api/settings — все настройки (без пароля), флаг password_required
@@ -51,7 +54,9 @@ router.get('/', (req, res) => {
                     key === 'monitor_hidden_service_ids' ||
                     key === 'monitor_vms' ||
                     key === 'monitor_hidden_vm_ids' ||
-                    key === 'monitor_screens_order'
+                    key === 'monitor_screens_order' ||
+                    key === 'host_metrics_settings' ||
+                    key === 'host_metrics_configs'
                 ) {
                     try {
                         payload[key] = JSON.parse(value);
@@ -112,7 +117,9 @@ router.post('/', (req, res) => {
                 if (v === undefined) return undefined;
                 return String(v).trim();
             })(),
-            speedtest_per_day: body.speedtest_per_day ?? body.speedtestPerDay
+            speedtest_per_day: body.speedtest_per_day ?? body.speedtestPerDay,
+            host_metrics_settings: body.host_metrics_settings ?? body.hostMetricsSettings,
+            host_metrics_configs: body.host_metrics_configs ?? body.hostMetricsConfigs
         };
         const savedKeys = [];
         for (const [key, value] of Object.entries(map)) {

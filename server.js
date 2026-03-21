@@ -55,6 +55,7 @@ app.use('/api/settings', require('./modules/routes/settings'));
 app.use('/api/ups', require('./modules/routes/ups'));
 app.use('/api/netdevices', require('./modules/routes/netdevices-snmp'));
 app.use('/api/speedtest', require('./modules/routes/speedtest'));
+app.use('/api/host-metrics', require('./modules/routes/host-metrics'));
 
 // Доступные языки
 app.get('/api/languages', (req, res) => {
