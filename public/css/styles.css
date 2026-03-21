@@ -390,7 +390,7 @@
         }
 
         /* Карточки мониторинга сервисов: более явные и без растяжки по высоте */
-        body #servicesMonitorSection #servicesCards .node-card {
+        body:not(.monitor-mode) #servicesMonitorSection #servicesCards .node-card {
             height: auto !important;
             min-height: auto !important;
             border: 1px solid rgba(102, 126, 234, 0.22);
@@ -399,19 +399,19 @@
             padding: 18px;
         }
 
-        body.dark-mode #servicesMonitorSection #servicesCards .node-card {
+        body.dark-mode:not(.monitor-mode) #servicesMonitorSection #servicesCards .node-card {
             background: #16213e;
             border: 1px solid rgba(83, 52, 131, 0.85);
             box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
             color: #e2e8f0;
         }
 
-        body #servicesMonitorSection #servicesCards .node-card h6 {
+        body:not(.monitor-mode) #servicesMonitorSection #servicesCards .node-card h6 {
             font-size: 1rem;
             font-weight: 700;
         }
 
-        body #servicesMonitorSection #servicesCards .node-card .badge {
+        body:not(.monitor-mode) #servicesMonitorSection #servicesCards .node-card .badge {
             font-weight: 700;
             padding: 0.35em 0.6em;
         }

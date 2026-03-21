@@ -10,7 +10,7 @@ let currentTheme = 'light';
 let currentUnits = 'decimal'; // 'decimal' (GB) or 'binary' (GiB)
 let monitorMode = false; // Monitor (display) mode flag
 /** Тема режима монитора: 'light' | 'dark' (независимо от общей темы) */
-let monitorTheme = 'dark';
+let monitorTheme = 'light';
 /** Пользовательские CSS-стили для 2 режимов x 2 тем */
 let customThemeCss = {
     normal: { light: '', dark: '' },
