@@ -32,6 +32,9 @@ const SETTING_KEYS = [
     'monitor_vm_icons',
     'monitor_vm_icon_colors',
     'monitor_screens_order',
+    'cluster_dashboard_tiles',
+    'dashboard_weather_city',
+    'dashboard_timezone',
     // Speedtest (Ookla CLI)
     'speedtest_enabled',
     'speedtest_server',
@@ -59,7 +62,8 @@ router.get('/', (req, res) => {
                     key === 'monitor_hidden_vm_ids' ||
                     key === 'monitor_vm_icons' ||
                     key === 'monitor_vm_icon_colors' ||
-                    key === 'monitor_screens_order'
+                    key === 'monitor_screens_order' ||
+                    key === 'cluster_dashboard_tiles'
                 ) {
                     try {
                         payload[key] = JSON.parse(value);
@@ -114,6 +118,9 @@ router.post('/', (req, res) => {
             monitor_vm_icons: body.monitor_vm_icons ?? body.monitorVmIcons,
             monitor_vm_icon_colors: body.monitor_vm_icon_colors ?? body.monitorVmIconColors,
             monitor_screens_order: body.monitor_screens_order ?? body.monitorScreensOrder,
+            cluster_dashboard_tiles: body.cluster_dashboard_tiles ?? body.clusterDashboardTiles,
+            dashboard_weather_city: body.dashboard_weather_city ?? body.dashboardWeatherCity,
+            dashboard_timezone: body.dashboard_timezone ?? body.dashboardTimezone,
             speedtest_enabled: (() => {
                 const v = body.speedtest_enabled ?? body.speedtestEnabled;
                 if (v === undefined) return undefined;

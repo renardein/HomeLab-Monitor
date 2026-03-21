@@ -24,6 +24,9 @@
         body.dark-mode .stat-label {
             color: #aaa;
         }
+        body.dark-mode .stat-card-meta {
+            color: #aaa;
+        }
         body.dark-mode .node-card {
             background: #16213e;
         }
@@ -127,6 +130,45 @@
             color: #666;
             font-size: 0.9rem;
             text-transform: uppercase;
+        }
+        .stat-card-meta {
+            margin-top: 0.45rem;
+            color: #666;
+            font-size: 0.8rem;
+            line-height: 1.35;
+        }
+        .stat-card-meta:empty {
+            display: none;
+        }
+        .cluster-scroll-row {
+            display: flex;
+            flex-wrap: nowrap;
+            gap: 0.75rem;
+            overflow-x: auto;
+            overflow-y: hidden;
+            padding-bottom: 0.35rem;
+            scrollbar-width: thin;
+            scroll-snap-type: x proximity;
+        }
+        .cluster-scroll-item {
+            flex: 0 0 calc((100% - 2.25rem) / 4);
+            min-width: 280px;
+            scroll-snap-align: start;
+        }
+        .cluster-scroll-item > .node-card {
+            margin-bottom: 0;
+        }
+        @media (max-width: 1199.98px) {
+            .cluster-scroll-item {
+                flex-basis: calc((100% - 0.75rem) / 2);
+                min-width: 300px;
+            }
+        }
+        @media (max-width: 767.98px) {
+            .cluster-scroll-item {
+                flex-basis: 88%;
+                min-width: 260px;
+            }
         }
         .node-card {
             background: white;
@@ -1371,6 +1413,29 @@
             align-content: flex-start;
         }
 
+        .ups-node-card {
+            margin-bottom: 0;
+        }
+
+        .ups-node-card__metric-label {
+            display: block;
+            margin-bottom: 0.15rem;
+        }
+
+        .ups-node-card__metric-value {
+            font-size: 1.05rem;
+            line-height: 1.2;
+        }
+
+        .ups-node-card .progress {
+            margin-top: 0.35rem;
+        }
+
+        .ups-node-card--single {
+            width: 100%;
+            height: 100%;
+        }
+
         /* Режим монитора: один экран без скролла, под 1920×1200 */
         .monitor-view {
             margin: 0;
@@ -1595,6 +1660,37 @@
             justify-content: center;
             padding: 4px 8px;
         }
+        .monitor-toolbar-dots {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 0.35rem;
+            margin-top: 0;
+            margin-left: 0.35rem;
+            min-height: 12px;
+            flex: 0 0 auto;
+        }
+        .monitor-toolbar-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 999px;
+            border: 0;
+            padding: 0;
+            background: rgba(148, 163, 184, 0.55);
+            transition: transform 0.2s ease, background-color 0.2s ease, opacity 0.2s ease;
+            opacity: 0.9;
+        }
+        .monitor-toolbar-dot.is-active {
+            background: #3b82f6;
+            transform: scale(1.25);
+            opacity: 1;
+        }
+        body.monitor-mode.monitor-theme-dark .monitor-toolbar-dot {
+            background: rgba(203, 213, 225, 0.45);
+        }
+        body.monitor-mode.monitor-theme-dark .monitor-toolbar-dot.is-active {
+            background: #60a5fa;
+        }
 
         .monitor-view__nav-btn:hover {
             background: rgba(59, 130, 246, 0.9);
@@ -1603,6 +1699,13 @@
 
         body.monitor-mode {
             overflow: hidden;
+        }
+        body.monitor-mode .cluster-scroll-row {
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+        body.monitor-mode .cluster-scroll-row::-webkit-scrollbar {
+            display: none;
         }
         body.monitor-mode.monitor-theme-dark .table-success { background-color: rgba(40, 167, 69, 0.2) !important; color: #e2e8f0; }
         body.monitor-mode.monitor-theme-dark .table-danger { background-color: rgba(220, 53, 69, 0.2) !important; color: #e2e8f0; }
@@ -1693,8 +1796,14 @@
             flex: 1 1 auto;
             display: flex;
             align-items: center;
-            justify-content: center;
+            justify-content: flex-start;
             gap: 16px;
+        }
+        .monitor-toolbar-title {
+            margin-right: auto;
+        }
+        .monitor-toolbar-update {
+            white-space: nowrap;
         }
         .monitor-toolbar-theme {
             display: flex;
@@ -1727,7 +1836,12 @@
         body.monitor-mode:not(.monitor-theme-dark) .monitor-toolbar-theme-btn.active {
             background: rgba(0,0,0,0.12);
         }
-        .monitor-toolbar-right { flex: 0 0 auto; }
+        .monitor-toolbar-right {
+            flex: 0 0 auto;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
 
         body.monitor-mode.monitor-theme-dark .monitor-toolbar-title,
         body.monitor-mode.monitor-theme-dark .monitor-toolbar-update {
@@ -1757,12 +1871,23 @@
 
         .monitor-toolbar-select { font-size: 0.9rem; }
 
+        .monitor-toolbar-settings,
         .monitor-toolbar-exit {
             border: none;
             padding: 8px 18px;
             border-radius: 8px;
             font-weight: 500;
             transition: background 0.2s, transform 0.2s;
+        }
+        body.monitor-mode.monitor-theme-dark .monitor-toolbar-settings {
+            background: rgba(59, 130, 246, 0.18);
+            color: #fff;
+            border: 1px solid rgba(96, 165, 250, 0.35);
+        }
+        body.monitor-mode.monitor-theme-dark .monitor-toolbar-settings:hover {
+            background: rgba(59, 130, 246, 0.28);
+            color: #fff;
+            transform: scale(1.02);
         }
         body.monitor-mode.monitor-theme-dark .monitor-toolbar-exit {
             background: rgba(220, 53, 69, 0.9);
@@ -1771,6 +1896,16 @@
         body.monitor-mode.monitor-theme-dark .monitor-toolbar-exit:hover {
             background: rgba(220, 53, 69, 1);
             color: #fff;
+            transform: scale(1.02);
+        }
+        body.monitor-mode:not(.monitor-theme-dark) .monitor-toolbar-settings {
+            background: #edf2f7;
+            color: #2d3748;
+            border: 1px solid #cbd5e0;
+        }
+        body.monitor-mode:not(.monitor-theme-dark) .monitor-toolbar-settings:hover {
+            background: #e2e8f0;
+            color: #1a202c;
             transform: scale(1.02);
         }
         body.monitor-mode:not(.monitor-theme-dark) .monitor-toolbar-exit {

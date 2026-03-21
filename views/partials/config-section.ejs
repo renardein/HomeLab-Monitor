@@ -568,77 +568,20 @@
 
                             <hr class="my-4">
 
-                                <div class="mb-3">
-                                <ul class="nav nav-pills" id="upsDisplayTabs" role="tablist">
-                                    <li class="nav-item" role="presentation">
-                                        <button class="nav-link active" id="upsDisplayDashboardTab" data-bs-toggle="tab"
-                                            data-bs-target="#upsDisplayDashboardPane" type="button" role="tab"
-                                            aria-controls="upsDisplayDashboardPane" aria-selected="true">
-                                            <span id="upsDisplayDashboardTabLabel">Обычный режим</span>
-                                        </button>
-                                    </li>
-                                    <li class="nav-item" role="presentation">
-                                        <button class="nav-link" id="upsDisplayMonitorTab" data-bs-toggle="tab"
-                                            data-bs-target="#upsDisplayMonitorPane" type="button" role="tab"
-                                            aria-controls="upsDisplayMonitorPane" aria-selected="false">
-                                            <span id="upsDisplayMonitorTabLabel">Режим монитора</span>
-                                        </button>
-                                    </li>
-                                </ul>
-                                <div class="tab-content p-3" id="upsDisplayTabsContent">
-                                    <div class="tab-pane fade show active" id="upsDisplayDashboardPane" role="tabpanel"
-                                        aria-labelledby="upsDisplayDashboardTab">
-                                        <label class="form-label fw-bold mb-2" id="upsShowOnDashboardLabel">Показывать UPS на дашборде</label>
-                                        <div class="d-flex flex-wrap gap-3">
-                                            <div class="form-check">
-                                                <input class="form-check-input upsDisplayDashboardSlot" type="checkbox"
-                                                    id="upsDisplayDashboardSlot1" value="1" checked>
-                                                <label class="form-check-label" for="upsDisplayDashboardSlot1">1</label>
-                                            </div>
-                                            <div class="form-check">
-                                                <input class="form-check-input upsDisplayDashboardSlot" type="checkbox"
-                                                    id="upsDisplayDashboardSlot2" value="2" checked>
-                                                <label class="form-check-label" for="upsDisplayDashboardSlot2">2</label>
-                                            </div>
-                                            <div class="form-check">
-                                                <input class="form-check-input upsDisplayDashboardSlot" type="checkbox"
-                                                    id="upsDisplayDashboardSlot3" value="3" checked>
-                                                <label class="form-check-label" for="upsDisplayDashboardSlot3">3</label>
-                                            </div>
-                                            <div class="form-check">
-                                                <input class="form-check-input upsDisplayDashboardSlot" type="checkbox"
-                                                    id="upsDisplayDashboardSlot4" value="4" checked>
-                                                <label class="form-check-label" for="upsDisplayDashboardSlot4">4</label>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div class="tab-pane fade" id="upsDisplayMonitorPane" role="tabpanel"
-                                        aria-labelledby="upsDisplayMonitorTab">
-                                        <label class="form-label fw-bold mb-2" id="upsShowOnMonitorClusterLabel">Показывать UPS в режиме монитора (экран Cluster)</label>
-                                        <div class="d-flex flex-wrap gap-3">
-                                            <div class="form-check">
-                                                <input class="form-check-input upsDisplayMonitorSlot" type="checkbox"
-                                                    id="upsDisplayMonitorSlot1" value="1" checked>
-                                                <label class="form-check-label" for="upsDisplayMonitorSlot1">1</label>
-                                            </div>
-                                            <div class="form-check">
-                                                <input class="form-check-input upsDisplayMonitorSlot" type="checkbox"
-                                                    id="upsDisplayMonitorSlot2" value="2" checked>
-                                                <label class="form-check-label" for="upsDisplayMonitorSlot2">2</label>
-                                            </div>
-                                            <div class="form-check">
-                                                <input class="form-check-input upsDisplayMonitorSlot" type="checkbox"
-                                                    id="upsDisplayMonitorSlot3" value="3" checked>
-                                                <label class="form-check-label" for="upsDisplayMonitorSlot3">3</label>
-                                            </div>
-                                            <div class="form-check">
-                                                <input class="form-check-input upsDisplayMonitorSlot" type="checkbox"
-                                                    id="upsDisplayMonitorSlot4" value="4" checked>
-                                                <label class="form-check-label" for="upsDisplayMonitorSlot4">4</label>
-                                            </div>
-                                        </div>
-                                    </div>
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold" for="upsShowOnDashboardSelect" id="upsShowOnDashboardLabel">Показывать в обычном режиме на экране UPS</label>
+                                    <select class="form-select" id="upsShowOnDashboardSelect">
+                                        <option value="0">Нет</option>
+                                        <option value="1" selected>Да</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold" for="upsShowOnMonitorSelect" id="upsShowOnMonitorClusterLabel">Показывать в режиме монитора на экране UPS</label>
+                                    <select class="form-select" id="upsShowOnMonitorSelect">
+                                        <option value="0">Нет</option>
+                                        <option value="1" selected>Да</option>
+                                    </select>
                                 </div>
                             </div>
 
@@ -697,35 +640,20 @@
 
                                 <hr class="my-4">
 
-                                <div class="mb-3">
-                                    <ul class="nav nav-pills" id="netdevDisplayTabs" role="tablist">
-                                        <li class="nav-item" role="presentation">
-                                            <button class="nav-link active" id="netdevDisplayDashboardTab" data-bs-toggle="tab"
-                                                data-bs-target="#netdevDisplayDashboardPane" type="button" role="tab"
-                                                aria-controls="netdevDisplayDashboardPane" aria-selected="true">
-                                                <span id="netdevDisplayDashboardTabLabel">Обычный режим</span>
-                                            </button>
-                                        </li>
-                                        <li class="nav-item" role="presentation">
-                                            <button class="nav-link" id="netdevDisplayMonitorTab" data-bs-toggle="tab"
-                                                data-bs-target="#netdevDisplayMonitorPane" type="button" role="tab"
-                                                aria-controls="netdevDisplayMonitorPane" aria-selected="false">
-                                                <span id="netdevDisplayMonitorTabLabel">Режим монитора</span>
-                                            </button>
-                                        </li>
-                                    </ul>
-                                    <div class="tab-content p-3" id="netdevDisplayTabsContent">
-                                        <div class="tab-pane fade show active" id="netdevDisplayDashboardPane" role="tabpanel"
-                                            aria-labelledby="netdevDisplayDashboardTab">
-                                            <label class="form-label fw-bold mb-2" id="netdevShowOnDashboardLabel">Показывать на дашборде</label>
-                                            <div class="d-flex flex-wrap gap-3" id="netdevDisplayDashboardSlotsWrap"></div>
-                                        </div>
-
-                                        <div class="tab-pane fade" id="netdevDisplayMonitorPane" role="tabpanel"
-                                            aria-labelledby="netdevDisplayMonitorTab">
-                                            <label class="form-label fw-bold mb-2" id="netdevShowOnMonitorLabel">Показывать в режиме монитора (экран Cluster)</label>
-                                            <div class="d-flex flex-wrap gap-3" id="netdevDisplayMonitorSlotsWrap"></div>
-                                        </div>
+                                <div class="row g-3 mb-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label fw-bold" for="netdevShowOnDashboardSelect" id="netdevShowOnDashboardLabel">Показывать в обычном режиме на экране SNMP</label>
+                                        <select class="form-select" id="netdevShowOnDashboardSelect">
+                                            <option value="0">Нет</option>
+                                            <option value="1" selected>Да</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label fw-bold" for="netdevShowOnMonitorSelect" id="netdevShowOnMonitorLabel">Показывать в режиме монитора на экране SNMP</label>
+                                        <select class="form-select" id="netdevShowOnMonitorSelect">
+                                            <option value="0">Нет</option>
+                                            <option value="1" selected>Да</option>
+                                        </select>
                                     </div>
                                 </div>
 

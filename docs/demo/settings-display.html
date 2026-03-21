@@ -158,6 +158,24 @@
         </div>
         <hr class="my-4">
         <div class="mb-2">
+            <label class="form-label fw-bold">Time and Weather</label>
+            <p class="text-muted small mb-3">Settings for the fourth card in the Cluster top row.</p>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label fw-bold">City</label>
+                    <input type="text" class="form-control" value="Berlin">
+                    <div class="form-text">Used to resolve the current weather.</div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold">Time zone</label>
+                    <input type="text" class="form-control" value="Europe/Berlin">
+                    <div class="form-text">Use an IANA time zone such as Europe/Berlin.</div>
+                </div>
+            </div>
+            <button class="btn btn-primary btn-sm mt-3" type="button"><i class="bi bi-save me-1"></i>Save time and weather</button>
+        </div>
+        <hr class="my-4">
+        <div class="mb-2">
             <label class="form-label fw-bold">Monitor Screen Order</label>
             <p class="text-muted small mb-2">Order used by swipe gestures and toolbar arrows. Backup screen is available only for Proxmox.</p>
             <ul class="list-group list-group-flush border rounded overflow-hidden">
@@ -211,6 +229,72 @@
                     </span>
                 </li>
             </ul>
+        </div>
+        <hr class="my-4">
+        <div class="mb-2">
+            <label class="form-label fw-bold">Cluster Screen Tiles</label>
+            <p class="text-muted small mb-2">Build up to 12 tiles for the Cluster screen from UPS, VM / CT, services, SNMP devices, and Speedtest. They scroll horizontally on the screen.</p>
+            <div class="border rounded p-3 mb-2">
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold small mb-1">Tile Type</label>
+                        <select class="form-select">
+                            <option selected>UPS</option>
+                            <option>Service</option>
+                            <option>VM / CT</option>
+                            <option>SNMP Device</option>
+                            <option>Speedtest</option>
+                        </select>
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label fw-bold small mb-1">Data Source</label>
+                        <select class="form-select">
+                            <option selected>UPS 1: ups</option>
+                            <option>UPS 2: rack-ups</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="d-flex gap-2 justify-content-md-end">
+                            <button type="button" class="btn btn-outline-secondary btn-sm" disabled><i class="bi bi-arrow-up"></i></button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-down"></i></button>
+                            <button type="button" class="btn btn-outline-danger btn-sm"><i class="bi bi-trash"></i></button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="border rounded p-3 mb-2">
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold small mb-1">Tile Type</label>
+                        <select class="form-select">
+                            <option>UPS</option>
+                            <option selected>Service</option>
+                            <option>VM / CT</option>
+                            <option>SNMP Device</option>
+                            <option>Speedtest</option>
+                        </select>
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label fw-bold small mb-1">Data Source</label>
+                        <select class="form-select">
+                            <option selected>Vaultwarden</option>
+                            <option>Traefik</option>
+                            <option>Grafana</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="d-flex gap-2 justify-content-md-end">
+                            <button type="button" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-up"></i></button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-down"></i></button>
+                            <button type="button" class="btn btn-outline-danger btn-sm"><i class="bi bi-trash"></i></button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="d-flex gap-2 flex-wrap mt-3">
+                <button class="btn btn-outline-primary btn-sm" type="button"><i class="bi bi-plus-lg me-1"></i>Add Tile</button>
+                <button class="btn btn-primary btn-sm" type="button"><i class="bi bi-save me-1"></i>Save Tiles</button>
+            </div>
         </div>
     </div>
 </div>
