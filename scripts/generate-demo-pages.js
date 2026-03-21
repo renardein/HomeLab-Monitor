@@ -3,6 +3,8 @@ const path = require('path');
 
 const rootDir = path.join(__dirname, '..');
 const demoDir = path.join(rootDir, 'demo');
+const publicCssPath = path.join(rootDir, 'public', 'css', 'styles.css');
+const demoCssPath = path.join(demoDir, 'demo.css');
 
 fs.mkdirSync(demoDir, { recursive: true });
 
@@ -52,7 +54,7 @@ const head = (title, monitor = false) => `<!DOCTYPE html>
     <title>${title}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
-    <link rel="stylesheet" href="../public/css/styles.css">
+    <link rel="stylesheet" href="./demo.css">
 </head>
 <body${monitor ? ' class="monitor-mode"' : ''}>`;
 
@@ -1500,6 +1502,12 @@ function writeDemoFile(fileName, html) {
     fs.writeFileSync(path.join(demoDir, fileName), html, 'utf8');
 }
 
+function writeDemoCssSnapshot() {
+    const sourceCss = fs.readFileSync(publicCssPath, 'utf8');
+    fs.writeFileSync(demoCssPath, sourceCss, 'utf8');
+}
+
+writeDemoCssSnapshot();
 writeDemoFile('index.html', buildIndex());
 
 settingsPages.forEach((page) => writeDemoFile(page.file, buildSettingsPage(page)));
