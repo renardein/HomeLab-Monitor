@@ -356,7 +356,9 @@ router.get('/discovery', checkAuth, async (req, res) => {
 
     try {
         const nodes = await proxmox.getNodes(req.token, req.serverUrl || null);
-        const nodeNames = (nodes || []).map((n) => n.node || n.name).filter(Boolean);
+        const clusterStatus = await proxmox.getClusterStatus(req.token, req.serverUrl || null);
+        const orderedNodes = proxmox.sortRowsByClusterNodeOrder(nodes, clusterStatus);
+        const nodeNames = (orderedNodes || []).map((n) => n.node || n.name).filter(Boolean);
         const connCfg = loadConfigs()[connectionId] || { nodes: {} };
 
         const items = await Promise.all(nodeNames.map(async (nodeName) => {
@@ -398,7 +400,9 @@ router.get('/current', checkAuth, async (req, res) => {
 
     try {
         const nodes = await proxmox.getNodes(req.token, req.serverUrl || null);
-        const nodeNames = (nodes || []).map((n) => n.node || n.name).filter(Boolean);
+        const clusterStatus = await proxmox.getClusterStatus(req.token, req.serverUrl || null);
+        const orderedNodes = proxmox.sortRowsByClusterNodeOrder(nodes, clusterStatus);
+        const nodeNames = (orderedNodes || []).map((n) => n.node || n.name).filter(Boolean);
         const connCfg = loadConfigs()[connectionId] || { nodes: {} };
 
         const enabledNodeNames = nodeNames.filter((nodeName) => {

@@ -124,7 +124,7 @@ async function request(endpoint, token, method = 'GET', data = null, serverUrl =
 async function getNodes(token, serverUrl = null) {
     try {
         const data = await request('/nodes', token, 'GET', null, serverUrl);
-        return data.data || [];
+        return sortRowsByClusterNodeOrder(data.data || []);
     } catch (error) {
         log('error', `Error in getNodes: ${error.message}`);
         throw error;
@@ -151,6 +151,59 @@ async function getClusterStatus(token, serverUrl = null) {
         log('warn', `Could not fetch cluster status: ${error.message}`);
         return [];
     }
+}
+
+function getNodeName(row) {
+    if (!row || typeof row !== 'object') return '';
+    return String(row.node || row.name || '').trim();
+}
+
+function getNodeOrderValue(row) {
+    if (!row || typeof row !== 'object') return null;
+    const directCandidates = [row.nodeid, row.nodeId, row.id];
+    for (const candidate of directCandidates) {
+        const n = parseInt(candidate, 10);
+        if (Number.isFinite(n)) return n;
+    }
+    if (typeof row.id === 'string') {
+        const m = row.id.match(/node\/(\d+)$/i);
+        if (m) {
+            const n = parseInt(m[1], 10);
+            if (Number.isFinite(n)) return n;
+        }
+    }
+    return null;
+}
+
+function buildClusterNodeOrderMap(clusterStatus) {
+    const map = new Map();
+    const rows = Array.isArray(clusterStatus) ? clusterStatus : [];
+    rows.forEach((row, index) => {
+        if (!row || String(row.type || '').toLowerCase() !== 'node') return;
+        const name = getNodeName(row);
+        if (!name) return;
+        const explicitOrder = getNodeOrderValue(row);
+        map.set(name, explicitOrder != null ? explicitOrder : (100000 + index));
+    });
+    return map;
+}
+
+function sortRowsByClusterNodeOrder(rows, clusterStatus = null, nameGetter = getNodeName) {
+    const list = Array.isArray(rows) ? rows.slice() : [];
+    const orderMap = buildClusterNodeOrderMap(clusterStatus);
+    return list.sort((a, b) => {
+        const nameA = String(nameGetter(a) || '').trim();
+        const nameB = String(nameGetter(b) || '').trim();
+        const directA = getNodeOrderValue(a);
+        const directB = getNodeOrderValue(b);
+        const orderA = directA != null ? directA : (orderMap.has(nameA) ? orderMap.get(nameA) : null);
+        const orderB = directB != null ? directB : (orderMap.has(nameB) ? orderMap.get(nameB) : null);
+
+        if (orderA != null && orderB != null && orderA !== orderB) return orderA - orderB;
+        if (orderA != null && orderB == null) return -1;
+        if (orderA == null && orderB != null) return 1;
+        return nameA.localeCompare(nameB, undefined, { sensitivity: 'base', numeric: true });
+    });
 }
 
 // Получение ресурсов кластера
@@ -275,6 +328,8 @@ module.exports = {
     getNodes,
     getNodeStatus,
     getClusterStatus,
+    sortRowsByClusterNodeOrder,
+    buildClusterNodeOrderMap,
     getClusterResources,
     getNodeStorage,
     getBackupJobs,

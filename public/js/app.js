@@ -2683,6 +2683,11 @@ async function updateNetdevDashboard() {
     const sectionEl = isNetdevMonitorScreen ? netdevMonSection : dashSection;
     const updatedAtTargetEl = isNetdevMonitorScreen ? netdevUpdatedAtEl : updatedAtEl;
 
+    if (!isNetdevMonitorScreen) {
+        if (dashSection) dashSection.style.display = 'none';
+        return;
+    }
+
     if (!cardsEl || !sectionEl) return;
 
     cardsEl.innerHTML = '';
@@ -2766,6 +2771,10 @@ async function updateSpeedtestDashboard() {
         const el = document.getElementById(id);
         if (el) el.textContent = text;
     };
+    if (!isSpeedtestMonitorScreen) {
+        if (dashSection) dashSection.style.display = 'none';
+        return;
+    }
     try {
         const res = await fetch('/api/speedtest/summary');
         const summary = await res.json();
@@ -3235,6 +3244,7 @@ async function toggleMonitorMode() {
         monitorCurrentView = 'cluster';
         applyMonitorTheme();
         initMonitorSwipes();
+        initMonitorKeyboardNavigation();
 
         // Определяем доступность ups/netdev/speedtest, чтобы свайп-циклы не включали “пустые/не настроенные” экраны.
         await refreshMonitorScreensAvailability();
@@ -4125,6 +4135,38 @@ function destroyMonitorSwipes() {
     }
 }
 
+let monitorKeyboardNavAttached = false;
+
+function initMonitorKeyboardNavigation() {
+    if (monitorKeyboardNavAttached) return;
+
+    document.addEventListener('keydown', (e) => {
+        if (!monitorMode || !e) return;
+
+        const target = e.target;
+        const tag = target && target.tagName ? String(target.tagName).toUpperCase() : '';
+        const isEditable = !!(target && (
+            target.isContentEditable ||
+            tag === 'INPUT' ||
+            tag === 'TEXTAREA' ||
+            tag === 'SELECT'
+        ));
+        if (isEditable) return;
+
+        if (e.key === 'ArrowLeft') {
+            e.preventDefault();
+            goMonitorView('prev');
+            return;
+        }
+        if (e.key === 'ArrowRight') {
+            e.preventDefault();
+            goMonitorView('next');
+        }
+    });
+
+    monitorKeyboardNavAttached = true;
+}
+
 function initMonitorSwipes() {
     if (monitorSwipeHandlersAttached) return;
     const minDist = 80;
@@ -4591,7 +4633,7 @@ function buildUpsCardsHtml(data, options = {}) {
                 </div>
                 <p class="small text-muted text-center mb-0 mt-3">${escapeHtml(hostLine)}</p>
             </div>`;
-        return { html, rowClass: 'row g-2' };
+        return { html, rowClass };
     }
 
     const html = data.items.map((item) => {
@@ -6367,6 +6409,7 @@ async function loadSettings() {
         applyMonitorView(monitorCurrentView);
         applyMonitorTheme();
         initMonitorSwipes();
+        initMonitorKeyboardNavigation();
     }
     // Preferred language select in settings
     const langSelect = document.getElementById('settingsPreferredLanguageSelect');

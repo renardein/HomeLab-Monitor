@@ -16,8 +16,10 @@ router.get('/', checkAuth, async (req, res) => {
     
     try {
         const nodes = await proxmox.getNodes(req.token, req.serverUrl || null);
-        cache.set(cacheKey, nodes);
-        res.json(nodes);
+        const clusterStatus = await proxmox.getClusterStatus(req.token, req.serverUrl || null);
+        const orderedNodes = proxmox.sortRowsByClusterNodeOrder(nodes, clusterStatus);
+        cache.set(cacheKey, orderedNodes);
+        res.json(orderedNodes);
     } catch (error) {
         log('error', `Error fetching nodes: ${error.message}`);
         if (error?.response?.status) {

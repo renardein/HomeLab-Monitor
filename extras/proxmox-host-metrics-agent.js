@@ -154,10 +154,9 @@ async function getCpuSensors() {
 
 async function getInterfaces() {
     const root = '/sys/class/net';
-    const names = await fs.promises.readdir(root, { withFileTypes: true });
+    const names = await fs.promises.readdir(root);
     return names
-        .filter((d) => d && d.isDirectory && d.isDirectory())
-        .map((d) => d.name)
+        .map((name) => String(name || '').trim())
         .filter((name) => name && name !== 'lo')
         .sort((a, b) => a.localeCompare(b));
 }

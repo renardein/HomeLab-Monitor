@@ -729,7 +729,7 @@
             border-radius: 10px;
         }
         body.monitor-mode .display-6 {
-            font-size: inherit;
+            /* font-size: inherit; */
         }
         body.monitor-mode .table {
             font-size: inherit;

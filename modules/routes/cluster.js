@@ -21,6 +21,7 @@ router.get('/full', checkAuth, async (req, res) => {
         
         // Получаем статус кластера
         const clusterStatus = await proxmox.getClusterStatus(req.token, req.serverUrl || null);
+        const clusterNodeOrderMap = proxmox.buildClusterNodeOrderMap(clusterStatus);
         
         // Получаем ресурсы кластера
         const clusterResources = await proxmox.getClusterResources(req.token, req.serverUrl || null);
@@ -38,7 +39,7 @@ router.get('/full', checkAuth, async (req, res) => {
         };
         
         // Получаем детальную информацию по каждому узлу
-        const nodesDetails = await Promise.all(
+        const nodesDetailsRaw = await Promise.all(
             nodes.map(async (node) => {
                 const nodeName = node.node || node.name;
                 try {
@@ -62,6 +63,10 @@ router.get('/full', checkAuth, async (req, res) => {
                         memory: usedMem > 0 ? Math.round((usedMem / totalMem) * 100) : 0,
                         memoryUsed: usedMem,
                         memoryTotal: totalMem,
+                        nodeid: (() => {
+                            const n = clusterNodeOrderMap.get(nodeName);
+                            return Number.isFinite(n) ? n : null;
+                        })(),
                         uptime: status.uptime || 0,
                         maxCpu: cpuCount,
                         totalMemory: totalMem
@@ -76,11 +81,16 @@ router.get('/full', checkAuth, async (req, res) => {
                         memory: 0,
                         memoryUsed: 0,
                         memoryTotal: 0,
+                        nodeid: (() => {
+                            const n = clusterNodeOrderMap.get(nodeName);
+                            return Number.isFinite(n) ? n : null;
+                        })(),
                         uptime: 0
                     };
                 }
             })
         );
+        const nodesDetails = proxmox.sortRowsByClusterNodeOrder(nodesDetailsRaw, clusterStatus, (row) => row.name);
         
         // Считаем VM и контейнеры и формируем плоский список гостей
         const vms = [];
@@ -109,17 +119,20 @@ router.get('/full', checkAuth, async (req, res) => {
         const quorumNodes = clusterStatus.length > 0 
             ? clusterStatus.filter(item => item.type === 'node').map(item => ({
                 name: item.name,
+                nodeid: Number.isFinite(parseInt(item.nodeid, 10)) ? parseInt(item.nodeid, 10) : null,
                 online: nodesDetails.find(n => n.name === item.name)?.status === 'online',
                 votes: item.votes || 1
             }))
             : nodesDetails.map(n => ({
                 name: n.name,
+                nodeid: n.nodeid != null ? n.nodeid : null,
                 online: n.status === 'online',
                 votes: 1
             }));
+        const sortedQuorumNodes = proxmox.sortRowsByClusterNodeOrder(quorumNodes, clusterStatus, (row) => row.name);
         
-        const totalVotes = quorumNodes.reduce((sum, n) => sum + n.votes, 0);
-        const onlineVotes = quorumNodes.filter(n => n.online).reduce((sum, n) => sum + n.votes, 0);
+        const totalVotes = sortedQuorumNodes.reduce((sum, n) => sum + n.votes, 0);
+        const onlineVotes = sortedQuorumNodes.filter(n => n.online).reduce((sum, n) => sum + n.votes, 0);
         
         const result = {
             nodes: nodesDetails,
@@ -146,7 +159,7 @@ router.get('/full', checkAuth, async (req, res) => {
                 votes: onlineVotes,
                 expected: totalVotes,
                 quorum: Math.floor(totalVotes / 2) + 1,
-                nodes: quorumNodes
+                nodes: sortedQuorumNodes
             }
         };
         
