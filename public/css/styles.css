@@ -338,6 +338,39 @@
             color: inherit;
         }
 
+        .settings-about-markdown h1,
+        .settings-about-markdown h2,
+        .settings-about-markdown h3,
+        .settings-about-markdown h4,
+        .settings-about-markdown h5,
+        .settings-about-markdown h6 {
+            margin-top: 1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .settings-about-markdown h1:first-child,
+        .settings-about-markdown h2:first-child,
+        .settings-about-markdown h3:first-child,
+        .settings-about-markdown h4:first-child,
+        .settings-about-markdown h5:first-child,
+        .settings-about-markdown h6:first-child {
+            margin-top: 0;
+        }
+
+        .settings-about-markdown p,
+        .settings-about-markdown ul,
+        .settings-about-markdown ol,
+        .settings-about-markdown pre {
+            margin-bottom: 0.75rem;
+        }
+
+        .settings-about-markdown pre {
+            padding: 0.75rem;
+            border-radius: 0.5rem;
+            background: rgba(127, 127, 127, 0.12);
+            overflow-x: auto;
+        }
+
         @media (max-width: 575.98px) {
             .vm-card-layout {
                 align-items: flex-start;

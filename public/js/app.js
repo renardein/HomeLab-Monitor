@@ -223,6 +223,152 @@ function escapeHtml(s) {
     return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+function renderInlineMarkdown(text) {
+    const placeholders = [];
+    const withPlaceholders = String(text || '').replace(/`([^`]+)`/g, (_, code) => {
+        const token = `__MD_CODE_${placeholders.length}__`;
+        placeholders.push(`<code>${escapeHtml(code)}</code>`);
+        return token;
+    });
+
+    let html = escapeHtml(withPlaceholders)
+        .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_m, label, url) => `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(label)}</a>`)
+        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+        .replace(/__([^_]+)__/g, '<strong>$1</strong>')
+        .replace(/(^|[^\w])\*([^*]+)\*(?!\w)/g, '$1<em>$2</em>')
+        .replace(/(^|[^\w])_([^_]+)_(?!\w)/g, '$1<em>$2</em>');
+
+    placeholders.forEach((value, idx) => {
+        html = html.replace(`__MD_CODE_${idx}__`, value);
+    });
+
+    return html;
+}
+
+function renderMarkdownToHtml(markdown) {
+    const lines = String(markdown || '').replace(/\r\n/g, '\n').split('\n');
+    const blocks = [];
+    let paragraph = [];
+    let listItems = [];
+    let listType = null;
+    let inCodeBlock = false;
+    let codeLines = [];
+
+    const flushParagraph = () => {
+        if (!paragraph.length) return;
+        const text = paragraph.join(' ').trim();
+        if (text) blocks.push(`<p>${renderInlineMarkdown(text)}</p>`);
+        paragraph = [];
+    };
+
+    const flushList = () => {
+        if (!listItems.length || !listType) return;
+        blocks.push(`<${listType}>${listItems.map((item) => `<li>${renderInlineMarkdown(item)}</li>`).join('')}</${listType}>`);
+        listItems = [];
+        listType = null;
+    };
+
+    const flushCode = () => {
+        if (!inCodeBlock) return;
+        blocks.push(`<pre class="mb-3"><code>${escapeHtml(codeLines.join('\n'))}</code></pre>`);
+        codeLines = [];
+        inCodeBlock = false;
+    };
+
+    lines.forEach((line) => {
+        if (line.trim().startsWith('```')) {
+            flushParagraph();
+            flushList();
+            if (inCodeBlock) {
+                flushCode();
+            } else {
+                inCodeBlock = true;
+                codeLines = [];
+            }
+            return;
+        }
+
+        if (inCodeBlock) {
+            codeLines.push(line);
+            return;
+        }
+
+        const trimmed = line.trim();
+        if (!trimmed) {
+            flushParagraph();
+            flushList();
+            return;
+        }
+
+        const headingMatch = trimmed.match(/^(#{1,6})\s+(.*)$/);
+        if (headingMatch) {
+            flushParagraph();
+            flushList();
+            const level = headingMatch[1].length;
+            blocks.push(`<h${level}>${renderInlineMarkdown(headingMatch[2])}</h${level}>`);
+            return;
+        }
+
+        const unorderedMatch = trimmed.match(/^[-*+]\s+(.*)$/);
+        if (unorderedMatch) {
+            flushParagraph();
+            if (listType && listType !== 'ul') flushList();
+            listType = 'ul';
+            listItems.push(unorderedMatch[1]);
+            return;
+        }
+
+        const orderedMatch = trimmed.match(/^\d+\.\s+(.*)$/);
+        if (orderedMatch) {
+            flushParagraph();
+            if (listType && listType !== 'ol') flushList();
+            listType = 'ol';
+            listItems.push(orderedMatch[1]);
+            return;
+        }
+
+        if (trimmed === '---') {
+            flushParagraph();
+            flushList();
+            blocks.push('<hr>');
+            return;
+        }
+
+        flushList();
+        paragraph.push(trimmed);
+    });
+
+    flushParagraph();
+    flushList();
+    flushCode();
+
+    return blocks.join('');
+}
+
+async function loadAboutContent() {
+    const container = document.getElementById('settingsAboutContent');
+    if (!container) return;
+
+    container.innerHTML = `<div class="text-muted">${escapeHtml(t('settingsAboutLoading') || 'Loading...')}</div>`;
+
+    try {
+        const response = await fetch('/api/about');
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            const message = response.status === 404
+                ? (t('settingsAboutMissing') || 'about.md not found.')
+                : ((data && data.error) ? data.error : (t('errorLoadingData') || 'Failed to load data'));
+            container.innerHTML = `<div class="text-muted">${escapeHtml(message)}</div>`;
+            return;
+        }
+
+        const markdown = typeof data.markdown === 'string' ? data.markdown : '';
+        container.innerHTML = renderMarkdownToHtml(markdown);
+    } catch (error) {
+        container.innerHTML = `<div class="text-danger">${escapeHtml((error && error.message) ? error.message : String(error))}</div>`;
+    }
+}
+
 function normalizeVmIconName(value) {
     const icon = String(value || '').trim();
     if (!icon) return '';
@@ -1008,6 +1154,7 @@ function updateUILanguage() {
     setText('settingsNavThresholds', t('settingsNavThresholds'));
     setText('settingsNavServices', t('settingsNavServices'));
     setText('settingsNavDebug', t('settingsNavDebug'));
+    setText('settingsNavAbout', t('settingsNavAbout') || 'About');
     setText('settingsDebugTitle', t('settingsDebugTitle'));
     setText('settingsDebugHint', t('settingsDebugHint'));
     setText('settingsDebugServerTitle', t('settingsDebugServerTitle'));
@@ -1022,6 +1169,7 @@ function updateUILanguage() {
     setText('settingsNavSecurity', t('settingsNavSecurity'));
     setText('settingsSecurityTitle', t('settingsSecurityTitle'));
     setText('settingsSecurityHint', t('settingsSecurityHint'));
+    setText('settingsAboutTitle', t('settingsAboutTitle') || 'About');
     setText('settingsPasswordCurrentLabel', t('settingsPasswordCurrentLabel'));
     setText('settingsPasswordNewLabel', t('settingsPasswordNewLabel'));
     setText('settingsPasswordRepeatLabel', t('settingsPasswordRepeatLabel'));
@@ -1586,6 +1734,7 @@ async function ensureSettingsUnlocked() {
 async function loadSettingsPanelData() {
     delete htmlCache['settingsServicesBody'];
     delete htmlCache['settingsVmsBody'];
+    delete htmlCache['settingsAboutContent'];
     try {
         const servRes = await fetch('/api/settings/services');
         if (servRes.ok) {
@@ -1610,6 +1759,7 @@ async function loadSettingsPanelData() {
     await loadNetdevSettings();
     await ensureNetdevDisplaySlotsLoaded();
     await loadHostMetricsSettings();
+    await loadAboutContent();
     renderServerList();
 }
 
