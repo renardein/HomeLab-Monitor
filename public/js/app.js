@@ -43,14 +43,92 @@ let isRefreshing = false;
 const htmlCache = {}; // elementId -> last innerHTML string
 let monitoredServices = []; // [{ id, name, type: 'tcp'|'udp'|'http', host?, port?, url?, lastStatus, lastLatency }]
 let monitorHiddenServiceIds = []; // IDs of services to hide in monitor mode (empty = show all)
+let monitorServiceIcons = {}; // service id -> Iconify icon name
+let monitorServiceIconColors = {}; // service id -> CSS hex color
 let monitoredVmIds = []; // VMids that are in the "monitored" list (shown in settings table)
 let monitorHiddenVmIds = []; // Of those, VMids to hide in monitor mode (checkbox unchecked)
+let monitorVmIcons = {}; // vmid -> Iconify icon name
+let monitorVmIconColors = {}; // vmid -> CSS hex color
 let lastClusterData = null;   // for monitor view (Proxmox)
 let lastTrueNASData = null;   // { system, pools } for monitor view (TrueNAS)
 let lastHostMetricsData = null; // { configured, items } for Proxmox host metrics
-let hostMetricsSettings = { pollIntervalSec: 10, timeoutMs: 3000, cacheTtlSec: 8 };
+let hostMetricsSettings = { pollIntervalSec: 10, timeoutMs: 3000, cacheTtlSec: 8, criticalTempC: 85, criticalLinkSpeedMbps: 1000 };
 let hostMetricsConfigs = {}; // connectionId -> { nodes: { [node]: { enabled, agentUrl, cpuTempSensor, linkInterface } } }
 let hostMetricsDiscoveryItems = [];
+let activeIconPicker = { kind: null, targetId: null, scope: 'all' };
+
+const ICON_PICKER_ITEMS = [
+    { icon: 'simple-icons:ubuntu', label: 'Ubuntu', tags: ['linux', 'os', 'vm'] },
+    { icon: 'simple-icons:debian', label: 'Debian', tags: ['linux', 'os', 'vm'] },
+    { icon: 'simple-icons:archlinux', label: 'Arch Linux', tags: ['linux', 'os', 'vm'] },
+    { icon: 'simple-icons:fedora', label: 'Fedora', tags: ['linux', 'os', 'vm'] },
+    { icon: 'simple-icons:alpinelinux', label: 'Alpine Linux', tags: ['linux', 'os', 'vm', 'container'] },
+    { icon: 'simple-icons:centos', label: 'CentOS', tags: ['linux', 'os', 'vm'] },
+    { icon: 'simple-icons:redhat', label: 'Red Hat', tags: ['linux', 'os', 'vm'] },
+    { icon: 'simple-icons:opensuse', label: 'openSUSE', tags: ['linux', 'os', 'vm'] },
+    { icon: 'simple-icons:linux', label: 'Linux', tags: ['linux', 'os', 'vm', 'service'] },
+    { icon: 'simple-icons:windows', label: 'Windows', tags: ['windows', 'os', 'vm'] },
+    { icon: 'simple-icons:apple', label: 'Apple', tags: ['macos', 'os', 'vm'] },
+    { icon: 'simple-icons:docker', label: 'Docker', tags: ['container', 'service', 'vm'] },
+    { icon: 'simple-icons:kubernetes', label: 'Kubernetes', tags: ['container', 'service'] },
+    { icon: 'simple-icons:portainer', label: 'Portainer', tags: ['container', 'service'] },
+    { icon: 'simple-icons:proxmox', label: 'Proxmox', tags: ['virtualization', 'vm'] },
+    { icon: 'simple-icons:truenas', label: 'TrueNAS', tags: ['storage', 'nas', 'service', 'vm'] },
+    { icon: 'simple-icons:openmediavault', label: 'OpenMediaVault', tags: ['storage', 'nas', 'service', 'vm'] },
+    { icon: 'simple-icons:nginx', label: 'NGINX', tags: ['web', 'proxy', 'service'] },
+    { icon: 'simple-icons:apache', label: 'Apache', tags: ['web', 'service'] },
+    { icon: 'simple-icons:traefikproxy', label: 'Traefik', tags: ['proxy', 'service'] },
+    { icon: 'simple-icons:caddy', label: 'Caddy', tags: ['proxy', 'service'] },
+    { icon: 'simple-icons:cloudflare', label: 'Cloudflare', tags: ['dns', 'proxy', 'service'] },
+    { icon: 'simple-icons:wireguard', label: 'WireGuard', tags: ['vpn', 'network', 'service'] },
+    { icon: 'simple-icons:openvpn', label: 'OpenVPN', tags: ['vpn', 'network', 'service'] },
+    { icon: 'simple-icons:tailscale', label: 'Tailscale', tags: ['vpn', 'network', 'service'] },
+    { icon: 'simple-icons:postgresql', label: 'PostgreSQL', tags: ['database', 'service'] },
+    { icon: 'simple-icons:mysql', label: 'MySQL', tags: ['database', 'service'] },
+    { icon: 'simple-icons:mariadb', label: 'MariaDB', tags: ['database', 'service'] },
+    { icon: 'simple-icons:redis', label: 'Redis', tags: ['database', 'cache', 'service'] },
+    { icon: 'simple-icons:mongodb', label: 'MongoDB', tags: ['database', 'service'] },
+    { icon: 'simple-icons:elasticsearch', label: 'Elasticsearch', tags: ['database', 'service'] },
+    { icon: 'simple-icons:influxdb', label: 'InfluxDB', tags: ['database', 'metrics', 'service'] },
+    { icon: 'simple-icons:prometheus', label: 'Prometheus', tags: ['metrics', 'service'] },
+    { icon: 'simple-icons:grafana', label: 'Grafana', tags: ['metrics', 'service'] },
+    { icon: 'simple-icons:loki', label: 'Loki', tags: ['logs', 'service'] },
+    { icon: 'simple-icons:clickhouse', label: 'ClickHouse', tags: ['database', 'service'] },
+    { icon: 'simple-icons:rabbitmq', label: 'RabbitMQ', tags: ['queue', 'service'] },
+    { icon: 'simple-icons:apachekafka', label: 'Kafka', tags: ['queue', 'service'] },
+    { icon: 'simple-icons:gitlab', label: 'GitLab', tags: ['git', 'service'] },
+    { icon: 'simple-icons:github', label: 'GitHub', tags: ['git', 'service'] },
+    { icon: 'simple-icons:gitea', label: 'Gitea', tags: ['git', 'service'] },
+    { icon: 'simple-icons:jenkins', label: 'Jenkins', tags: ['ci', 'service'] },
+    { icon: 'simple-icons:ansible', label: 'Ansible', tags: ['automation', 'service'] },
+    { icon: 'simple-icons:terraform', label: 'Terraform', tags: ['automation', 'service'] },
+    { icon: 'simple-icons:node-dot-js', label: 'Node.js', tags: ['runtime', 'service', 'vm'] },
+    { icon: 'simple-icons:python', label: 'Python', tags: ['runtime', 'service', 'vm'] },
+    { icon: 'simple-icons:java', label: 'Java', tags: ['runtime', 'service', 'vm'] },
+    { icon: 'simple-icons:dotnet', label: '.NET', tags: ['runtime', 'service', 'vm'] },
+    { icon: 'simple-icons:php', label: 'PHP', tags: ['runtime', 'service', 'vm'] },
+    { icon: 'simple-icons:go', label: 'Go', tags: ['runtime', 'service', 'vm'] },
+    { icon: 'simple-icons:rust', label: 'Rust', tags: ['runtime', 'service', 'vm'] },
+    { icon: 'simple-icons:react', label: 'React', tags: ['frontend', 'service'] },
+    { icon: 'simple-icons:vuedotjs', label: 'Vue', tags: ['frontend', 'service'] },
+    { icon: 'simple-icons:angular', label: 'Angular', tags: ['frontend', 'service'] },
+    { icon: 'simple-icons:nextdotjs', label: 'Next.js', tags: ['frontend', 'service'] },
+    { icon: 'simple-icons:homeassistant', label: 'Home Assistant', tags: ['homelab', 'service'] },
+    { icon: 'simple-icons:plex', label: 'Plex', tags: ['media', 'service'] },
+    { icon: 'simple-icons:jellyfin', label: 'Jellyfin', tags: ['media', 'service'] },
+    { icon: 'simple-icons:adguard', label: 'AdGuard', tags: ['dns', 'service'] },
+    { icon: 'simple-icons:pihole', label: 'Pi-hole', tags: ['dns', 'service'] },
+    { icon: 'simple-icons:vaultwarden', label: 'Vaultwarden', tags: ['security', 'service'] },
+    { icon: 'simple-icons:bitwarden', label: 'Bitwarden', tags: ['security', 'service'] },
+    { icon: 'simple-icons:paperlessngx', label: 'Paperless-ngx', tags: ['docs', 'service'] },
+    { icon: 'simple-icons:immich', label: 'Immich', tags: ['photos', 'service'] },
+    { icon: 'mdi:virtual-machine', label: 'Virtual Machine', tags: ['vm', 'virtualization'] },
+    { icon: 'mdi:nas', label: 'NAS', tags: ['storage', 'nas', 'vm', 'service'] },
+    { icon: 'carbon:container-software', label: 'Container', tags: ['container', 'vm', 'service'] },
+    { icon: 'mdi:server-network', label: 'Network Service', tags: ['network', 'service'] },
+    { icon: 'mdi:web', label: 'Web Service', tags: ['web', 'service'] },
+    { icon: 'mdi:database', label: 'Database', tags: ['database', 'service'] }
+];
 
 function el(id) {
     return document.getElementById(id);
@@ -145,6 +223,195 @@ function escapeHtml(s) {
     return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+function normalizeVmIconName(value) {
+    const icon = String(value || '').trim();
+    if (!icon) return '';
+    return icon.slice(0, 128);
+}
+
+function normalizeMonitorVmIconsMap(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+    const out = {};
+    for (const [key, raw] of Object.entries(value)) {
+        const id = Number(key);
+        const icon = normalizeVmIconName(raw);
+        if (!Number.isNaN(id) && icon) out[String(id)] = icon;
+    }
+    return out;
+}
+
+function normalizeMonitorServiceIconsMap(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+    const out = {};
+    for (const [key, raw] of Object.entries(value)) {
+        const id = Number(key);
+        const icon = normalizeVmIconName(raw);
+        if (!Number.isNaN(id) && icon) out[String(id)] = icon;
+    }
+    return out;
+}
+
+function normalizeHexColor(value) {
+    const color = String(value || '').trim();
+    return /^#[0-9a-fA-F]{6}$/.test(color) ? color.toLowerCase() : '';
+}
+
+function normalizeMonitorServiceIconColorsMap(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+    const out = {};
+    for (const [key, raw] of Object.entries(value)) {
+        const id = Number(key);
+        const color = normalizeHexColor(raw);
+        if (!Number.isNaN(id) && color) out[String(id)] = color;
+    }
+    return out;
+}
+
+function normalizeMonitorVmIconColorsMap(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+    const out = {};
+    for (const [key, raw] of Object.entries(value)) {
+        const id = Number(key);
+        const color = normalizeHexColor(raw);
+        if (!Number.isNaN(id) && color) out[String(id)] = color;
+    }
+    return out;
+}
+
+function renderNamedIconHtml(iconName, fallbackClass, baseClass, extraClass = '', color = '') {
+    const className = [baseClass, extraClass].filter(Boolean).join(' ');
+    const styleAttr = color ? ` style="color:${escapeHtml(color)}"` : '';
+    if (iconName) {
+        return `<iconify-icon icon="${escapeHtml(iconName)}" class="${escapeHtml(className)}" aria-hidden="true"${styleAttr}></iconify-icon>`;
+    }
+    return `<i class="bi ${escapeHtml(fallbackClass)} ${escapeHtml(className)}" aria-hidden="true"${styleAttr}></i>`;
+}
+
+function getVmIconName(vm) {
+    const id = Number(vm && (vm.vmid != null ? vm.vmid : vm.id));
+    if (Number.isNaN(id)) return '';
+    return normalizeVmIconName(monitorVmIcons[String(id)] || monitorVmIcons[id] || '');
+}
+
+function getVmFallbackIconClass(vm) {
+    const type = String(vm && vm.type || 'vm').toLowerCase();
+    return type === 'lxc' || type === 'ct' ? 'bi-box-seam' : 'bi-pc-display';
+}
+
+function getVmIconColor(vm) {
+    const id = Number(vm && (vm.vmid != null ? vm.vmid : vm.id));
+    if (Number.isNaN(id)) return '';
+    return normalizeHexColor(monitorVmIconColors[String(id)] || monitorVmIconColors[id] || '');
+}
+
+function renderVmIconHtml(vm, extraClass = '') {
+    const iconName = getVmIconName(vm);
+    return renderNamedIconHtml(iconName, getVmFallbackIconClass(vm), 'vm-icon', extraClass, getVmIconColor(vm));
+}
+
+function getServiceIconName(service) {
+    const id = Number(service && service.id);
+    if (Number.isNaN(id)) return '';
+    return normalizeVmIconName(monitorServiceIcons[String(id)] || monitorServiceIcons[id] || '');
+}
+
+function getServiceIconColor(service) {
+    const id = Number(service && service.id);
+    if (Number.isNaN(id)) return '';
+    return normalizeHexColor(monitorServiceIconColors[String(id)] || monitorServiceIconColors[id] || '');
+}
+
+function getServiceFallbackIconClass(service) {
+    const type = String(service && service.type || 'tcp').toLowerCase();
+    if (type === 'http' || type === 'https') return 'bi-globe2';
+    if (type === 'udp') return 'bi-broadcast';
+    if (type === 'snmp') return 'bi-diagram-3';
+    if (type === 'nut') return 'bi-battery-half';
+    return 'bi-hdd-network';
+}
+
+function renderServiceIconHtml(service, extraClass = '') {
+    const iconName = getServiceIconName(service);
+    return renderNamedIconHtml(iconName, getServiceFallbackIconClass(service), 'service-icon', extraClass, getServiceIconColor(service));
+}
+
+function getIconPickerModalInstance() {
+    const modalEl = document.getElementById('iconPickerModal');
+    if (!modalEl || typeof bootstrap === 'undefined' || !bootstrap.Modal) return null;
+    return bootstrap.Modal.getOrCreateInstance(modalEl);
+}
+
+function getIconPickerItems() {
+    return ICON_PICKER_ITEMS.slice();
+}
+
+function renderIconPickerGrid() {
+    const grid = document.getElementById('iconPickerGrid');
+    const empty = document.getElementById('iconPickerEmpty');
+    const searchInput = document.getElementById('iconPickerSearchInput');
+    if (!grid || !empty) return;
+    const query = String(searchInput && searchInput.value || '').trim().toLowerCase();
+    const items = getIconPickerItems().filter((item) => {
+        if (!query) return true;
+        const haystack = [item.label, item.icon].concat(item.tags || []).join(' ').toLowerCase();
+        return haystack.includes(query);
+    });
+    grid.innerHTML = items.map((item) => `
+        <button type="button" class="btn btn-outline-secondary icon-picker-item" onclick="selectIconFromPicker('${escapeHtml(item.icon)}')" title="${escapeHtml(item.label)}">
+            <iconify-icon icon="${escapeHtml(item.icon)}" class="icon-picker-item__icon" aria-hidden="true"></iconify-icon>
+            <span class="icon-picker-item__label">${escapeHtml(item.label)}</span>
+            <code class="icon-picker-item__name">${escapeHtml(item.icon)}</code>
+        </button>
+    `).join('');
+    empty.classList.toggle('d-none', items.length > 0);
+}
+
+function openIconPicker(kind, targetId) {
+    activeIconPicker = {
+        kind: kind === 'service' ? 'service' : 'vm',
+        targetId: Number(targetId),
+        scope: 'all'
+    };
+    const title = document.getElementById('iconPickerModalTitle');
+    const help = document.getElementById('iconPickerHelpText');
+    const search = document.getElementById('iconPickerSearchInput');
+    const clearBtn = document.getElementById('iconPickerClearBtn');
+    if (title) title.textContent = activeIconPicker.kind === 'service'
+        ? (t('serviceIconPickerTitle') || 'Иконка сервиса')
+        : (t('vmIconPickerTitle') || 'Иконка VM/CT');
+    if (help) help.textContent = t('iconPickerHelp') || 'Выберите иконку из каталога ниже. При необходимости можно потом задать любое имя иконки Iconify.';
+    if (search) {
+        search.value = '';
+        search.placeholder = t('iconPickerSearchPlaceholder') || 'Поиск по названию или icon name';
+    }
+    if (clearBtn) clearBtn.textContent = t('clear') || 'Сбросить';
+    renderIconPickerGrid();
+    const modal = getIconPickerModalInstance();
+    if (modal) modal.show();
+}
+
+function selectIconFromPicker(iconName) {
+    const normalized = normalizeVmIconName(iconName);
+    if (!normalized) return;
+    if (activeIconPicker.kind === 'service') {
+        saveServiceIconSetting(activeIconPicker.targetId, normalized);
+    } else {
+        saveVmIconSetting(activeIconPicker.targetId, normalized);
+    }
+    const modal = getIconPickerModalInstance();
+    if (modal) modal.hide();
+}
+
+function clearActiveIconPickerSelection() {
+    if (activeIconPicker.kind === 'service') {
+        saveServiceIconSetting(activeIconPicker.targetId, '');
+    } else {
+        saveVmIconSetting(activeIconPicker.targetId, '');
+    }
+    const modal = getIconPickerModalInstance();
+    if (modal) modal.hide();
+}
+
 function setDisplay(id, display) {
     const e = el(id);
     if (e) e.style.display = display;
@@ -197,8 +464,12 @@ async function saveSettingsToServer(payload) {
     if (payload.connectionIdMap !== undefined) body.connectionIdMap = payload.connectionIdMap;
     if (payload.preferredLanguage !== undefined) body.preferredLanguage = payload.preferredLanguage;
     if (payload.monitorHiddenServiceIds !== undefined) body.monitorHiddenServiceIds = payload.monitorHiddenServiceIds;
+    if (payload.monitorServiceIcons !== undefined) body.monitorServiceIcons = payload.monitorServiceIcons;
+    if (payload.monitorServiceIconColors !== undefined) body.monitorServiceIconColors = payload.monitorServiceIconColors;
     if (payload.monitorHiddenVmIds !== undefined) body.monitorHiddenVmIds = payload.monitorHiddenVmIds;
     if (payload.monitorVms !== undefined) body.monitorVms = payload.monitorVms;
+    if (payload.monitorVmIcons !== undefined) body.monitorVmIcons = payload.monitorVmIcons;
+    if (payload.monitorVmIconColors !== undefined) body.monitorVmIconColors = payload.monitorVmIconColors;
     if (payload.monitorScreensOrder !== undefined) body.monitorScreensOrder = payload.monitorScreensOrder;
     if (payload.speedtestEnabled !== undefined) body.speedtestEnabled = !!payload.speedtestEnabled;
     if (payload.speedtestServer !== undefined) body.speedtestServer = payload.speedtestServer;
@@ -653,6 +924,7 @@ function updateUILanguage() {
     setText('settingsServicesTitle', t('settingsServicesTitle'));
     setText('settingsServicesHint', t('settingsServicesHint'));
     setText('servicesMonitorHint', t('servicesMonitorHint'));
+    setText('pingAllTextMonitor', t('pingAllText') || 'Проверить все');
     setText('settingsServiceNameLabel', t('serviceNameLabel'));
     setText('settingsServiceTypeLabel', t('serviceTypeLabel'));
     setText('settingsServiceHostLabel', t('serviceHostLabel'));
@@ -661,6 +933,7 @@ function updateUILanguage() {
     setText('settingsServiceNameHeader', t('serviceNameHeader'));
     setText('settingsServiceTypeHeader', t('serviceTypeHeader'));
     setText('settingsServiceTargetHeader', t('serviceTargetHeader'));
+    setText('settingsServiceIconHeader', t('settingsServiceIconHeader') || 'Иконка');
     setText('settingsServiceMonitorVisibleHeader', t('settingsServiceShowInMonitor'));
     setText('settingsServiceActionsHeader', t('serviceActionsHeader'));
     setText('settingsVmsTitle', t('settingsVmsTitle') || 'VM/CT для мониторинга');
@@ -674,6 +947,7 @@ function updateUILanguage() {
     setText('settingsVmTypeHeader', t('settingsVmTypeHeader') || 'Тип');
     setText('settingsVmNoteHeader', t('settingsVmNoteHeader') || 'Примечание');
     setText('settingsVmStatusHeader', t('settingsVmStatusHeader') || 'Статус');
+    setText('settingsVmIconHeader', t('settingsVmIconHeader') || 'Иконка');
     setText('settingsVmShowInMonitorHeader', t('settingsVmShowInMonitor') || 'В режиме монитора');
     setText('settingsVmActionsHeader', t('settingsVmActionsHeader') || 'Действия');
     setText('settingsNavImportExport', t('settingsNavImportExport') || 'Импорт / экспорт');
@@ -819,6 +1093,10 @@ function updateUILanguage() {
     setText('hostMetricsTimeoutHint', t('hostMetricsTimeoutHint'));
     setText('hostMetricsCacheTtlLabel', t('hostMetricsCacheTtlLabel'));
     setText('hostMetricsCacheTtlHint', t('hostMetricsCacheTtlHint'));
+    setText('hostMetricsCriticalTempLabel', t('hostMetricsCriticalTempLabel'));
+    setText('hostMetricsCriticalTempHint', t('hostMetricsCriticalTempHint'));
+    setText('hostMetricsCriticalLinkLabel', t('hostMetricsCriticalLinkLabel'));
+    setText('hostMetricsCriticalLinkHint', t('hostMetricsCriticalLinkHint'));
     setText('hostMetricsRefreshDiscoveryText', t('hostMetricsRefreshDiscoveryText'));
     setText('hostMetricsNodeHeader', t('tabNodes') || 'Узел');
     setText('hostMetricsEnabledHeader', t('hostMetricsEnabledHeader'));
@@ -2162,7 +2440,9 @@ function createDefaultHostMetricsSettings() {
     return {
         pollIntervalSec: 10,
         timeoutMs: 3000,
-        cacheTtlSec: 8
+        cacheTtlSec: 8,
+        criticalTempC: 85,
+        criticalLinkSpeedMbps: 1000
     };
 }
 
@@ -2181,10 +2461,14 @@ function normalizeHostMetricsSettingsClient(raw) {
     const poll = parseInt(src.pollIntervalSec, 10);
     const timeout = parseInt(src.timeoutMs, 10);
     const ttl = parseInt(src.cacheTtlSec, 10);
+    const critical = parseInt(src.criticalTempC, 10);
+    const criticalLink = parseInt(src.criticalLinkSpeedMbps, 10);
     return {
         pollIntervalSec: Number.isFinite(poll) ? Math.min(300, Math.max(5, poll)) : base.pollIntervalSec,
         timeoutMs: Number.isFinite(timeout) ? Math.min(30000, Math.max(500, timeout)) : base.timeoutMs,
-        cacheTtlSec: Number.isFinite(ttl) ? Math.min(300, Math.max(1, ttl)) : base.cacheTtlSec
+        cacheTtlSec: Number.isFinite(ttl) ? Math.min(300, Math.max(1, ttl)) : base.cacheTtlSec,
+        criticalTempC: Number.isFinite(critical) ? Math.min(120, Math.max(0, critical)) : base.criticalTempC,
+        criticalLinkSpeedMbps: Number.isFinite(criticalLink) ? Math.min(400000, Math.max(0, criticalLink)) : base.criticalLinkSpeedMbps
     };
 }
 
@@ -2310,6 +2594,8 @@ async function loadHostMetricsSettings() {
     const pollInput = document.getElementById('hostMetricsPollIntervalInput');
     const timeoutInput = document.getElementById('hostMetricsTimeoutInput');
     const ttlInput = document.getElementById('hostMetricsCacheTtlInput');
+    const criticalInput = document.getElementById('hostMetricsCriticalTempInput');
+    const criticalLinkInput = document.getElementById('hostMetricsCriticalLinkInput');
     try {
         const res = await fetch('/api/host-metrics/settings');
         const data = await res.json().catch(() => ({}));
@@ -2329,6 +2615,8 @@ async function loadHostMetricsSettings() {
     if (pollInput) pollInput.value = String(hostMetricsSettings.pollIntervalSec);
     if (timeoutInput) timeoutInput.value = String(hostMetricsSettings.timeoutMs);
     if (ttlInput) ttlInput.value = String(hostMetricsSettings.cacheTtlSec);
+    if (criticalInput) criticalInput.value = String(hostMetricsSettings.criticalTempC);
+    if (criticalLinkInput) criticalLinkInput.value = String(hostMetricsSettings.criticalLinkSpeedMbps);
 
     await refreshHostMetricsDiscovery({ silent: true });
 }
@@ -2370,6 +2658,8 @@ async function saveHostMetricsSettings() {
     const pollInput = document.getElementById('hostMetricsPollIntervalInput');
     const timeoutInput = document.getElementById('hostMetricsTimeoutInput');
     const ttlInput = document.getElementById('hostMetricsCacheTtlInput');
+    const criticalInput = document.getElementById('hostMetricsCriticalTempInput');
+    const criticalLinkInput = document.getElementById('hostMetricsCriticalLinkInput');
     const rows = document.querySelectorAll('#hostMetricsSettingsBody tr[data-host-metrics-node]');
     const nodes = {};
 
@@ -2390,7 +2680,9 @@ async function saveHostMetricsSettings() {
     const nextSettings = normalizeHostMetricsSettingsClient({
         pollIntervalSec: pollInput ? pollInput.value : hostMetricsSettings.pollIntervalSec,
         timeoutMs: timeoutInput ? timeoutInput.value : hostMetricsSettings.timeoutMs,
-        cacheTtlSec: ttlInput ? ttlInput.value : hostMetricsSettings.cacheTtlSec
+        cacheTtlSec: ttlInput ? ttlInput.value : hostMetricsSettings.cacheTtlSec,
+        criticalTempC: criticalInput ? criticalInput.value : hostMetricsSettings.criticalTempC,
+        criticalLinkSpeedMbps: criticalLinkInput ? criticalLinkInput.value : hostMetricsSettings.criticalLinkSpeedMbps
     });
 
     try {
@@ -2412,6 +2704,8 @@ async function saveHostMetricsSettings() {
         if (pollInput) pollInput.value = String(hostMetricsSettings.pollIntervalSec);
         if (timeoutInput) timeoutInput.value = String(hostMetricsSettings.timeoutMs);
         if (ttlInput) ttlInput.value = String(hostMetricsSettings.cacheTtlSec);
+        if (criticalInput) criticalInput.value = String(hostMetricsSettings.criticalTempC);
+        if (criticalLinkInput) criticalLinkInput.value = String(hostMetricsSettings.criticalLinkSpeedMbps);
 
         showToast(t('toastHostMetricsSaved') || 'Настройки метрик хостов сохранены', 'success');
         await refreshHostMetricsDiscovery({ silent: true });
@@ -2443,15 +2737,52 @@ function formatHostMetricsSpeed(link) {
     return '—';
 }
 
+function getHostMetricsAlerts(metric, settings = null) {
+    const cfg = normalizeHostMetricsSettingsClient(settings || hostMetricsSettings);
+    const alerts = [];
+    const tempThreshold = Number(cfg.criticalTempC);
+    const temp = Number(metric && metric.cpu && metric.cpu.tempC);
+    if (Number.isFinite(tempThreshold) && tempThreshold > 0 && Number.isFinite(temp) && temp >= tempThreshold) {
+        alerts.push({
+            kind: 'cpu',
+            message: (t('hostMetricsCriticalWarning') || 'Температура CPU превысила порог {temp}°C').replace('{temp}', String(cfg.criticalTempC))
+        });
+    }
+
+    const linkThreshold = Number(cfg.criticalLinkSpeedMbps);
+    const linkSpeed = Number(metric && metric.link && metric.link.speedMbps);
+    const linkState = String(metric && metric.link && metric.link.state || '').toLowerCase();
+    if (Number.isFinite(linkThreshold) && linkThreshold > 0) {
+        if (linkState === 'down') {
+            alerts.push({
+                kind: 'link',
+                message: (t('hostMetricsCriticalLinkDown') || 'Линк down при минимальном пороге {speed} Mbps').replace('{speed}', String(cfg.criticalLinkSpeedMbps))
+            });
+        } else if (Number.isFinite(linkSpeed) && linkSpeed > 0 && linkSpeed < linkThreshold) {
+            alerts.push({
+                kind: 'link',
+                message: (t('hostMetricsCriticalLinkWarning') || 'Скорость линка ниже порога {speed} Mbps').replace('{speed}', String(cfg.criticalLinkSpeedMbps))
+            });
+        }
+    }
+    return alerts;
+}
+
 function formatHostMetricsNodeExtras(metric) {
     if (!metric) return '';
+    const settings = normalizeHostMetricsSettingsClient((lastHostMetricsData && lastHostMetricsData.settings) || hostMetricsSettings);
     const cpuText = formatHostMetricsTemp(metric.cpu && metric.cpu.tempC);
     const linkText = formatHostMetricsSpeed(metric.link);
     const stateText = metric.link && metric.link.state && metric.link.state !== 'unknown'
         ? `<div class="small text-muted">${escapeHtml(metric.link.state)}</div>`
         : '';
+    const alerts = getHostMetricsAlerts(metric, settings);
+    const hasCpuCritical = alerts.some((item) => item.kind === 'cpu');
+    const hasLinkCritical = alerts.some((item) => item.kind === 'link');
     let extraStatus = '';
-    if (metric.stale) {
+    if (alerts.length) {
+        extraStatus = alerts.map((item) => `<div class="col-12 mt-2"><small class="text-danger fw-semibold"><i class="bi bi-exclamation-triangle-fill me-1"></i>${escapeHtml(item.message)}</small></div>`).join('');
+    } else if (metric.stale) {
         extraStatus = `<div class="col-12 mt-2"><small class="text-warning">${escapeHtml(t('hostMetricsStale') || 'Данные устарели')}</small></div>`;
     } else if (metric.error) {
         extraStatus = `<div class="col-12 mt-2"><small class="text-danger">${escapeHtml(metric.error)}</small></div>`;
@@ -2459,11 +2790,11 @@ function formatHostMetricsNodeExtras(metric) {
     return `
         <div class="col-6 mt-2">
             <small class="text-muted">${escapeHtml(t('hostMetricsCpuTempLabel') || 'CPU temp')}</small>
-            <div class="fw-bold">${escapeHtml(cpuText)}</div>
+            <div class="fw-bold${hasCpuCritical ? ' text-danger' : ''}">${escapeHtml(cpuText)}</div>
         </div>
         <div class="col-6 mt-2">
             <small class="text-muted">${escapeHtml(t('hostMetricsLinkSpeedLabel') || 'Link speed')}</small>
-            <div class="fw-bold">${escapeHtml(linkText)}</div>
+            <div class="fw-bold${hasLinkCritical ? ' text-danger' : ''}">${escapeHtml(linkText)}</div>
             ${stateText}
         </div>
         ${extraStatus}
@@ -4624,14 +4955,18 @@ function buildUpsCardsHtml(data, options = {}) {
 
         const html = `
             <div class="${upsColClass}">
-                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3 pb-3 border-bottom">
-                    <div class="fw-semibold fs-5 text-truncate" title="${escapeHtml(name)}">${escapeHtml(name)}</div>
-                    <span class="badge ${badgeClass}">${escapeHtml(statusLabel)}</span>
+                <div class="card h-100">
+                    <div class="card-body p-3">
+                        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3 pb-3 border-bottom">
+                            <div class="fw-semibold fs-5 text-truncate" title="${escapeHtml(name)}">${escapeHtml(name)}</div>
+                            <span class="badge ${badgeClass}">${escapeHtml(statusLabel)}</span>
+                        </div>
+                        <div class="row g-2">
+                            ${tilesHtml}
+                        </div>
+                        <p class="small text-muted text-center mb-0 mt-3">${escapeHtml(hostLine)}</p>
+                    </div>
                 </div>
-                <div class="row g-2">
-                    ${tilesHtml}
-                </div>
-                <p class="small text-muted text-center mb-0 mt-3">${escapeHtml(hostLine)}</p>
             </div>`;
         return { html, rowClass };
     }
@@ -5024,10 +5359,11 @@ function renderMonitorServicesList() {
         const typeLabel = (s.type || 'tcp').toUpperCase();
         const target = getServiceTargetDisplay(s);
         const latency = typeof s.lastLatency === 'number' ? `${s.lastLatency} ms` : '—';
+        const iconHtml = renderServiceIconHtml(s, 'service-monitor-icon');
         return `
             <div class="monitor-view__card">
                 <div class="d-flex justify-content-between align-items-center mb-1">
-                    <span class="fw-semibold text-truncate" title="${escapeHtml(name)}">${escapeHtml(name)}</span>
+                    <span class="fw-semibold text-truncate d-inline-flex align-items-center gap-2" title="${escapeHtml(name)}">${iconHtml}<span class="text-truncate">${escapeHtml(name)}</span></span>
                     <span class="badge ${statusClass}" title="${escapeHtml(statusLabel)}">${escapeHtml(statusLabel)}</span>
                 </div>
                 <div class="small mb-1">
@@ -5058,10 +5394,11 @@ function renderMonitorVmsList() {
         const statusClass = getVmStatusBadgeClass(status);
         const statusLabel = getVmStatusLabel(status);
         const note = vm.node ? (vm.node + (vm.vmid != null ? ` / ${vm.vmid}` : '')) : (vm.note || '');
+        const iconHtml = renderVmIconHtml(vm, 'vm-monitor-icon');
         return `
             <div class="monitor-view__card">
                 <div class="d-flex justify-content-between align-items-center mb-1">
-                    <span class="fw-semibold text-truncate" title="${escapeHtml(vm.name || '')}">${escapeHtml(vm.name || '')}</span>
+                    <span class="fw-semibold text-truncate d-inline-flex align-items-center gap-2" title="${escapeHtml(vm.name || '')}">${iconHtml}<span class="text-truncate">${escapeHtml(vm.name || '')}</span></span>
                     <span class="badge ${statusClass}" title="${escapeHtml(statusLabel)}">${escapeHtml(statusLabel)}</span>
                 </div>
                 <div class="small mb-1">
@@ -5089,16 +5426,22 @@ function renderVmsMonitorCards() {
         const statusClass = getVmStatusBadgeClass(status);
         const statusLabel = getVmStatusLabel(status);
         const note = vm.node ? (vm.node + (vm.vmid != null ? ` / ${vm.vmid}` : '')) : (vm.note || '');
+        const iconHtml = renderVmIconHtml(vm, 'vm-card-icon');
         return `
             <div class="col-md-4 col-lg-3 mb-3">
-                <div class="node-card h-100">
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <h6 class="mb-0">${escapeHtml(vm.name || '')}</h6>
-                        <span class="badge ${statusClass}" title="${escapeHtml(statusLabel)}">${escapeHtml(statusLabel)}</span>
+                <div class="node-card vm-card-layout">
+                    <div class="vm-card-layout__icon">
+                        ${iconHtml}
                     </div>
-                    <div class="mb-1">
-                        <span class="badge bg-secondary me-1">${escapeHtml(typeLabel)}</span>
-                        <span class="small text-muted" title="${escapeHtml(note || '')}">${escapeHtml(note || '')}</span>
+                    <div class="vm-card-layout__info">
+                        <h6 class="mb-1 text-truncate" title="${escapeHtml(vm.name || '')}">${escapeHtml(vm.name || '')}</h6>
+                        <div class="mb-1">
+                            <span class="badge bg-secondary me-1">${escapeHtml(typeLabel)}</span>
+                        </div>
+                        <div class="small text-muted text-truncate" title="${escapeHtml(note || '')}">${escapeHtml(note || '')}</div>
+                    </div>
+                    <div class="vm-card-layout__status">
+                        <span class="badge ${statusClass}" title="${escapeHtml(statusLabel)}">${escapeHtml(statusLabel)}</span>
                     </div>
                 </div>
             </div>
@@ -5150,6 +5493,7 @@ function updateDashboard(clusterData, storageData, backupsData, hostMetricsData 
             ? hostMetricsData.items.map((item) => [item.node, item])
             : []
     );
+    const hostMetricsRenderSettings = normalizeHostMetricsSettingsClient(hostMetricsData && hostMetricsData.settings);
     const totalNodes = clusterData.nodes.length;
     const onlineNodes = clusterData.nodes.filter(n => n.status === 'online').length;
     
@@ -5191,11 +5535,15 @@ function updateDashboard(clusterData, storageData, backupsData, hostMetricsData 
     if (nodesContainer) {
         const nodesHtml = clusterData.nodes.map(node => {
         const hostMetric = hostMetricsMap.get(node.name) || null;
+        const hostMetricAlerts = getHostMetricsAlerts(hostMetric, hostMetricsRenderSettings);
+        const hostMetricWarning = hostMetricAlerts.length
+            ? `<span class="badge bg-warning text-dark ms-2" title="${escapeHtml(hostMetricAlerts.map((item) => item.message).join(' | ') || (t('hostMetricsCriticalNodeTitle') || 'Есть предупреждение по метрикам узла'))}"><i class="bi bi-exclamation-triangle-fill"></i></span>`
+            : '';
         return `
             <div class="col-md-6 col-lg-3">
                 <div class="node-card">
                     <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h5 class="mb-0">${node.name}</h5>
+                        <h5 class="mb-0 d-inline-flex align-items-center">${node.name}${hostMetricWarning}</h5>
                         <span class="badge ${node.status === 'online' ? 'bg-success' : 'bg-danger'}">
                             ${node.status === 'online' ? t('nodeOnline') : t('nodeOffline')}
                         </span>
@@ -5626,19 +5974,25 @@ function renderMonitoredServices() {
         const latency = typeof s.lastLatency === 'number' ? `${s.lastLatency} ms` : '—';
         const typeLabel = (s.type || 'tcp').toUpperCase();
         const target = getServiceTargetDisplay(s);
+        const iconHtml = renderServiceIconHtml(s, 'service-card-icon');
         return `
             <div class="col-md-4 col-lg-3 mb-3">
-                <div class="node-card">
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <h6 class="mb-0">${escapeHtml(s.name || target)}</h6>
+                <div class="node-card service-card-layout">
+                    <div class="service-card-layout__icon">
+                        ${iconHtml}
+                    </div>
+                    <div class="service-card-layout__info">
+                        <h6 class="mb-1 text-truncate" title="${escapeHtml(s.name || target)}">${escapeHtml(s.name || target)}</h6>
+                        <div class="mb-1">
+                            <span class="badge bg-secondary me-1">${escapeHtml(typeLabel)}</span>
+                            <code class="small">${escapeHtml(target)}</code>
+                        </div>
+                        <div class="small text-muted">
+                            ${t('serviceLatencyHeader') || 'Задержка'}: ${latency}
+                        </div>
+                    </div>
+                    <div class="service-card-layout__status">
                         ${statusBadge}
-                    </div>
-                    <div class="mb-1">
-                        <span class="badge bg-secondary me-1">${escapeHtml(typeLabel)}</span>
-                        <code class="small">${escapeHtml(target)}</code>
-                    </div>
-                    <div class="small text-muted">
-                        ${t('serviceLatencyHeader') || 'Задержка'}: ${latency}
                     </div>
                 </div>
             </div>
@@ -5656,11 +6010,35 @@ function renderSettingsMonitoredServices() {
         const target = getServiceTargetDisplay(s);
         const id = s.id != null ? s.id : 0;
         const showInMonitor = !monitorHiddenServiceIds.includes(Number(id));
+        const iconName = getServiceIconName(s);
+        const iconColor = getServiceIconColor(s) || '#667eea';
+        const pickerTitle = t('iconPickerChoose') || 'Выбрать иконку';
+        const clearTitle = t('clear') || 'Сбросить';
+        const colorTitle = t('settingsServiceIconColorLabel') || 'Цвет иконки';
         return `
             <tr>
-                <td>${escapeHtml(s.name || target)}</td>
+                <td>
+                    <div class="d-flex align-items-center gap-2">
+                        ${renderServiceIconHtml(s, 'service-settings-icon')}
+                        <span>${escapeHtml(s.name || target)}</span>
+                    </div>
+                </td>
                 <td><span class="badge bg-secondary">${escapeHtml(typeLabel)}</span></td>
                 <td><code>${escapeHtml(target)}</code></td>
+                <td style="min-width: 230px;">
+                    <div class="icon-setting-control">
+                        <button type="button" class="btn btn-sm btn-outline-secondary icon-picker-trigger" onclick="openIconPicker('service', ${id})" title="${escapeHtml(pickerTitle)}">
+                            ${renderServiceIconHtml(s, 'service-settings-icon')}
+                        </button>
+                        <div class="icon-setting-control__meta">
+                            <div class="small text-truncate">${iconName ? escapeHtml(iconName) : (t('iconPickerNotSelected') || 'Не выбрано')}</div>
+                        </div>
+                        <input type="color" class="form-control form-control-color icon-color-input" value="${escapeHtml(iconColor)}" title="${escapeHtml(colorTitle)}" onchange="saveServiceIconColorSetting(${id}, this.value)">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="saveServiceIconSetting(${id}, '')" title="${escapeHtml(clearTitle)}">
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                    </div>
+                </td>
                 <td class="text-center align-middle">
                     <input type="checkbox" class="form-check-input" id="monitorVisible_${id}" ${showInMonitor ? 'checked' : ''}
                            onchange="toggleMonitorVisible(${id})" title="${t('settingsServiceShowInMonitor') || 'Показывать в режиме монитора'}">
@@ -5674,6 +6052,34 @@ function renderSettingsMonitoredServices() {
         `;
     }).join('');
     setHTMLIfChanged('settingsServicesBody', rows || '');
+}
+
+function saveServiceIconSetting(serviceId, rawValue) {
+    const id = Number(serviceId);
+    if (Number.isNaN(id)) return;
+    const icon = normalizeVmIconName(rawValue);
+    const current = normalizeVmIconName(monitorServiceIcons[String(id)] || '');
+    if (icon === current) return;
+    if (icon) monitorServiceIcons[String(id)] = icon;
+    else delete monitorServiceIcons[String(id)];
+    saveSettingsToServer({ monitorServiceIcons });
+    renderMonitoredServices();
+    renderSettingsMonitoredServices();
+    renderMonitorServicesList();
+}
+
+function saveServiceIconColorSetting(serviceId, rawValue) {
+    const id = Number(serviceId);
+    if (Number.isNaN(id)) return;
+    const color = normalizeHexColor(rawValue);
+    const current = normalizeHexColor(monitorServiceIconColors[String(id)] || '');
+    if (color === current) return;
+    if (color) monitorServiceIconColors[String(id)] = color;
+    else delete monitorServiceIconColors[String(id)];
+    saveSettingsToServer({ monitorServiceIconColors });
+    renderMonitoredServices();
+    renderSettingsMonitoredServices();
+    renderMonitorServicesList();
 }
 
 function toggleMonitorVisible(serviceId) {
@@ -5782,12 +6188,36 @@ function renderSettingsMonitoredVms() {
         const note = vm.node ? (vm.node + (vm.vmid != null ? ` / ${vm.vmid}` : '')) : (vm.note || '');
         const statusClass = getVmStatusBadgeClass(status);
         const showInMonitorTitle = t('settingsVmShowInMonitor') || 'Показывать в режиме монитора';
+        const iconValue = getVmIconName(vm);
+        const iconColor = getVmIconColor(vm) || '#667eea';
+        const pickerTitle = t('iconPickerChoose') || 'Выбрать иконку';
+        const clearTitle = t('clear') || 'Сбросить';
+        const colorTitle = t('settingsVmIconColorLabel') || 'Цвет иконки';
         return `
             <tr>
-                <td>${escapeHtml(vm.name || '')}</td>
+                <td>
+                    <div class="d-flex align-items-center gap-2">
+                        ${renderVmIconHtml(vm, 'vm-settings-icon')}
+                        <span>${escapeHtml(vm.name || '')}</span>
+                    </div>
+                </td>
                 <td><span class="badge bg-secondary">${escapeHtml(typeLabel)}</span></td>
                 <td><span class="badge ${statusClass}">${escapeHtml(getVmStatusLabel(status))}</span></td>
                 <td>${note ? `<span class="text-muted small">${escapeHtml(note)}</span>` : '&mdash;'}</td>
+                <td style="min-width: 230px;">
+                    <div class="icon-setting-control">
+                        <button type="button" class="btn btn-sm btn-outline-secondary icon-picker-trigger" onclick="openIconPicker('vm', ${id})" title="${escapeHtml(pickerTitle)}">
+                            ${renderVmIconHtml(vm, 'vm-settings-icon')}
+                        </button>
+                        <div class="icon-setting-control__meta">
+                            <div class="small text-truncate">${iconValue ? escapeHtml(iconValue) : (t('iconPickerNotSelected') || 'Не выбрано')}</div>
+                        </div>
+                        <input type="color" class="form-control form-control-color icon-color-input" value="${escapeHtml(iconColor)}" title="${escapeHtml(colorTitle)}" onchange="saveVmIconColorSetting(${id}, this.value)">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="saveVmIconSetting(${id}, '')" title="${escapeHtml(clearTitle)}">
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                    </div>
+                </td>
                 <td class="text-center align-middle">
                     <input type="checkbox" class="form-check-input" id="monitorVmVisible_${id}" ${showInMonitor ? 'checked' : ''}
                            onchange="toggleMonitorVmVisible(${id})" title="${escapeHtml(showInMonitorTitle)}">
@@ -5815,13 +6245,44 @@ function toggleMonitorVmVisible(vmId) {
     renderMonitorVmsList();
 }
 
+function saveVmIconSetting(vmId, rawValue) {
+    const id = Number(vmId);
+    if (Number.isNaN(id)) return;
+    const icon = normalizeVmIconName(rawValue);
+    const current = normalizeVmIconName(monitorVmIcons[String(id)] || '');
+    if (icon === current) return;
+    if (icon) monitorVmIcons[String(id)] = icon;
+    else delete monitorVmIcons[String(id)];
+    saveSettingsToServer({ monitorVmIcons });
+    renderSettingsMonitoredVms();
+    renderMonitorVmsList();
+    renderVmsMonitorCards();
+}
+
+function saveVmIconColorSetting(vmId, rawValue) {
+    const id = Number(vmId);
+    if (Number.isNaN(id)) return;
+    const color = normalizeHexColor(rawValue);
+    const current = normalizeHexColor(monitorVmIconColors[String(id)] || '');
+    if (color === current) return;
+    if (color) monitorVmIconColors[String(id)] = color;
+    else delete monitorVmIconColors[String(id)];
+    saveSettingsToServer({ monitorVmIconColors });
+    renderSettingsMonitoredVms();
+    renderMonitorVmsList();
+    renderVmsMonitorCards();
+}
+
 function removeMonitoredVm(vmId) {
     const id = Number(vmId);
     monitoredVmIds = monitoredVmIds.filter(x => x !== id);
     monitorHiddenVmIds = monitorHiddenVmIds.filter(x => x !== id);
-    saveSettingsToServer({ monitorVms: monitoredVmIds, monitorHiddenVmIds });
+    delete monitorVmIcons[String(id)];
+    delete monitorVmIconColors[String(id)];
+    saveSettingsToServer({ monitorVms: monitoredVmIds, monitorHiddenVmIds, monitorVmIcons, monitorVmIconColors });
     renderSettingsMonitoredVms();
     renderMonitorVmsList();
+    renderVmsMonitorCards();
     if (lastClusterData) {
         const visible = (lastClusterData.vms || []).filter(vm => monitoredVmIds.includes(Number(vm.vmid)) && !monitorHiddenVmIds.includes(Number(vm.vmid)));
         const wrap = document.getElementById('monitoredVmsDashboardWrap');
@@ -5906,7 +6367,11 @@ async function exportServicesOnly() {
             throw new Error(data.error || `HTTP ${resp.status}`);
         }
         const json = await resp.json();
-        const only = { services: json.services || [] };
+        const only = {
+            services: json.services || [],
+            monitor_service_icons: normalizeMonitorServiceIconsMap(json.monitor_service_icons),
+            monitor_service_icon_colors: normalizeMonitorServiceIconColorsMap(json.monitor_service_icon_colors)
+        };
         const blob = new Blob([JSON.stringify(only, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -5939,20 +6404,33 @@ async function handleImportServicesFile(event) {
             return;
         }
         try {
+            const body = {};
+            if (Array.isArray(parsed.services)) body.services = parsed.services;
+            else if (Array.isArray(parsed)) body.services = parsed;
+            if (parsed.monitor_service_icons && typeof parsed.monitor_service_icons === 'object' && !Array.isArray(parsed.monitor_service_icons)) {
+                body.monitor_service_icons = normalizeMonitorServiceIconsMap(parsed.monitor_service_icons);
+            }
+            if (parsed.monitor_service_icon_colors && typeof parsed.monitor_service_icon_colors === 'object' && !Array.isArray(parsed.monitor_service_icon_colors)) {
+                body.monitor_service_icon_colors = normalizeMonitorServiceIconColorsMap(parsed.monitor_service_icon_colors);
+            }
             const resp = await fetch('/api/settings/import/services', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ services: parsed.services || parsed })
+                body: JSON.stringify(body)
             });
             const data = await resp.json().catch(() => ({}));
             if (!resp.ok || data.success === false) {
                 throw new Error(data.error || `HTTP ${resp.status}`);
             }
             showToast(t('settingsImportSuccess') || 'Настройки импортированы, данные обновлены', 'success');
+            const settingsData = await fetch('/api/settings').then(r => r.json()).catch(() => ({}));
             const servicesData = await fetch('/api/settings/services').then(r => r.json()).catch(() => ({ services: [] }));
             monitoredServices = Array.isArray(servicesData.services) ? servicesData.services : [];
+            monitorServiceIcons = normalizeMonitorServiceIconsMap(settingsData.monitor_service_icons);
+            monitorServiceIconColors = normalizeMonitorServiceIconColorsMap(settingsData.monitor_service_icon_colors);
             renderMonitoredServices();
             renderSettingsMonitoredServices();
+            renderMonitorServicesList();
         } catch (err) {
             showToast((t('settingsImportError') || t('errorUpdate')) + ': ' + err.message, 'error');
         } finally {
@@ -5972,7 +6450,9 @@ async function exportVmsOnly() {
         const json = await resp.json();
         const only = {
             monitor_vms: Array.isArray(json.monitor_vms) ? json.monitor_vms : [],
-            monitor_hidden_vm_ids: Array.isArray(json.monitor_hidden_vm_ids) ? json.monitor_hidden_vm_ids : []
+            monitor_hidden_vm_ids: Array.isArray(json.monitor_hidden_vm_ids) ? json.monitor_hidden_vm_ids : [],
+            monitor_vm_icons: normalizeMonitorVmIconsMap(json.monitor_vm_icons),
+            monitor_vm_icon_colors: normalizeMonitorVmIconColorsMap(json.monitor_vm_icon_colors)
         };
         const blob = new Blob([JSON.stringify(only, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
@@ -6008,8 +6488,14 @@ async function handleImportVmsFile(event) {
         const body = {};
         if (Array.isArray(parsed.monitor_vms)) body.monitor_vms = parsed.monitor_vms;
         if (Array.isArray(parsed.monitor_hidden_vm_ids)) body.monitor_hidden_vm_ids = parsed.monitor_hidden_vm_ids;
-        if (!body.monitor_vms && !body.monitor_hidden_vm_ids) {
-            showToast(t('settingsImportError') || 'В файле нет monitor_vms или monitor_hidden_vm_ids', 'error');
+        if (parsed.monitor_vm_icons && typeof parsed.monitor_vm_icons === 'object' && !Array.isArray(parsed.monitor_vm_icons)) {
+            body.monitor_vm_icons = normalizeMonitorVmIconsMap(parsed.monitor_vm_icons);
+        }
+        if (parsed.monitor_vm_icon_colors && typeof parsed.monitor_vm_icon_colors === 'object' && !Array.isArray(parsed.monitor_vm_icon_colors)) {
+            body.monitor_vm_icon_colors = normalizeMonitorVmIconColorsMap(parsed.monitor_vm_icon_colors);
+        }
+        if (!body.monitor_vms && !body.monitor_hidden_vm_ids && !body.monitor_vm_icons && !body.monitor_vm_icon_colors) {
+            showToast(t('settingsImportError') || 'В файле нет monitor_vms, monitor_hidden_vm_ids, monitor_vm_icons или monitor_vm_icon_colors', 'error');
             event.target.value = '';
             return;
         }
@@ -6027,6 +6513,7 @@ async function handleImportVmsFile(event) {
             await loadSettings();
             renderSettingsMonitoredVms();
             renderMonitorVmsList();
+            renderVmsMonitorCards();
         } catch (err) {
             showToast((t('settingsImportError') || t('errorUpdate')) + ': ' + err.message, 'error');
         } finally {
@@ -6179,7 +6666,9 @@ async function removeMonitoredService(id) {
         }
         monitoredServices = monitoredServices.filter(s => s.id !== id);
         monitorHiddenServiceIds = monitorHiddenServiceIds.filter(x => x !== Number(id));
-        saveSettingsToServer({ monitorHiddenServiceIds: monitorHiddenServiceIds });
+        delete monitorServiceIcons[String(id)];
+        delete monitorServiceIconColors[String(id)];
+        saveSettingsToServer({ monitorHiddenServiceIds: monitorHiddenServiceIds, monitorServiceIcons, monitorServiceIconColors });
         renderMonitoredServices();
         renderSettingsMonitoredServices();
         renderMonitorServicesList();
@@ -6350,6 +6839,8 @@ async function loadSettings() {
         }
     }
     monitoredServices = Array.isArray(servicesData.services) ? servicesData.services : [];
+    monitorServiceIcons = normalizeMonitorServiceIconsMap(data.monitor_service_icons);
+    monitorServiceIconColors = normalizeMonitorServiceIconColorsMap(data.monitor_service_icon_colors);
     monitoredVmIds = [];
     if (Array.isArray(data.monitor_vms) && data.monitor_vms.length) {
         data.monitor_vms.forEach(x => {
@@ -6357,6 +6848,8 @@ async function loadSettings() {
             if (id != null) monitoredVmIds.push(Number(id));
         });
     }
+    monitorVmIcons = normalizeMonitorVmIconsMap(data.monitor_vm_icons);
+    monitorVmIconColors = normalizeMonitorVmIconColorsMap(data.monitor_vm_icon_colors);
     if (data.current_server_index != null) currentServerIndex = parseInt(data.current_server_index, 10) || 0;
     if (data.current_truenas_index != null) currentTrueNASServerIndex = parseInt(data.current_truenas_index, 10) || 0;
     if (data.server_type) currentServerType = data.server_type === 'truenas' ? 'truenas' : 'proxmox';

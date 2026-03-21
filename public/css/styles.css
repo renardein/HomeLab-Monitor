@@ -165,6 +165,197 @@
             color: #e2e8f0;
         }
 
+        .vm-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1;
+            flex: 0 0 auto;
+        }
+
+        .service-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1;
+            flex: 0 0 auto;
+        }
+
+        .vm-settings-icon {
+            width: 1.1rem;
+            height: 1.1rem;
+            font-size: 1.1rem;
+        }
+
+        .vm-monitor-icon {
+            width: 1.25rem;
+            height: 1.25rem;
+            font-size: 1.25rem;
+        }
+
+        .service-monitor-icon {
+            width: 1.25rem;
+            height: 1.25rem;
+            font-size: 1.25rem;
+        }
+
+        .vm-card-icon {
+            width: 2.4rem;
+            height: 2.4rem;
+            font-size: 2.4rem;
+        }
+
+        .service-settings-icon {
+            width: 1.1rem;
+            height: 1.1rem;
+            font-size: 1.1rem;
+        }
+
+        .service-card-icon {
+            width: 2.1rem;
+            height: 2.1rem;
+            font-size: 2.1rem;
+        }
+
+        .vm-card-layout {
+            display: flex;
+            align-items: center;
+            gap: 0.9rem;
+        }
+
+        .vm-card-layout__icon {
+            flex: 0 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 3rem;
+        }
+
+        .vm-card-layout__info {
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+
+        .vm-card-layout__status {
+            flex: 0 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            min-width: 90px;
+        }
+
+        .vm-card-layout__info .badge {
+            vertical-align: middle;
+        }
+
+        .service-card-layout {
+            display: flex;
+            align-items: center;
+            gap: 0.9rem;
+        }
+
+        .service-card-layout__icon {
+            flex: 0 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 2.8rem;
+        }
+
+        .service-card-layout__info {
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+
+        .service-card-layout__status {
+            flex: 0 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            min-width: 96px;
+        }
+
+        .icon-setting-control {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .icon-color-input {
+            width: 2.4rem;
+            min-width: 2.4rem;
+            padding: 0.15rem;
+            border-radius: 0.4rem;
+            cursor: pointer;
+        }
+
+        .icon-setting-control__meta {
+            min-width: 0;
+            flex: 1 1 auto;
+        }
+
+        .icon-picker-trigger {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 2rem;
+            min-height: 2rem;
+        }
+
+        .icon-picker-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+            gap: 0.75rem;
+            max-height: 430px;
+            overflow-y: auto;
+        }
+
+        .icon-picker-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.85rem 0.6rem;
+            text-align: center;
+        }
+
+        .icon-picker-item__icon {
+            width: 2rem;
+            height: 2rem;
+            font-size: 2rem;
+        }
+
+        .icon-picker-item__label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            line-height: 1.2;
+        }
+
+        .icon-picker-item__name {
+            font-size: 0.72rem;
+            white-space: normal;
+            word-break: break-word;
+            color: inherit;
+        }
+
+        @media (max-width: 575.98px) {
+            .vm-card-layout {
+                align-items: flex-start;
+            }
+
+            .vm-card-layout__status {
+                min-width: auto;
+            }
+
+            .service-card-layout {
+                align-items: flex-start;
+            }
+
+            .service-card-layout__status {
+                min-width: auto;
+            }
+        }
+
         /* Карточки мониторинга сервисов: более явные и без растяжки по высоте */
         body #servicesMonitorSection #servicesCards .node-card {
             height: auto !important;
@@ -847,21 +1038,12 @@
 
         /* Экран бэкапов: весь viewport под тулбар, без скролла */
         body.monitor-mode #backupsMonitorSection.monitor-backups-screen {
-            position: fixed;
-            top: 52px;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            z-index: 1020;
-            margin: 0 !important;
-            padding: 6px 8px 8px;
             display: flex;
             flex-direction: column;
-            overflow: hidden;
-            background: var(--bs-body-bg, #fff);
+            background: transparent;
         }
         body.monitor-mode.monitor-theme-dark #backupsMonitorSection.monitor-backups-screen {
-            background: #0d1117;
+            background: transparent;
         }
         body.monitor-mode .monitor-backups-main-card {
             flex: 1;
@@ -870,11 +1052,8 @@
             flex-direction: column;
             overflow: hidden;
         }
-        body.monitor-mode .monitor-backups-main-card > .card-header {
-            flex-shrink: 0;
-        }
         /* Иначе колонки узлов схлопываются в 0px — таблицы не видны */
-        body.monitor-mode .monitor-backups-main-card > .card-body.monitor-backups-body {
+        body.monitor-mode .monitor-backups-main-card > .monitor-backups-body {
             flex: 1 1 0 !important;
             min-height: 0 !important;
             display: flex !important;
@@ -1050,12 +1229,8 @@
             padding: 0.5rem;
         }
 
-        /* Полноэкранные окна монитора: нет внешних отступов и “пустых” зон */
-        body.monitor-mode #servicesMonitorSection,
-        body.monitor-mode #vmsMonitorSection,
-        body.monitor-mode #upsMonitorSection,
-        body.monitor-mode #netdevMonitorSection,
-        body.monitor-mode #speedtestMonitorSection {
+        /* Полноэкранные окна монитора: общий shell в стиле экрана Cluster */
+        body.monitor-mode .monitor-screen {
             position: fixed;
             top: 52px;
             left: 0;
@@ -1063,38 +1238,93 @@
             bottom: 0;
             z-index: 1020;
             margin: 0 !important;
-            padding: 6px 8px 8px;
+            padding: 0.75rem 1rem 1rem;
             overflow: hidden;
         }
 
-        body.monitor-mode #servicesMonitorSection .card,
-        body.monitor-mode #vmsMonitorSection .card,
-        body.monitor-mode #upsMonitorSection .card,
-        body.monitor-mode #netdevMonitorSection .card,
-        body.monitor-mode #speedtestMonitorSection .card {
+        body.monitor-mode .monitor-screen__backrow {
+            display: none !important;
+        }
+
+        body.monitor-mode .monitor-screen__layout {
             height: 100%;
             min-height: 0;
-            overflow: hidden;
-            margin-bottom: 0;
             display: flex;
             flex-direction: column;
+            gap: 0.75rem;
         }
 
-        /* В monitor-mode заголовок в верхней панели уже есть, поэтому убираем дублирующий card-header. */
-        body.monitor-mode #vmsMonitorSection .card-header {
+        body.monitor-mode .monitor-screen__panel {
+            flex: 1 1 auto;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        body.monitor-mode .monitor-screen__panel-title {
             display: none;
         }
 
-        body.monitor-mode #servicesMonitorSection .card-body,
-        body.monitor-mode #vmsMonitorSection .card-body,
-        body.monitor-mode #upsMonitorSection .card-body,
-        body.monitor-mode #netdevMonitorSection .card-body,
-        body.monitor-mode #speedtestMonitorSection .card-body {
+        body.monitor-mode .monitor-screen__panel-body {
             flex: 1 1 auto;
             min-height: 0;
             overflow: hidden;
             display: flex;
             flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        body.monitor-mode .monitor-screen__stats {
+            margin-bottom: 0;
+        }
+
+        body.monitor-mode .monitor-screen__meta-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 0.75rem;
+        }
+
+        body.monitor-mode .monitor-screen__meta-card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 10px;
+            border: 1px solid rgba(226, 232, 240, 1);
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05);
+            padding: 0.85rem 1rem;
+        }
+
+        body.monitor-mode .monitor-screen__meta-label {
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            opacity: 0.8;
+            margin-bottom: 0.3rem;
+        }
+
+        body.monitor-mode .monitor-screen__meta-value {
+            font-size: 1.1rem;
+            font-weight: 700;
+            line-height: 1.35;
+        }
+
+        body.monitor-mode .monitor-screen__meta-extra {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 10px;
+            border: 1px solid rgba(226, 232, 240, 1);
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05);
+            padding: 0.75rem 1rem;
+        }
+
+        body.monitor-mode .monitor-screen__header-action {
+            border-color: rgba(255, 255, 255, 0.55);
+            color: #fff;
+        }
+
+        body.monitor-mode .monitor-screen__header-action:hover,
+        body.monitor-mode .monitor-screen__header-action:focus {
+            background: rgba(255, 255, 255, 0.16);
+            color: #fff;
+            border-color: rgba(255, 255, 255, 0.85);
         }
 
         body.monitor-mode #upsMonitorCards,
@@ -1103,8 +1333,9 @@
         body.monitor-mode #vmsMonitorCards {
             flex: 1 1 auto;
             min-height: 0;
-            overflow: hidden;
+            overflow: auto;
             height: 100%;
+            align-content: flex-start;
         }
 
         /* Режим монитора: один экран без скролла, под 1920×1200 */
@@ -1364,6 +1595,14 @@
         body.monitor-mode:not(.monitor-theme-dark) .card-header {
             background: linear-gradient(135deg, #edf2f7 0%, #e2e8f0 100%);
             color: #2d3748;
+        }
+
+        body.monitor-mode.monitor-theme-dark .monitor-screen__meta-card,
+        body.monitor-mode.monitor-theme-dark .monitor-screen__meta-extra {
+            background: #16213e;
+            color: #e2e8f0;
+            border-color: #2d3748;
+            box-shadow: none;
         }
         body.monitor-mode:not(.monitor-theme-dark) .node-card {
             background: #fff;

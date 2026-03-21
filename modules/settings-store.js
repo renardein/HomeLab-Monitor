@@ -207,10 +207,67 @@ function parseHiddenVmIdsFromStored(raw) {
     }
 }
 
+function parseIconMapFromStored(raw) {
+    if (!raw) return {};
+    try {
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+        const out = {};
+        for (const [key, value] of Object.entries(parsed)) {
+            const id = Number(key);
+            const icon = value != null ? String(value).trim() : '';
+            if (!Number.isNaN(id) && icon) out[String(id)] = icon;
+        }
+        return out;
+    } catch {
+        return {};
+    }
+}
+
+function parseColorMapFromStored(raw) {
+    if (!raw) return {};
+    try {
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+        const out = {};
+        for (const [key, value] of Object.entries(parsed)) {
+            const id = Number(key);
+            const color = value != null ? String(value).trim() : '';
+            if (!Number.isNaN(id) && /^#[0-9a-fA-F]{6}$/.test(color)) out[String(id)] = color.toLowerCase();
+        }
+        return out;
+    } catch {
+        return {};
+    }
+}
+
+function getMonitoredServicesExport() {
+    return {
+        services: listMonitoredServices(),
+        monitor_service_icons: parseIconMapFromStored(getSetting('monitor_service_icons')),
+        monitor_service_icon_colors: parseColorMapFromStored(getSetting('monitor_service_icon_colors'))
+    };
+}
+
+function importMonitoredServicesConfig(payload) {
+    if (!payload || typeof payload !== 'object') return;
+    if (Array.isArray(payload.services)) {
+        importSettingsAndServices({ services: payload.services });
+    }
+    if (payload.monitor_service_icons && typeof payload.monitor_service_icons === 'object' && !Array.isArray(payload.monitor_service_icons)) {
+        setSetting('monitor_service_icons', JSON.stringify(parseIconMapFromStored(JSON.stringify(payload.monitor_service_icons))));
+    }
+    if (payload.monitor_service_icon_colors && typeof payload.monitor_service_icon_colors === 'object' && !Array.isArray(payload.monitor_service_icon_colors)) {
+        setSetting('monitor_service_icon_colors', JSON.stringify(parseColorMapFromStored(JSON.stringify(payload.monitor_service_icon_colors))));
+    }
+}
+
 function getMonitoredVmsExport() {
     return {
         monitor_vms: parseMonitorVmsFromStored(getSetting('monitor_vms')),
-        monitor_hidden_vm_ids: parseHiddenVmIdsFromStored(getSetting('monitor_hidden_vm_ids'))
+        monitor_hidden_vm_ids: parseHiddenVmIdsFromStored(getSetting('monitor_hidden_vm_ids')),
+        monitor_vm_icons: parseIconMapFromStored(getSetting('monitor_vm_icons')),
+        monitor_vm_icon_colors: parseColorMapFromStored(getSetting('monitor_vm_icon_colors'))
     };
 }
 
@@ -229,6 +286,18 @@ function importMonitoredVmsConfig(payload) {
             JSON.stringify(payload.monitor_hidden_vm_ids.map(Number).filter(n => !Number.isNaN(n)))
         );
     }
+    if (payload.monitor_vm_icons && typeof payload.monitor_vm_icons === 'object' && !Array.isArray(payload.monitor_vm_icons)) {
+        const out = {};
+        for (const [key, value] of Object.entries(payload.monitor_vm_icons)) {
+            const id = Number(key);
+            const icon = value != null ? String(value).trim() : '';
+            if (!Number.isNaN(id) && icon) out[String(id)] = icon;
+        }
+        setSetting('monitor_vm_icons', JSON.stringify(out));
+    }
+    if (payload.monitor_vm_icon_colors && typeof payload.monitor_vm_icon_colors === 'object' && !Array.isArray(payload.monitor_vm_icon_colors)) {
+        setSetting('monitor_vm_icon_colors', JSON.stringify(parseColorMapFromStored(JSON.stringify(payload.monitor_vm_icon_colors))));
+    }
 }
 
 module.exports = {
@@ -246,6 +315,8 @@ module.exports = {
     updateMonitoredServiceStatus,
     exportSettingsAndServices,
     importSettingsAndServices,
+    getMonitoredServicesExport,
+    importMonitoredServicesConfig,
     getMonitoredVmsExport,
     importMonitoredVmsConfig
 };

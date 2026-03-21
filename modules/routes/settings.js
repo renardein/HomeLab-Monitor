@@ -25,8 +25,12 @@ const SETTING_KEYS = [
     'snmp_oid_power', 'snmp_oid_load', 'snmp_oid_frequency',
     // monitor-mode specific
     'monitor_hidden_service_ids',
+    'monitor_service_icons',
+    'monitor_service_icon_colors',
     'monitor_vms',
     'monitor_hidden_vm_ids',
+    'monitor_vm_icons',
+    'monitor_vm_icon_colors',
     'monitor_screens_order',
     // Speedtest (Ookla CLI)
     'speedtest_enabled',
@@ -49,8 +53,12 @@ router.get('/', (req, res) => {
                     key === 'custom_theme_css' ||
                     key === 'custom_theme_style_settings' ||
                     key === 'monitor_hidden_service_ids' ||
+                    key === 'monitor_service_icons' ||
+                    key === 'monitor_service_icon_colors' ||
                     key === 'monitor_vms' ||
                     key === 'monitor_hidden_vm_ids' ||
+                    key === 'monitor_vm_icons' ||
+                    key === 'monitor_vm_icon_colors' ||
                     key === 'monitor_screens_order'
                 ) {
                     try {
@@ -99,8 +107,12 @@ router.post('/', (req, res) => {
             custom_theme_css: body.custom_theme_css ?? body.customThemeCss,
             custom_theme_style_settings: body.custom_theme_style_settings ?? body.customThemeStyleSettings,
             monitor_hidden_service_ids: body.monitor_hidden_service_ids ?? body.monitorHiddenServiceIds,
+            monitor_service_icons: body.monitor_service_icons ?? body.monitorServiceIcons,
+            monitor_service_icon_colors: body.monitor_service_icon_colors ?? body.monitorServiceIconColors,
             monitor_vms: body.monitor_vms ?? body.monitorVms,
             monitor_hidden_vm_ids: body.monitor_hidden_vm_ids ?? body.monitorHiddenVmIds,
+            monitor_vm_icons: body.monitor_vm_icons ?? body.monitorVmIcons,
+            monitor_vm_icon_colors: body.monitor_vm_icon_colors ?? body.monitorVmIconColors,
             monitor_screens_order: body.monitor_screens_order ?? body.monitorScreensOrder,
             speedtest_enabled: (() => {
                 const v = body.speedtest_enabled ?? body.speedtestEnabled;
@@ -269,21 +281,23 @@ router.delete('/services/:id', (req, res) => {
 // GET /api/settings/export/services — только сервисы мониторинга
 router.get('/export/services', (req, res) => {
     try {
-        const list = store.listMonitoredServices();
-        res.json({ services: list });
+        res.json(store.getMonitoredServicesExport());
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
 });
 
-// POST /api/settings/import/services — только сервисы мониторинга
+// POST /api/settings/import/services — только сервисы мониторинга и их иконки
 router.post('/import/services', (req, res) => {
     try {
         const payload = req.body;
-        if (!payload || typeof payload !== 'object' || !Array.isArray(payload.services)) {
+        const hasServices = !!(payload && typeof payload === 'object' && Array.isArray(payload.services));
+        const hasIcons = !!(payload && typeof payload === 'object' && payload.monitor_service_icons && typeof payload.monitor_service_icons === 'object' && !Array.isArray(payload.monitor_service_icons));
+        const hasColors = !!(payload && typeof payload === 'object' && payload.monitor_service_icon_colors && typeof payload.monitor_service_icon_colors === 'object' && !Array.isArray(payload.monitor_service_icon_colors));
+        if (!hasServices && !hasIcons && !hasColors) {
             return res.status(400).json({ success: false, error: 'invalid_payload' });
         }
-        store.importSettingsAndServices({ services: payload.services });
+        store.importMonitoredServicesConfig(payload);
         res.json({ success: true });
     } catch (e) {
         res.status(500).json({ success: false, error: e.message });
@@ -299,7 +313,7 @@ router.get('/export/vms', (req, res) => {
     }
 });
 
-// POST /api/settings/import/vms — только списки VM/CT (поля-массивы перезаписываются)
+// POST /api/settings/import/vms — только списки VM/CT и их иконки
 router.post('/import/vms', (req, res) => {
     try {
         const payload = req.body;
@@ -308,7 +322,9 @@ router.post('/import/vms', (req, res) => {
         }
         const hasMv = Array.isArray(payload.monitor_vms);
         const hasHidden = Array.isArray(payload.monitor_hidden_vm_ids);
-        if (!hasMv && !hasHidden) {
+        const hasIcons = !!(payload.monitor_vm_icons && typeof payload.monitor_vm_icons === 'object' && !Array.isArray(payload.monitor_vm_icons));
+        const hasColors = !!(payload.monitor_vm_icon_colors && typeof payload.monitor_vm_icon_colors === 'object' && !Array.isArray(payload.monitor_vm_icon_colors));
+        if (!hasMv && !hasHidden && !hasIcons && !hasColors) {
             return res.status(400).json({ success: false, error: 'invalid_payload' });
         }
         store.importMonitoredVmsConfig(payload);

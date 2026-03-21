@@ -17,6 +17,8 @@ const DEFAULT_AGENT_URL_PATH = '/host-metrics';
 const DEFAULT_POLL_INTERVAL_SEC = 10;
 const DEFAULT_TIMEOUT_MS = 3000;
 const DEFAULT_CACHE_TTL_SEC = 8;
+const DEFAULT_CRITICAL_TEMP_C = 85;
+const DEFAULT_CRITICAL_LINK_SPEED_MBPS = 1000;
 
 const runtimeCache = new Map();
 
@@ -43,7 +45,9 @@ function normalizeSettings(raw) {
     return {
         pollIntervalSec: clampInt(s.pollIntervalSec, 5, 300, DEFAULT_POLL_INTERVAL_SEC),
         timeoutMs: clampInt(s.timeoutMs, 500, 30000, DEFAULT_TIMEOUT_MS),
-        cacheTtlSec: clampInt(s.cacheTtlSec, 1, 300, DEFAULT_CACHE_TTL_SEC)
+        cacheTtlSec: clampInt(s.cacheTtlSec, 1, 300, DEFAULT_CACHE_TTL_SEC),
+        criticalTempC: clampInt(s.criticalTempC, 0, 120, DEFAULT_CRITICAL_TEMP_C),
+        criticalLinkSpeedMbps: clampInt(s.criticalLinkSpeedMbps, 0, 400000, DEFAULT_CRITICAL_LINK_SPEED_MBPS)
     };
 }
 
@@ -168,6 +172,40 @@ function uniqueStrings(arr) {
     return out;
 }
 
+function parseLinkSpeedMbps(raw) {
+    if (raw == null || raw === '') return null;
+    if (Number.isFinite(Number(raw))) return Number(raw);
+
+    const text = safeString(raw).trim().toLowerCase().replace(/,/g, '.');
+    if (!text) return null;
+    if (['unknown', 'n/a', 'na', 'none', 'down', 'auto', '-1'].includes(text)) return null;
+
+    const match = text.match(/(\d+(?:\.\d+)?)/);
+    if (!match) return null;
+
+    const value = Number(match[1]);
+    if (!Number.isFinite(value) || value < 0) return null;
+
+    const rest = text.slice((match.index || 0) + match[0].length).trim();
+    const normalizedRest = rest.replace(/[\s_-]+/g, '');
+
+    // Common Ethernet-style notation, e.g. 10Gbase-T / 1000baseX.
+    if (normalizedRest.startsWith('gbase')) return value * 1000;
+    if (normalizedRest.startsWith('mbase') || normalizedRest.startsWith('base')) return value;
+    if (normalizedRest.startsWith('kbase')) return value / 1000;
+    if (normalizedRest.startsWith('tbase')) return value * 1000 * 1000;
+
+    // Broad unit support: Mbps, Mb/s, Mbit/s, Gbps, Gbit/sec, 2.5G, etc.
+    const firstChar = normalizedRest.charAt(0);
+    if (firstChar === 't') return value * 1000 * 1000;
+    if (firstChar === 'g') return value * 1000;
+    if (firstChar === 'm') return value;
+    if (firstChar === 'k') return value / 1000;
+
+    // If there is no recognizable unit after the number, assume the source already uses Mbps.
+    return value;
+}
+
 function parseDiscoveryPayload(data) {
     const cpuSensors = uniqueStrings(
         data.cpuSensors ||
@@ -198,7 +236,7 @@ function parseCurrentPayload(data, cfg) {
         data.link?.speedMbps ??
         data.network?.linkSpeedMbps ??
         null;
-    const linkSpeedMbps = Number.isFinite(Number(linkSpeedRaw)) ? Number(linkSpeedRaw) : null;
+    const linkSpeedMbps = parseLinkSpeedMbps(linkSpeedRaw);
     const linkState = safeString(
         data.linkState ??
         data.link?.state ??
@@ -425,6 +463,7 @@ router.get('/current', checkAuth, async (req, res) => {
 
         res.json({
             configured: true,
+            settings,
             items,
             updatedAt: new Date().toISOString()
         });
