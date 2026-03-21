@@ -47,6 +47,10 @@ let monitoredVmIds = []; // VMids that are in the "monitored" list (shown in set
 let monitorHiddenVmIds = []; // Of those, VMids to hide in monitor mode (checkbox unchecked)
 let lastClusterData = null;   // for monitor view (Proxmox)
 let lastTrueNASData = null;   // { system, pools } for monitor view (TrueNAS)
+let lastHostMetricsData = null; // { configured, items } for Proxmox host metrics
+let hostMetricsSettings = { pollIntervalSec: 10, timeoutMs: 3000, cacheTtlSec: 8 };
+let hostMetricsConfigs = {}; // connectionId -> { nodes: { [node]: { enabled, agentUrl, cpuTempSensor, linkInterface } } }
+let hostMetricsDiscoveryItems = [];
 
 function el(id) {
     return document.getElementById(id);
@@ -584,6 +588,7 @@ function updateUILanguage() {
         menuSpeedtestMonitorText: 'monitorScreenSpeedtest',
         settingsNavUps: 'settingsNavUps',
         settingsNavNetdevices: 'settingsNavNetdevices',
+        settingsNavHostMetrics: 'settingsNavHostMetrics',
         settingsNavSpeedtest: 'settingsNavSpeedtest'
     };
     
@@ -806,6 +811,22 @@ function updateUILanguage() {
     setText('netdevShowOnDashboardLabel', t('netdevShowOnDashboardLabel'));
     setText('netdevShowOnMonitorLabel', t('netdevShowOnMonitorLabel'));
     setText('netdevSaveButtonText', t('netdevSaveButton'));
+    setText('hostMetricsSettingsTitle', t('hostMetricsSettingsTitle'));
+    setText('hostMetricsSettingsHint', t('hostMetricsSettingsHint'));
+    setText('hostMetricsPollIntervalLabel', t('hostMetricsPollIntervalLabel'));
+    setText('hostMetricsPollIntervalHint', t('hostMetricsPollIntervalHint'));
+    setText('hostMetricsTimeoutLabel', t('hostMetricsTimeoutLabel'));
+    setText('hostMetricsTimeoutHint', t('hostMetricsTimeoutHint'));
+    setText('hostMetricsCacheTtlLabel', t('hostMetricsCacheTtlLabel'));
+    setText('hostMetricsCacheTtlHint', t('hostMetricsCacheTtlHint'));
+    setText('hostMetricsRefreshDiscoveryText', t('hostMetricsRefreshDiscoveryText'));
+    setText('hostMetricsNodeHeader', t('tabNodes') || 'Узел');
+    setText('hostMetricsEnabledHeader', t('hostMetricsEnabledHeader'));
+    setText('hostMetricsAgentUrlHeader', t('hostMetricsAgentUrlHeader'));
+    setText('hostMetricsCpuSensorHeader', t('hostMetricsCpuSensorHeader'));
+    setText('hostMetricsInterfaceHeader', t('hostMetricsInterfaceHeader'));
+    setText('hostMetricsDiscoveryHeader', t('hostMetricsDiscoveryHeader'));
+    setText('hostMetricsSaveButtonText', t('hostMetricsSaveButtonText'));
 
     setText('speedtestSettingsTitle', t('speedtestSettingsTitle'));
     setText('speedtestSettingsHint', t('speedtestSettingsHint'));
@@ -1009,6 +1030,17 @@ function connectionKey(type, url) {
 function getCurrentConnectionId() {
     const url = getCurrentServerUrl();
     return connectionIdMap[connectionKey(currentServerType, url)] || null;
+}
+
+function getCurrentProxmoxHeaders() {
+    if (currentServerType !== 'proxmox') return null;
+    const connId = getCurrentConnectionId();
+    if (connId) return { 'X-Connection-Id': connId };
+    if (!apiToken) return null;
+    return {
+        'Authorization': apiToken,
+        'X-Server-Url': getCurrentServerUrl()
+    };
 }
 
 function saveConnectionId(type, url, id) {
@@ -1299,6 +1331,7 @@ async function loadSettingsPanelData() {
     await ensureUpsDisplaySlotsLoaded();
     await loadNetdevSettings();
     await ensureNetdevDisplaySlotsLoaded();
+    await loadHostMetricsSettings();
     renderServerList();
 }
 
@@ -2123,6 +2156,320 @@ async function saveNetdevSettings() {
     }
 }
 
+// ==================== PROXMOX HOST METRICS ====================
+
+function createDefaultHostMetricsSettings() {
+    return {
+        pollIntervalSec: 10,
+        timeoutMs: 3000,
+        cacheTtlSec: 8
+    };
+}
+
+function createDefaultHostMetricsNodeConfig(nodeName = '') {
+    return {
+        enabled: false,
+        agentUrl: nodeName ? `http://${nodeName}:9105/host-metrics` : '',
+        cpuTempSensor: '',
+        linkInterface: ''
+    };
+}
+
+function normalizeHostMetricsSettingsClient(raw) {
+    const src = raw && typeof raw === 'object' ? raw : {};
+    const base = createDefaultHostMetricsSettings();
+    const poll = parseInt(src.pollIntervalSec, 10);
+    const timeout = parseInt(src.timeoutMs, 10);
+    const ttl = parseInt(src.cacheTtlSec, 10);
+    return {
+        pollIntervalSec: Number.isFinite(poll) ? Math.min(300, Math.max(5, poll)) : base.pollIntervalSec,
+        timeoutMs: Number.isFinite(timeout) ? Math.min(30000, Math.max(500, timeout)) : base.timeoutMs,
+        cacheTtlSec: Number.isFinite(ttl) ? Math.min(300, Math.max(1, ttl)) : base.cacheTtlSec
+    };
+}
+
+function normalizeHostMetricsNodeConfigClient(raw, nodeName = '') {
+    const src = raw && typeof raw === 'object' ? raw : {};
+    const base = createDefaultHostMetricsNodeConfig(nodeName);
+    return {
+        enabled: src.enabled === true || src.enabled === '1' || src.enabled === 1 || src.enabled === 'true',
+        agentUrl: String(src.agentUrl != null ? src.agentUrl : base.agentUrl).trim(),
+        cpuTempSensor: String(src.cpuTempSensor || '').trim(),
+        linkInterface: String(src.linkInterface || '').trim()
+    };
+}
+
+function hostMetricsDomIdPart(s) {
+    return encodeURIComponent(String(s || '')).replace(/%/g, '_');
+}
+
+function getCurrentHostMetricsConnectionConfig() {
+    const connId = getCurrentConnectionId();
+    const cfg = connId && hostMetricsConfigs && hostMetricsConfigs[connId] && hostMetricsConfigs[connId].nodes
+        ? hostMetricsConfigs[connId].nodes
+        : {};
+    return { connectionId: connId, nodes: cfg || {} };
+}
+
+function getHostMetricsNodeConfigForRow(nodeName, item) {
+    const { nodes } = getCurrentHostMetricsConnectionConfig();
+    return normalizeHostMetricsNodeConfigClient(nodes && nodes[nodeName], nodeName || item?.node || '');
+}
+
+function hostMetricsDiscoveryStatusHtml(item) {
+    if (!item) return `<span class="badge bg-secondary">${escapeHtml(t('statusDash') || '—')}</span>`;
+    if (item.error) {
+        return `
+            <span class="badge bg-danger-subtle text-danger-emphasis border">${escapeHtml(t('hostMetricsDiscoveryError') || 'Ошибка')}</span>
+            <div class="small text-muted mt-1">${escapeHtml(item.error)}</div>
+        `;
+    }
+    const sensorsCount = Array.isArray(item.cpuSensors) ? item.cpuSensors.length : 0;
+    const ifaceCount = Array.isArray(item.interfaces) ? item.interfaces.length : 0;
+    return `
+        <span class="badge bg-success-subtle text-success-emphasis border">${escapeHtml(t('statusOkShort') || 'OK')}</span>
+        <div class="small text-muted mt-1">${escapeHtml((t('hostMetricsDiscoveryFound') || '{sensors} sensors, {ifaces} interfaces')
+            .replace('{sensors}', String(sensorsCount))
+            .replace('{ifaces}', String(ifaceCount)))}</div>
+    `;
+}
+
+function renderHostMetricsRows(items, state = null) {
+    const tbody = document.getElementById('hostMetricsSettingsBody');
+    const empty = document.getElementById('hostMetricsSettingsEmpty');
+    if (!tbody || !empty) return;
+
+    if (currentServerType !== 'proxmox') {
+        tbody.innerHTML = '';
+        empty.classList.remove('d-none');
+        empty.textContent = t('hostMetricsProxmoxOnly') || 'Метрики хостов доступны только для Proxmox.';
+        return;
+    }
+
+    if (state === 'no-connection') {
+        tbody.innerHTML = '';
+        empty.classList.remove('d-none');
+        empty.textContent = t('hostMetricsNeedConnection') || 'Сначала подключитесь к Proxmox.';
+        return;
+    }
+
+    if (!Array.isArray(items) || !items.length) {
+        tbody.innerHTML = '';
+        empty.classList.remove('d-none');
+        empty.textContent = state === 'error'
+            ? (t('hostMetricsDiscoveryErrorHint') || 'Не удалось получить список узлов/датчиков.')
+            : (t('hostMetricsNoNodes') || 'Нет доступных узлов для настройки.');
+        return;
+    }
+
+    empty.classList.add('d-none');
+    tbody.innerHTML = items.map((item) => {
+        const nodeName = item.node || '';
+        const cfg = getHostMetricsNodeConfigForRow(nodeName, item);
+        const cpuListId = 'hostMetricsCpuSensors_' + hostMetricsDomIdPart(nodeName);
+        const ifaceListId = 'hostMetricsInterfaces_' + hostMetricsDomIdPart(nodeName);
+        const cpuSensors = Array.isArray(item.cpuSensors) ? item.cpuSensors : [];
+        const interfaces = Array.isArray(item.interfaces) ? item.interfaces : [];
+        return `
+            <tr data-host-metrics-node="${escapeHtml(nodeName)}">
+                <td>
+                    <div class="fw-semibold">${escapeHtml(nodeName)}</div>
+                    <div class="small text-muted">${escapeHtml(t('hostMetricsAgentHintShort') || 'Локальный HTTP endpoint на узле')}</div>
+                </td>
+                <td>
+                    <select class="form-select form-select-sm host-metrics-enabled">
+                        <option value="0"${cfg.enabled ? '' : ' selected'}>${escapeHtml(t('optionNo') || 'Нет')}</option>
+                        <option value="1"${cfg.enabled ? ' selected' : ''}>${escapeHtml(t('optionYes') || 'Да')}</option>
+                    </select>
+                </td>
+                <td>
+                    <input type="text" class="form-control form-control-sm host-metrics-agent-url"
+                        value="${escapeHtml(cfg.agentUrl || '')}" placeholder="http://${escapeHtml(nodeName)}:9105/host-metrics">
+                </td>
+                <td>
+                    <input type="text" class="form-control form-control-sm host-metrics-sensor" list="${cpuListId}"
+                        value="${escapeHtml(cfg.cpuTempSensor || '')}" placeholder="${escapeHtml(t('hostMetricsCpuSensorPlaceholder') || 'Package id 0')}">
+                    <datalist id="${cpuListId}">
+                        ${cpuSensors.map((sensor) => `<option value="${escapeHtml(sensor)}"></option>`).join('')}
+                    </datalist>
+                </td>
+                <td>
+                    <input type="text" class="form-control form-control-sm host-metrics-interface" list="${ifaceListId}"
+                        value="${escapeHtml(cfg.linkInterface || '')}" placeholder="${escapeHtml(t('hostMetricsInterfacePlaceholder') || 'enp3s0')}">
+                    <datalist id="${ifaceListId}">
+                        ${interfaces.map((iface) => `<option value="${escapeHtml(iface)}"></option>`).join('')}
+                    </datalist>
+                </td>
+                <td>${hostMetricsDiscoveryStatusHtml(item)}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+async function loadHostMetricsSettings() {
+    const pollInput = document.getElementById('hostMetricsPollIntervalInput');
+    const timeoutInput = document.getElementById('hostMetricsTimeoutInput');
+    const ttlInput = document.getElementById('hostMetricsCacheTtlInput');
+    try {
+        const res = await fetch('/api/host-metrics/settings');
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data && data.success) {
+            hostMetricsSettings = normalizeHostMetricsSettingsClient(data.settings);
+            hostMetricsConfigs = data.configs && typeof data.configs === 'object' ? data.configs : {};
+        } else {
+            hostMetricsSettings = createDefaultHostMetricsSettings();
+            hostMetricsConfigs = {};
+        }
+    } catch (e) {
+        console.error('Failed to load host metrics settings:', e);
+        hostMetricsSettings = createDefaultHostMetricsSettings();
+        hostMetricsConfigs = {};
+    }
+
+    if (pollInput) pollInput.value = String(hostMetricsSettings.pollIntervalSec);
+    if (timeoutInput) timeoutInput.value = String(hostMetricsSettings.timeoutMs);
+    if (ttlInput) ttlInput.value = String(hostMetricsSettings.cacheTtlSec);
+
+    await refreshHostMetricsDiscovery({ silent: true });
+}
+
+async function refreshHostMetricsDiscovery(options = {}) {
+    const headers = getCurrentProxmoxHeaders();
+    if (!headers) {
+        hostMetricsDiscoveryItems = [];
+        renderHostMetricsRows([], 'no-connection');
+        return;
+    }
+
+    try {
+        const res = await fetch('/api/host-metrics/discovery', { headers });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data?.success) throw new Error(data?.error || `HTTP ${res.status}`);
+        hostMetricsDiscoveryItems = Array.isArray(data.items) ? data.items : [];
+        renderHostMetricsRows(hostMetricsDiscoveryItems);
+        if (!options.silent) {
+            showToast(t('hostMetricsDiscoveryUpdated') || 'Список датчиков обновлён', 'success');
+        }
+    } catch (e) {
+        console.error('Host metrics discovery failed:', e);
+        hostMetricsDiscoveryItems = [];
+        renderHostMetricsRows([], 'error');
+        if (!options.silent) {
+            showToast((t('hostMetricsDiscoveryErrorToast') || 'Ошибка получения датчиков') + ': ' + (e.message || String(e)), 'error');
+        }
+    }
+}
+
+async function saveHostMetricsSettings() {
+    const connId = getCurrentConnectionId();
+    if (!connId) {
+        showToast(t('hostMetricsNeedConnection') || 'Сначала подключитесь к Proxmox.', 'warning');
+        return;
+    }
+
+    const pollInput = document.getElementById('hostMetricsPollIntervalInput');
+    const timeoutInput = document.getElementById('hostMetricsTimeoutInput');
+    const ttlInput = document.getElementById('hostMetricsCacheTtlInput');
+    const rows = document.querySelectorAll('#hostMetricsSettingsBody tr[data-host-metrics-node]');
+    const nodes = {};
+
+    rows.forEach((row) => {
+        const nodeName = row.getAttribute('data-host-metrics-node') || '';
+        const enabled = row.querySelector('.host-metrics-enabled')?.value === '1';
+        const agentUrl = (row.querySelector('.host-metrics-agent-url')?.value || '').trim();
+        const cpuTempSensor = (row.querySelector('.host-metrics-sensor')?.value || '').trim();
+        const linkInterface = (row.querySelector('.host-metrics-interface')?.value || '').trim();
+        nodes[nodeName] = {
+            enabled,
+            agentUrl,
+            cpuTempSensor,
+            linkInterface
+        };
+    });
+
+    const nextSettings = normalizeHostMetricsSettingsClient({
+        pollIntervalSec: pollInput ? pollInput.value : hostMetricsSettings.pollIntervalSec,
+        timeoutMs: timeoutInput ? timeoutInput.value : hostMetricsSettings.timeoutMs,
+        cacheTtlSec: ttlInput ? ttlInput.value : hostMetricsSettings.cacheTtlSec
+    });
+
+    try {
+        const res = await fetch('/api/host-metrics/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                settings: nextSettings,
+                connectionId: connId,
+                nodes
+            })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data?.success) throw new Error(data?.error || 'failed to save');
+
+        hostMetricsSettings = normalizeHostMetricsSettingsClient(data.settings);
+        hostMetricsConfigs = data.configs && typeof data.configs === 'object' ? data.configs : {};
+
+        if (pollInput) pollInput.value = String(hostMetricsSettings.pollIntervalSec);
+        if (timeoutInput) timeoutInput.value = String(hostMetricsSettings.timeoutMs);
+        if (ttlInput) ttlInput.value = String(hostMetricsSettings.cacheTtlSec);
+
+        showToast(t('toastHostMetricsSaved') || 'Настройки метрик хостов сохранены', 'success');
+        await refreshHostMetricsDiscovery({ silent: true });
+        if (currentServerType === 'proxmox' && (getCurrentConnectionId() || apiToken)) {
+            refreshData({ silent: true });
+        }
+    } catch (e) {
+        showToast((t('toastHostMetricsSaveError') || 'Не удалось сохранить метрики хостов: {msg}')
+            .replace('{msg}', e.message || String(e)), 'error');
+    }
+}
+
+function formatHostMetricsTemp(tempC) {
+    const n = Number(tempC);
+    if (!Number.isFinite(n)) return '—';
+    const rounded = Math.round(n * 10) / 10;
+    return `${rounded}°C`;
+}
+
+function formatHostMetricsSpeed(link) {
+    const speed = Number(link && link.speedMbps);
+    if (Number.isFinite(speed) && speed > 0) {
+        if (speed >= 1000 && speed % 1000 === 0) return `${speed / 1000} Gbps`;
+        return `${speed} Mbps`;
+    }
+    const state = String(link && link.state || '').toLowerCase();
+    if (state === 'down') return t('hostMetricsLinkDown') || 'down';
+    if (state === 'up') return t('hostMetricsLinkUnknown') || 'unknown';
+    return '—';
+}
+
+function formatHostMetricsNodeExtras(metric) {
+    if (!metric) return '';
+    const cpuText = formatHostMetricsTemp(metric.cpu && metric.cpu.tempC);
+    const linkText = formatHostMetricsSpeed(metric.link);
+    const stateText = metric.link && metric.link.state && metric.link.state !== 'unknown'
+        ? `<div class="small text-muted">${escapeHtml(metric.link.state)}</div>`
+        : '';
+    let extraStatus = '';
+    if (metric.stale) {
+        extraStatus = `<div class="col-12 mt-2"><small class="text-warning">${escapeHtml(t('hostMetricsStale') || 'Данные устарели')}</small></div>`;
+    } else if (metric.error) {
+        extraStatus = `<div class="col-12 mt-2"><small class="text-danger">${escapeHtml(metric.error)}</small></div>`;
+    }
+    return `
+        <div class="col-6 mt-2">
+            <small class="text-muted">${escapeHtml(t('hostMetricsCpuTempLabel') || 'CPU temp')}</small>
+            <div class="fw-bold">${escapeHtml(cpuText)}</div>
+        </div>
+        <div class="col-6 mt-2">
+            <small class="text-muted">${escapeHtml(t('hostMetricsLinkSpeedLabel') || 'Link speed')}</small>
+            <div class="fw-bold">${escapeHtml(linkText)}</div>
+            ${stateText}
+        </div>
+        ${extraStatus}
+    `;
+}
+
 function formatNetdevMetricValue(v) {
     if (v == null || (typeof v === 'string' && v.trim() === '')) return '—';
     const s = String(v).trim();
@@ -2797,29 +3144,39 @@ async function toggleSettings() {
 function onSettingsNavSectionChange(section) {
     // Мы держим все настройки UPS/Netdev внутри settings-tab-services по разметке,
     // но по клику слева показываем "только нужный блок", чтобы экраны не выглядели одинаково.
-    // section: 'services' | 'ups' | 'netdev'
+    // section: 'services' | 'ups' | 'netdev' | 'hostMetrics'
     const servicesHosts = document.getElementById('servicesHostsSettingsWrap');
     const upsWrap = document.getElementById('upsSettingsCardWrap');
     const netdevWrap = document.getElementById('netdevSettingsCardWrap');
+    const hostMetricsWrap = document.getElementById('hostMetricsSettingsWrap');
     const vmsWrap = document.getElementById('vmsForMonitoringSettingsWrap');
 
-    if (!servicesHosts || !upsWrap || !netdevWrap || !vmsWrap) return;
+    if (!servicesHosts || !upsWrap || !netdevWrap || !hostMetricsWrap || !vmsWrap) return;
 
     if (section === 'ups') {
         servicesHosts.style.display = 'none';
         upsWrap.style.display = '';
         netdevWrap.style.display = 'none';
+        hostMetricsWrap.style.display = 'none';
         vmsWrap.style.display = 'none';
     } else if (section === 'netdev') {
         servicesHosts.style.display = 'none';
         upsWrap.style.display = 'none';
         netdevWrap.style.display = '';
+        hostMetricsWrap.style.display = 'none';
+        vmsWrap.style.display = 'none';
+    } else if (section === 'hostMetrics') {
+        servicesHosts.style.display = 'none';
+        upsWrap.style.display = 'none';
+        netdevWrap.style.display = 'none';
+        hostMetricsWrap.style.display = '';
         vmsWrap.style.display = 'none';
     } else {
         // Service monitoring: только Hosts + VM/CT, без UPS/Netdev.
         servicesHosts.style.display = '';
         upsWrap.style.display = 'none';
         netdevWrap.style.display = 'none';
+        hostMetricsWrap.style.display = 'none';
         vmsWrap.style.display = '';
     }
 }
@@ -4023,6 +4380,7 @@ async function refreshData(options = {}) {
         const prevActiveId = document.activeElement && document.activeElement.id ? document.activeElement.id : null;
 
         if (currentServerType === 'truenas') {
+            lastHostMetricsData = null;
             const serverUrl = getCurrentServerUrl();
             const [systemRes, poolsRes] = await Promise.all([
                 fetch('/api/truenas/system', { headers: connId ? { 'X-Connection-Id': connId } : { 'Authorization': apiToken, 'X-Server-Url': serverUrl } }),
@@ -4053,12 +4411,23 @@ async function refreshData(options = {}) {
             const clusterData = await clusterRes.json();
             const storageData = await storageRes.json();
             const backupsData = await backupsRes.json();
+            let hostMetricsData = lastHostMetricsData;
             
             if (!clusterRes.ok) throw new Error(clusterData?.error || `cluster: HTTP ${clusterRes.status}`);
             if (!storageRes.ok) throw new Error(storageData?.error || `storage: HTTP ${storageRes.status}`);
             if (!backupsRes.ok) throw new Error(backupsData?.error || `backups: HTTP ${backupsRes.status}`);
+
+            try {
+                const hmRes = await fetch('/api/host-metrics/current', { headers: getCurrentProxmoxHeaders() || {} });
+                if (hmRes.ok) {
+                    hostMetricsData = await hmRes.json();
+                    lastHostMetricsData = hostMetricsData;
+                }
+            } catch (hmErr) {
+                console.warn('Host metrics refresh failed:', hmErr);
+            }
             
-            updateDashboard(clusterData, storageData, backupsData, {});
+            updateDashboard(clusterData, storageData, backupsData, hostMetricsData);
             if (!monitorMode || monitorCurrentView === 'cluster' || monitorCurrentView === 'ups') {
                 updateUPSDashboard().catch(() => {});
             }
@@ -4730,10 +5099,15 @@ function formatBytes(bytes) {
 }
 
 // Update dashboard
-function updateDashboard(clusterData, storageData, backupsData) {
+function updateDashboard(clusterData, storageData, backupsData, hostMetricsData = null) {
     if (!clusterData || !Array.isArray(clusterData.nodes) || !clusterData.cluster?.summary || !clusterData.quorum) {
         throw new Error(clusterData?.error || 'Некорректный ответ кластера');
     }
+    const hostMetricsMap = new Map(
+        Array.isArray(hostMetricsData?.items)
+            ? hostMetricsData.items.map((item) => [item.node, item])
+            : []
+    );
     const totalNodes = clusterData.nodes.length;
     const onlineNodes = clusterData.nodes.filter(n => n.status === 'online').length;
     
@@ -4774,6 +5148,7 @@ function updateDashboard(clusterData, storageData, backupsData) {
     const nodesContainer = el('nodesContainer');
     if (nodesContainer) {
         const nodesHtml = clusterData.nodes.map(node => {
+        const hostMetric = hostMetricsMap.get(node.name) || null;
         return `
             <div class="col-md-6 col-lg-3">
                 <div class="node-card">
@@ -4802,6 +5177,7 @@ function updateDashboard(clusterData, storageData, backupsData) {
                             <small class="text-muted">${t('nodeCpuCores')}</small>
                             <div class="fw-bold">${node.cpuCount}</div>
                         </div>
+                        ${formatHostMetricsNodeExtras(hostMetric)}
                     </div>
                 </div>
             </div>

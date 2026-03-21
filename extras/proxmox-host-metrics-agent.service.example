@@ -1,0 +1,19 @@
+[Unit]
+Description=Proxmox host metrics agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/Proxmox-Monitor-restore
+ExecStart=/usr/bin/node /opt/Proxmox-Monitor-restore/extras/proxmox-host-metrics-agent.js
+Restart=always
+RestartSec=3
+Environment=HOST_METRICS_AGENT_HOST=0.0.0.0
+Environment=HOST_METRICS_AGENT_PORT=9105
+Environment=HOST_METRICS_AGENT_BASE_PATH=/host-metrics
+Environment=HOST_METRICS_COMMAND_TIMEOUT_MS=3000
+
+[Install]
+WantedBy=multi-user.target
