@@ -28,6 +28,9 @@
                             <button class="nav-link" id="settings-nav-speedtest" data-bs-toggle="pill" data-bs-target="#settings-tab-speedtest" type="button" role="tab">
                                 <i class="bi bi-wifi me-2"></i><span id="settingsNavSpeedtest">Speedtest</span>
                             </button>
+                            <button class="nav-link" id="settings-nav-host-metrics" data-bs-toggle="pill" data-bs-target="#settings-tab-host-metrics" type="button" role="tab">
+                                <i class="bi bi-cpu me-2"></i><span id="settingsNavHostMetrics">Метрики хостов</span>
+                            </button>
                             <button class="nav-link" id="settings-nav-security" data-bs-toggle="pill" data-bs-target="#settings-tab-security" type="button" role="tab">
                                 <i class="bi bi-shield-lock me-2"></i><span id="settingsNavSecurity">Безопасность</span>
                             </button>
@@ -826,6 +829,65 @@
                             <!-- Сетевые устройства -->
                             <div class="tab-pane fade" id="settings-tab-netdevices" role="tabpanel">
                                     <div id="netdevSettingsContainer"></div>
+                            </div>
+                            <!-- Метрики хостов -->
+                            <div class="tab-pane fade" id="settings-tab-host-metrics" role="tabpanel">
+                                <div class="settings-section">
+                                    <h5 class="mb-3"><i class="bi bi-cpu me-2"></i><span id="hostMetricsSettingsTitle">Метрики хостов Proxmox</span></h5>
+                                    <p class="text-muted small mb-3" id="hostMetricsSettingsHint">Мониторинг температуры CPU и скорости линка сетевого интерфейса для каждого узла Proxmox. Источник данных — внешний exporter на каждом хосте.</p>
+                                    
+                                    <div class="card mb-4">
+                                        <div class="card-header py-2">
+                                            <i class="bi bi-gear me-2"></i><span id="hostMetricsGlobalSettingsTitle">Глобальные настройки</span>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="row g-3 align-items-end">
+                                                <div class="col-md-4">
+                                                    <label class="form-label fw-bold" for="hostMetricsPollIntervalInput" id="hostMetricsPollIntervalLabel">Частота опроса, сек</label>
+                                                    <input type="number" class="form-control" id="hostMetricsPollIntervalInput" min="5" max="300" value="10">
+                                                    <div class="form-text" id="hostMetricsPollIntervalHint">Допустимый диапазон: 5..300</div>
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <label class="form-label fw-bold" for="hostMetricsTimeoutInput" id="hostMetricsTimeoutLabel">Таймаут, мс</label>
+                                                    <input type="number" class="form-control" id="hostMetricsTimeoutInput" min="1000" max="30000" value="3000">
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <label class="form-label fw-bold" for="hostMetricsCacheTtlInput" id="hostMetricsCacheTtlLabel">TTL кэша, сек</label>
+                                                    <input type="number" class="form-control" id="hostMetricsCacheTtlInput" min="1" max="60" value="8">
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="d-flex justify-content-between align-items-center mb-3">
+                                        <h6 class="mb-0"><i class="bi bi-server me-2"></i><span id="hostMetricsNodesConfigTitle">Конфигурация по узлам</span></h6>
+                                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="loadHostMetricsDiscovery()" id="hostMetricsDiscoveryBtn">
+                                            <i class="bi bi-arrow-clockwise me-1"></i><span id="hostMetricsDiscoveryText">Обновить списки датчиков/интерфейсов</span>
+                                        </button>
+                                    </div>
+
+                                    <div class="table-responsive">
+                                        <table class="table table-sm table-hover align-middle mb-0">
+                                            <thead>
+                                                <tr>
+                                                    <th id="hostMetricsConnectionHeader">Подключение</th>
+                                                    <th id="hostMetricsNodeHeader">Узел</th>
+                                                    <th class="text-center" id="hostMetricsEnabledHeader">Включено</th>
+                                                    <th id="hostMetricsCpuSensorHeader">Датчик CPU</th>
+                                                    <th id="hostMetricsLinkInterfaceHeader">Интерфейс</th>
+                                                    <th id="hostMetricsStatusHeader">Статус discovery</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="hostMetricsConfigsBody"></tbody>
+                                        </table>
+                                    </div>
+
+                                    <div class="d-flex justify-content-end mt-4">
+                                        <button type="button" class="btn btn-primary" onclick="saveHostMetricsSettings()" id="hostMetricsSaveBtn">
+                                            <i class="bi bi-save me-2"></i><span id="hostMetricsSaveText">Сохранить настройки метрик хостов</span>
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                             <!-- Speedtest -->
                             <div class="tab-pane fade" id="settings-tab-speedtest" role="tabpanel">

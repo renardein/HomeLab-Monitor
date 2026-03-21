@@ -1299,6 +1299,7 @@ async function loadSettingsPanelData() {
     await ensureUpsDisplaySlotsLoaded();
     await loadNetdevSettings();
     await ensureNetdevDisplaySlotsLoaded();
+    await loadHostMetricsSettings();
     renderServerList();
 }
 
@@ -2550,6 +2551,190 @@ async function runSpeedtestNow() {
         if (btn) btn.disabled = false;
     }
 }
+
+// ===================== HOST METRICS =====================
+
+let hostMetricsDiscoveryData = []; // Array of { connectionId, node, cpuSensors[], interfaces[], error }
+
+async function loadHostMetricsSettings() {
+    try {
+        const res = await fetch('/api/host-metrics/settings');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        
+        const settings = data.host_metrics_settings || {};
+        document.getElementById('hostMetricsPollIntervalInput').value = settings.pollIntervalSec ?? 10;
+        document.getElementById('hostMetricsTimeoutInput').value = settings.timeoutMs ?? 3000;
+        document.getElementById('hostMetricsCacheTtlInput').value = settings.cacheTtlSec ?? 8;
+        
+        await loadHostMetricsConfigsTable(data.host_metrics_configs || {});
+    } catch (e) {
+        console.error('Failed to load host metrics settings:', e);
+        showToast('Ошибка загрузки настроек метрик хостов: ' + e.message, 'error');
+    }
+}
+
+async function loadHostMetricsConfigsTable(configs) {
+    const tbody = document.getElementById('hostMetricsConfigsBody');
+    if (!tbody) return;
+    
+    tbody.innerHTML = '';
+    
+    const connectionStore = window.connectionStore || {};
+    const connections = (typeof connectionStore.listConnections === 'function' ? connectionStore.listConnections() : [])
+        .filter(c => c.type === 'proxmox');
+    
+    for (const conn of connections) {
+        const connConfigs = configs[conn.id] || {};
+        const nodes = connConfigs.nodes || {};
+        
+        // Get nodes from Proxmox API
+        let proxmoxNodes = [];
+        try {
+            const token = conn.secret || null;
+            const apiRes = await fetch('/api/nodes?token=' + encodeURIComponent(token || ''), {
+                headers: { 'X-Proxmox-URL': conn.url }
+            });
+            if (apiRes.ok) {
+                const apiData = await apiRes.json();
+                proxmoxNodes = Array.isArray(apiData) ? apiData : (apiData.data || []);
+            }
+        } catch (_) {
+            // Ignore, will show empty
+        }
+        
+        for (const node of proxmoxNodes) {
+            const nodeName = node.node || node.name;
+            if (!nodeName) continue;
+            
+            const nodeConfig = nodes[nodeName] || {};
+            const discoveryItem = hostMetricsDiscoveryData.find(d => d.connectionId === conn.id && d.node === nodeName);
+            
+            const tr = document.createElement('tr');
+            tr.dataset.connectionId = conn.id;
+            tr.dataset.node = nodeName;
+            
+            const sensorsOptions = (discoveryItem?.cpuSensors || []).map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
+            const interfacesOptions = (discoveryItem?.interfaces || []).map(i => `<option value="${escapeHtml(i)}">${escapeHtml(i)}</option>`).join('');
+            
+            tr.innerHTML = `
+                <td>${escapeHtml(conn.name || conn.url)}</td>
+                <td>${escapeHtml(nodeName)}</td>
+                <td class="text-center">
+                    <input type="checkbox" class="form-check-input host-metrics-enabled" ${nodeConfig.enabled ? 'checked' : ''}>
+                </td>
+                <td>
+                    <select class="form-select form-select-sm host-metrics-cpu-sensor">
+                        <option value="">${t('hostMetricsSelectSensor') || 'Выберите датчик'}</option>
+                        ${sensorsOptions}
+                    </select>
+                </td>
+                <td>
+                    <select class="form-select form-select-sm host-metrics-link-interface">
+                        <option value="">${t('hostMetricsSelectInterface') || 'Выберите интерфейс'}</option>
+                        ${interfacesOptions}
+                    </select>
+                </td>
+                <td>
+                    ${discoveryItem?.error 
+                        ? `<span class="badge bg-danger" title="${escapeHtml(discoveryItem.error)}">${t('hostMetricsDiscoveryError') || 'Ошибка'}</span>`
+                        : `<span class="badge bg-success">${t('hostMetricsDiscoveryOk') || 'OK'}</span>`
+                    }
+                </td>
+            `;
+            
+            // Set selected values
+            const sensorSelect = tr.querySelector('.host-metrics-cpu-sensor');
+            const interfaceSelect = tr.querySelector('.host-metrics-link-interface');
+            if (nodeConfig.cpuTempSensor) sensorSelect.value = nodeConfig.cpuTempSensor;
+            if (nodeConfig.linkInterface) interfaceSelect.value = nodeConfig.linkInterface;
+            
+            tbody.appendChild(tr);
+        }
+    }
+    
+    if (tbody.children.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted">${t('hostMetricsNoNodes') || 'Узлы не найдены'}</td></tr>`;
+    }
+}
+
+async function loadHostMetricsDiscovery() {
+    const btn = document.getElementById('hostMetricsDiscoveryBtn');
+    if (btn) btn.disabled = true;
+    
+    try {
+        const res = await fetch('/api/host-metrics/discovery');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        
+        hostMetricsDiscoveryData = data.items || [];
+        
+        // Reload configs table with updated discovery data
+        const settingsRes = await fetch('/api/host-metrics/settings');
+        const settingsData = await settingsRes.json();
+        await loadHostMetricsConfigsTable(settingsData.host_metrics_configs || {});
+        
+        showToast(t('hostMetricsDiscoveryLoaded') || 'Списки датчиков и интерфейсов обновлены', 'success');
+    } catch (e) {
+        console.error('Failed to load host metrics discovery:', e);
+        showToast('Ошибка discovery: ' + e.message, 'error');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+async function saveHostMetricsSettings() {
+    try {
+        const settings = {
+            pollIntervalSec: parseInt(document.getElementById('hostMetricsPollIntervalInput').value, 10) || 10,
+            timeoutMs: parseInt(document.getElementById('hostMetricsTimeoutInput').value, 10) || 3000,
+            cacheTtlSec: parseInt(document.getElementById('hostMetricsCacheTtlInput').value, 10) || 8
+        };
+        
+        const configs = {};
+        const rows = document.querySelectorAll('#hostMetricsConfigsBody tr');
+        
+        for (const row of rows) {
+            const connectionId = row.dataset.connectionId;
+            const node = row.dataset.node;
+            if (!connectionId || !node) continue;
+            
+            const enabled = row.querySelector('.host-metrics-enabled')?.checked || false;
+            const cpuTempSensor = row.querySelector('.host-metrics-cpu-sensor')?.value || '';
+            const linkInterface = row.querySelector('.host-metrics-link-interface')?.value || '';
+            
+            if (!configs[connectionId]) {
+                configs[connectionId] = { nodes: {} };
+            }
+            
+            configs[connectionId].nodes[node] = {
+                enabled,
+                cpuTempSensor: cpuTempSensor || null,
+                linkInterface: linkInterface || null
+            };
+        }
+        
+        const res = await fetch('/api/host-metrics/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                host_metrics_settings: settings,
+                host_metrics_configs: configs
+            })
+        });
+        
+        if (!res.ok) {
+            const errData = await res.json();
+            throw new Error(errData.error || `HTTP ${res.status}`);
+        }
+        
+        showToast(t('hostMetricsSettingsSaved') || 'Настройки метрик хостов сохранены', 'success');
+    } catch (e) {
+        console.error('Failed to save host metrics settings:', e);
+        showToast('Ошибка сохранения: ' + e.message, 'error');
+    }
+}
+
 
 /** Последний ответ /api/debug для экспорта отчёта */
 let lastDebugServerData = null;

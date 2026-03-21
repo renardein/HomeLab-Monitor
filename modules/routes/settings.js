@@ -325,20 +325,21 @@ router.post('/import/vms', (req, res) => {
     }
 });
 
-// GET /api/settings/export/all — все настройки + сервисы + подключения (c секретами) + явные списки VM/CT
+// GET /api/settings/export/all — все настройки + сервисы + подключения (c секретами) + явные списки VM/CT + host_metrics
 router.get('/export/all', (req, res) => {
     try {
         const base = store.exportSettingsAndServices();
         const connectionsStore = require('../connection-store');
         const connections = connectionsStore.exportConnectionsWithSecrets();
         const vmCfg = store.getMonitoredVmsExport();
-        res.json({ ...base, ...vmCfg, connections });
+        const hostMetricsCfg = store.getHostMetricsExport();
+        res.json({ ...base, ...vmCfg, ...hostMetricsCfg, connections });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
 });
 
-// POST /api/settings/import/all — все настройки + сервисы + подключения
+// POST /api/settings/import/all — все настройки + сервисы + подключения + host_metrics
 router.post('/import/all', (req, res) => {
     try {
         const payload = req.body;
@@ -351,6 +352,7 @@ router.post('/import/all', (req, res) => {
         }
         store.importSettingsAndServices(payload);
         store.importMonitoredVmsConfig(payload);
+        store.importHostMetricsConfig(payload);
         res.json({ success: true });
     } catch (e) {
         res.status(500).json({ success: false, error: e.message });

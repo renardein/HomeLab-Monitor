@@ -231,6 +231,31 @@ function importMonitoredVmsConfig(payload) {
     }
 }
 
+// Host metrics export/import helpers
+function getHostMetricsExport() {
+    const settingsRaw = getSetting('host_metrics_settings');
+    const configsRaw = getSetting('host_metrics_configs');
+    let settings = null;
+    let configs = null;
+    if (settingsRaw) {
+        try { settings = JSON.parse(settingsRaw); } catch {}
+    }
+    if (configsRaw) {
+        try { configs = JSON.parse(configsRaw); } catch {}
+    }
+    return { host_metrics_settings: settings, host_metrics_configs: configs };
+}
+
+function importHostMetricsConfig(payload) {
+    if (!payload || typeof payload !== 'object') return;
+    if (payload.host_metrics_settings !== undefined) {
+        setSetting('host_metrics_settings', JSON.stringify(payload.host_metrics_settings));
+    }
+    if (payload.host_metrics_configs !== undefined) {
+        setSetting('host_metrics_configs', JSON.stringify(payload.host_metrics_configs));
+    }
+}
+
 module.exports = {
     getSetting,
     setSetting,
@@ -247,5 +272,7 @@ module.exports = {
     exportSettingsAndServices,
     importSettingsAndServices,
     getMonitoredVmsExport,
-    importMonitoredVmsConfig
+    importMonitoredVmsConfig,
+    getHostMetricsExport,
+    importHostMetricsConfig
 };
