@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HomeLab Monitor Demo Services</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="./demo.css">
+</head>
+<body class="monitor-mode">
+    <div class="container">
+        
+        
+        <div id="servicesMonitorSection" class="mb-4 monitor-screen" style="display: block;">
+            <div class="d-flex justify-content-between align-items-center mb-3 monitor-screen__backrow">
+                <button type="button" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-arrow-left me-1"></i><span>Back to dashboard</span>
+                </button>
+                <button class="btn btn-sm btn-outline-success">
+                    <i class="bi bi-arrow-repeat me-1"></i><span>Check all</span>
+                </button>
+            </div>
+            <div class="monitor-screen__layout">
+                <div class="monitor-screen__panel">
+                    <div class="monitor-view__panel-title monitor-screen__panel-title">
+                        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+                            <div>
+                                <h5 class="mb-0"><i class="bi bi-activity me-2"></i><span>Service Monitoring</span></h5>
+                                <div class="small opacity-75 mt-1">Services selected in settings. Only visible monitor entries are shown here.</div>
+                            </div>
+                            <button class="btn btn-sm btn-outline-light monitor-screen__header-action">
+                                <i class="bi bi-arrow-repeat me-1"></i><span>Check all</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="monitor-screen__panel-body">
+<div class="row" id="servicesCards">
+    <div class="col-md-4 col-lg-3 mb-3">
+        <div class="node-card service-card-layout">
+            <div class="service-card-layout__icon"><span class="service-icon service-card-icon text-success"><i class="bi bi-shield-check"></i></span></div>
+            <div class="service-card-layout__info"><h6 class="mb-1">Vaultwarden</h6><div class="mb-1"><span class="badge bg-secondary me-1">HTTP</span><code class="small">https://vault.example.local/</code></div><div class="small text-muted">Latency: 38 ms</div></div>
+            <div class="service-card-layout__status"><span class="badge bg-success">Connected</span></div>
+        </div>
+    </div>
+    <div class="col-md-4 col-lg-3 mb-3">
+        <div class="node-card service-card-layout">
+            <div class="service-card-layout__icon"><span class="service-icon service-card-icon text-info"><i class="bi bi-globe2"></i></span></div>
+            <div class="service-card-layout__info"><h6 class="mb-1">Traefik</h6><div class="mb-1"><span class="badge bg-secondary me-1">TCP</span><code class="small">10.200.0.15:443</code></div><div class="small text-muted">Latency: 12 ms</div></div>
+            <div class="service-card-layout__status"><span class="badge bg-success">Connected</span></div>
+        </div>
+    </div>
+    <div class="col-md-4 col-lg-3 mb-3">
+        <div class="node-card service-card-layout">
+            <div class="service-card-layout__icon"><span class="service-icon service-card-icon text-warning"><i class="bi bi-bar-chart"></i></span></div>
+            <div class="service-card-layout__info"><h6 class="mb-1">Grafana</h6><div class="mb-1"><span class="badge bg-secondary me-1">HTTP</span><code class="small">https://grafana.example.local/</code></div><div class="small text-muted">Latency: 26 ms</div></div>
+            <div class="service-card-layout__status"><span class="badge bg-danger">Server Error</span></div>
+        </div>
+    </div>
+</div></div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="monitorToolbar" class="monitor-toolbar" style="display: flex;">
+            <div class="monitor-toolbar-left">
+                <select class="form-select form-select-sm monitor-toolbar-select">
+                    <option selected>Proxmox</option>
+                    <option>TrueNAS</option>
+                </select>
+            </div>
+            <div class="monitor-toolbar-center">
+                <span class="monitor-toolbar-title">Services</span>
+                <span class="monitor-toolbar-update text-muted small">Updated 2026-03-21 17:20</span>
+            </div>
+            <div class="monitor-toolbar-theme">
+                <button type="button" class="btn btn-sm monitor-toolbar-nav-btn" title="Prev"><i class="bi bi-chevron-left"></i></button>
+                <button type="button" class="btn btn-sm monitor-toolbar-nav-btn" title="Next"><i class="bi bi-chevron-right"></i></button>
+                <button type="button" class="btn btn-sm monitor-toolbar-theme-btn" title="Refresh"><i class="bi bi-arrow-repeat"></i></button>
+                <button type="button" class="btn btn-sm monitor-toolbar-theme-btn active" title="Light theme"><i class="bi bi-sun-fill"></i></button>
+                <button type="button" class="btn btn-sm monitor-toolbar-theme-btn" title="Dark theme"><i class="bi bi-moon-stars-fill"></i></button>
+            </div>
+            <div class="monitor-toolbar-right">
+                <a href="./dashboard.html" class="btn btn-sm monitor-toolbar-exit" title="Exit monitor mode">
+                    <i class="bi bi-fullscreen-exit me-1"></i><span>Exit</span>
+                </a>
+            </div>
+        </div>
+        
+    </div>
+</body>
+</html>
