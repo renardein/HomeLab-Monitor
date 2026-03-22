@@ -16,6 +16,9 @@ Local web dashboard for Proxmox and TrueNAS with separate dashboard and monitor 
 - Fullscreen monitor mode with swipe / arrow navigation
 - Monitor mode uses the light theme by default
 - Settings password protection, import / export, and local SQLite storage
+- **First-run setup wizard**: language, Proxmox or TrueNAS path, connection, or **import a full JSON backup** (same format as Settings → export) to restore configuration in one step
+- **Telegram integration**: bot token, notification rules by event type (services, VM/CT, nodes, SNMP slots, host CPU temperature, link speed), optional **custom message templates** with type-specific placeholders (edited in a dedicated dialog)
+- **Host metrics agent**: install or remove the agent on a Proxmox node **via SSH from the UI**, and remove the agent from a node when no longer needed
 
 ## UI Mockup
 
@@ -59,11 +62,12 @@ http://localhost:81
 
 ## Configuration
 
-1. Open the application in your browser.
-2. Add a Proxmox and/or TrueNAS connection in `Settings`.
+1. Open the application in your browser. On first launch (or after a full settings reset), complete the **initial setup wizard** or import a backup JSON.
+2. Add a Proxmox and/or TrueNAS connection in `Settings` if you did not do it in the wizard.
 3. Configure services, VM / CT, UPS, SNMP devices, Speedtest, and host metrics.
 4. Adjust monitor screen order, themes, display options, and monitor visibility.
-5. Optionally enable settings password protection and use import / export.
+5. Optionally configure **Telegram** rules under Settings.
+6. Optionally enable settings password protection and use import / export.
 
 ## Notes
 
