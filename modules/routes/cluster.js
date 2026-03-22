@@ -21,6 +21,7 @@ router.get('/full', checkAuth, async (req, res) => {
         
         // Получаем статус кластера
         const clusterStatus = await proxmox.getClusterStatus(req.token, req.serverUrl || null);
+        const nodeIpMap = proxmox.extractNodeIpMap(clusterStatus);
         const clusterNodeOrderMap = proxmox.buildClusterNodeOrderMap(clusterStatus);
         
         // Получаем ресурсы кластера
@@ -57,6 +58,7 @@ router.get('/full', checkAuth, async (req, res) => {
                     
                     return {
                         name: nodeName,
+                        ip: nodeIpMap[nodeName] || null,
                         status: node.status || 'unknown',
                         cpu: cpuUsage ? Math.round(cpuUsage * 100) : 0,
                         cpuCount: cpuCount,
@@ -75,6 +77,7 @@ router.get('/full', checkAuth, async (req, res) => {
                     log('error', `Error fetching node ${nodeName}: ${error.message}`);
                     return {
                         name: nodeName,
+                        ip: nodeIpMap[nodeName] || null,
                         status: 'offline',
                         cpu: 0,
                         cpuCount: 0,

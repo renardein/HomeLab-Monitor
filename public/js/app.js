@@ -49,12 +49,48 @@ let monitoredVmIds = []; // VMids that are in the "monitored" list (shown in set
 let monitorHiddenVmIds = []; // Of those, VMids to hide in monitor mode (checkbox unchecked)
 let monitorVmIcons = {}; // vmid -> Iconify icon name
 let monitorVmIconColors = {}; // vmid -> CSS hex color
+/** @type {Array<object>} */
+let telegramNotificationRules = [];
+let telegramBotTokenSet = false;
+/** false → показать мастер начальной настройки (первый запуск или сброс) */
+let setupCompleted = true;
+let setupWizardStep = 1;
+let setupWizardServerType = 'proxmox';
+let setupWizardListenersBound = false;
+let telegramRuleMessageModalBound = false;
+let setupWizardFinishMode = 'success';
+let clusterDashboardTiles = []; // [{ type: 'service'|'vmct'|'netdev'|'speedtest', sourceId: 'type:id' }]
+let clusterDashboardTilesDirty = false;
+let clusterDashboardTilesSettingPresent = false;
+const CLUSTER_DASHBOARD_TILE_TYPES = ['service', 'vmct', 'netdev', 'speedtest'];
+const MAX_CLUSTER_DASHBOARD_TILES = 12;
+const DEFAULT_DASHBOARD_TIMEZONE = (() => {
+    try {
+        return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    } catch (_) {
+        return 'UTC';
+    }
+})();
+const DASHBOARD_WEATHER_REFRESH_MS = 10 * 60 * 1000;
+let dashboardWeatherCity = '';
+let dashboardTimezone = DEFAULT_DASHBOARD_TIMEZONE;
+let dashboardWeatherData = null;
+let dashboardWeatherDisplayName = '';
+let dashboardWeatherError = '';
+let dashboardWeatherLastFetchMs = 0;
+let dashboardWeatherFetchPromise = null;
+let dashboardClockInterval = null;
+const UPDATE_NOTICE_STORAGE_KEY = 'update_notice_seen_version';
+let updateCheckPromise = null;
+let latestUpdateInfo = null;
 let lastClusterData = null;   // for monitor view (Proxmox)
 let lastTrueNASData = null;   // { system, pools } for monitor view (TrueNAS)
 let lastHostMetricsData = null; // { configured, items } for Proxmox host metrics
 let hostMetricsSettings = { pollIntervalSec: 10, timeoutMs: 3000, cacheTtlSec: 8, criticalTempC: 85, criticalLinkSpeedMbps: 1000 };
 let hostMetricsConfigs = {}; // connectionId -> { nodes: { [node]: { enabled, agentUrl, cpuTempSensor, linkInterface } } }
 let hostMetricsDiscoveryItems = [];
+let hostMetricsAgentInstallPlanCache = null;
+let lastHostMetricsAgentModalNodeName = '';
 let activeIconPicker = { kind: null, targetId: null, scope: 'all' };
 
 const ICON_PICKER_ITEMS = [
@@ -221,6 +257,286 @@ function escapeHtml(s) {
     if (s == null) return '';
     const t = String(s);
     return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function getSeenUpdateVersion() {
+    try {
+        return localStorage.getItem(UPDATE_NOTICE_STORAGE_KEY) || '';
+    } catch (_) {
+        return '';
+    }
+}
+
+function markUpdateVersionAsSeen(version) {
+    try {
+        localStorage.setItem(UPDATE_NOTICE_STORAGE_KEY, String(version || ''));
+    } catch (_) {}
+}
+
+function renderFooterUpdateStatus() {
+    const el = document.getElementById('footerUpdateStatus');
+    if (!el) return;
+
+    if (!latestUpdateInfo) {
+        el.textContent = t('statusDash') || '—';
+        return;
+    }
+
+    if (latestUpdateInfo.error) {
+        el.textContent = t('updateStatusCheckFailed') || 'Update check failed';
+        return;
+    }
+
+    if (latestUpdateInfo.updateAvailable && latestUpdateInfo.latestVersion) {
+        const label = tParams('updateStatusAvailableShort', { latest: latestUpdateInfo.latestVersion });
+        const url = latestUpdateInfo.releaseUrl || latestUpdateInfo.repoUrl || '';
+        el.innerHTML = url
+            ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(label)}</a>`
+            : escapeHtml(label);
+        return;
+    }
+
+    if (latestUpdateInfo.latestVersion) {
+        el.textContent = tParams('updateStatusCurrentShort', { version: latestUpdateInfo.latestVersion });
+        return;
+    }
+
+    el.textContent = t('statusDash') || '—';
+}
+
+function normalizeDashboardWeatherCity(value) {
+    return String(value || '').trim();
+}
+
+function isValidDashboardTimezone(value) {
+    const tz = String(value || '').trim();
+    if (!tz) return false;
+    try {
+        Intl.DateTimeFormat('en-US', { timeZone: tz }).format(new Date());
+        return true;
+    } catch (_) {
+        return false;
+    }
+}
+
+function normalizeDashboardTimezone(value) {
+    const tz = String(value || '').trim();
+    if (!tz) return DEFAULT_DASHBOARD_TIMEZONE;
+    return isValidDashboardTimezone(tz) ? tz : DEFAULT_DASHBOARD_TIMEZONE;
+}
+
+function resetDashboardWeatherState() {
+    dashboardWeatherData = null;
+    dashboardWeatherDisplayName = '';
+    dashboardWeatherError = '';
+    dashboardWeatherLastFetchMs = 0;
+    dashboardWeatherFetchPromise = null;
+}
+
+function getDashboardDateLocale() {
+    return currentLanguage === 'ru' ? 'ru-RU' : 'en-US';
+}
+
+function getDashboardWeatherIconClass(weatherCode, isDay) {
+    const code = Number(weatherCode);
+    if (code === 0) return isDay ? 'bi-brightness-high' : 'bi-moon-stars';
+    if (code === 1 || code === 2) return isDay ? 'bi-cloud-sun' : 'bi-cloud-moon';
+    if (code === 3) return 'bi-cloud';
+    if (code === 45 || code === 48) return 'bi-cloud-fog2';
+    if ([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82].includes(code)) return 'bi-cloud-rain';
+    if ([71, 73, 75, 77, 85, 86].includes(code)) return 'bi-cloud-snow';
+    if ([95, 96, 99].includes(code)) return 'bi-cloud-lightning-rain';
+    return 'bi-cloud';
+}
+
+function formatDashboardTemperature(value) {
+    const num = Number(value);
+    if (!Number.isFinite(num)) return t('notApplicable') || 'N/A';
+    const rounded = Math.round(num);
+    return `${rounded > 0 ? '+' : ''}${rounded}°C`;
+}
+
+function renderDashboardTimeWeatherCard() {
+    const timeValueEl = el('dashboardTimeValue');
+    const timeMetaEl = el('dashboardTimeMeta');
+    const temperatureValueEl = el('dashboardTemperatureValue');
+    const temperatureMetaEl = el('dashboardTemperatureMeta');
+    if (!timeValueEl || !timeMetaEl || !temperatureValueEl || !temperatureMetaEl) return;
+
+    let timeText = '--:--';
+    let dateText = '--';
+    try {
+        const now = new Date();
+        timeText = new Intl.DateTimeFormat(getDashboardDateLocale(), {
+            timeZone: dashboardTimezone,
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+        }).format(now);
+        dateText = new Intl.DateTimeFormat(getDashboardDateLocale(), {
+            timeZone: dashboardTimezone,
+            day: '2-digit',
+            month: 'short'
+        }).format(now);
+    } catch (_) {}
+
+    let weatherValue = escapeHtml(t('dashboardWeatherUnavailable') || 'Weather unavailable');
+    const cityValue = dashboardWeatherCity
+        ? escapeHtml(dashboardWeatherCity)
+        : escapeHtml(t('dashboardWeatherCityMissing') || 'Set a city in settings');
+
+    if (dashboardWeatherCity) {
+        if (dashboardWeatherData && Number.isFinite(Number(dashboardWeatherData.temperature))) {
+            const iconClass = getDashboardWeatherIconClass(dashboardWeatherData.weatherCode, dashboardWeatherData.isDay);
+            weatherValue = `<i class="bi ${iconClass} me-1"></i>${escapeHtml(formatDashboardTemperature(dashboardWeatherData.temperature))}`;
+        } else if (dashboardWeatherFetchPromise) {
+            weatherValue = `<i class="bi bi-cloud-download me-1"></i>${escapeHtml(t('loading'))}`;
+        } else if (dashboardWeatherError) {
+            weatherValue = `<i class="bi bi-cloud-slash me-1"></i>${escapeHtml(t('dashboardWeatherUnavailable') || 'Weather unavailable')}`;
+        } else {
+            weatherValue = `<i class="bi bi-cloud me-1"></i>${escapeHtml(t('loading'))}`;
+        }
+    } else {
+        weatherValue = `<i class="bi bi-geo-alt me-1"></i>${escapeHtml(t('dashboardWeatherCityMissing') || 'Set a city in settings')}`;
+    }
+
+    setText('dashboardTimeValue', timeText);
+    setHTMLIfChanged('dashboardTimeMeta', dateText);
+    timeMetaEl.style.display = '';
+
+    setHTMLIfChanged('dashboardTemperatureValue', weatherValue);
+    setHTMLIfChanged('dashboardTemperatureMeta', cityValue);
+    temperatureMetaEl.style.display = '';
+}
+
+async function refreshDashboardWeather(force = false) {
+    const requestedCity = normalizeDashboardWeatherCity(dashboardWeatherCity);
+    if (!requestedCity) {
+        resetDashboardWeatherState();
+        renderDashboardTimeWeatherCard();
+        return null;
+    }
+
+    const requestedTimezone = normalizeDashboardTimezone(dashboardTimezone);
+    const now = Date.now();
+    if (!force && dashboardWeatherFetchPromise) return dashboardWeatherFetchPromise;
+    if (!force && dashboardWeatherLastFetchMs && (now - dashboardWeatherLastFetchMs) < DASHBOARD_WEATHER_REFRESH_MS) {
+        renderDashboardTimeWeatherCard();
+        return dashboardWeatherData;
+    }
+
+    dashboardWeatherError = '';
+    let requestPromise = null;
+    requestPromise = (async () => {
+        try {
+            const geocodeUrl = new URL('https://geocoding-api.open-meteo.com/v1/search');
+            geocodeUrl.searchParams.set('name', requestedCity);
+            geocodeUrl.searchParams.set('count', '1');
+            geocodeUrl.searchParams.set('language', currentLanguage === 'ru' ? 'ru' : 'en');
+            geocodeUrl.searchParams.set('format', 'json');
+
+            const geocodeRes = await fetch(geocodeUrl.toString());
+            if (!geocodeRes.ok) throw new Error(`Geocoding failed: ${geocodeRes.status}`);
+            const geocodeData = await geocodeRes.json();
+            const result = Array.isArray(geocodeData?.results) ? geocodeData.results[0] : null;
+            if (!result || result.latitude == null || result.longitude == null) {
+                throw new Error('City not found');
+            }
+
+            const weatherUrl = new URL('https://api.open-meteo.com/v1/forecast');
+            weatherUrl.searchParams.set('latitude', String(result.latitude));
+            weatherUrl.searchParams.set('longitude', String(result.longitude));
+            weatherUrl.searchParams.set('current', 'temperature_2m,weather_code,is_day');
+            weatherUrl.searchParams.set('timezone', requestedTimezone);
+
+            const weatherRes = await fetch(weatherUrl.toString());
+            if (!weatherRes.ok) throw new Error(`Weather failed: ${weatherRes.status}`);
+            const weatherData = await weatherRes.json();
+            const current = weatherData?.current;
+            if (!current || current.temperature_2m == null) {
+                throw new Error('Weather unavailable');
+            }
+
+            if (requestedCity !== dashboardWeatherCity || requestedTimezone !== dashboardTimezone) return null;
+
+            dashboardWeatherData = {
+                temperature: Number(current.temperature_2m),
+                weatherCode: Number(current.weather_code),
+                isDay: Number(current.is_day) !== 0
+            };
+            dashboardWeatherDisplayName = [result.name, result.admin1, result.country].filter(Boolean).join(', ');
+            dashboardWeatherError = '';
+            dashboardWeatherLastFetchMs = Date.now();
+            return dashboardWeatherData;
+        } catch (error) {
+            if (requestedCity === dashboardWeatherCity && requestedTimezone === dashboardTimezone) {
+                dashboardWeatherData = null;
+                dashboardWeatherDisplayName = '';
+                dashboardWeatherError = error?.message || 'Weather unavailable';
+                dashboardWeatherLastFetchMs = Date.now();
+            }
+            console.warn('Failed to load dashboard weather:', error);
+            return null;
+        } finally {
+            if (dashboardWeatherFetchPromise === requestPromise) {
+                dashboardWeatherFetchPromise = null;
+            }
+            renderDashboardTimeWeatherCard();
+        }
+    })();
+
+    dashboardWeatherFetchPromise = requestPromise;
+    renderDashboardTimeWeatherCard();
+    return requestPromise;
+}
+
+function startDashboardClockTimer() {
+    renderDashboardTimeWeatherCard();
+    if (dashboardClockInterval) clearInterval(dashboardClockInterval);
+    dashboardClockInterval = setInterval(() => {
+        renderDashboardTimeWeatherCard();
+        if (dashboardWeatherCity && !dashboardWeatherFetchPromise) {
+            const ageMs = Date.now() - dashboardWeatherLastFetchMs;
+            if (!dashboardWeatherLastFetchMs || ageMs >= DASHBOARD_WEATHER_REFRESH_MS) {
+                refreshDashboardWeather().catch(() => {});
+            }
+        }
+    }, 1000);
+}
+
+async function saveDashboardTimeWeatherSettings() {
+    const cityInput = el('settingsDashboardWeatherCityInput');
+    const timezoneInput = el('settingsDashboardTimezoneInput');
+    const nextCity = normalizeDashboardWeatherCity(cityInput ? cityInput.value : dashboardWeatherCity);
+    const rawTimezone = String(timezoneInput ? timezoneInput.value : dashboardTimezone).trim();
+
+    if (rawTimezone && !isValidDashboardTimezone(rawTimezone)) {
+        showToast(t('settingsDashboardTimezoneInvalid') || 'Invalid time zone', 'error');
+        return;
+    }
+
+    const nextTimezone = normalizeDashboardTimezone(rawTimezone);
+    const cityChanged = nextCity !== dashboardWeatherCity;
+    const timezoneChanged = nextTimezone !== dashboardTimezone;
+
+    dashboardWeatherCity = nextCity;
+    dashboardTimezone = nextTimezone;
+    if (cityChanged || timezoneChanged) resetDashboardWeatherState();
+    setValue('settingsDashboardWeatherCityInput', dashboardWeatherCity);
+    setValue('settingsDashboardTimezoneInput', dashboardTimezone);
+    startDashboardClockTimer();
+
+    try {
+        await saveSettingsToServer({
+            dashboardWeatherCity: dashboardWeatherCity,
+            dashboardTimezone: dashboardTimezone
+        });
+        refreshDashboardWeather(true).catch(() => {});
+        showToast(t('dataUpdated') || 'Настройки сохранены', 'success');
+    } catch (error) {
+        console.error('Failed to save dashboard time/weather settings:', error);
+        showToast((t('connectError') || 'Connection error') + ': ' + error.message, 'error');
+    }
 }
 
 function renderInlineMarkdown(text) {
@@ -617,9 +933,19 @@ async function saveSettingsToServer(payload) {
     if (payload.monitorVmIcons !== undefined) body.monitorVmIcons = payload.monitorVmIcons;
     if (payload.monitorVmIconColors !== undefined) body.monitorVmIconColors = payload.monitorVmIconColors;
     if (payload.monitorScreensOrder !== undefined) body.monitorScreensOrder = payload.monitorScreensOrder;
+    if (payload.clusterDashboardTiles !== undefined) body.clusterDashboardTiles = payload.clusterDashboardTiles;
+    if (payload.dashboardWeatherCity !== undefined) body.dashboardWeatherCity = payload.dashboardWeatherCity;
+    if (payload.dashboardTimezone !== undefined) body.dashboardTimezone = payload.dashboardTimezone;
     if (payload.speedtestEnabled !== undefined) body.speedtestEnabled = !!payload.speedtestEnabled;
     if (payload.speedtestServer !== undefined) body.speedtestServer = payload.speedtestServer;
     if (payload.speedtestPerDay !== undefined) body.speedtestPerDay = payload.speedtestPerDay;
+    if (payload.telegramNotifyEnabled !== undefined) body.telegramNotifyEnabled = !!payload.telegramNotifyEnabled;
+    if (payload.telegramNotifyIntervalSec !== undefined) body.telegramNotifyIntervalSec = payload.telegramNotifyIntervalSec;
+    if (payload.telegramRoutes !== undefined) body.telegramRoutes = payload.telegramRoutes;
+    if (payload.telegramNotificationRules !== undefined) body.telegramNotificationRules = payload.telegramNotificationRules;
+    if (payload.telegramBotToken !== undefined) body.telegramBotToken = payload.telegramBotToken;
+    if (payload.telegramClearBotToken === true) body.telegramClearBotToken = true;
+    if (payload.setupCompleted !== undefined) body.setupCompleted = !!payload.setupCompleted;
     try {
         await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     } catch (e) {
@@ -840,6 +1166,7 @@ function setLanguage(lang) {
         localStorage.setItem('preferred_language', lang);
     } catch (_) {}
     updateUILanguage();
+    renderFooterUpdateStatus();
     
     // Re-render server list to update translated tooltips and text
     renderServerList();
@@ -856,6 +1183,10 @@ function setLanguage(lang) {
         backupsExecTable.destroy();
         backupsExecTable = null;
     }
+    renderDashboardTimeWeatherCard();
+    try {
+        if (document.getElementById('telegramRulesTableBody')) renderTelegramRulesTable();
+    } catch (_) {}
 }
 
 // Render language switcher buttons dynamically
@@ -1004,15 +1335,40 @@ function updateUILanguage() {
         menuNetdevMonitorText: 'monitorScreenNetdev',
         menuSpeedtestMonitorText: 'monitorScreenSpeedtest',
         settingsNavUps: 'settingsNavUps',
+        settingsNavVms: 'settingsNavVms',
         settingsNavNetdevices: 'settingsNavNetdevices',
         settingsNavHostMetrics: 'settingsNavHostMetrics',
-        settingsNavSpeedtest: 'settingsNavSpeedtest'
+        settingsNavSpeedtest: 'settingsNavSpeedtest',
+        settingsNavTelegramIntegration: 'settingsNavTelegramIntegration',
+        settingsTelegramTitle: 'settingsTelegramTitle',
+        settingsTelegramHint: 'settingsTelegramHint',
+        settingsTelegramBotTokenLabel: 'settingsTelegramBotTokenLabel',
+        settingsTelegramBotTokenHelp: 'settingsTelegramBotTokenHelp',
+        settingsTelegramNotifyEnabledLabel: 'settingsTelegramNotifyEnabledLabel',
+        settingsTelegramIntervalLabel: 'settingsTelegramIntervalLabel',
+        settingsTelegramSaveText: 'settingsTelegramSaveText',
+        settingsTelegramClearTokenText: 'settingsTelegramClearTokenText',
+        settingsTelegramRulesTitle: 'settingsTelegramRulesTitle',
+        settingsTelegramAddRuleText: 'settingsTelegramAddRuleText',
+        settingsTelegramRulesHint: 'settingsTelegramRulesHint',
+        settingsTelegramRuleTypeHeader: 'settingsTelegramRuleTypeHeader',
+        settingsTelegramRuleTargetHeader: 'settingsTelegramRuleTargetHeader',
+        settingsTelegramRuleExtraHeader: 'settingsTelegramRuleExtraHeader',
+        settingsTelegramRuleMessageHeader: 'settingsTelegramRuleMessageHeader',
+        settingsTelegramRulesMessageHintShort: 'telegramRulesMessageHintShort',
+        settingsTelegramRuleChatHeader: 'settingsTelegramRuleChatHeader',
+        settingsTelegramRuleThreadHeader: 'settingsTelegramRuleThreadHeader',
+        settingsTelegramNotifyOpt0: 'settingsTelegramNotifyOptionOff',
+        settingsTelegramNotifyOpt1: 'settingsTelegramNotifyOptionOn',
+        settingsServiceIconHeader: 'settingsServiceIconHeader',
+        settingsVmIconHeader: 'settingsVmIconHeader'
     };
     
     for (const [id, key] of Object.entries(elements)) {
         const el = document.getElementById(id);
         if (el) el.textContent = t(key);
     }
+    localizeTelegramMessageModal();
     
     // Update theme and units button texts
     const themeLight = document.getElementById('themeLight');
@@ -1031,6 +1387,10 @@ function updateUILanguage() {
     if (monitorExitBtnText) monitorExitBtnText.textContent = t('monitorExitText');
     const monitorExitBtn = document.getElementById('monitorExitBtnFixed');
     if (monitorExitBtn) monitorExitBtn.title = t('monitorExitTitle');
+    const monitorSettingsBtnText = document.getElementById('monitorSettingsBtnText');
+    if (monitorSettingsBtnText) monitorSettingsBtnText.textContent = t('settings');
+    const monitorSettingsBtn = document.getElementById('monitorSettingsBtn');
+    if (monitorSettingsBtn) monitorSettingsBtn.title = t('settingsTitle') || t('settings');
     const monitorRefreshBtn = document.getElementById('monitorRefreshBtn');
     if (monitorRefreshBtn) monitorRefreshBtn.title = t('monitorRefreshTitle');
     const monitorThemeLight = document.getElementById('monitorThemeLight');
@@ -1056,9 +1416,8 @@ function updateUILanguage() {
     setText('dashboardClusterVmTitle', t('monitorBlockVm'));
     setText('dashboardClusterCtTitle', t('monitorBlockCt'));
     setText('dashboardClusterVmRunningLbl', t('monitorGuestRunning'));
-    setText('dashboardClusterCtRunningLbl', t('monitorGuestRunning'));
+    setText('dashboardClusterCtTotalLbl', t('monitorGuestTotal'));
     setText('upsTitle', t('upsTitle') || 'UPS');
-    setText('dashboardUpsTitle', t('upsTitle') || 'UPS');
     setText('upsLabelInputVoltage', t('upsLabelInputVoltage') || 'Вход U');
     setText('upsLabelOutputVoltage', t('upsLabelOutputVoltage') || 'Выход U');
     setText('upsLabelPower', t('upsLabelPower') || 'Мощность');
@@ -1200,6 +1559,19 @@ function updateUILanguage() {
     setText('upsShowOnDashboardLabel', t('upsShowOnDashboardLabel'));
     setText('upsShowOnMonitorClusterLabel', t('upsShowOnMonitorClusterLabel'));
     setText('upsSaveButtonText', t('upsSaveButton'));
+    setText('settingsDashboardTimeWeatherTitle', t('settingsDashboardTimeWeatherTitle'));
+    setText('settingsDashboardTimeWeatherHint', t('settingsDashboardTimeWeatherHint'));
+    setText('settingsDashboardWeatherCityLabel', t('settingsDashboardWeatherCityLabel'));
+    setText('settingsDashboardWeatherCityHint', t('settingsDashboardWeatherCityHint'));
+    setText('settingsDashboardTimezoneLabel', t('settingsDashboardTimezoneLabel'));
+    setText('settingsDashboardTimezoneHint', t('settingsDashboardTimezoneHint'));
+    setText('settingsDashboardTimeWeatherSaveBtnLabel', t('settingsDashboardTimeWeatherSaveBtn'));
+    setPlaceholder('settingsDashboardWeatherCityInput', t('settingsDashboardWeatherCityPlaceholder') || 'Berlin');
+    setPlaceholder('settingsDashboardTimezoneInput', t('settingsDashboardTimezonePlaceholder') || 'Europe/Berlin');
+    setText('settingsClusterTilesTitle', t('settingsClusterTilesTitle'));
+    setText('settingsClusterTilesHint', t('settingsClusterTilesHint'));
+    setText('settingsClusterTilesAddBtnLabel', t('settingsClusterTilesAddBtn'));
+    setText('settingsClusterTilesSaveBtnLabel', t('settingsClusterTilesSaveBtn'));
     setText('upsNutVarStatusLabel', t('upsNutVarStatus'));
     setText('upsNutVarChargeLabel', t('upsNutVarCharge'));
     setText('upsNutVarRuntimeLabel', t('upsNutVarRuntime'));
@@ -1247,12 +1619,23 @@ function updateUILanguage() {
     setText('hostMetricsCriticalLinkHint', t('hostMetricsCriticalLinkHint'));
     setText('hostMetricsRefreshDiscoveryText', t('hostMetricsRefreshDiscoveryText'));
     setText('hostMetricsNodeHeader', t('tabNodes') || 'Узел');
+    setText('hostMetricsAgentIpHostHeader', t('hostMetricsAgentIpHostHeader'));
     setText('hostMetricsEnabledHeader', t('hostMetricsEnabledHeader'));
     setText('hostMetricsAgentUrlHeader', t('hostMetricsAgentUrlHeader'));
     setText('hostMetricsCpuSensorHeader', t('hostMetricsCpuSensorHeader'));
     setText('hostMetricsInterfaceHeader', t('hostMetricsInterfaceHeader'));
     setText('hostMetricsDiscoveryHeader', t('hostMetricsDiscoveryHeader'));
     setText('hostMetricsSaveButtonText', t('hostMetricsSaveButtonText'));
+    setText('hostMetricsInstallHeader', t('hostMetricsInstallHeader'));
+    setText('hostMetricsAgentInstallSshHostLabel', t('hostMetricsAgentInstallSshHostLabel'));
+    setText('hostMetricsAgentInstallSshPortLabel', t('hostMetricsAgentInstallSshPortLabel'));
+    setText('hostMetricsAgentInstallSshUserLabel', t('hostMetricsAgentInstallSshUserLabel'));
+    setText('hostMetricsAgentInstallSshPasswordLabel', t('hostMetricsAgentInstallSshPasswordLabel'));
+    setText('hostMetricsAgentInstallNextBtnText', t('hostMetricsAgentInstallNextBtn'));
+    setText('hostMetricsAgentInstallPlanLabel', t('hostMetricsAgentInstallPlanLabel'));
+    setText('hostMetricsAgentInstallBackBtnText', t('hostMetricsAgentInstallBackBtn'));
+    setText('hostMetricsAgentInstallResultLabel', t('hostMetricsAgentInstallResultLabel'));
+    applyHostMetricsAgentModalMode(lastHostMetricsAgentModalNodeName);
 
     setText('speedtestSettingsTitle', t('speedtestSettingsTitle'));
     setText('speedtestSettingsHint', t('speedtestSettingsHint'));
@@ -1262,6 +1645,7 @@ function updateUILanguage() {
     setText('speedtestPerDayLabel', t('speedtestPerDayLabel'));
     setText('speedtestRunNowText', t('speedtestRunNowText'));
     setText('dashboardSpeedtestTitle', t('dashboardSpeedtestTitle'));
+    setText('dashboardClusterTilesTitle', t('dashboardClusterTilesTitle'));
     setText('speedtestMonitorTitle', t('dashboardSpeedtestTitle'));
     setText('speedtestLastRunLabel', t('speedtestLastRunLabel'));
     setText('speedtestAvgLabel', t('speedtestAvgLabel'));
@@ -1291,7 +1675,11 @@ function updateUILanguage() {
 
     localizeRefreshIntervalSelect();
     localizeYesNoSelect('upsEnabledSelect');
+    localizeYesNoSelect('upsShowOnDashboardSelect');
+    localizeYesNoSelect('upsShowOnMonitorSelect');
     localizeYesNoSelect('netdevEnabledSelect');
+    localizeYesNoSelect('netdevShowOnDashboardSelect');
+    localizeYesNoSelect('netdevShowOnMonitorSelect');
     localizeYesNoSelect('speedtestEnabledSelect');
     localizeServiceTypeSelect();
     localizeUpsTypeSelect();
@@ -1304,6 +1692,266 @@ function updateUILanguage() {
             if (cur.length) renderNetdevFieldsEditors(cur);
         }
     } catch (_) {}
+
+    localizeSetupWizard();
+}
+
+function localizeSetupWizard() {
+    setText('setupWizardTitleText', t('setupWizardTitle'));
+    setText('setupWizardWelcomeText', t('setupWizardWelcome'));
+    setText('setupWizardLangLabel', t('setupWizardLangLabel'));
+    setText('setupWizardTypeHint', t('setupWizardTypeHint'));
+    setText('setupWizardProxmoxTitle', t('setupWizardProxmoxTitle'));
+    setText('setupWizardProxmoxSub', t('setupWizardProxmoxSub'));
+    setText('setupWizardTrueNASTitle', t('setupWizardTrueNASTitle'));
+    setText('setupWizardTrueNASSub', t('setupWizardTrueNASSub'));
+    setText('setupWizardConnHint', t('setupWizardConnHint'));
+    setText('setupWizardUrlLabel', t('setupWizardUrlLabel'));
+    setText('setupWizardTokenIdLabel', t('setupWizardTokenIdLabel'));
+    setText('setupWizardTokenSecretLabel', t('setupWizardTokenSecretLabel'));
+    setText('setupWizardTnUrlLabel', t('setupWizardTnUrlLabel'));
+    setText('setupWizardTnKeyLabel', t('setupWizardTnKeyLabel'));
+    setText('setupWizardBackText', t('setupWizardBack'));
+    setText('setupWizardSkipText', t('setupWizardSkip'));
+    setText('setupWizardNextText', t('setupWizardNext'));
+    setText('setupWizardConnectText', t('connectButton'));
+    setText('setupWizardFinishText', t('setupWizardFinish'));
+    setText('setupWizardDoneTitle', t('setupWizardDoneTitle'));
+    if (setupWizardFinishMode === 'skip') {
+        setText('setupWizardDoneText', t('setupWizardDoneSkipped'));
+    } else {
+        setText('setupWizardDoneText', t('setupWizardDoneConnected'));
+    }
+    setText('setupWizardImportHint', t('setupWizardImportHint'));
+    setText('setupWizardImportBtnText', t('setupWizardImportButton'));
+}
+
+function setupWizardFillLangSelect() {
+    const sel = document.getElementById('wizardLangSelect');
+    if (!sel || !Array.isArray(availableLanguages) || !availableLanguages.length) return;
+    sel.innerHTML = availableLanguages.map((code) => `<option value="${escapeHtml(code)}">${escapeHtml(code.toUpperCase())}</option>`).join('');
+    try {
+        const stored = localStorage.getItem('preferred_language');
+        if (stored && availableLanguages.includes(stored)) sel.value = stored;
+        else if (currentLanguage && availableLanguages.includes(currentLanguage)) sel.value = currentLanguage;
+        else sel.value = availableLanguages[0];
+    } catch (_) {
+        sel.value = availableLanguages[0];
+    }
+}
+
+function setupWizardSyncFromWizardToConfig() {
+    currentServerType = setupWizardServerType === 'truenas' ? 'truenas' : 'proxmox';
+    if (setupWizardServerType === 'proxmox') {
+        const url = (document.getElementById('wizardProxmoxUrl') && document.getElementById('wizardProxmoxUrl').value.trim()) || '';
+        const idPart = (document.getElementById('wizardApiTokenId') && document.getElementById('wizardApiTokenId').value.trim()) || '';
+        const secPart = (document.getElementById('wizardApiTokenSecret') && document.getElementById('wizardApiTokenSecret').value.trim()) || '';
+        proxmoxServers = url ? [normalizeUrlClient(url)] : [];
+        currentServerIndex = 0;
+        const tid = document.getElementById('apiTokenId');
+        const ts = document.getElementById('apiTokenSecret');
+        if (tid) tid.value = idPart;
+        if (ts) ts.value = secPart;
+        syncProxmoxApiTokenFromParts();
+    } else {
+        const url = (document.getElementById('wizardTrueNASUrl') && document.getElementById('wizardTrueNASUrl').value.trim()) || '';
+        const key = (document.getElementById('wizardTrueNASKey') && document.getElementById('wizardTrueNASKey').value.trim()) || '';
+        truenasServers = url ? [normalizeUrlClient(url)] : [];
+        currentTrueNASServerIndex = 0;
+        const k = document.getElementById('apiTokenTrueNAS');
+        if (k) k.value = key;
+    }
+    renderServerList();
+}
+
+function setupWizardUpdateUI() {
+    const step = setupWizardStep;
+    const s1 = document.getElementById('setupWizardStep1');
+    const s2 = document.getElementById('setupWizardStep2');
+    const s3 = document.getElementById('setupWizardStep3');
+    const s4 = document.getElementById('setupWizardStep4');
+    if (s1) s1.classList.toggle('d-none', step !== 1);
+    if (s2) s2.classList.toggle('d-none', step !== 2);
+    if (s3) s3.classList.toggle('d-none', step !== 3);
+    if (s4) s4.classList.toggle('d-none', step !== 4);
+    for (let i = 1; i <= 4; i++) {
+        const b = document.getElementById('setupWizardBadge' + i);
+        if (b) {
+            b.classList.toggle('bg-primary', i === step);
+            b.classList.toggle('bg-secondary', i !== step);
+        }
+    }
+    const back = document.getElementById('setupWizardBtnBack');
+    const skip = document.getElementById('setupWizardBtnSkip');
+    const next = document.getElementById('setupWizardBtnNext');
+    const conn = document.getElementById('setupWizardBtnConnect');
+    const fin = document.getElementById('setupWizardBtnFinish');
+    if (back) back.classList.toggle('d-none', step === 1);
+    if (skip) skip.classList.toggle('d-none', step !== 3);
+    if (next) next.classList.toggle('d-none', step !== 1);
+    if (conn) conn.classList.toggle('d-none', step !== 3);
+    if (fin) fin.classList.toggle('d-none', step !== 4);
+    if (step === 3) {
+        const prox = document.getElementById('setupWizardProxmoxFields');
+        const tn = document.getElementById('setupWizardTrueNASFields');
+        const isTn = setupWizardServerType === 'truenas';
+        if (prox) prox.classList.toggle('d-none', isTn);
+        if (tn) tn.classList.toggle('d-none', !isTn);
+    }
+}
+
+function setupWizardBindOnce() {
+    if (setupWizardListenersBound) return;
+    setupWizardListenersBound = true;
+    const pickPx = document.getElementById('setupWizardPickProxmox');
+    const pickTn = document.getElementById('setupWizardPickTrueNAS');
+    if (pickPx) pickPx.addEventListener('click', () => {
+        setupWizardServerType = 'proxmox';
+        setupWizardStep = 3;
+        setupWizardUpdateUI();
+    });
+    if (pickTn) pickTn.addEventListener('click', () => {
+        setupWizardServerType = 'truenas';
+        setupWizardStep = 3;
+        setupWizardUpdateUI();
+    });
+    const back = document.getElementById('setupWizardBtnBack');
+    if (back) back.addEventListener('click', () => {
+        if (setupWizardStep === 3) {
+            setupWizardStep = 2;
+        } else if (setupWizardStep === 2) {
+            setupWizardStep = 1;
+        }
+        setupWizardUpdateUI();
+    });
+    const next = document.getElementById('setupWizardBtnNext');
+    if (next) next.addEventListener('click', async () => {
+        if (setupWizardStep !== 1) return;
+        const sel = document.getElementById('wizardLangSelect');
+        const lang = sel && sel.value ? sel.value : currentLanguage;
+        setLanguage(lang);
+        await saveSettingsToServer({ preferredLanguage: lang });
+        setupWizardStep = 2;
+        setupWizardUpdateUI();
+    });
+    const skip = document.getElementById('setupWizardBtnSkip');
+    if (skip) skip.addEventListener('click', () => {
+        setupWizardFinishMode = 'skip';
+        setupWizardStep = 4;
+        localizeSetupWizard();
+        setupWizardUpdateUI();
+    });
+    const connectBtn = document.getElementById('setupWizardBtnConnect');
+    if (connectBtn) connectBtn.addEventListener('click', async () => {
+        if (setupWizardServerType === 'proxmox') {
+            const url = document.getElementById('wizardProxmoxUrl') && document.getElementById('wizardProxmoxUrl').value.trim();
+            const idPart = document.getElementById('wizardApiTokenId') && document.getElementById('wizardApiTokenId').value.trim();
+            const secPart = document.getElementById('wizardApiTokenSecret') && document.getElementById('wizardApiTokenSecret').value.trim();
+            if (!url || !idPart || !secPart) {
+                showToast(t('setupWizardFillRequired') || t('tokenRequired'), 'warning');
+                return;
+            }
+        } else {
+            const url = document.getElementById('wizardTrueNASUrl') && document.getElementById('wizardTrueNASUrl').value.trim();
+            const key = document.getElementById('wizardTrueNASKey') && document.getElementById('wizardTrueNASKey').value.trim();
+            if (!url || !key) {
+                showToast(t('setupWizardFillRequired') || t('tokenRequired'), 'warning');
+                return;
+            }
+        }
+        setupWizardSyncFromWizardToConfig();
+        await saveSettingsToServer({
+            serverType: setupWizardServerType === 'truenas' ? 'truenas' : 'proxmox',
+            proxmoxServers,
+            truenasServers,
+            currentServerIndex,
+            currentTrueNASServerIndex
+        });
+        connectBtn.disabled = true;
+        try {
+            const ok = await connect({ skipDashboard: true });
+            if (ok) {
+                setupWizardFinishMode = 'success';
+                setupWizardStep = 4;
+                localizeSetupWizard();
+                setupWizardUpdateUI();
+            }
+        } finally {
+            connectBtn.disabled = false;
+        }
+    });
+    const fin = document.getElementById('setupWizardBtnFinish');
+    if (fin) fin.addEventListener('click', () => setupWizardFinishFlow());
+    const importBtn = document.getElementById('setupWizardImportBtn');
+    const importFile = document.getElementById('wizardConfigImportFile');
+    if (importBtn && importFile) {
+        importBtn.addEventListener('click', () => importFile.click());
+        importFile.addEventListener('change', (ev) => setupWizardOnImportConfigFile(ev));
+    }
+}
+
+async function setupWizardOnImportConfigFile(ev) {
+    const file = ev.target.files && ev.target.files[0];
+    if (!file) return;
+    let parsed;
+    try {
+        parsed = JSON.parse(await file.text());
+    } catch {
+        showToast(t('settingsImportError') || 'Неверный файл импорта', 'error');
+        ev.target.value = '';
+        return;
+    }
+    const importBtn = document.getElementById('setupWizardImportBtn');
+    if (importBtn) importBtn.disabled = true;
+    try {
+        await importAllConfigFromParsedJson(parsed);
+        showToast(t('settingsImportSuccess') || 'Настройки импортированы, данные обновлены', 'success');
+        await setupWizardFinishFlow();
+    } catch (err) {
+        showToast((t('settingsImportError') || t('errorUpdate')) + ': ' + err.message, 'error');
+    } finally {
+        ev.target.value = '';
+        if (importBtn) importBtn.disabled = false;
+    }
+}
+
+function showInitialSetupWizard() {
+    setupWizardStep = 1;
+    setupWizardServerType = 'proxmox';
+    setupWizardFinishMode = 'success';
+    setupWizardFillLangSelect();
+    setupWizardBindOnce();
+    setupWizardUpdateUI();
+    localizeSetupWizard();
+    const el = document.getElementById('initialSetupWizardModal');
+    if (!el) return;
+    const m = bootstrap.Modal.getOrCreateInstance(el, { backdrop: 'static', keyboard: false });
+    m.show();
+}
+
+async function setupWizardFinishFlow() {
+    await saveSettingsToServer({ setupCompleted: true });
+    setupCompleted = true;
+    const modalEl = document.getElementById('initialSetupWizardModal');
+    const inst = modalEl && bootstrap.Modal.getInstance(modalEl);
+    if (inst) inst.hide();
+    const data = await loadSettings();
+    if (data.preferred_language && availableLanguages.includes(data.preferred_language)) {
+        setLanguage(data.preferred_language);
+    }
+    const hasConnIds = connectionIdMap && typeof connectionIdMap === 'object' && Object.keys(connectionIdMap).length > 0;
+    if (hasConnIds) {
+        try {
+            await refreshData();
+            startAutoRefresh();
+            if (!monitorMode) showDashboard();
+        } catch (e) {
+            console.warn('Initial refresh after wizard:', e);
+            showConfigSectionOnly();
+        }
+    } else {
+        showConfigSectionOnly();
+    }
 }
 
 // Available languages (will be populated from server)
@@ -1373,6 +2021,18 @@ document.addEventListener('DOMContentLoaded', async function() {
         vmIdOrNameInput.addEventListener('change', addVmToMonitorByIdOrName);
         vmIdOrNameInput.addEventListener('keydown', function(e) { if (e.key === 'Enter') { e.preventDefault(); addVmToMonitorByIdOrName(); } });
     }
+    const telegramNav = document.getElementById('settings-nav-telegram');
+    if (telegramNav) {
+        telegramNav.addEventListener('shown.bs.tab', () => renderTelegramRulesTable());
+    }
+    const hostMetricsNav = document.getElementById('settings-nav-hostmetrics');
+    if (hostMetricsNav) {
+        hostMetricsNav.addEventListener('shown.bs.tab', () => {
+            loadHostMetricsSettings().catch(() => {});
+        });
+    }
+    initHostMetricsAgentInstallModal();
+    bindTelegramRuleMessageModalOnce();
     const debugNav = document.getElementById('settings-nav-debug');
     if (debugNav) {
         debugNav.addEventListener('shown.bs.tab', () => refreshDebugMetrics());
@@ -1403,22 +2063,27 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
 
     checkServerStatus();
+    checkForAppUpdates().catch(() => {});
     updateCurrentServerBadge();
 
-    // Показать дашборд или настройки: при сохранённом подключении — загрузить данные и показать контент, иначе — форму входа
-    const hasConnIds = connectionIdMap && typeof connectionIdMap === 'object' && Object.keys(connectionIdMap).length > 0;
-    if (apiToken || hasConnIds) {
-        try {
-            await refreshData();
-            startAutoRefresh();
-            if (!monitorMode) showDashboard();
-            // если monitorMode — видимость уже задана в loadSettings() через applyMonitorView
-        } catch (e) {
-            console.warn('Initial refresh failed:', e);
+    const needsSetupWizard = settingsData && settingsData.setup_completed === false;
+    if (needsSetupWizard) {
+        showInitialSetupWizard();
+    } else {
+        // Показать дашборд или настройки: при сохранённом подключении — загрузить данные и показать контент, иначе — форму входа
+        const hasConnIds = connectionIdMap && typeof connectionIdMap === 'object' && Object.keys(connectionIdMap).length > 0;
+        if (apiToken || hasConnIds) {
+            try {
+                await refreshData();
+                startAutoRefresh();
+                if (!monitorMode) showDashboard();
+            } catch (e) {
+                console.warn('Initial refresh failed:', e);
+                showConfigSectionOnly();
+            }
+        } else {
             showConfigSectionOnly();
         }
-    } else {
-        showConfigSectionOnly();
     }
 });
 
@@ -1451,6 +2116,461 @@ function normalizeUrlClient(u) {
 
 function connectionKey(type, url) {
     return `${type}|${normalizeUrlClient(url)}`;
+}
+
+function normalizeTelegramRoutes(raw) {
+    const o = raw && typeof raw === 'object' ? raw : {};
+    return {
+        service: typeof o.service === 'object' && o.service ? { ...o.service } : {},
+        vm: typeof o.vm === 'object' && o.vm ? { ...o.vm } : {},
+        node: typeof o.node === 'object' && o.node ? { ...o.node } : {},
+        netdev: typeof o.netdev === 'object' && o.netdev ? { ...o.netdev } : {}
+    };
+}
+
+function migrateLegacyTelegramRoutesToRulesClient(routes) {
+    const out = [];
+    let n = 0;
+    const id = () => `legacy_${Date.now()}_${++n}`;
+    const svc = routes.service || {};
+    for (const [sid, r] of Object.entries(svc)) {
+        const chatId = String(r && r.chatId || '').trim();
+        if (!chatId) continue;
+        const serviceId = parseInt(sid, 10);
+        if (!Number.isFinite(serviceId)) continue;
+        out.push({ id: id(), enabled: true, type: 'service_updown', serviceId, chatId, threadId: String(r.threadId || '').trim() || undefined });
+    }
+    const vm = routes.vm || {};
+    for (const [vid, r] of Object.entries(vm)) {
+        const chatId = String(r && r.chatId || '').trim();
+        if (!chatId) continue;
+        const vmid = parseInt(vid, 10);
+        if (!Number.isFinite(vmid)) continue;
+        out.push({ id: id(), enabled: true, type: 'vm_state', vmid, chatId, threadId: String(r.threadId || '').trim() || undefined });
+    }
+    const node = routes.node || {};
+    for (const [name, r] of Object.entries(node)) {
+        const chatId = String(r && r.chatId || '').trim();
+        if (!chatId) continue;
+        const nodeName = String(name || '').trim();
+        if (!nodeName) continue;
+        out.push({ id: id(), enabled: true, type: 'node_online', nodeName, chatId, threadId: String(r.threadId || '').trim() || undefined });
+    }
+    const nd = routes.netdev || {};
+    for (const [slot, r] of Object.entries(nd)) {
+        const chatId = String(r && r.chatId || '').trim();
+        if (!chatId) continue;
+        const netdevSlot = parseInt(slot, 10);
+        if (!Number.isFinite(netdevSlot)) continue;
+        out.push({ id: id(), enabled: true, type: 'netdev_updown', netdevSlot, chatId, threadId: String(r.threadId || '').trim() || undefined });
+    }
+    return out;
+}
+
+function normalizeTelegramNotificationRules(raw) {
+    if (!Array.isArray(raw)) return [];
+    return raw.filter((x) => x && typeof x === 'object' && x.type);
+}
+
+function newTelegramRuleId() {
+    return `r_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function getDefaultTelegramRule() {
+    const list = Array.isArray(monitoredServices) ? monitoredServices : [];
+    const firstSvc = list[0];
+    if (firstSvc && firstSvc.id != null) {
+        return { id: newTelegramRuleId(), enabled: true, type: 'service_updown', serviceId: firstSvc.id, chatId: '', threadId: '' };
+    }
+    return { id: newTelegramRuleId(), enabled: true, type: 'node_online', nodeName: getClusterNodeNamesForTelegramRules()[0] || 'pve', chatId: '', threadId: '' };
+}
+
+function getClusterNodeNamesForTelegramRules() {
+    const nodes = lastClusterData && Array.isArray(lastClusterData.nodes) ? lastClusterData.nodes : [];
+    return nodes.map((n) => n.name || n.node).filter(Boolean);
+}
+
+function getTelegramRuleTypeLabel(type) {
+    const m = {
+        service_updown: 'telegramRuleTypeService',
+        vm_state: 'telegramRuleTypeVm',
+        node_online: 'telegramRuleTypeNode',
+        netdev_updown: 'telegramRuleTypeNetdev',
+        host_temp: 'telegramRuleTypeHostTemp',
+        host_link_speed: 'telegramRuleTypeHostLink'
+    };
+    return t(m[type] || type);
+}
+
+function syncTelegramRuleMessageFromModalIfOpen() {
+    const modalEl = document.getElementById('telegramRuleMessageModal');
+    if (!modalEl) return;
+    const rid = modalEl.dataset.editingRuleId;
+    if (!rid) return;
+    const ta = document.getElementById('telegramRuleMessageModalTextarea');
+    if (!ta) return;
+    const rule = (telegramNotificationRules || []).find((r) => r.id === rid);
+    if (!rule) return;
+    const mt = String(ta.value || '').trim();
+    if (mt) rule.messageTemplate = mt;
+    else delete rule.messageTemplate;
+}
+
+function buildTelegramVarsListHtml(type) {
+    const key = 'telegramMessageVars_' + String(type || 'service_updown');
+    const raw = t(key);
+    if (!raw || raw === key) {
+        return `<li class="text-muted small">${escapeHtml(t('telegramVarsFallback') || '—')}</li>`;
+    }
+    const parts = String(raw).split('|').map((s) => s.trim()).filter(Boolean);
+    return parts.map((line) => {
+        const m = line.match(/^(\{[^}]+\})\s*[—–\-]\s*(.+)$/);
+        if (m) {
+            return `<li><code>${escapeHtml(m[1])}</code> <span class="text-muted">${escapeHtml(m[2].trim())}</span></li>`;
+        }
+        return `<li class="small">${escapeHtml(line)}</li>`;
+    }).join('');
+}
+
+function localizeTelegramMessageModal() {
+    setText('telegramRuleMessageModalTitleText', t('telegramMessageModalTitle'));
+    setText('telegramRuleMessageModalEmptyHint', t('telegramMessageModalEmptyHint'));
+    setText('telegramRuleMessageModalTextareaLabel', t('telegramMessageModalTextareaLabel'));
+    setText('telegramRuleMessageModalVarsTitle', t('telegramMessageModalVarsTitle'));
+    setText('telegramRuleMessageModalCancelText', t('telegramMessageModalCancel'));
+    setText('telegramRuleMessageModalSaveText', t('telegramMessageModalSave'));
+    const ta = document.getElementById('telegramRuleMessageModalTextarea');
+    if (ta) ta.placeholder = t('settingsTelegramMessageTemplatePlaceholder') || '';
+}
+
+function openTelegramRuleMessageModal(ruleId) {
+    syncTelegramRulesFromDom();
+    const rule = (telegramNotificationRules || []).find((r) => r.id === ruleId);
+    if (!rule) return;
+    const modalEl = document.getElementById('telegramRuleMessageModal');
+    const ta = document.getElementById('telegramRuleMessageModalTextarea');
+    if (!modalEl || !ta) return;
+    modalEl.dataset.editingRuleId = ruleId;
+    ta.value = rule.messageTemplate || '';
+    const typeLine = document.getElementById('telegramRuleMessageModalTypeLine');
+    if (typeLine) typeLine.textContent = getTelegramRuleTypeLabel(rule.type || 'service_updown');
+    const ul = document.getElementById('telegramRuleMessageModalVarsList');
+    if (ul) ul.innerHTML = buildTelegramVarsListHtml(String(rule.type || 'service_updown'));
+    localizeTelegramMessageModal();
+    const m = bootstrap.Modal.getOrCreateInstance(modalEl);
+    m.show();
+}
+
+function saveTelegramRuleMessageModal() {
+    const modalEl = document.getElementById('telegramRuleMessageModal');
+    const rid = modalEl && modalEl.dataset.editingRuleId;
+    if (!rid) return;
+    const ta = document.getElementById('telegramRuleMessageModalTextarea');
+    const rule = (telegramNotificationRules || []).find((r) => r.id === rid);
+    if (!rule) return;
+    const mt = ta ? String(ta.value || '').trim() : '';
+    if (mt) rule.messageTemplate = mt;
+    else delete rule.messageTemplate;
+    const inst = modalEl && bootstrap.Modal.getInstance(modalEl);
+    if (inst) inst.hide();
+    delete modalEl.dataset.editingRuleId;
+    renderTelegramRulesTable();
+}
+
+function bindTelegramRuleMessageModalOnce() {
+    if (telegramRuleMessageModalBound) return;
+    telegramRuleMessageModalBound = true;
+    const modalEl = document.getElementById('telegramRuleMessageModal');
+    const saveBtn = document.getElementById('telegramRuleMessageModalSaveBtn');
+    if (saveBtn) saveBtn.addEventListener('click', () => saveTelegramRuleMessageModal());
+    if (modalEl) {
+        modalEl.addEventListener('hidden.bs.modal', () => {
+            delete modalEl.dataset.editingRuleId;
+        });
+    }
+}
+
+function buildTelegramRuleTargetSelectHtml(rule) {
+    const typ = String(rule.type || 'service_updown');
+    if (typ === 'service_updown') {
+        const list = Array.isArray(monitoredServices) ? monitoredServices : [];
+        const opts = list.map((s) => {
+            const id = s.id != null ? s.id : 0;
+            const sel = Number(rule.serviceId) === Number(id) ? ' selected' : '';
+            const lab = escapeHtml(s.name || getServiceTargetDisplay(s) || String(id));
+            return `<option value="${id}"${sel}>${lab}</option>`;
+        }).join('');
+        return `<select class="form-select form-select-sm" data-tr-field="target" data-rule-id="${escapeHtml(rule.id)}">${opts || '<option value="">—</option>'}</select>`;
+    }
+    if (typ === 'vm_state') {
+        const vms = getClusterVms();
+        const ids = new Set((Array.isArray(monitoredVmIds) ? monitoredVmIds : []).map(Number));
+        vms.forEach((vm) => { const id = Number(vm.vmid != null ? vm.vmid : vm.id); if (!Number.isNaN(id)) ids.add(id); });
+        const idList = Array.from(ids).sort((a, b) => a - b);
+        const opts = idList.map((id) => {
+            const sel = Number(rule.vmid) === id ? ' selected' : '';
+            const vm = vms.find((v) => Number(v.vmid || v.id) === id);
+            const lab = vm ? `${escapeHtml(vm.name || '')} [${id}]` : String(id);
+            return `<option value="${id}"${sel}>${lab}</option>`;
+        }).join('');
+        return `<select class="form-select form-select-sm" data-tr-field="target" data-rule-id="${escapeHtml(rule.id)}">${opts || '<option value="">—</option>'}</select>`;
+    }
+    if (typ === 'node_online' || typ === 'host_temp' || typ === 'host_link_speed') {
+        const names = getClusterNodeNamesForTelegramRules();
+        const fallback = rule.nodeName ? [String(rule.nodeName)] : ['pve'];
+        const uniq = names.length ? names : fallback;
+        const opts = uniq.map((name) => {
+            const sel = String(rule.nodeName) === String(name) ? ' selected' : '';
+            return `<option value="${escapeHtml(name)}"${sel}>${escapeHtml(name)}</option>`;
+        }).join('');
+        return `<select class="form-select form-select-sm" data-tr-field="target" data-rule-id="${escapeHtml(rule.id)}">${opts}</select>`;
+    }
+    if (typ === 'netdev_updown') {
+        const opts = Array.from({ length: 10 }, (_, i) => i + 1).map((slot) => {
+            const sel = Number(rule.netdevSlot) === slot ? ' selected' : '';
+            return `<option value="${slot}"${sel}>${slot}</option>`;
+        }).join('');
+        return `<select class="form-select form-select-sm" data-tr-field="target" data-rule-id="${escapeHtml(rule.id)}">${opts}</select>`;
+    }
+    return '—';
+}
+
+function buildTelegramRuleExtraHtml(rule) {
+    const typ = String(rule.type || '');
+    if (typ === 'host_temp') {
+        const v = rule.tempThresholdC != null && rule.tempThresholdC !== '' ? String(rule.tempThresholdC) : '85';
+        return `<input type="number" class="form-control form-control-sm" min="0" max="120" step="1" value="${escapeHtml(v)}" data-tr-field="extraTemp" data-rule-id="${escapeHtml(rule.id)}" title="${escapeHtml(t('telegramRuleTempHint') || '°C')}">`;
+    }
+    return `<span class="text-muted small">—</span>`;
+}
+
+function renderTelegramRulesTable() {
+    syncTelegramRuleMessageFromModalIfOpen();
+    const body = document.getElementById('telegramRulesTableBody');
+    if (!body) return;
+    const rules = Array.isArray(telegramNotificationRules) ? telegramNotificationRules : [];
+    if (!rules.length) {
+        body.innerHTML = `<tr><td colspan="8" class="text-muted small">${escapeHtml(t('telegramRulesEmpty') || 'Нет правил — добавьте или сохраните настройки после миграции со старого формата.')}</td></tr>`;
+        return;
+    }
+    body.innerHTML = rules.map((rule) => {
+        const typeOpts = ['service_updown', 'vm_state', 'node_online', 'netdev_updown', 'host_temp', 'host_link_speed'].map((tp) => {
+            const sel = String(rule.type) === tp ? ' selected' : '';
+            return `<option value="${tp}"${sel}>${escapeHtml(getTelegramRuleTypeLabel(tp))}</option>`;
+        }).join('');
+        const hasTpl = !!(rule.messageTemplate && String(rule.messageTemplate).trim());
+        const statusText = hasTpl ? (t('telegramMessageTemplateStatusCustom') || 'Custom') : (t('telegramMessageTemplateStatusDefault') || 'Default');
+        return `
+            <tr data-rule-row="${escapeHtml(rule.id)}">
+                <td class="text-center align-middle">
+                    <input type="checkbox" class="form-check-input" data-tr-field="enabled" data-rule-id="${escapeHtml(rule.id)}" ${rule.enabled !== false ? 'checked' : ''}>
+                </td>
+                <td>
+                    <select class="form-select form-select-sm" data-tr-field="type" data-rule-id="${escapeHtml(rule.id)}">${typeOpts}</select>
+                </td>
+                <td class="telegram-rule-target">${buildTelegramRuleTargetSelectHtml(rule)}</td>
+                <td class="telegram-rule-extra">${buildTelegramRuleExtraHtml(rule)}</td>
+                <td class="align-top">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-tr-edit-msg="${escapeHtml(rule.id)}">
+                        <i class="bi bi-pencil-square me-1"></i>${escapeHtml(t('telegramRuleEditMessage') || 'Edit')}
+                    </button>
+                    <div class="text-muted small mt-1">${escapeHtml(statusText)}</div>
+                </td>
+                <td><input type="text" class="form-control form-control-sm" data-tr-field="chatId" data-rule-id="${escapeHtml(rule.id)}" value="${escapeHtml(rule.chatId || '')}" placeholder="${escapeHtml(t('settingsTelegramChatIdPlaceholder') || 'chat_id')}" autocomplete="off"></td>
+                <td><input type="text" class="form-control form-control-sm" data-tr-field="threadId" data-rule-id="${escapeHtml(rule.id)}" value="${escapeHtml(rule.threadId || '')}" placeholder="${escapeHtml(t('settingsTelegramThreadPlaceholder') || 'thread')}" autocomplete="off"></td>
+                <td class="text-nowrap">
+                    <button type="button" class="btn btn-sm btn-outline-secondary me-1" data-tr-test="${escapeHtml(rule.id)}" title="${escapeHtml(t('telegramTestRuleButton') || 'Test')}"><i class="bi bi-send"></i></button>
+                    <button type="button" class="btn btn-sm btn-outline-danger" data-tr-remove="${escapeHtml(rule.id)}" title="${escapeHtml(t('remove') || 'Удалить')}"><i class="bi bi-trash"></i></button>
+                </td>
+            </tr>`;
+    }).join('');
+
+    body.querySelectorAll('[data-tr-field]').forEach((el) => {
+        const field = el.getAttribute('data-tr-field');
+        if (field === 'type') el.addEventListener('change', onTelegramRuleTypeChange);
+        else {
+            el.addEventListener('change', onTelegramRuleFieldChange);
+            el.addEventListener('input', onTelegramRuleFieldChange);
+        }
+    });
+    body.querySelectorAll('[data-tr-edit-msg]').forEach((btn) => {
+        btn.addEventListener('click', () => openTelegramRuleMessageModal(btn.getAttribute('data-tr-edit-msg')));
+    });
+    body.querySelectorAll('[data-tr-remove]').forEach((btn) => {
+        btn.addEventListener('click', () => removeTelegramNotificationRule(btn.getAttribute('data-tr-remove')));
+    });
+    body.querySelectorAll('[data-tr-test]').forEach((btn) => {
+        btn.addEventListener('click', () => testTelegramNotificationRule(btn.getAttribute('data-tr-test')));
+    });
+}
+
+function telegramTestRuleApiErrorMessage(errText) {
+    const s = String(errText || '').toLowerCase();
+    if (s.includes('chat_id')) return t('telegramTestRuleNeedChat');
+    if (s.includes('bot_token')) return t('telegramTestRuleNeedToken');
+    return String(errText || 'error');
+}
+
+async function testTelegramNotificationRule(ruleId) {
+    syncTelegramRuleMessageFromModalIfOpen();
+    syncTelegramRulesFromDom();
+    const rule = (telegramNotificationRules || []).find((r) => r.id === ruleId);
+    if (!rule) return;
+    if (!String(rule.chatId || '').trim()) {
+        showToast(t('telegramTestRuleNeedChat') || 'Укажите chat_id', 'warning');
+        return;
+    }
+    const tokEl = document.getElementById('settingsTelegramBotTokenInput');
+    const hasNewToken = tokEl && String(tokEl.value).trim();
+    if (!hasNewToken && !telegramBotTokenSet) {
+        showToast(t('telegramTestRuleNeedToken') || 'Нужен токен бота', 'warning');
+        return;
+    }
+    const payload = { rule: { ...rule } };
+    if (hasNewToken) payload.telegramBotToken = String(tokEl.value).trim();
+    try {
+        const res = await fetch('/api/settings/telegram-test-rule', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.success) {
+            const errRaw = data.error || res.statusText || 'error';
+            throw new Error(telegramTestRuleApiErrorMessage(errRaw));
+        }
+        showToast(t('telegramTestRuleSuccess') || 'Отправлено', 'success');
+    } catch (e) {
+        showToast((t('telegramTestRuleError') || 'Ошибка') + ': ' + (e.message || String(e)), 'error');
+    }
+}
+
+function onTelegramRuleTypeChange(ev) {
+    const el = ev && ev.target;
+    const rid = el && el.getAttribute('data-rule-id');
+    if (!rid) return;
+    syncTelegramRuleMessageFromModalIfOpen();
+    const modalEl = document.getElementById('telegramRuleMessageModal');
+    if (modalEl && modalEl.dataset.editingRuleId === rid) {
+        const inst = bootstrap.Modal.getInstance(modalEl);
+        if (inst) inst.hide();
+        delete modalEl.dataset.editingRuleId;
+    }
+    const rule = (telegramNotificationRules || []).find((r) => r.id === rid);
+    if (!rule) return;
+    rule.type = String(el.value || 'service_updown');
+    delete rule.serviceId;
+    delete rule.vmid;
+    delete rule.nodeName;
+    delete rule.netdevSlot;
+    delete rule.tempThresholdC;
+    const nn = getClusterNodeNamesForTelegramRules()[0] || 'pve';
+    if (rule.type === 'service_updown') {
+        const list = Array.isArray(monitoredServices) ? monitoredServices : [];
+        rule.serviceId = list[0] && list[0].id != null ? list[0].id : 0;
+    } else if (rule.type === 'vm_state') {
+        const vms = getClusterVms();
+        const id0 = vms[0] ? Number(vms[0].vmid != null ? vms[0].vmid : vms[0].id) : (Array.isArray(monitoredVmIds) && monitoredVmIds[0] != null ? monitoredVmIds[0] : 0);
+        rule.vmid = Number.isFinite(id0) ? id0 : 0;
+    } else if (rule.type === 'netdev_updown') rule.netdevSlot = 1;
+    else if (rule.type === 'host_temp') {
+        rule.nodeName = nn;
+        rule.tempThresholdC = 85;
+    } else if (rule.type === 'host_link_speed') rule.nodeName = nn;
+    else if (rule.type === 'node_online') rule.nodeName = nn;
+    renderTelegramRulesTable();
+}
+
+function onTelegramRuleFieldChange() {
+    syncTelegramRulesFromDom();
+}
+
+function syncTelegramRulesFromDom() {
+    syncTelegramRuleMessageFromModalIfOpen();
+    const body = document.getElementById('telegramRulesTableBody');
+    if (!body) return;
+    const map = new Map((telegramNotificationRules || []).map((r) => [r.id, { ...r }]));
+    body.querySelectorAll('tr[data-rule-row]').forEach((tr) => {
+        const rid = tr.getAttribute('data-rule-row');
+        const rule = map.get(rid) || { id: rid };
+        const en = tr.querySelector('[data-tr-field="enabled"]');
+        if (en) rule.enabled = !!en.checked;
+        const typEl = tr.querySelector('[data-tr-field="type"]');
+        if (typEl) rule.type = String(typEl.value || 'service_updown');
+        const chatEl = tr.querySelector('[data-tr-field="chatId"]');
+        if (chatEl) rule.chatId = String(chatEl.value || '').trim();
+        const thEl = tr.querySelector('[data-tr-field="threadId"]');
+        if (thEl) {
+            const t0 = String(thEl.value || '').trim();
+            rule.threadId = t0 || undefined;
+        }
+        const tgt = tr.querySelector('[data-tr-field="target"]');
+        if (tgt) {
+            const typ = String(rule.type);
+            const v = String(tgt.value || '').trim();
+            delete rule.serviceId;
+            delete rule.vmid;
+            delete rule.nodeName;
+            delete rule.netdevSlot;
+            delete rule.tempThresholdC;
+            if (typ === 'service_updown') rule.serviceId = parseInt(v, 10);
+            else if (typ === 'vm_state') rule.vmid = parseInt(v, 10);
+            else if (typ === 'node_online' || typ === 'host_temp' || typ === 'host_link_speed') rule.nodeName = v;
+            else if (typ === 'netdev_updown') rule.netdevSlot = parseInt(v, 10);
+        }
+        const ex = tr.querySelector('[data-tr-field="extraTemp"]');
+        if (ex && String(rule.type) === 'host_temp') {
+            const n = parseFloat(ex.value);
+            rule.tempThresholdC = Number.isFinite(n) ? n : 85;
+        }
+        map.set(rid, rule);
+    });
+    telegramNotificationRules = Array.from(map.values());
+}
+
+function addTelegramNotificationRule() {
+    syncTelegramRulesFromDom();
+    telegramNotificationRules = [...(telegramNotificationRules || []), getDefaultTelegramRule()];
+    renderTelegramRulesTable();
+}
+
+function removeTelegramNotificationRule(ruleId) {
+    syncTelegramRulesFromDom();
+    const modalEl = document.getElementById('telegramRuleMessageModal');
+    if (modalEl && modalEl.dataset.editingRuleId === ruleId) {
+        const inst = bootstrap.Modal.getInstance(modalEl);
+        if (inst) inst.hide();
+        delete modalEl.dataset.editingRuleId;
+    }
+    telegramNotificationRules = (telegramNotificationRules || []).filter((r) => r.id !== ruleId);
+    renderTelegramRulesTable();
+}
+
+async function saveTelegramSettings() {
+    syncTelegramRulesFromDom();
+    const en = document.getElementById('settingsTelegramNotifyEnabled');
+    const intervalEl = document.getElementById('settingsTelegramIntervalSec');
+    const tokEl = document.getElementById('settingsTelegramBotTokenInput');
+    const enabled = en && String(en.value) === '1';
+    let interval = intervalEl ? parseInt(intervalEl.value, 10) : 60;
+    if (!Number.isFinite(interval) || interval < 15) interval = 15;
+    if (interval > 3600) interval = 3600;
+    const payload = {
+        telegramNotifyEnabled: enabled,
+        telegramNotifyIntervalSec: interval,
+        telegramNotificationRules: [...telegramNotificationRules]
+    };
+    if (tokEl && String(tokEl.value).trim()) payload.telegramBotToken = String(tokEl.value).trim();
+    await saveSettingsToServer(payload);
+    if (tokEl) tokEl.value = '';
+    showToast(t('dataUpdated') || 'Сохранено', 'success');
+}
+
+async function clearTelegramBotToken() {
+    if (!confirm(t('settingsTelegramClearTokenConfirm') || 'Удалить токен бота?')) return;
+    await saveSettingsToServer({ telegramClearBotToken: true });
+    telegramBotTokenSet = false;
+    showToast(t('dataUpdated') || 'Готово', 'success');
 }
 
 function getCurrentConnectionId() {
@@ -1540,6 +2660,42 @@ async function checkServerStatus() {
     } catch (error) {
         setHTML('serverStatus', '<i class="bi bi-exclamation-circle"></i> <span id="serverStatusText">' + t('serverError') + '</span>');
     }
+}
+
+async function checkForAppUpdates(force = false) {
+    if (!force && updateCheckPromise) return updateCheckPromise;
+
+    updateCheckPromise = (async () => {
+        try {
+            const response = await fetch('/api/updates');
+            const data = await response.json();
+            latestUpdateInfo = data || null;
+            renderFooterUpdateStatus();
+            if (!response.ok || !data || !data.updateAvailable || !data.latestVersion) return data;
+
+            if (getSeenUpdateVersion() === data.latestVersion) return data;
+
+            const message = `${escapeHtml(tParams('updateAvailableToast', {
+                latest: data.latestVersion,
+                current: data.currentVersion || 'unknown'
+            }))} <a href="${escapeHtml(data.releaseUrl || data.repoUrl || '#')}" target="_blank" rel="noopener noreferrer">${escapeHtml(t('updateAvailableOpenRelease'))}</a>`;
+
+            showToast(message, 'warning');
+            markUpdateVersionAsSeen(data.latestVersion);
+            return data;
+        } catch (error) {
+            latestUpdateInfo = {
+                error: error && error.message ? error.message : String(error)
+            };
+            renderFooterUpdateStatus();
+            console.warn('Update check failed:', error);
+            throw error;
+        } finally {
+            updateCheckPromise = null;
+        }
+    })();
+
+    return updateCheckPromise;
 }
 
 // Show notification
@@ -1754,13 +2910,238 @@ async function loadSettingsPanelData() {
         renderSettingsMonitoredVms();
     }
     renderSettingsMonitoredServices();
+    renderTelegramRulesTable();
     await loadUpsSettings();
     await ensureUpsDisplaySlotsLoaded();
     await loadNetdevSettings();
     await ensureNetdevDisplaySlotsLoaded();
     await loadHostMetricsSettings();
     await loadAboutContent();
+    renderClusterDashboardTilesSettings();
     renderServerList();
+}
+
+function normalizeClusterDashboardTile(raw) {
+    const tile = raw && typeof raw === 'object' ? raw : {};
+    const type = String(tile.type || '').trim().toLowerCase();
+    if (!CLUSTER_DASHBOARD_TILE_TYPES.includes(type)) return null;
+    let sourceId = String(tile.sourceId || '').trim();
+    if (type === 'speedtest') sourceId = 'speedtest:default';
+    if (!sourceId) return null;
+    return { type, sourceId };
+}
+
+function normalizeClusterDashboardTiles(raw) {
+    if (!Array.isArray(raw)) return [];
+    return raw
+        .map(normalizeClusterDashboardTile)
+        .filter(Boolean)
+        .slice(0, MAX_CLUSTER_DASHBOARD_TILES);
+}
+
+function getClusterDashboardTileTypeLabel(type) {
+    if (type === 'service') return t('settingsClusterTileTypeService');
+    if (type === 'vmct') return t('settingsClusterTileTypeVmct');
+    if (type === 'netdev') return t('settingsClusterTileTypeNetdev');
+    if (type === 'speedtest') return t('settingsClusterTileTypeSpeedtest');
+    return type || '—';
+}
+
+function getClusterDashboardTileSourceOptions(type) {
+    if (type === 'netdev') {
+        return (Array.isArray(netdevConfigs) ? netdevConfigs : [])
+            .map((cfg, idx) => ({ cfg, slot: idx + 1 }))
+            .filter(({ cfg }) => cfg && cfg.enabled && String(cfg.host || '').trim() !== '')
+            .map(({ cfg, slot }) => ({
+                value: `netdev:${slot}`,
+                label: `SNMP ${slot}: ${cfg.name || cfg.host || ('#' + slot)}`
+            }));
+    }
+
+    if (type === 'service') {
+        return (Array.isArray(monitoredServices) ? monitoredServices : []).map((svc) => ({
+            value: `service:${svc.id}`,
+            label: `${svc.name || getServiceTargetDisplay(svc)}`
+        }));
+    }
+
+    if (type === 'vmct') {
+        const clusterVms = getClusterVms();
+        if (clusterVms.length) {
+            return clusterVms.map((vm) => {
+                const id = Number(vm.vmid != null ? vm.vmid : vm.id);
+                const node = vm.node ? ` (${vm.node})` : '';
+                return {
+                    value: `vmct:${id}`,
+                    label: `${vm.name || ('VM/CT ' + id)} [${id}]${node}`
+                };
+            });
+        }
+        return monitoredVmIds.map((id) => ({
+            value: `vmct:${id}`,
+            label: `VM/CT ${id}`
+        }));
+    }
+
+    if (type === 'speedtest') {
+        return [{
+            value: 'speedtest:default',
+            label: t('dashboardSpeedtestTitle') || 'Speedtest'
+        }];
+    }
+
+    return [];
+}
+
+function markClusterDashboardTilesDirty(nextDirty) {
+    clusterDashboardTilesDirty = !!nextDirty;
+    const saveBtn = document.getElementById('settingsClusterTilesSaveBtn');
+    if (saveBtn) saveBtn.disabled = !clusterDashboardTilesDirty;
+}
+
+function renderClusterDashboardTilesSettings() {
+    const listEl = document.getElementById('settingsClusterTilesList');
+    if (!listEl) return;
+
+    const emptyText = t('settingsClusterTilesEmpty');
+    const typeLabel = t('settingsClusterTileTypeLabel');
+    const sourceLabel = t('settingsClusterTileSourceLabel');
+    const missingSourceText = t('settingsClusterTileSourceMissing');
+    const noSourcesText = t('settingsClusterTileNoSources');
+    const removeTitle = t('settingsClusterTileRemoveTitle');
+    const moveUpTitle = t('settingsClusterTileMoveUpTitle');
+    const moveDownTitle = t('settingsClusterTileMoveDownTitle');
+
+    if (!Array.isArray(clusterDashboardTiles)) clusterDashboardTiles = [];
+
+    if (!clusterDashboardTiles.length) {
+        listEl.innerHTML = `<div class="text-muted small">${escapeHtml(emptyText)}</div>`;
+    } else {
+        listEl.innerHTML = clusterDashboardTiles.map((tile, index) => {
+            const typeOptions = CLUSTER_DASHBOARD_TILE_TYPES.map((type) => `
+                <option value="${escapeHtml(type)}" ${tile.type === type ? 'selected' : ''}>${escapeHtml(getClusterDashboardTileTypeLabel(type))}</option>
+            `).join('');
+
+            let sourceOptions = getClusterDashboardTileSourceOptions(tile.type);
+            if (tile.sourceId && !sourceOptions.some((opt) => opt.value === tile.sourceId)) {
+                sourceOptions = [{
+                    value: tile.sourceId,
+                    label: `${missingSourceText}: ${tile.sourceId}`
+                }].concat(sourceOptions);
+            }
+
+            const sourceOptionsHtml = sourceOptions.length
+                ? sourceOptions.map((opt) => `
+                    <option value="${escapeHtml(opt.value)}" ${tile.sourceId === opt.value ? 'selected' : ''}>${escapeHtml(opt.label)}</option>
+                `).join('')
+                : `<option value="">${escapeHtml(noSourcesText)}</option>`;
+
+            return `
+                <div class="border rounded p-3 mb-2">
+                    <div class="row g-2 align-items-end">
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold small mb-1">${escapeHtml(typeLabel)}</label>
+                            <select class="form-select" onchange="updateClusterDashboardTileType(${index}, this.value)">
+                                ${typeOptions}
+                            </select>
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label fw-bold small mb-1">${escapeHtml(sourceLabel)}</label>
+                            <select class="form-select" onchange="updateClusterDashboardTileSource(${index}, this.value)">
+                                ${sourceOptionsHtml}
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="d-flex gap-2 justify-content-md-end">
+                                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="moveClusterDashboardTile(${index}, -1)" title="${escapeHtml(moveUpTitle)}" ${index === 0 ? 'disabled' : ''}>
+                                    <i class="bi bi-arrow-up"></i>
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="moveClusterDashboardTile(${index}, 1)" title="${escapeHtml(moveDownTitle)}" ${index === clusterDashboardTiles.length - 1 ? 'disabled' : ''}>
+                                    <i class="bi bi-arrow-down"></i>
+                                </button>
+                                <button type="button" class="btn btn-outline-danger btn-sm" onclick="removeClusterDashboardTile(${index})" title="${escapeHtml(removeTitle)}">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    const addBtn = document.getElementById('settingsClusterTilesAddBtn');
+    if (addBtn) addBtn.disabled = clusterDashboardTiles.length >= MAX_CLUSTER_DASHBOARD_TILES;
+    markClusterDashboardTilesDirty(clusterDashboardTilesDirty);
+}
+
+function addClusterDashboardTile() {
+    if (clusterDashboardTiles.length >= MAX_CLUSTER_DASHBOARD_TILES) return;
+    let selectedType = CLUSTER_DASHBOARD_TILE_TYPES[0];
+    for (const type of CLUSTER_DASHBOARD_TILE_TYPES) {
+        if (getClusterDashboardTileSourceOptions(type).length > 0) {
+            selectedType = type;
+            break;
+        }
+    }
+    const firstSource = getClusterDashboardTileSourceOptions(selectedType)[0];
+    clusterDashboardTiles = clusterDashboardTiles.concat([{
+        type: selectedType,
+        sourceId: firstSource ? firstSource.value : (selectedType === 'speedtest' ? 'speedtest:default' : '')
+    }]).slice(0, MAX_CLUSTER_DASHBOARD_TILES);
+    markClusterDashboardTilesDirty(true);
+    renderClusterDashboardTilesSettings();
+}
+
+function updateClusterDashboardTileType(index, nextType) {
+    const type = String(nextType || '').trim().toLowerCase();
+    if (!CLUSTER_DASHBOARD_TILE_TYPES.includes(type) || !clusterDashboardTiles[index]) return;
+    const firstSource = getClusterDashboardTileSourceOptions(type)[0];
+    clusterDashboardTiles[index] = {
+        type,
+        sourceId: firstSource ? firstSource.value : (type === 'speedtest' ? 'speedtest:default' : '')
+    };
+    clusterDashboardTiles = normalizeClusterDashboardTiles(clusterDashboardTiles);
+    markClusterDashboardTilesDirty(true);
+    renderClusterDashboardTilesSettings();
+}
+
+function updateClusterDashboardTileSource(index, sourceId) {
+    if (!clusterDashboardTiles[index]) return;
+    clusterDashboardTiles[index] = {
+        ...clusterDashboardTiles[index],
+        sourceId: String(sourceId || '').trim()
+    };
+    clusterDashboardTiles = normalizeClusterDashboardTiles(clusterDashboardTiles);
+    markClusterDashboardTilesDirty(true);
+}
+
+function moveClusterDashboardTile(index, delta) {
+    const nextIndex = index + delta;
+    if (index < 0 || index >= clusterDashboardTiles.length || nextIndex < 0 || nextIndex >= clusterDashboardTiles.length) return;
+    const next = clusterDashboardTiles.slice();
+    const tmp = next[index];
+    next[index] = next[nextIndex];
+    next[nextIndex] = tmp;
+    clusterDashboardTiles = next;
+    markClusterDashboardTilesDirty(true);
+    renderClusterDashboardTilesSettings();
+}
+
+function removeClusterDashboardTile(index) {
+    clusterDashboardTiles = clusterDashboardTiles.filter((_, idx) => idx !== index);
+    markClusterDashboardTilesDirty(true);
+    renderClusterDashboardTilesSettings();
+}
+
+async function saveClusterDashboardTilesSettings() {
+    clusterDashboardTiles = normalizeClusterDashboardTiles(clusterDashboardTiles);
+    await saveSettingsToServer({ clusterDashboardTiles });
+    clusterDashboardTilesSettingPresent = true;
+    markClusterDashboardTilesDirty(false);
+    renderClusterDashboardTilesSettings();
+    await renderClusterDashboardTiles();
+    showToast(t('settingsClusterTilesSaved') || t('dataUpdated'), 'success');
 }
 
 // ==================== UPS MONITORING (NUT/SNMP) ====================
@@ -1827,21 +3208,15 @@ let upsDisplaySlotsDashboard = [1, 2, 3, 4];
 let upsDisplaySlotsLoadedPromise = null;
 let upsDisplaySlotsLoadedOnce = false;
 
-function getCheckedUpsSlotsByClass(checkboxClass) {
-    const boxes = document.querySelectorAll('input.' + checkboxClass + ':checked');
-    const slots = Array.from(boxes)
-        .map((b) => parseInt(b.value, 10))
-        .filter((n) => Number.isFinite(n) && n >= 1 && n <= 4);
-    return Array.from(new Set(slots)).sort((a, b) => a - b);
+function getAllUpsDisplaySlots() {
+    return [1, 2, 3, 4];
 }
 
-function setUpsDisplayCheckboxes(dashboardSlots, monitorSlots) {
-    for (let s = 1; s <= 4; s++) {
-        const dashBox = document.getElementById('upsDisplayDashboardSlot' + s);
-        if (dashBox) dashBox.checked = Array.isArray(dashboardSlots) && dashboardSlots.includes(s);
-        const monBox = document.getElementById('upsDisplayMonitorSlot' + s);
-        if (monBox) monBox.checked = Array.isArray(monitorSlots) && monitorSlots.includes(s);
-    }
+function setUpsDisplayToggles(dashboardSlots, monitorSlots) {
+    const dashSelect = document.getElementById('upsShowOnDashboardSelect');
+    const monSelect = document.getElementById('upsShowOnMonitorSelect');
+    if (dashSelect) dashSelect.value = Array.isArray(dashboardSlots) && dashboardSlots.length ? '1' : '0';
+    if (monSelect) monSelect.value = Array.isArray(monitorSlots) && monitorSlots.length ? '1' : '0';
 }
 
 async function ensureUpsDisplaySlotsLoaded() {
@@ -1859,9 +3234,9 @@ async function ensureUpsDisplaySlotsLoaded() {
             // Используем дефолтные [1..4]
         }
 
-        // Обновим чекбоксы в панели настроек (если она есть на странице)
+        // Обновим переключатели в панели настроек (если она есть на странице)
         try {
-            setUpsDisplayCheckboxes(upsDisplaySlotsDashboard, upsDisplaySlotsMonitor);
+            setUpsDisplayToggles(upsDisplaySlotsDashboard, upsDisplaySlotsMonitor);
         } catch (_) {}
 
         upsDisplaySlotsLoadedOnce = true;
@@ -2035,20 +3410,34 @@ async function saveUpsSettings() {
 
         // Сохраним также, какие слоты UPS показывать на дашборде и в режиме монитора (Cluster)
         try {
-            const hasDashboardBoxes = document.querySelectorAll('input.upsDisplayDashboardSlot').length > 0;
-            const hasMonitorBoxes = document.querySelectorAll('input.upsDisplayMonitorSlot').length > 0;
-            const dashboardSlots = hasDashboardBoxes ? getCheckedUpsSlotsByClass('upsDisplayDashboardSlot') : [1, 2, 3, 4];
-            const monitorSlots = hasMonitorBoxes ? getCheckedUpsSlotsByClass('upsDisplayMonitorSlot') : [1, 2, 3, 4];
-            await fetch('/api/ups/display', {
+            const dashboardSlots = document.getElementById('upsShowOnDashboardSelect')?.value === '0'
+                ? []
+                : getAllUpsDisplaySlots();
+            const monitorSlots = document.getElementById('upsShowOnMonitorSelect')?.value === '0'
+                ? []
+                : getAllUpsDisplaySlots();
+            const displayResp = await fetch('/api/ups/display', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ dashboardSlots, monitorSlots })
             });
+            const displayData = await displayResp.json().catch(() => ({}));
+            if (!displayResp.ok || !displayData?.success) {
+                throw new Error(displayData?.error || 'failed to save UPS display settings');
+            }
+
+            // Синхронизируем локальный кеш сразу, чтобы дашборд и monitor-mode
+            // обновлялись без перезагрузки страницы.
+            upsDisplaySlotsDashboard = dashboardSlots;
+            upsDisplaySlotsMonitor = monitorSlots;
+            setUpsDisplayToggles(upsDisplaySlotsDashboard, upsDisplaySlotsMonitor);
         } catch (e) {
             showToast(t('toastUpsDisplaySaveError'), 'error');
         }
 
         updateUPSDashboard().catch(() => {});
+        renderClusterDashboardTilesSettings();
+        renderClusterDashboardTiles().catch(() => {});
         toggleUpsFields();
     } catch (e) {
         showToast(tParams('toastUpsSaveError', { msg: e.message || String(e) }), 'error');
@@ -2375,50 +3764,15 @@ function ensureNetdevFieldsInfrastructure() {
     initNetdevFieldFormatUi();
 }
 
-function renderNetdevDisplayCheckboxes() {
-    const dashWrap = document.getElementById('netdevDisplayDashboardSlotsWrap');
-    const monWrap = document.getElementById('netdevDisplayMonitorSlotsWrap');
-    if (!dashWrap || !monWrap) return;
-
-    if (dashWrap.dataset.rendered === '1' && monWrap.dataset.rendered === '1') return;
-
-    dashWrap.innerHTML = '';
-    monWrap.innerHTML = '';
-
-    dashWrap.dataset.rendered = '1';
-    monWrap.dataset.rendered = '1';
-
-    for (let s = 1; s <= NETDEV_MAX_CONFIGS; s++) {
-        dashWrap.insertAdjacentHTML('beforeend', `
-            <div class="form-check">
-                <input class="form-check-input netdevDisplayDashboardSlot" type="checkbox" id="netdevDisplayDashboardSlot${s}" value="${s}">
-                <label class="form-check-label" for="netdevDisplayDashboardSlot${s}">${s}</label>
-            </div>
-        `);
-        monWrap.insertAdjacentHTML('beforeend', `
-            <div class="form-check">
-                <input class="form-check-input netdevDisplayMonitorSlot" type="checkbox" id="netdevDisplayMonitorSlot${s}" value="${s}">
-                <label class="form-check-label" for="netdevDisplayMonitorSlot${s}">${s}</label>
-            </div>
-        `);
-    }
+function getAllNetdevDisplaySlots() {
+    return Array.from({ length: NETDEV_MAX_CONFIGS }, (_, i) => i + 1);
 }
 
-function getCheckedNetdevSlotsByClass(checkboxClass) {
-    const boxes = document.querySelectorAll('input.' + checkboxClass + ':checked');
-    const slots = Array.from(boxes)
-        .map((b) => parseInt(b.value, 10))
-        .filter((n) => Number.isFinite(n) && n >= 1 && n <= NETDEV_MAX_CONFIGS);
-    return Array.from(new Set(slots)).sort((a, b) => a - b);
-}
-
-function setNetdevDisplayCheckboxes(dashboardSlots, monitorSlots) {
-    for (let s = 1; s <= NETDEV_MAX_CONFIGS; s++) {
-        const dashBox = document.getElementById('netdevDisplayDashboardSlot' + s);
-        if (dashBox) dashBox.checked = Array.isArray(dashboardSlots) && dashboardSlots.includes(s);
-        const monBox = document.getElementById('netdevDisplayMonitorSlot' + s);
-        if (monBox) monBox.checked = Array.isArray(monitorSlots) && monitorSlots.includes(s);
-    }
+function setNetdevDisplayToggles(dashboardSlots, monitorSlots) {
+    const dashSelect = document.getElementById('netdevShowOnDashboardSelect');
+    const monSelect = document.getElementById('netdevShowOnMonitorSelect');
+    if (dashSelect) dashSelect.value = Array.isArray(dashboardSlots) && dashboardSlots.length ? '1' : '0';
+    if (monSelect) monSelect.value = Array.isArray(monitorSlots) && monitorSlots.length ? '1' : '0';
 }
 
 async function ensureNetdevDisplaySlotsLoaded() {
@@ -2436,9 +3790,9 @@ async function ensureNetdevDisplaySlotsLoaded() {
             // Defaults are already set
         }
 
-        // Update checkboxes
+        // Update toggles
         try {
-            setNetdevDisplayCheckboxes(netdevDisplaySlotsDashboard, netdevDisplaySlotsMonitor);
+            setNetdevDisplayToggles(netdevDisplaySlotsDashboard, netdevDisplaySlotsMonitor);
         } catch (_) {}
 
         netdevDisplaySlotsLoadedOnce = true;
@@ -2451,29 +3805,28 @@ async function loadNetdevSettings() {
     // Render dynamic parts once
     ensureNetdevSlotTabsRendered();
     ensureNetdevFieldsInfrastructure();
-    renderNetdevDisplayCheckboxes();
 
     const enabledSelect = document.getElementById('netdevEnabledSelect');
     const hostInput = document.getElementById('netdevHostInput');
     const portInput = document.getElementById('netdevPortInput');
     const communityInput = document.getElementById('netdevCommunityInput');
     const nameInput = document.getElementById('netdevNameInput');
-    const nameOidInput = document.getElementById('netdevNameOidInput');
-    if (!enabledSelect || !hostInput || !portInput || !communityInput || !nameInput || !nameOidInput) return;
+        const nameOidInput = document.getElementById('netdevNameOidInput');
+        if (!enabledSelect || !hostInput || !portInput || !communityInput || !nameInput || !nameOidInput) return;
 
-    const applySlotToForm = (slotIdx) => {
-        const cfg = (Array.isArray(netdevConfigs) && netdevConfigs[slotIdx]) ? netdevConfigs[slotIdx] : createDefaultNetdevConfig();
+        const applySlotToForm = (slotIdx) => {
+            const cfg = (Array.isArray(netdevConfigs) && netdevConfigs[slotIdx]) ? netdevConfigs[slotIdx] : createDefaultNetdevConfig();
 
-        enabledSelect.value = cfg.enabled ? '1' : '0';
-        if (hostInput) hostInput.value = cfg.host || '';
-        if (portInput) portInput.value = cfg.port != null ? String(cfg.port) : '';
-        if (communityInput) communityInput.value = cfg.community || '';
-        if (nameInput) nameInput.value = cfg.name || '';
-        if (nameOidInput) nameOidInput.value = cfg.nameOid || '';
+            enabledSelect.value = cfg.enabled ? '1' : '0';
+            if (hostInput) hostInput.value = cfg.host || '';
+            if (portInput) portInput.value = cfg.port != null ? String(cfg.port) : '';
+            if (communityInput) communityInput.value = cfg.community || '';
+            if (nameInput) nameInput.value = cfg.name || '';
+            if (nameOidInput) nameOidInput.value = cfg.nameOid || '';
 
-        const fields = Array.isArray(cfg.fields) ? cfg.fields : [];
-        renderNetdevFieldsEditors(fields);
-    };
+            const fields = Array.isArray(cfg.fields) ? cfg.fields : [];
+            renderNetdevFieldsEditors(fields);
+        };
 
     try {
         const res = await fetch('/api/netdevices/settings');
@@ -2492,6 +3845,7 @@ async function loadNetdevSettings() {
         netdevConfigs = Array.from({ length: NETDEV_MAX_CONFIGS }, () => createDefaultNetdevConfig());
         applySlotToForm(0);
     }
+    renderClusterDashboardTilesSettings();
 
     if (!netdevSlotListenerAttached) {
         const tabsEl = document.getElementById('netdevSlotTabs');
@@ -2557,22 +3911,29 @@ async function saveNetdevSettings() {
 
         // Save display slots
         try {
-            const hasDashboardBoxes = document.querySelectorAll('input.netdevDisplayDashboardSlot').length > 0;
-            const hasMonitorBoxes = document.querySelectorAll('input.netdevDisplayMonitorSlot').length > 0;
-            const dashboardSlots = hasDashboardBoxes ? getCheckedNetdevSlotsByClass('netdevDisplayDashboardSlot') : netdevDisplaySlotsDashboard;
-            const monitorSlots = hasMonitorBoxes ? getCheckedNetdevSlotsByClass('netdevDisplayMonitorSlot') : netdevDisplaySlotsMonitor;
+            const dashboardSlots = document.getElementById('netdevShowOnDashboardSelect')?.value === '0'
+                ? []
+                : getAllNetdevDisplaySlots();
+            const monitorSlots = document.getElementById('netdevShowOnMonitorSelect')?.value === '0'
+                ? []
+                : getAllNetdevDisplaySlots();
 
             await fetch('/api/netdevices/display', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ dashboardSlots, monitorSlots })
             });
+            netdevDisplaySlotsDashboard = dashboardSlots;
+            netdevDisplaySlotsMonitor = monitorSlots;
+            setNetdevDisplayToggles(netdevDisplaySlotsDashboard, netdevDisplaySlotsMonitor);
         } catch (e) {
             showToast(t('toastNetdevDisplaySaveError'), 'error');
         }
 
         showToast(t('toastNetdevSaved'), 'success');
         await updateNetdevDashboard();
+        renderClusterDashboardTilesSettings();
+        renderClusterDashboardTiles().catch(() => {});
     } catch (e) {
         showToast(tParams('toastNetdevSaveError', { msg: e.message || String(e) }), 'error');
     }
@@ -2596,10 +3957,11 @@ function createDefaultHostMetricsSettings() {
     };
 }
 
-function createDefaultHostMetricsNodeConfig(nodeName = '') {
+function createDefaultHostMetricsNodeConfig() {
     return {
         enabled: false,
-        agentUrl: nodeName ? `http://${nodeName}:9105/host-metrics` : '',
+        agentUrl: '',
+        agentHost: '',
         cpuTempSensor: '',
         linkInterface: ''
     };
@@ -2624,13 +3986,28 @@ function normalizeHostMetricsSettingsClient(raw) {
 
 function normalizeHostMetricsNodeConfigClient(raw, nodeName = '') {
     const src = raw && typeof raw === 'object' ? raw : {};
-    const base = createDefaultHostMetricsNodeConfig(nodeName);
+    const base = createDefaultHostMetricsNodeConfig();
     return {
         enabled: src.enabled === true || src.enabled === '1' || src.enabled === 1 || src.enabled === 'true',
         agentUrl: String(src.agentUrl != null ? src.agentUrl : base.agentUrl).trim(),
+        agentHost: String(src.agentHost != null ? src.agentHost : base.agentHost).trim(),
         cpuTempSensor: String(src.cpuTempSensor || '').trim(),
         linkInterface: String(src.linkInterface || '').trim()
     };
+}
+
+function hostMetricsResolvedAgentHostForUrl(nodeName, cfg, item) {
+    const ah = (cfg.agentHost || '').trim();
+    if (ah) return ah;
+    const nip = item && item.nodeIp ? String(item.nodeIp).trim() : '';
+    if (nip) return nip;
+    return String(nodeName || '').trim() || 'localhost';
+}
+
+function getHostMetricsSshHostForNode(nodeName) {
+    const item = hostMetricsDiscoveryItems.find((i) => i.node === nodeName);
+    const cfg = getHostMetricsNodeConfigForRow(nodeName, item);
+    return hostMetricsResolvedAgentHostForUrl(nodeName, cfg, item);
 }
 
 function hostMetricsDomIdPart(s) {
@@ -2648,6 +4025,255 @@ function getCurrentHostMetricsConnectionConfig() {
 function getHostMetricsNodeConfigForRow(nodeName, item) {
     const { nodes } = getCurrentHostMetricsConnectionConfig();
     return normalizeHostMetricsNodeConfigClient(nodes && nodes[nodeName], nodeName || item?.node || '');
+}
+
+function getHostMetricsAgentModalMode() {
+    const el = document.getElementById('hostMetricsAgentInstallModal');
+    if (el && el.getAttribute('data-agent-mode') === 'uninstall') return 'uninstall';
+    return 'install';
+}
+
+function setHostMetricsAgentModalMode(mode) {
+    const el = document.getElementById('hostMetricsAgentInstallModal');
+    if (el) el.setAttribute('data-agent-mode', mode === 'uninstall' ? 'uninstall' : 'install');
+}
+
+function applyHostMetricsAgentModalMode(nodeName) {
+    const isUn = getHostMetricsAgentModalMode() === 'uninstall';
+    const titleEl = document.getElementById('hostMetricsAgentInstallTitleText');
+    if (titleEl) titleEl.textContent = t(isUn ? 'hostMetricsAgentUninstallTitle' : 'hostMetricsAgentInstallTitle');
+    const intro = document.getElementById('hostMetricsAgentInstallIntro');
+    if (intro) {
+        intro.textContent = tParams(
+            isUn ? 'hostMetricsAgentUninstallModalIntro' : 'hostMetricsAgentInstallModalIntro',
+            { node: nodeName || '—' }
+        );
+    }
+    const confirmLbl = document.getElementById('hostMetricsAgentInstallConfirmLabel');
+    if (confirmLbl) {
+        confirmLbl.textContent = t(isUn ? 'hostMetricsAgentUninstallConfirmLabel' : 'hostMetricsAgentInstallConfirmLabel');
+    }
+    const runTxt = document.getElementById('hostMetricsAgentInstallRunBtnText');
+    if (runTxt) runTxt.textContent = t(isUn ? 'hostMetricsAgentUninstallRunBtn' : 'hostMetricsAgentInstallRunBtn');
+    const iconEl = document.getElementById('hostMetricsAgentInstallModalTitleIcon');
+    if (iconEl) {
+        iconEl.className = 'bi me-2 ' + (isUn ? 'bi-trash' : 'bi-cloud-download');
+    }
+}
+
+function buildHostMetricsAgentPlanText(plan, mode) {
+    if (!plan) return '';
+    const isUn = mode === 'uninstall';
+    const lines = [];
+    lines.push(t(isUn ? 'hostMetricsAgentUninstallPlanIntro' : 'hostMetricsAgentInstallPlanIntro'));
+    lines.push('');
+    (plan.steps || []).forEach((s, i) => {
+        lines.push(`${i + 1}. ${s}`);
+    });
+    lines.push('');
+    lines.push(t(isUn ? 'hostMetricsAgentUninstallPlanFooter' : 'hostMetricsAgentInstallPlanFooter'));
+    if (plan.prerequisites) {
+        lines.push('');
+        lines.push(plan.prerequisites);
+    }
+    return lines.join('\n');
+}
+
+function resetHostMetricsAgentInstallModal() {
+    hostMetricsAgentInstallPlanCache = null;
+    const s1 = document.getElementById('hostMetricsAgentInstallStep1');
+    const s2 = document.getElementById('hostMetricsAgentInstallStep2');
+    if (s1) s1.classList.remove('d-none');
+    if (s2) s2.classList.add('d-none');
+    const pw = document.getElementById('hostMetricsAgentSshPassword');
+    if (pw) pw.value = '';
+    const chk = document.getElementById('hostMetricsAgentInstallConfirm');
+    if (chk) chk.checked = false;
+    const rw = document.getElementById('hostMetricsAgentInstallResultWrap');
+    if (rw) rw.classList.add('d-none');
+    const runBtn = document.getElementById('hostMetricsAgentInstallRunBtn');
+    if (runBtn) runBtn.disabled = true;
+    const nextBtn = document.getElementById('hostMetricsAgentInstallNextBtn');
+    if (nextBtn) nextBtn.disabled = false;
+}
+
+function openHostMetricsAgentInstallModal(nodeName) {
+    setHostMetricsAgentModalMode('install');
+    resetHostMetricsAgentInstallModal();
+    lastHostMetricsAgentModalNodeName = nodeName || '';
+    const hostEl = document.getElementById('hostMetricsAgentSshHost');
+    if (hostEl) hostEl.value = getHostMetricsSshHostForNode(nodeName) || nodeName || '';
+    applyHostMetricsAgentModalMode(nodeName);
+    const modalEl = document.getElementById('hostMetricsAgentInstallModal');
+    if (modalEl && typeof bootstrap !== 'undefined') {
+        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+    }
+}
+
+function openHostMetricsAgentUninstallModal(nodeName) {
+    setHostMetricsAgentModalMode('uninstall');
+    resetHostMetricsAgentInstallModal();
+    lastHostMetricsAgentModalNodeName = nodeName || '';
+    const hostEl = document.getElementById('hostMetricsAgentSshHost');
+    if (hostEl) hostEl.value = getHostMetricsSshHostForNode(nodeName) || nodeName || '';
+    applyHostMetricsAgentModalMode(nodeName);
+    const modalEl = document.getElementById('hostMetricsAgentInstallModal');
+    if (modalEl && typeof bootstrap !== 'undefined') {
+        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+    }
+}
+
+async function hostMetricsAgentInstallGoNext() {
+    const base = getCurrentProxmoxHeaders();
+    if (!base) {
+        showToast(t('hostMetricsNeedConnection') || 'Подключитесь к Proxmox', 'warning');
+        return;
+    }
+    const host = document.getElementById('hostMetricsAgentSshHost') && document.getElementById('hostMetricsAgentSshHost').value
+        ? String(document.getElementById('hostMetricsAgentSshHost').value).trim()
+        : '';
+    if (!host) {
+        showToast(t('hostMetricsAgentInstallNeedHost') || 'Укажите SSH host', 'warning');
+        return;
+    }
+    const btn = document.getElementById('hostMetricsAgentInstallNextBtn');
+    if (btn) btn.disabled = true;
+    const mode = getHostMetricsAgentModalMode();
+    try {
+        const previewPath =
+            mode === 'uninstall'
+                ? '/api/host-metrics/agent-uninstall/preview'
+                : '/api/host-metrics/agent-install/preview';
+        const res = await fetch(previewPath, {
+            method: 'POST',
+            headers: { ...base, 'Content-Type': 'application/json' },
+            body: '{}',
+            credentials: 'same-origin'
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.success) throw new Error(data.error || res.statusText);
+        hostMetricsAgentInstallPlanCache = data.plan;
+        const ta = document.getElementById('hostMetricsAgentInstallPlanText');
+        if (ta) ta.value = buildHostMetricsAgentPlanText(data.plan, mode);
+        document.getElementById('hostMetricsAgentInstallStep1').classList.add('d-none');
+        document.getElementById('hostMetricsAgentInstallStep2').classList.remove('d-none');
+    } catch (e) {
+        const previewErrKey =
+            mode === 'uninstall'
+                ? 'hostMetricsAgentUninstallPreviewError'
+                : 'hostMetricsAgentInstallPreviewError';
+        showToast((t(previewErrKey) || 'Ошибка') + ': ' + (e.message || e), 'error');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+function hostMetricsAgentInstallGoBack() {
+    document.getElementById('hostMetricsAgentInstallStep1').classList.remove('d-none');
+    document.getElementById('hostMetricsAgentInstallStep2').classList.add('d-none');
+    const rw = document.getElementById('hostMetricsAgentInstallResultWrap');
+    if (rw) rw.classList.add('d-none');
+}
+
+async function hostMetricsAgentInstallRun() {
+    const mode = getHostMetricsAgentModalMode();
+    const base = getCurrentProxmoxHeaders();
+    if (!base) {
+        showToast(t('hostMetricsNeedConnection') || 'Подключитесь к Proxmox', 'warning');
+        return;
+    }
+    const sshHost = document.getElementById('hostMetricsAgentSshHost') && document.getElementById('hostMetricsAgentSshHost').value
+        ? String(document.getElementById('hostMetricsAgentSshHost').value).trim()
+        : '';
+    const sshPortRaw = document.getElementById('hostMetricsAgentSshPort') && document.getElementById('hostMetricsAgentSshPort').value;
+    const sshPort = parseInt(sshPortRaw != null ? sshPortRaw : '22', 10);
+    const sshUser = document.getElementById('hostMetricsAgentSshUser') && document.getElementById('hostMetricsAgentSshUser').value
+        ? String(document.getElementById('hostMetricsAgentSshUser').value).trim() || 'root'
+        : 'root';
+    const sshPassword = document.getElementById('hostMetricsAgentSshPassword') ? document.getElementById('hostMetricsAgentSshPassword').value : '';
+    if (!sshHost) {
+        showToast(t('hostMetricsAgentInstallNeedHost') || 'Укажите host', 'warning');
+        return;
+    }
+    if (!sshPassword) {
+        showToast(t('hostMetricsAgentInstallNeedPassword') || 'Укажите пароль SSH', 'warning');
+        return;
+    }
+    const confirmEl = document.getElementById('hostMetricsAgentInstallConfirm');
+    if (!confirmEl || !confirmEl.checked) {
+        showToast(t('hostMetricsAgentInstallNeedConfirm') || 'Подтвердите выполнение команд', 'warning');
+        return;
+    }
+    const runBtn = document.getElementById('hostMetricsAgentInstallRunBtn');
+    if (runBtn) runBtn.disabled = true;
+    try {
+        const runPath =
+            mode === 'uninstall'
+                ? '/api/host-metrics/agent-uninstall/run'
+                : '/api/host-metrics/agent-install/run';
+        const res = await fetch(runPath, {
+            method: 'POST',
+            headers: { ...base, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                confirm: true,
+                sshHost,
+                sshPort: Number.isFinite(sshPort) ? sshPort : 22,
+                sshUser,
+                sshPassword
+            }),
+            credentials: 'same-origin'
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.success) throw new Error(data.error || res.statusText);
+        const pre = document.getElementById('hostMetricsAgentInstallResult');
+        const wrap = document.getElementById('hostMetricsAgentInstallResultWrap');
+        if (pre) pre.textContent = data.log || '';
+        if (wrap) wrap.classList.remove('d-none');
+        const okKey =
+            mode === 'uninstall'
+                ? 'hostMetricsAgentUninstallSuccess'
+                : 'hostMetricsAgentInstallSuccess';
+        showToast(t(okKey) || 'Готово', 'success');
+        if (confirmEl) confirmEl.checked = false;
+        if (runBtn) runBtn.disabled = true;
+        await refreshHostMetricsDiscovery({ silent: true });
+    } catch (e) {
+        const errKey =
+            mode === 'uninstall'
+                ? 'hostMetricsAgentUninstallError'
+                : 'hostMetricsAgentInstallError';
+        showToast((t(errKey) || 'Ошибка') + ': ' + (e.message || e), 'error');
+    } finally {
+        if (runBtn) {
+            const c = document.getElementById('hostMetricsAgentInstallConfirm');
+            runBtn.disabled = !(c && c.checked);
+        }
+    }
+}
+
+function initHostMetricsAgentInstallModal() {
+    const nextBtn = document.getElementById('hostMetricsAgentInstallNextBtn');
+    if (nextBtn) nextBtn.addEventListener('click', () => hostMetricsAgentInstallGoNext());
+    const backBtn = document.getElementById('hostMetricsAgentInstallBackBtn');
+    if (backBtn) backBtn.addEventListener('click', () => hostMetricsAgentInstallGoBack());
+    const runBtn = document.getElementById('hostMetricsAgentInstallRunBtn');
+    if (runBtn) runBtn.addEventListener('click', () => hostMetricsAgentInstallRun());
+    const chk = document.getElementById('hostMetricsAgentInstallConfirm');
+    if (chk) {
+        chk.addEventListener('change', () => {
+            const b = document.getElementById('hostMetricsAgentInstallRunBtn');
+            if (b) b.disabled = !chk.checked;
+        });
+    }
+    const modalEl = document.getElementById('hostMetricsAgentInstallModal');
+    if (modalEl) {
+        modalEl.addEventListener('hidden.bs.modal', () => {
+            resetHostMetricsAgentInstallModal();
+            setHostMetricsAgentModalMode('install');
+            lastHostMetricsAgentModalNodeName = '';
+            applyHostMetricsAgentModalMode('');
+        });
+    }
 }
 
 function hostMetricsDiscoveryStatusHtml(item) {
@@ -2704,11 +4330,20 @@ function renderHostMetricsRows(items, state = null) {
         const ifaceListId = 'hostMetricsInterfaces_' + hostMetricsDomIdPart(nodeName);
         const cpuSensors = Array.isArray(item.cpuSensors) ? item.cpuSensors : [];
         const interfaces = Array.isArray(item.interfaces) ? item.interfaces : [];
+        const resolvedHost = hostMetricsResolvedAgentHostForUrl(nodeName, cfg, item);
+        const clusterIp = item.nodeIp ? String(item.nodeIp).trim() : '';
         return `
             <tr data-host-metrics-node="${escapeHtml(nodeName)}">
                 <td>
                     <div class="fw-semibold">${escapeHtml(nodeName)}</div>
                     <div class="small text-muted">${escapeHtml(t('hostMetricsAgentHintShort') || 'Локальный HTTP endpoint на узле')}</div>
+                </td>
+                <td>
+                    <div class="small text-muted mb-1" title="${escapeHtml(t('hostMetricsAgentIpClusterHint') || '')}">${clusterIp
+            ? `${escapeHtml(t('hostMetricsAgentIpClusterLabel') || 'IP')} ${escapeHtml(clusterIp)}`
+            : escapeHtml(t('hostMetricsAgentIpClusterDash') || '—')}</div>
+                    <input type="text" class="form-control form-control-sm host-metrics-agent-host" autocomplete="off"
+                        value="${escapeHtml(cfg.agentHost || '')}" placeholder="${escapeHtml(t('hostMetricsAgentHostPlaceholder') || '10.0.0.5')}">
                 </td>
                 <td>
                     <select class="form-select form-select-sm host-metrics-enabled">
@@ -2718,7 +4353,7 @@ function renderHostMetricsRows(items, state = null) {
                 </td>
                 <td>
                     <input type="text" class="form-control form-control-sm host-metrics-agent-url"
-                        value="${escapeHtml(cfg.agentUrl || '')}" placeholder="http://${escapeHtml(nodeName)}:9105/host-metrics">
+                        value="${escapeHtml(cfg.agentUrl || '')}" placeholder="http://${escapeHtml(resolvedHost)}:9105/host-metrics">
                 </td>
                 <td>
                     <input type="text" class="form-control form-control-sm host-metrics-sensor" list="${cpuListId}"
@@ -2735,6 +4370,16 @@ function renderHostMetricsRows(items, state = null) {
                     </datalist>
                 </td>
                 <td>${hostMetricsDiscoveryStatusHtml(item)}</td>
+                <td class="text-end">
+                    <div class="d-inline-flex gap-1 flex-wrap justify-content-end">
+                        <button type="button" class="btn btn-sm btn-outline-primary" title="${escapeHtml(t('hostMetricsAgentInstallButtonTitle') || '')}" onclick='openHostMetricsAgentInstallModal(${JSON.stringify(nodeName)})'>
+                            <i class="bi bi-cloud-download"></i>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-danger" title="${escapeHtml(t('hostMetricsAgentUninstallButtonTitle') || '')}" onclick='openHostMetricsAgentUninstallModal(${JSON.stringify(nodeName)})'>
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </td>
             </tr>
         `;
     }).join('');
@@ -2817,11 +4462,13 @@ async function saveHostMetricsSettings() {
         const nodeName = row.getAttribute('data-host-metrics-node') || '';
         const enabled = row.querySelector('.host-metrics-enabled')?.value === '1';
         const agentUrl = (row.querySelector('.host-metrics-agent-url')?.value || '').trim();
+        const agentHost = (row.querySelector('.host-metrics-agent-host')?.value || '').trim();
         const cpuTempSensor = (row.querySelector('.host-metrics-sensor')?.value || '').trim();
         const linkInterface = (row.querySelector('.host-metrics-interface')?.value || '').trim();
         nodes[nodeName] = {
             enabled,
             agentUrl,
+            agentHost,
             cpuTempSensor,
             linkInterface
         };
@@ -3344,6 +4991,212 @@ async function updateSpeedtestDashboard() {
     }
 }
 
+function clusterTileSourceNumericId(tile, prefix) {
+    const src = String(tile && tile.sourceId || '').trim();
+    if (!src.startsWith(prefix + ':')) return NaN;
+    const n = parseInt(src.slice(prefix.length + 1), 10);
+    return Number.isFinite(n) ? n : NaN;
+}
+
+function buildClusterDashboardMetricCell(label, value, progressPct, barClass, colClass = 'col-6') {
+    const bar = typeof progressPct === 'number' && Number.isFinite(progressPct)
+        ? `<div class="progress mt-2" style="height: 8px;"><div class="progress-bar ${barClass || 'bg-primary'}" style="width: ${Math.min(100, Math.max(0, progressPct))}%"></div></div>`
+        : '';
+    return `
+        <div class="${colClass}">
+            <div class="p-2 h-100">
+                <small class="text-muted ups-node-card__metric-label">${escapeHtml(label)}</small>
+                <div class="fw-bold ups-node-card__metric-value text-break">${escapeHtml(value == null || value === '' ? '—' : String(value))}</div>
+                ${bar}
+            </div>
+        </div>
+    `;
+}
+
+function buildClusterDashboardTileShell(titleHtml, badgeHtml, bodyHtml, footerHtml) {
+    return `
+        <div class="cluster-scroll-item">
+            <div class="node-card ups-node-card h-100">
+                <div class="d-flex justify-content-between align-items-center mb-3 gap-2">
+                    <h5 class="mb-0 text-truncate d-inline-flex align-items-center gap-2">${titleHtml}</h5>
+                    ${badgeHtml}
+                </div>
+                <div class="row g-2">
+                    ${bodyHtml}
+                </div>
+                ${footerHtml ? `<div class="small text-muted mt-2">${footerHtml}</div>` : ''}
+            </div>
+        </div>
+    `;
+}
+
+function buildClusterDashboardUnavailableTile(title, message) {
+    return buildClusterDashboardTileShell(
+        escapeHtml(title),
+        `<span class="badge bg-secondary">${escapeHtml(t('statusDash') || '—')}</span>`,
+        `<div class="col-12"><small class="text-muted">${escapeHtml(message || (t('backupNoData') || 'Нет данных'))}</small></div>`,
+        ''
+    );
+}
+
+function getClusterNetdevFieldValue(field) {
+    const statusDisplay = field && field.statusDisplay;
+    if (statusDisplay === 'connected') return t('netdevStatusConnected') || 'Подключён';
+    if (statusDisplay === 'disconnected') return t('netdevStatusDisconnected') || 'Отключён';
+    if (statusDisplay === 'unknown') return t('netdevStatusUnknown') || 'Неизвестно';
+    const disp = field && field.displayValue != null ? String(field.displayValue).trim() : '';
+    if (disp) return disp;
+    const raw = field && field.value != null ? String(field.value).trim() : '';
+    return raw ? formatNetdevMetricValue(raw) : '—';
+}
+
+function buildClusterServiceTileHtml(tile) {
+    const id = clusterTileSourceNumericId(tile, 'service');
+    const service = (Array.isArray(monitoredServices) ? monitoredServices : []).find((svc) => Number(svc.id) === id);
+    if (!service) {
+        return buildClusterDashboardUnavailableTile(t('menuServicesMonitorText') || 'Service', t('servicesNotConfigured') || 'Сервис не найден');
+    }
+    const statusBadge = service.lastStatus === 'up'
+        ? `<span class="badge bg-success">${escapeHtml(t('connected'))}</span>`
+        : (service.lastStatus === 'down'
+            ? `<span class="badge bg-danger">${escapeHtml(t('serverError'))}</span>`
+            : `<span class="badge bg-secondary">${escapeHtml(t('notConnected'))}</span>`);
+    const target = getServiceTargetDisplay(service);
+    const latency = typeof service.lastLatency === 'number' ? `${service.lastLatency} ms` : '—';
+    const iconHtml = renderServiceIconHtml(service, 'service-monitor-icon');
+    const bodyHtml = [
+        `<div class="col-12"><div class="small text-muted mb-1"><span class="badge bg-secondary me-1">${escapeHtml((service.type || 'tcp').toUpperCase())}</span><code>${escapeHtml(target)}</code></div></div>`,
+        buildClusterDashboardMetricCell(t('serviceLatencyHeader') || 'Latency', latency, null, null, 'col-6'),
+        buildClusterDashboardMetricCell(t('serviceTypeLabel') || 'Type', (service.type || 'tcp').toUpperCase(), null, null, 'col-6')
+    ].join('');
+    return buildClusterDashboardTileShell(
+        `${iconHtml}<span class="text-truncate">${escapeHtml(service.name || target)}</span>`,
+        statusBadge,
+        bodyHtml,
+        ''
+    );
+}
+
+function buildClusterVmTileHtml(tile) {
+    const id = clusterTileSourceNumericId(tile, 'vmct');
+    const vm = getClusterVms().find((entry) => Number(entry.vmid != null ? entry.vmid : entry.id) === id);
+    if (!vm) {
+        return buildClusterDashboardUnavailableTile(`VM/CT ${Number.isFinite(id) ? id : ''}`.trim(), t('vmListEmpty') || 'VM/CT не найден');
+    }
+    const status = vm.status || 'unknown';
+    const statusClass = getVmStatusBadgeClass(status);
+    const statusLabel = getVmStatusLabel(status);
+    const typeLabel = (vm.type || 'vm').toUpperCase();
+    const note = vm.node ? `${vm.node}${vm.vmid != null ? ` / ${vm.vmid}` : ''}` : (vm.note || '');
+    const iconHtml = renderVmIconHtml(vm, 'vm-monitor-icon');
+    const bodyHtml = [
+        buildClusterDashboardMetricCell(t('settingsVmTypeLabel') || 'Type', typeLabel, null, null, 'col-6'),
+        buildClusterDashboardMetricCell(t('nodeHeader') || 'Node', vm.node || '—', null, null, 'col-6'),
+        buildClusterDashboardMetricCell('ID', vm.vmid != null ? String(vm.vmid) : String(vm.id || '—'), null, null, 'col-6 mt-2'),
+        buildClusterDashboardMetricCell(t('vmStatus_unknown') || 'Status', statusLabel, null, null, 'col-6 mt-2')
+    ].join('');
+    return buildClusterDashboardTileShell(
+        `${iconHtml}<span class="text-truncate">${escapeHtml(vm.name || `VM/CT ${id}`)}</span>`,
+        `<span class="badge ${statusClass}">${escapeHtml(statusLabel)}</span>`,
+        bodyHtml,
+        escapeHtml(note)
+    );
+}
+
+function buildClusterNetdevTileHtml(tile, payload) {
+    const slot = clusterTileSourceNumericId(tile, 'netdev');
+    const item = Array.isArray(payload?.items) ? payload.items.find((entry) => Number(entry.slot) === slot) : null;
+    if (!item) {
+        return buildClusterDashboardUnavailableTile(`SNMP ${Number.isFinite(slot) ? slot : ''}`.trim(), t('netdevNotConfigured') || 'Сетевое устройство не найдено');
+    }
+    const badgeClass = item.up ? 'bg-success' : 'bg-secondary';
+    const statusLabel = item.up ? (t('statusOkShort') || 'OK') : (t('statusDash') || '—');
+    const fields = (Array.isArray(item.fields) ? item.fields : [])
+        .filter((field) => field && field.enabled !== false && String(field.oid || '').trim() !== '')
+        .slice(0, 4);
+    const bodyHtml = (fields.length ? fields : [{ label: t('backupNoData') || 'Нет данных', value: '—' }]).map((field, index) => {
+        const label = field.label ? String(field.label).trim() : (String(field.oid || '').split('.').filter(Boolean).pop() || '—');
+        const value = getClusterNetdevFieldValue(field);
+        const cls = index >= 2 ? 'col-6 mt-2' : 'col-6';
+        return buildClusterDashboardMetricCell(label, value, null, null, cls);
+    }).join('');
+    return buildClusterDashboardTileShell(
+        escapeHtml(item.name || `SNMP ${slot}`),
+        `<span class="badge ${badgeClass}">${escapeHtml(statusLabel)}</span>`,
+        bodyHtml,
+        escapeHtml(item.host ? `${t('netdevSnmpPrefix') || 'SNMP'} · ${item.host}` : (t('netdevSnmpPrefix') || 'SNMP'))
+    );
+}
+
+function buildClusterSpeedtestTileHtml(summary) {
+    if (!summary || !summary.enabled) {
+        return buildClusterDashboardUnavailableTile(t('dashboardSpeedtestTitle') || 'Speedtest', t('backupNoData') || 'Нет данных');
+    }
+    const last = summary.last || {};
+    const today = summary.today || {};
+    const download = today.download || {};
+    const upload = today.upload || {};
+    const badgeClass = last.error ? 'bg-warning text-dark' : 'bg-success';
+    const badgeText = last.error ? (t('serverError') || 'Ошибка') : (t('statusOkShort') || 'OK');
+    const lastRun = last.runAt ? new Date(last.runAt).toLocaleString() : '—';
+    const pingText = last.pingMs != null ? `${Math.round(Number(last.pingMs) * 10) / 10} ms` : '—';
+    const bodyHtml = [
+        buildClusterDashboardMetricCell(t('speedtestLastRunLabel') || 'Last run', lastRun, null, null, 'col-6'),
+        buildClusterDashboardMetricCell(t('speedtestAvgLabel') || 'Average', formatSpeedtestMbps(download.avg), null, null, 'col-6'),
+        buildClusterDashboardMetricCell(t('speedtestUploadShort') || 'Upload', formatSpeedtestMbps(upload.avg), null, null, 'col-6 mt-2'),
+        buildClusterDashboardMetricCell('Ping', pingText, null, null, 'col-6 mt-2')
+    ].join('');
+    const footer = last.serverName ? escapeHtml(String(last.serverName)) : '';
+    return buildClusterDashboardTileShell(
+        escapeHtml(t('dashboardSpeedtestTitle') || 'Speedtest'),
+        `<span class="badge ${badgeClass}">${escapeHtml(badgeText)}</span>`,
+        bodyHtml,
+        footer
+    );
+}
+
+async function renderClusterDashboardTiles() {
+    const sectionEl = document.getElementById('dashboardClusterTilesSection');
+    const containerEl = document.getElementById('dashboardClusterTiles');
+    if (!sectionEl || !containerEl) return;
+
+    const tiles = normalizeClusterDashboardTiles(clusterDashboardTiles);
+    if (!tiles.length) {
+        sectionEl.style.display = 'none';
+        setHTMLIfChanged('dashboardClusterTiles', '');
+        return;
+    }
+
+    const needNetdev = tiles.some((tile) => tile.type === 'netdev');
+    const needSpeedtest = tiles.some((tile) => tile.type === 'speedtest');
+
+    const fetchJson = async (url) => {
+        try {
+            const res = await fetch(url);
+            const data = await res.json().catch(() => ({}));
+            return res.ok ? data : { error: data?.error || `HTTP ${res.status}` };
+        } catch (e) {
+            return { error: e.message || String(e) };
+        }
+    };
+
+    const [netdevPayload, speedtestSummary] = await Promise.all([
+        needNetdev ? fetchJson('/api/netdevices/current') : Promise.resolve(null),
+        needSpeedtest ? fetchJson('/api/speedtest/summary') : Promise.resolve(null)
+    ]);
+
+    const html = tiles.map((tile) => {
+        if (tile.type === 'service') return buildClusterServiceTileHtml(tile);
+        if (tile.type === 'vmct') return buildClusterVmTileHtml(tile);
+        if (tile.type === 'netdev') return buildClusterNetdevTileHtml(tile, netdevPayload);
+        if (tile.type === 'speedtest') return buildClusterSpeedtestTileHtml(speedtestSummary);
+        return '';
+    }).join('');
+
+    sectionEl.style.display = html ? '' : 'none';
+    setHTMLIfChanged('dashboardClusterTiles', html || '');
+}
+
 async function saveSpeedtestSettings() {
     const en = document.getElementById('speedtestEnabledSelect') && document.getElementById('speedtestEnabledSelect').value === '1';
     speedtestClientEnabled = en;
@@ -3422,14 +5275,32 @@ async function refreshDebugMetrics() {
     clientEl.textContent = '…';
     let serverText = '—';
     try {
-        const res = await fetch('/api/debug');
+        const [res, updatesData] = await Promise.all([
+            fetch('/api/debug'),
+            checkForAppUpdates().catch((error) => ({
+                error: error && error.message ? error.message : String(error)
+            }))
+        ]);
         const data = await res.json();
         lastDebugServerData = data;
         const mem = data.memory || {};
         const fmt = (n) => (n != null && typeof n === 'number') ? (n / 1024 / 1024).toFixed(2) + ' MB' : '—';
         const cache = data.cache || {};
+        const updateStatus = updatesData && updatesData.error
+            ? (t('updateStatusCheckFailed') || 'Update check failed')
+            : (updatesData && updatesData.updateAvailable && updatesData.latestVersion)
+                ? tParams('updateStatusAvailableShort', { latest: updatesData.latestVersion })
+                : (updatesData && updatesData.latestVersion)
+                    ? tParams('updateStatusCurrentShort', { version: updatesData.latestVersion })
+                    : (t('statusDash') || '—');
         serverText = [
             `version: ${data.version ?? '—'}`,
+            `update.status: ${updateStatus}`,
+            `update.currentVersion: ${updatesData?.currentVersion ?? data.version ?? '—'}`,
+            `update.latestVersion: ${updatesData?.latestVersion ?? '—'}`,
+            `update.available: ${updatesData?.updateAvailable != null ? updatesData.updateAvailable : '—'}`,
+            `update.checkedAt: ${updatesData?.checkedAt ?? '—'}`,
+            `update.releaseUrl: ${updatesData?.releaseUrl ?? updatesData?.repoUrl ?? '—'}`,
             `env: ${data.env ?? '—'}`,
             `node: ${data.nodeVersion ?? '—'}`,
             `platform: ${data.platform ?? '—'} ${data.arch ?? ''}`,
@@ -3604,6 +5475,13 @@ async function showConfig() {
     }
 }
 
+async function openSettingsFromMonitor() {
+    if (monitorMode) {
+        await toggleMonitorMode();
+    }
+    await showConfig();
+}
+
 // Toggle settings visibility
 async function toggleSettings() {
     const configSection = document.getElementById('configSection');
@@ -3634,40 +5512,39 @@ async function toggleSettings() {
 function onSettingsNavSectionChange(section) {
     // Мы держим все настройки UPS/Netdev внутри settings-tab-services по разметке,
     // но по клику слева показываем "только нужный блок", чтобы экраны не выглядели одинаково.
-    // section: 'services' | 'ups' | 'netdev' | 'hostMetrics'
+    // section: 'services' | 'vms' | 'ups' | 'netdev' | 'hostMetrics'
     const servicesHosts = document.getElementById('servicesHostsSettingsWrap');
     const upsWrap = document.getElementById('upsSettingsCardWrap');
     const netdevWrap = document.getElementById('netdevSettingsCardWrap');
     const hostMetricsWrap = document.getElementById('hostMetricsSettingsWrap');
     const vmsWrap = document.getElementById('vmsForMonitoringSettingsWrap');
 
-    if (!servicesHosts || !upsWrap || !netdevWrap || !hostMetricsWrap || !vmsWrap) return;
+    if (!servicesHosts || !upsWrap || !netdevWrap || !vmsWrap) return;
+
+    const hide = (el) => {
+        if (el) el.style.display = 'none';
+    };
+    const show = (el) => {
+        if (el) el.style.display = '';
+    };
+
+    hide(servicesHosts);
+    hide(upsWrap);
+    hide(netdevWrap);
+    hide(vmsWrap);
+    if (hostMetricsWrap) hide(hostMetricsWrap);
 
     if (section === 'ups') {
-        servicesHosts.style.display = 'none';
-        upsWrap.style.display = '';
-        netdevWrap.style.display = 'none';
-        hostMetricsWrap.style.display = 'none';
-        vmsWrap.style.display = 'none';
+        show(upsWrap);
     } else if (section === 'netdev') {
-        servicesHosts.style.display = 'none';
-        upsWrap.style.display = 'none';
-        netdevWrap.style.display = '';
-        hostMetricsWrap.style.display = 'none';
-        vmsWrap.style.display = 'none';
+        show(netdevWrap);
     } else if (section === 'hostMetrics') {
-        servicesHosts.style.display = 'none';
-        upsWrap.style.display = 'none';
-        netdevWrap.style.display = 'none';
-        hostMetricsWrap.style.display = '';
-        vmsWrap.style.display = 'none';
+        show(hostMetricsWrap);
+    } else if (section === 'vms') {
+        show(vmsWrap);
     } else {
-        // Service monitoring: только Hosts + VM/CT, без UPS/Netdev.
-        servicesHosts.style.display = '';
-        upsWrap.style.display = 'none';
-        netdevWrap.style.display = 'none';
-        hostMetricsWrap.style.display = 'none';
-        vmsWrap.style.display = '';
+        // Мониторинг сервисов: только таблица хостов (без VM/CT, UPS, SNMP, метрик).
+        show(servicesHosts);
     }
 }
 
@@ -3750,6 +5627,7 @@ async function toggleMonitorMode() {
         const backupsMonExit = document.getElementById('backupsMonitorSection');
         if (backupsMonExit) backupsMonExit.style.display = 'none';
         if (monitorView) monitorView.style.display = 'none';
+        renderMonitorScreenDots();
     }
 
     try {
@@ -3898,6 +5776,7 @@ function moveMonitorScreenOrder(index, delta) {
     monitorScreensOrder = next;
     saveSettingsToServer({ monitorScreensOrder: monitorScreensOrder });
     renderSettingsMonitorScreensOrderList();
+    renderMonitorScreenDots();
 }
 
 function updateMonitorToolbarTitleForView() {
@@ -3913,6 +5792,40 @@ function updateMonitorToolbarTitleForView() {
         backupRuns: t('monitorScreenBackupRuns')
     };
     el.textContent = titles[monitorCurrentView] || t('monitorMode');
+    renderMonitorScreenDots();
+}
+
+function renderMonitorScreenDots() {
+    const dotsEl = document.getElementById('monitorScreenDots');
+    if (!dotsEl) return;
+
+    if (!monitorMode) {
+        dotsEl.innerHTML = '';
+        dotsEl.style.display = 'none';
+        return;
+    }
+
+    const views = getMonitorViewsOrder();
+    if (views.length <= 1) {
+        dotsEl.innerHTML = '';
+        dotsEl.style.display = 'none';
+        return;
+    }
+
+    dotsEl.style.display = 'flex';
+    dotsEl.innerHTML = views.map((viewId) => {
+        const isActive = viewId === monitorCurrentView;
+        const label = monitorScreenSettingsLabel(viewId);
+        return `
+            <button
+                type="button"
+                class="monitor-toolbar-dot${isActive ? ' is-active' : ''}"
+                onclick="applyMonitorView('${escapeHtml(viewId)}')"
+                title="${escapeHtml(label)}"
+                aria-label="${escapeHtml(label)}"
+            ></button>
+        `;
+    }).join('');
 }
 
 // Переключение экранов в режиме монитора:
@@ -3941,6 +5854,7 @@ function applyMonitorView(view) {
         if (speedtestMonSection) speedtestMonSection.style.display = 'none';
         if (backupsMon) backupsMon.style.display = 'none';
         if (monitorView) monitorView.style.display = 'none';
+        renderMonitorScreenDots();
         return;
     }
 
@@ -4712,27 +6626,50 @@ function startAutoRefresh() {
 }
 
 // Connect (called after connectAs(type) sets currentServerType)
-async function connect() {
+/** @param {{ skipDashboard?: boolean }} [options] — для мастера: не переключать экран до завершения шагов */
+async function connect(options) {
+    const opt = options && typeof options === 'object' ? options : {};
+    const skipDashboard = !!opt.skipDashboard;
     const tokenInput = currentServerType === 'truenas'
         ? document.getElementById('apiTokenTrueNAS')
         : document.getElementById('apiToken');
     if (currentServerType === 'proxmox') syncProxmoxApiTokenFromParts();
     const rawToken = tokenInput ? tokenInput.value.trim() : '';
-    const token = (rawToken && rawToken.includes('•')) ? (apiToken || '') : rawToken;
+    const masked = rawToken.includes('•');
+    const token = masked ? (apiToken || '') : rawToken;
+    const connId = getCurrentConnectionId();
+    // Секрет только в БД: поле с маской, apiToken в памяти уже null — используем сохранённое подключение
+    const reuseExistingSecret = connId && (!rawToken || (masked && !apiToken));
 
-    if (!token) {
+    if (!reuseExistingSecret && !token) {
         showToast(t('tokenRequired'), 'error');
-        return;
+        return false;
     }
 
     const connectBtnId = currentServerType === 'truenas' ? 'connectBtnTrueNAS' : 'connectBtnProxmox';
     const connectBtn = document.getElementById(connectBtnId);
-    const originalText = connectBtn.innerHTML;
-    connectBtn.disabled = true;
-    connectBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>' + t('loading');
-    
+    const originalText = connectBtn ? connectBtn.innerHTML : '';
+    if (connectBtn) {
+        connectBtn.disabled = true;
+        connectBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>' + t('loading');
+    }
+
     const serverUrl = getCurrentServerUrl();
     try {
+        if (reuseExistingSecret) {
+            const testRes = await fetch(`/api/connections/${connId}/test`, { method: 'POST' });
+            const testData = await testRes.json().catch(() => ({}));
+            if (!testRes.ok || !testData.success) {
+                throw new Error(testData?.error || `HTTP ${testRes.status}`);
+            }
+            showToast(t('connectSuccess'), 'success');
+            const logoutContainerId = currentServerType === 'truenas' ? 'logoutContainerTrueNAS' : 'logoutContainerProxmox';
+            setDisplay(logoutContainerId, 'block');
+            updateConnectionStatus(true, currentServerType);
+            if (!skipDashboard) showDashboard();
+            return true;
+        }
+
         // Всегда сохраняем секрет в DB и используем connectionId
         const upsertRes = await fetch('/api/connections/upsert', {
             method: 'POST',
@@ -4757,25 +6694,29 @@ async function connect() {
                 ? { apiKey: token, serverUrl }
                 : { token, serverUrl })
         });
-        
+
         const data = await response.json();
-        
+
         if (data.success) {
             showToast(t('connectSuccess'), 'success');
             const logoutContainerId = currentServerType === 'truenas' ? 'logoutContainerTrueNAS' : 'logoutContainerProxmox';
             setDisplay(logoutContainerId, 'block');
             updateConnectionStatus(true, currentServerType);
-            showDashboard();
-        } else {
-            showToast(t('connectError') + ': ' + data.error, 'error');
-            updateConnectionStatus(false, currentServerType);
+            if (!skipDashboard) showDashboard();
+            return true;
         }
+        showToast(t('connectError') + ': ' + data.error, 'error');
+        updateConnectionStatus(false, currentServerType);
+        return false;
     } catch (error) {
         showToast(t('connectError') + ': ' + error.message, 'error');
         updateConnectionStatus(false, currentServerType);
+        return false;
     } finally {
-        connectBtn.disabled = false;
-        connectBtn.innerHTML = originalText;
+        if (connectBtn) {
+            connectBtn.disabled = false;
+            connectBtn.innerHTML = originalText;
+        }
     }
 }
 
@@ -4791,24 +6732,20 @@ async function testConnection() {
         : document.getElementById('apiToken');
     if (currentServerType === 'proxmox') syncProxmoxApiTokenFromParts();
     const rawToken = tokenInput ? tokenInput.value.trim() : '';
-    const token = (rawToken && rawToken.includes('•')) ? (apiToken || '') : rawToken;
-
-    if (!token) {
-        showToast(t('tokenRequired'), 'warning');
-        updateConnectionStatus(false, currentServerType);
-        return;
-    }
+    const masked = rawToken.includes('•');
+    const token = masked ? (apiToken || '') : rawToken;
+    const connId = getCurrentConnectionId();
+    const reuseExistingSecret = connId && (!rawToken || (masked && !apiToken));
 
     const testBtnId = currentServerType === 'truenas' ? 'testConnectionBtnTrueNAS' : 'testConnectionBtnProxmox';
     const testBtn = document.getElementById(testBtnId);
     const originalText = testBtn.innerHTML;
     testBtn.disabled = true;
     testBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>' + t('loading');
-    
+
     const serverUrl = getCurrentServerUrl();
     try {
-        const connId = getCurrentConnectionId();
-        if (connId) {
+        if (reuseExistingSecret) {
             const testRes = await fetch(`/api/connections/${connId}/test`, { method: 'POST' });
             const testData = await testRes.json();
             if (testRes.ok && testData.success) {
@@ -4817,6 +6754,12 @@ async function testConnection() {
                 return;
             }
             showToast(t('connectionStatusDisconnected') + ': ' + (testData.error || `HTTP ${testRes.status}`), 'error');
+            updateConnectionStatus(false, currentServerType);
+            return;
+        }
+
+        if (!token) {
+            showToast(t('tokenRequired'), 'warning');
             updateConnectionStatus(false, currentServerType);
             return;
         }
@@ -4914,6 +6857,7 @@ async function refreshData(options = {}) {
             if (!systemRes.ok) throw new Error(systemData?.error || `system: HTTP ${systemRes.status}`);
             if (!poolsRes.ok) throw new Error(poolsData?.error || `pools: HTTP ${poolsRes.status}`);
             updateTrueNASDashboard(systemData, poolsData);
+            await renderClusterDashboardTiles();
             if (!monitorMode || monitorCurrentView === 'cluster' || monitorCurrentView === 'ups') {
                 updateUPSDashboard().catch(() => {});
             }
@@ -4951,6 +6895,7 @@ async function refreshData(options = {}) {
             }
             
             updateDashboard(clusterData, storageData, backupsData, hostMetricsData);
+            await renderClusterDashboardTiles();
             if (!monitorMode || monitorCurrentView === 'cluster' || monitorCurrentView === 'ups') {
                 updateUPSDashboard().catch(() => {});
             }
@@ -4978,7 +6923,10 @@ async function refreshData(options = {}) {
                 const timeStr = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
                 toolbarEl.textContent = t('lastUpdated') + ' ' + timeStr;
             }
-            checkAllServices().then(() => renderMonitorServicesList());
+            checkAllServices().then(() => {
+                renderMonitorServicesList();
+                renderClusterDashboardTiles().catch(() => {});
+            });
         }
         if (!silent) showToast(t('dataUpdated'), 'success');
 
@@ -4990,36 +6938,19 @@ async function refreshData(options = {}) {
     }
 }
 
-/** Ячейка метрики UPS в стиле блока «Ресурсы кластера» (центр, крупное значение, опционально progress). */
-function upsMetricTile(iconBi, label, valueStr, progressPct, barClass) {
-    const bar =
-        typeof progressPct === 'number' && Number.isFinite(progressPct)
-            ? `<div class="progress mt-2 mx-auto" style="height: 10px; max-width: 160px"><div class="progress-bar ${barClass || 'bg-primary'}" style="width: ${Math.min(100, Math.max(0, progressPct))}%"></div></div>`
-            : '<div class="mt-2" style="height: 10px" aria-hidden="true"></div>';
-    return `
-        <div class="col-6 col-md-4 col-xl-3">
-            <div class="text-center p-3">
-                <h6 class="mb-1"><i class="bi ${iconBi} me-1"></i>${escapeHtml(label)}</h6>
-                <div class="fs-3 fw-semibold lh-sm text-break">${escapeHtml(valueStr)}</div>
-                ${bar}
-            </div>
-        </div>`;
-}
-
-// Компактная “tile” для случая, когда UPS несколько (внутри уже есть отдельная карточка UPS)
 function upsMetricCompactTile(iconBi, label, valueStr, progressPct, barClass, colClass) {
     const bar =
         typeof progressPct === 'number' && Number.isFinite(progressPct)
-            ? `<div class="progress mt-2 mx-auto" style="height: 8px; max-width: 120px">
+            ? `<div class="progress mt-2" style="height: 8px;">
                     <div class="progress-bar ${barClass || 'bg-primary'}" style="width: ${Math.min(100, Math.max(0, progressPct))}%"></div>
                </div>`
             : '';
 
     return `
         <div class="${colClass || 'col-6'}">
-            <div class="text-center p-2 h-100">
-                <h6 class="mb-1"><i class="bi ${iconBi} me-1"></i>${escapeHtml(label)}</h6>
-                <div class="fs-5 fw-semibold lh-sm text-break">${escapeHtml(valueStr)}</div>
+            <div class="p-2 h-100">
+                <small class="text-muted ups-node-card__metric-label">${escapeHtml(label)}</small>
+                <div class="fw-bold ups-node-card__metric-value text-break">${escapeHtml(valueStr)}</div>
                 ${bar}
             </div>
         </div>`;
@@ -5030,6 +6961,7 @@ function buildUpsCardsHtml(data, options = {}) {
     const multiUpsColClass = options.multiUpsColClass || 'col-md-6';
     const singleRowClass = options.singleRowClass || 'row g-2';
     const multiRowClass = options.multiRowClass || 'row row-cols-1 row-cols-sm-2 g-2 small';
+    const singleUpsVariant = options.singleUpsVariant || 'panel';
 
     const upsColClass = data.items.length === 1 ? singleUpsColClass : multiUpsColClass;
     const rowClass = data.items.length === 1 ? singleRowClass : multiRowClass;
@@ -5042,6 +6974,13 @@ function buildUpsCardsHtml(data, options = {}) {
         freq: t('upsLabelFrequency') || 'Частота',
         charge: t('upsLabelCharge') || 'Заряд',
         runtime: t('upsLabelRuntime') || 'Время на батарее'
+    };
+    const staleLabel = t('hostMetricsStale') || 'Stale data';
+    const isStale = (iso) => {
+        if (!iso) return false;
+        const ts = Date.parse(iso);
+        if (!Number.isFinite(ts)) return false;
+        return (Date.now() - ts) > (10 * 60 * 1000);
     };
 
     if (data.items.length === 1) {
@@ -5094,30 +7033,44 @@ function buildUpsCardsHtml(data, options = {}) {
 
         const hasVal = (v) => v != null && String(v).trim() !== '' && String(v) !== '—';
         const tilesHtml = [
-            hasVal(inVText) ? upsMetricTile('bi-plug', labels.inV, inVText, null, null) : null,
-            hasVal(outVText) ? upsMetricTile('bi-outlet', labels.outV, outVText, null, null) : null,
-            hasVal(powerText) ? upsMetricTile('bi-lightning-charge', labels.power, powerText, null, null) : null,
-            hasVal(loadText) ? upsMetricTile('bi-speedometer2', labels.load, loadText, loadPctNum, 'bg-warning') : null,
-            hasVal(freqText) ? upsMetricTile('bi-arrow-repeat', labels.freq, freqText, null, null) : null,
-            hasVal(chargeText) ? upsMetricTile('bi-battery-half', labels.charge, chargeText, chargeBarNum, 'bg-success') : null,
-            hasVal(runtimeText) ? upsMetricTile('bi-clock-history', labels.runtime, runtimeText, null, null) : null
+            hasVal(inVText) ? upsMetricCompactTile('bi-plug', labels.inV, inVText, null, null, 'col-6') : null,
+            hasVal(loadText) ? upsMetricCompactTile('bi-speedometer2', labels.load, loadText, loadPctNum, 'bg-warning', 'col-6') : null,
+            hasVal(chargeText) ? upsMetricCompactTile('bi-battery-half', labels.charge, chargeText, chargeBarNum, 'bg-success', 'col-6 mt-2') : null,
+            hasVal(runtimeText) ? upsMetricCompactTile('bi-clock-history', labels.runtime, runtimeText, null, null, 'col-6 mt-2') : null
         ].filter(Boolean).join('');
+        const staleHtml = isStale(item.updatedAt || data.updatedAt)
+            ? `<div class="col-12 mt-2"><small class="text-warning">${escapeHtml(staleLabel)}</small></div>`
+            : '';
 
-        const html = `
-            <div class="${upsColClass}">
-                <div class="card h-100">
-                    <div class="card-body p-3">
-                        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3 pb-3 border-bottom">
-                            <div class="fw-semibold fs-5 text-truncate" title="${escapeHtml(name)}">${escapeHtml(name)}</div>
+        const html = singleUpsVariant === 'card'
+            ? `
+                <div class="${upsColClass}">
+                    <div class="node-card ups-node-card h-100">
+                        <div class="d-flex justify-content-between align-items-center mb-3 gap-2">
+                            <h5 class="mb-0 text-truncate" title="${escapeHtml(name)}">${escapeHtml(name)}</h5>
                             <span class="badge ${badgeClass}">${escapeHtml(statusLabel)}</span>
                         </div>
                         <div class="row g-2">
                             ${tilesHtml}
+                            ${staleHtml}
                         </div>
-                        <p class="small text-muted text-center mb-0 mt-3">${escapeHtml(hostLine)}</p>
+                        <div class="small text-muted mt-2">${escapeHtml(hostLine)}</div>
                     </div>
-                </div>
-            </div>`;
+                </div>`
+            : `
+                <div class="${upsColClass}">
+                    <div class="node-card ups-node-card ups-node-card--single h-100">
+                        <div class="d-flex justify-content-between align-items-center mb-3 gap-2">
+                            <h5 class="mb-0 text-truncate" title="${escapeHtml(name)}">${escapeHtml(name)}</h5>
+                            <span class="badge ${badgeClass}">${escapeHtml(statusLabel)}</span>
+                        </div>
+                        <div class="row g-2">
+                            ${tilesHtml}
+                            ${staleHtml}
+                        </div>
+                        <div class="small text-muted mt-2">${escapeHtml(hostLine)}</div>
+                    </div>
+                </div>`;
         return { html, rowClass };
     }
 
@@ -5160,25 +7113,23 @@ function buildUpsCardsHtml(data, options = {}) {
         const hasVal = (v) => v != null && String(v).trim() !== '' && String(v) !== '—';
         const tilesHtml = [
             hasVal(inVText) ? upsMetricCompactTile('bi-plug', labels.inV, inVText, null, null, 'col-6') : null,
-            hasVal(outVText) ? upsMetricCompactTile('bi-outlet', labels.outV, outVText, null, null, 'col-6') : null,
-            hasVal(powerText) ? upsMetricCompactTile('bi-lightning-charge', labels.power, powerText, null, null, 'col-6') : null,
             hasVal(loadText) ? upsMetricCompactTile('bi-speedometer2', labels.load, loadText, loadPctNum, 'bg-warning', 'col-6') : null,
-            hasVal(freqText) ? upsMetricCompactTile('bi-arrow-repeat', labels.freq, freqText, null, null, 'col-6') : null,
-            hasVal(chargeText) ? upsMetricCompactTile('bi-battery-half', labels.charge, chargeText, chargeBarNum, 'bg-success', 'col-6') : null,
-            hasVal(runtimeText) ? upsMetricCompactTile('bi-clock-history', labels.runtime, runtimeText, null, null, 'col-12') : null
+            hasVal(chargeText) ? upsMetricCompactTile('bi-battery-half', labels.charge, chargeText, chargeBarNum, 'bg-success', 'col-6 mt-2') : null,
+            hasVal(runtimeText) ? upsMetricCompactTile('bi-clock-history', labels.runtime, runtimeText, null, null, 'col-6 mt-2') : null
         ].filter(Boolean).join('');
+        const staleHtml = isStale(item.updatedAt || data.updatedAt)
+            ? `<div class="col-12 mt-2"><small class="text-warning">${escapeHtml(staleLabel)}</small></div>`
+            : '';
 
         if (item.error) {
             return `
                     <div class="${upsColClass}">
-                        <div class="card h-100">
-                            <div class="card-header py-2 px-2 d-flex justify-content-between align-items-center">
-                                <div class="fw-semibold text-truncate pe-2" title="${escapeHtml(name)}">${escapeHtml(name)}</div>
+                        <div class="node-card ups-node-card h-100">
+                            <div class="d-flex justify-content-between align-items-center mb-3 gap-2">
+                                <h5 class="mb-0 text-truncate" title="${escapeHtml(name)}">${escapeHtml(name)}</h5>
                                 <span class="badge bg-secondary">${escapeHtml(t('upsError') || 'Ошибка UPS')}</span>
                             </div>
-                            <div class="card-body p-2">
-                                <div class="small text-muted">${escapeHtml(backend)}: ${escapeHtml(item.error)}</div>
-                            </div>
+                            <div class="small text-muted">${escapeHtml(backend)}: ${escapeHtml(item.error)}</div>
                         </div>
                     </div>
                 `;
@@ -5186,16 +7137,16 @@ function buildUpsCardsHtml(data, options = {}) {
 
         return `
                 <div class="${upsColClass}">
-                    <div class="card h-100">
-                        <div class="card-header py-2 px-2 d-flex justify-content-between align-items-center">
-                            <div class="fw-semibold text-truncate pe-2" title="${escapeHtml(name)}">${escapeHtml(name)}</div>
+                    <div class="node-card ups-node-card h-100">
+                        <div class="d-flex justify-content-between align-items-center mb-3 gap-2">
+                            <h5 class="mb-0 text-truncate" title="${escapeHtml(name)}">${escapeHtml(name)}</h5>
                             <span class="badge ${badgeClass}">${escapeHtml(statusLabel)}</span>
                         </div>
-                        <div class="card-body p-2">
-                            <div class="row g-2">
-                                ${tilesHtml}
-                            </div>
+                        <div class="row g-2">
+                            ${tilesHtml}
+                            ${staleHtml}
                         </div>
+                        <div class="small text-muted mt-2">${escapeHtml(backend)}</div>
                     </div>
                 </div>
             `;
@@ -5231,10 +7182,7 @@ function paintUpsMount(cardsEl, updatedAtEl, data, options) {
 
 async function updateUPSDashboard() {
     const monitorCards = document.getElementById('upsMonitorCards');
-    const dashboardCards = document.getElementById('dashboardUpsCards');
-    const dashSection = document.getElementById('dashboardUpsSection');
-
-    if (!monitorCards && !dashboardCards) return;
+    if (!monitorCards) return;
 
     const resetRow = (el) => {
         if (!el) return;
@@ -5242,11 +7190,8 @@ async function updateUPSDashboard() {
         el.className = 'row g-2 small';
     };
     resetRow(monitorCards);
-    resetRow(dashboardCards);
     const upsUpdatedAt = document.getElementById('upsUpdatedAt');
-    const dashboardUpsUpdatedAt = document.getElementById('dashboardUpsUpdatedAt');
     if (upsUpdatedAt) upsUpdatedAt.textContent = '';
-    if (dashboardUpsUpdatedAt) dashboardUpsUpdatedAt.textContent = '';
 
     try {
         const res = await fetch('/api/ups/current');
@@ -5255,34 +7200,10 @@ async function updateUPSDashboard() {
         // Обновляем кеш доступности экрана для корректного свайп-порядка.
         upsMonitorConfigured = !!(data && data.configured && Array.isArray(data.items) && data.items.length > 0);
 
-        await ensureUpsDisplaySlotsLoaded();
-        const isMonitorCluster = monitorMode && monitorCurrentView === 'cluster';
-        const slotsForDashboard = isMonitorCluster ? upsDisplaySlotsMonitor : upsDisplaySlotsDashboard;
-        const safeSlotsForDashboard = (Array.isArray(slotsForDashboard) && slotsForDashboard.length > 0)
-            ? slotsForDashboard
-            : (upsDisplaySlotsLoadedOnce ? [] : [1, 2, 3, 4]);
-
-        const dashboardItems = (Array.isArray(safeSlotsForDashboard) && safeSlotsForDashboard.length)
-            ? (data.items || []).filter((it) => safeSlotsForDashboard.includes(it.slot))
-            : data.items;
-
-        const showDash = !!(data && data.configured && Array.isArray(dashboardItems) && dashboardItems.length > 0);
-        if (dashSection) dashSection.style.display = showDash ? '' : 'none';
-
         paintUpsMount(monitorCards, upsUpdatedAt, data, {});
-        const dashboardData = { ...data, items: dashboardItems };
-        paintUpsMount(dashboardCards, dashboardUpsUpdatedAt, dashboardData, {
-            // На дашборде одиночный UPS должен выглядеть “как карточка”, а не растягиваться на всю ширину.
-            singleUpsColClass: 'col-12 col-md-6 col-lg-4',
-            singleRowClass: 'row g-2 justify-content-center'
-        });
     } catch (e) {
         const errHtml = `<div class="col-12"><div class="text-danger small">${escapeHtml((e && e.message) ? e.message : String(e))}</div></div>`;
         if (monitorCards) monitorCards.innerHTML = errHtml;
-        if (dashboardCards) {
-            dashboardCards.innerHTML = errHtml;
-            if (dashSection) dashSection.style.display = '';
-        }
     }
 }
 
@@ -5449,7 +7370,9 @@ function updateMonitorView(clusterData) {
         } else {
             listEl.innerHTML = nodes.map(node => {
                 const statusClass = node.status === 'online' ? 'online' : 'offline';
-                return `<div class="monitor-view__node-row"><span class="monitor-view__node-name">${escapeHtml(node.name)}</span><span class="monitor-view__node-status ${statusClass}" title="${node.status === 'online' ? t('nodeOnline') : t('nodeOffline')}"></span></div>`;
+                const nip = node.ip ? String(node.ip).trim() : '';
+                const ipHtml = nip ? `<span class="monitor-view__node-ip text-muted">${escapeHtml(nip)}</span>` : '';
+                return `<div class="monitor-view__node-row"><span class="monitor-view__node-name">${escapeHtml(node.name)}</span>${ipHtml ? ' ' + ipHtml : ''}<span class="monitor-view__node-status ${statusClass}" title="${node.status === 'online' ? t('nodeOnline') : t('nodeOffline')}"></span></div>`;
             }).join('');
         }
     }
@@ -5689,11 +7612,18 @@ function updateDashboard(clusterData, storageData, backupsData, hostMetricsData 
         const hostMetricWarning = hostMetricAlerts.length
             ? `<span class="badge bg-warning text-dark ms-2" title="${escapeHtml(hostMetricAlerts.map((item) => item.message).join(' | ') || (t('hostMetricsCriticalNodeTitle') || 'Есть предупреждение по метрикам узла'))}"><i class="bi bi-exclamation-triangle-fill"></i></span>`
             : '';
+        const nodeIpDisplay = node.ip || (hostMetric && hostMetric.nodeIp) || '';
+        const nodeIpLine = nodeIpDisplay
+            ? `<div class="small text-muted mt-1"><i class="bi bi-hdd-network me-1"></i>${escapeHtml(String(nodeIpDisplay))}</div>`
+            : '';
         return `
-            <div class="col-md-6 col-lg-3">
+            <div class="cluster-scroll-item">
                 <div class="node-card">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <div>
                         <h5 class="mb-0 d-inline-flex align-items-center">${node.name}${hostMetricWarning}</h5>
+                        ${nodeIpLine}
+                        </div>
                         <span class="badge ${node.status === 'online' ? 'bg-success' : 'bg-danger'}">
                             ${node.status === 'online' ? t('nodeOnline') : t('nodeOffline')}
                         </span>
@@ -6202,6 +8132,7 @@ function renderSettingsMonitoredServices() {
         `;
     }).join('');
     setHTMLIfChanged('settingsServicesBody', rows || '');
+    renderClusterDashboardTilesSettings();
 }
 
 function saveServiceIconSetting(serviceId, rawValue) {
@@ -6216,6 +8147,7 @@ function saveServiceIconSetting(serviceId, rawValue) {
     renderMonitoredServices();
     renderSettingsMonitoredServices();
     renderMonitorServicesList();
+    renderClusterDashboardTiles().catch(() => {});
 }
 
 function saveServiceIconColorSetting(serviceId, rawValue) {
@@ -6230,6 +8162,7 @@ function saveServiceIconColorSetting(serviceId, rawValue) {
     renderMonitoredServices();
     renderSettingsMonitoredServices();
     renderMonitorServicesList();
+    renderClusterDashboardTiles().catch(() => {});
 }
 
 function toggleMonitorVisible(serviceId) {
@@ -6263,6 +8196,7 @@ async function loadClusterVmsForSettings(options) {
             lastClusterData = data;
             renderSettingsMonitoredVms();
             renderMonitorVmsList();
+            renderClusterDashboardTiles().catch(() => {});
             if (!silent) showToast(t('dataUpdated') || 'Список обновлён', 'success');
         } else {
             if (!silent) showToast(data?.error || (t('connectError') || 'Ошибка загрузки'), 'error');
@@ -6307,6 +8241,7 @@ function addVmToMonitorByIdOrName() {
     saveSettingsToServer({ monitorVms: monitoredVmIds, monitorHiddenVmIds });
     renderSettingsMonitoredVms();
     renderMonitorVmsList();
+    renderClusterDashboardTiles().catch(() => {});
     input.value = '';
     showToast(matched.length === 1
         ? (t('settingsVmAdded') || 'Добавлено в монитор')
@@ -6381,6 +8316,7 @@ function renderSettingsMonitoredVms() {
         `;
     }).join('');
     setHTMLIfChanged('settingsVmsBody', rows || '');
+    renderClusterDashboardTilesSettings();
 }
 
 function toggleMonitorVmVisible(vmId) {
@@ -6407,6 +8343,7 @@ function saveVmIconSetting(vmId, rawValue) {
     renderSettingsMonitoredVms();
     renderMonitorVmsList();
     renderVmsMonitorCards();
+    renderClusterDashboardTiles().catch(() => {});
 }
 
 function saveVmIconColorSetting(vmId, rawValue) {
@@ -6421,6 +8358,7 @@ function saveVmIconColorSetting(vmId, rawValue) {
     renderSettingsMonitoredVms();
     renderMonitorVmsList();
     renderVmsMonitorCards();
+    renderClusterDashboardTiles().catch(() => {});
 }
 
 function removeMonitoredVm(vmId) {
@@ -6700,43 +8638,42 @@ function triggerImportAllConfig() {
     if (input) input.click();
 }
 
+async function importAllConfigFromParsedJson(parsed) {
+    const resp = await fetch('/api/settings/import/all', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(parsed)
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || data.success === false) {
+        throw new Error(data.error || `HTTP ${resp.status}`);
+    }
+    await loadSettings();
+    renderMonitoredServices();
+    renderSettingsMonitoredServices();
+    renderSettingsMonitoredVms();
+    renderMonitorVmsList();
+}
+
 async function handleImportAllConfigFile(event) {
     const file = event.target.files && event.target.files[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-        let parsed;
-        try {
-            parsed = JSON.parse(String(e.target.result || ''));
-        } catch {
-            showToast(t('settingsImportError') || 'Неверный файл импорта', 'error');
-            return;
-        }
-        try {
-            const resp = await fetch('/api/settings/import/all', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(parsed)
-            });
-            const data = await resp.json().catch(() => ({}));
-            if (!resp.ok || data.success === false) {
-                throw new Error(data.error || `HTTP ${resp.status}`);
-            }
-            showToast(t('settingsImportSuccess') || 'Настройки импортированы, данные обновлены', 'success');
-            await loadSettings();
-            const servicesData = await fetch('/api/settings/services').then(r => r.json()).catch(() => ({ services: [] }));
-            monitoredServices = Array.isArray(servicesData.services) ? servicesData.services : [];
-            renderMonitoredServices();
-            renderSettingsMonitoredServices();
-            renderSettingsMonitoredVms();
-            renderMonitorVmsList();
-        } catch (err) {
-            showToast((t('settingsImportError') || t('errorUpdate')) + ': ' + err.message, 'error');
-        } finally {
-            event.target.value = '';
-        }
-    };
-    reader.readAsText(file, 'utf-8');
+    let parsed;
+    try {
+        parsed = JSON.parse(await file.text());
+    } catch {
+        showToast(t('settingsImportError') || 'Неверный файл импорта', 'error');
+        event.target.value = '';
+        return;
+    }
+    try {
+        await importAllConfigFromParsedJson(parsed);
+        showToast(t('settingsImportSuccess') || 'Настройки импортированы, данные обновлены', 'success');
+    } catch (err) {
+        showToast((t('settingsImportError') || t('errorUpdate')) + ': ' + err.message, 'error');
+    } finally {
+        event.target.value = '';
+    }
 }
 
 async function addMonitoredService() {
@@ -6800,6 +8737,7 @@ async function addMonitoredService() {
         if (portInput) portInput.value = '';
         renderMonitoredServices();
         renderSettingsMonitoredServices();
+        renderClusterDashboardTiles().catch(() => {});
         showToast(t('dataUpdated'), 'success');
     } catch (e) {
         showToast(t('connectError') + ': ' + e.message, 'error');
@@ -6822,6 +8760,7 @@ async function removeMonitoredService(id) {
         renderMonitoredServices();
         renderSettingsMonitoredServices();
         renderMonitorServicesList();
+        renderClusterDashboardTiles().catch(() => {});
     } catch (e) {
         showToast(t('connectError') + ': ' + e.message, 'error');
     }
@@ -6940,6 +8879,7 @@ async function loadSettings() {
     }
 
     settingsPasswordRequired = !!data.password_required;
+    setupCompleted = data.setup_completed !== false;
     settingsSessionTtlMinutes = parseInt(data.session_ttl_minutes, 10) || 30;
     try {
         const expiry = sessionStorage.getItem(SETTINGS_UNLOCK_EXPIRY_KEY);
@@ -6998,10 +8938,23 @@ async function loadSettings() {
             if (id != null) monitoredVmIds.push(Number(id));
         });
     }
+    clusterDashboardTilesSettingPresent = Object.prototype.hasOwnProperty.call(data, 'cluster_dashboard_tiles');
+    clusterDashboardTiles = normalizeClusterDashboardTiles(data.cluster_dashboard_tiles);
+    clusterDashboardTilesDirty = false;
+    dashboardWeatherCity = normalizeDashboardWeatherCity(data.dashboard_weather_city);
+    dashboardTimezone = normalizeDashboardTimezone(data.dashboard_timezone);
+    setValue('settingsDashboardWeatherCityInput', dashboardWeatherCity);
+    setValue('settingsDashboardTimezoneInput', dashboardTimezone);
     monitorVmIcons = normalizeMonitorVmIconsMap(data.monitor_vm_icons);
     monitorVmIconColors = normalizeMonitorVmIconColorsMap(data.monitor_vm_icon_colors);
     if (data.current_server_index != null) currentServerIndex = parseInt(data.current_server_index, 10) || 0;
     if (data.current_truenas_index != null) currentTrueNASServerIndex = parseInt(data.current_truenas_index, 10) || 0;
+    if (proxmoxServers.length) {
+        currentServerIndex = Math.max(0, Math.min(currentServerIndex, proxmoxServers.length - 1));
+    }
+    if (truenasServers.length) {
+        currentTrueNASServerIndex = Math.max(0, Math.min(currentTrueNASServerIndex, truenasServers.length - 1));
+    }
     if (data.server_type) currentServerType = data.server_type === 'truenas' ? 'truenas' : 'proxmox';
     if (data.monitor_theme === 'light' || data.monitor_theme === 'dark') monitorTheme = data.monitor_theme;
     if (data.custom_theme_style_settings !== undefined) {
@@ -7030,7 +8983,25 @@ async function loadSettings() {
         if (n > 48) n = 48;
         spDay.value = String(n);
     }
+    telegramNotificationRules = normalizeTelegramNotificationRules(data.telegram_notification_rules);
+    if (!telegramNotificationRules.length && data.telegram_routes) {
+        telegramNotificationRules = migrateLegacyTelegramRoutesToRulesClient(normalizeTelegramRoutes(data.telegram_routes));
+    }
+    telegramBotTokenSet = !!data.telegram_bot_token_set;
+    const tgEn = document.getElementById('settingsTelegramNotifyEnabled');
+    if (tgEn) tgEn.value = (data.telegram_notify_enabled === true || data.telegram_notify_enabled === '1') ? '1' : '0';
+    const tgInt = document.getElementById('settingsTelegramIntervalSec');
+    if (tgInt) {
+        let n = parseInt(data.telegram_notify_interval_sec, 10);
+        if (!Number.isFinite(n) || n < 15) n = 60;
+        if (n > 3600) n = 3600;
+        tgInt.value = String(n);
+    }
+    renderTelegramRulesTable();
     renderSettingsMonitorScreensOrderList();
+    renderClusterDashboardTilesSettings();
+    startDashboardClockTimer();
+    refreshDashboardWeather().catch(() => {});
     const ttlSel = document.getElementById('settingsSessionTtlSelect');
     if (ttlSel) {
         const v = String(settingsSessionTtlMinutes);
@@ -7224,7 +9195,6 @@ function renderOneServerList(containerId, servers, currentIdx, type) {
         const div = document.createElement('div');
         div.className = 'input-group mb-2';
         const isCurrent = index === currentIdx;
-        const statusBadge = isCurrent ? '<span class="badge bg-success ms-2">✓</span>' : '';
         div.innerHTML = `
             <input type="text" class="form-control form-control-sm ${isCurrent ? 'border-success' : ''}"
                    value="${escapeHtml(server)}" data-index="${index}"
@@ -7238,7 +9208,6 @@ function renderOneServerList(containerId, servers, currentIdx, type) {
                     title="${t('removeServer')}">
                 <i class="bi bi-trash"></i>
             </button>
-            ${statusBadge}
         `;
         container.appendChild(div);
     });
@@ -7293,17 +9262,27 @@ function removeServerByType(type, index) {
         showToast(t('toastCannotRemoveLastServer'), 'warning');
         return;
     }
+    const removedUrl = servers[index];
     servers.splice(index, 1);
-    const currentIdx = type === 'truenas' ? currentTrueNASServerIndex : currentServerIndex;
-    if (currentIdx >= servers.length) {
-        if (type === 'truenas') {
-            currentTrueNASServerIndex = servers.length - 1;
-            saveSettingsToServer({ currentTrueNASServerIndex: currentTrueNASServerIndex });
-        } else {
-            currentServerIndex = servers.length - 1;
-            saveSettingsToServer({ currentServerIndex: currentServerIndex });
-        }
+
+    let currentIdx = type === 'truenas' ? currentTrueNASServerIndex : currentServerIndex;
+    if (index < currentIdx) {
+        currentIdx -= 1;
+    } else if (index === currentIdx) {
+        currentIdx = Math.min(currentIdx, servers.length - 1);
     }
+    currentIdx = Math.max(0, Math.min(currentIdx, servers.length - 1));
+
+    if (type === 'truenas') {
+        currentTrueNASServerIndex = currentIdx;
+    } else {
+        currentServerIndex = currentIdx;
+    }
+
+    if (removedUrl != null && String(removedUrl).trim() !== '') {
+        delete connectionIdMap[connectionKey(type, normalizeUrlClient(removedUrl))];
+    }
+
     renderServerList();
     saveServers();
 }
@@ -7314,7 +9293,8 @@ function saveServers() {
         proxmoxServers: [...proxmoxServers],
         truenasServers: [...truenasServers],
         currentServerIndex: currentServerIndex,
-        currentTrueNASServerIndex: currentTrueNASServerIndex
+        currentTrueNASServerIndex: currentTrueNASServerIndex,
+        connectionIdMap: { ...connectionIdMap }
     });
     updateCurrentServerBadge();
 }

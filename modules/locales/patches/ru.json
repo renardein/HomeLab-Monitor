@@ -16,5 +16,7 @@
     "settingsNavUps": "ИБП",
     "serviceUrlLabelNutHint": "NUT (имяUPS|имяПеременной)",
     "netdevCommunityLabel": "Community (SNMP)",
-    "backupId": "Ид."
+    "backupId": "Ид.",
+    "settingsServiceIconHeader": "Иконка",
+    "settingsVmIconHeader": "Иконка"
 }

@@ -277,6 +277,24 @@ const settingsContent = {
         </div>
         <hr class="my-4">
         <div class="mb-2">
+            <label class="form-label fw-bold">Time and Weather</label>
+            <p class="text-muted small mb-3">Settings for the fourth card in the Cluster top row.</p>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label fw-bold">City</label>
+                    <input type="text" class="form-control" value="Berlin">
+                    <div class="form-text">Used to resolve the current weather.</div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold">Time zone</label>
+                    <input type="text" class="form-control" value="Europe/Berlin">
+                    <div class="form-text">Use an IANA time zone such as Europe/Berlin.</div>
+                </div>
+            </div>
+            <button class="btn btn-primary btn-sm mt-3" type="button"><i class="bi bi-save me-1"></i>Save time and weather</button>
+        </div>
+        <hr class="my-4">
+        <div class="mb-2">
             <label class="form-label fw-bold">Monitor Screen Order</label>
             <p class="text-muted small mb-2">Order used by swipe gestures and toolbar arrows. Backup screen is available only for Proxmox.</p>
             <ul class="list-group list-group-flush border rounded overflow-hidden">
@@ -330,6 +348,72 @@ const settingsContent = {
                     </span>
                 </li>
             </ul>
+        </div>
+        <hr class="my-4">
+        <div class="mb-2">
+            <label class="form-label fw-bold">Cluster Screen Tiles</label>
+            <p class="text-muted small mb-2">Build up to 12 tiles for the Cluster screen from UPS, VM / CT, services, SNMP devices, and Speedtest. They scroll horizontally on the screen.</p>
+            <div class="border rounded p-3 mb-2">
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold small mb-1">Tile Type</label>
+                        <select class="form-select">
+                            <option selected>UPS</option>
+                            <option>Service</option>
+                            <option>VM / CT</option>
+                            <option>SNMP Device</option>
+                            <option>Speedtest</option>
+                        </select>
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label fw-bold small mb-1">Data Source</label>
+                        <select class="form-select">
+                            <option selected>UPS 1: ups</option>
+                            <option>UPS 2: rack-ups</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="d-flex gap-2 justify-content-md-end">
+                            <button type="button" class="btn btn-outline-secondary btn-sm" disabled><i class="bi bi-arrow-up"></i></button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-down"></i></button>
+                            <button type="button" class="btn btn-outline-danger btn-sm"><i class="bi bi-trash"></i></button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="border rounded p-3 mb-2">
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold small mb-1">Tile Type</label>
+                        <select class="form-select">
+                            <option>UPS</option>
+                            <option selected>Service</option>
+                            <option>VM / CT</option>
+                            <option>SNMP Device</option>
+                            <option>Speedtest</option>
+                        </select>
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label fw-bold small mb-1">Data Source</label>
+                        <select class="form-select">
+                            <option selected>Vaultwarden</option>
+                            <option>Traefik</option>
+                            <option>Grafana</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="d-flex gap-2 justify-content-md-end">
+                            <button type="button" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-up"></i></button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-down"></i></button>
+                            <button type="button" class="btn btn-outline-danger btn-sm"><i class="bi bi-trash"></i></button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="d-flex gap-2 flex-wrap mt-3">
+                <button class="btn btn-outline-primary btn-sm" type="button"><i class="bi bi-plus-lg me-1"></i>Add Tile</button>
+                <button class="btn btn-primary btn-sm" type="button"><i class="bi bi-save me-1"></i>Save Tiles</button>
+            </div>
         </div>
     </div>
 </div>`,
@@ -534,22 +618,9 @@ const settingsContent = {
                 <div class="col-md-4"><label class="form-label fw-bold">Output Voltage VAR</label><input type="text" class="form-control" value="output.voltage"></div>
             </div>
             <hr class="my-4">
-            <div class="mb-3">
-                <ul class="nav nav-pills" role="tablist">
-                    <li class="nav-item"><button class="nav-link active" type="button">Normal Mode</button></li>
-                    <li class="nav-item"><button class="nav-link" type="button">Monitor Mode</button></li>
-                </ul>
-                <div class="tab-content p-3 border border-top-0 rounded-bottom">
-                    <div class="tab-pane fade show active" role="tabpanel">
-                        <label class="form-label fw-bold mb-2">Show UPS on Dashboard</label>
-                        <div class="d-flex flex-wrap gap-3">
-                            <div class="form-check"><input class="form-check-input" type="checkbox" checked><label class="form-check-label">1</label></div>
-                            <div class="form-check"><input class="form-check-input" type="checkbox" checked><label class="form-check-label">2</label></div>
-                            <div class="form-check"><input class="form-check-input" type="checkbox"><label class="form-check-label">3</label></div>
-                            <div class="form-check"><input class="form-check-input" type="checkbox"><label class="form-check-label">4</label></div>
-                        </div>
-                    </div>
-                </div>
+            <div class="row g-3 mb-3">
+                <div class="col-md-6"><label class="form-label fw-bold">Show in Normal Mode on the UPS Screen</label><select class="form-select"><option>No</option><option selected>Yes</option></select></div>
+                <div class="col-md-6"><label class="form-label fw-bold">Show in Monitor Mode on the UPS Screen</label><select class="form-select"><option>No</option><option selected>Yes</option></select></div>
             </div>
             <div class="d-flex justify-content-end"><button class="btn btn-primary" type="button"><i class="bi bi-save me-2"></i>Save UPS</button></div>
         </div>
@@ -630,29 +701,9 @@ const settingsContent = {
                 <div class="form-text">Rows can be added or removed. Empty OIDs are not shown on dashboard or monitor screens.</div>
             </div>
             <hr class="my-4">
-            <div class="mb-3">
-                <ul class="nav nav-pills" role="tablist">
-                    <li class="nav-item"><button class="nav-link active" type="button">Normal Mode</button></li>
-                    <li class="nav-item"><button class="nav-link" type="button">Monitor Mode</button></li>
-                </ul>
-                <div class="tab-content p-3 border border-top-0 rounded-bottom">
-                    <div class="tab-pane fade show active" role="tabpanel">
-                        <label class="form-label fw-bold mb-2">Show on Dashboard</label>
-                        <div class="d-flex flex-wrap gap-3">
-                            <div class="form-check"><input class="form-check-input" type="checkbox" checked><label class="form-check-label">1</label></div>
-                            <div class="form-check"><input class="form-check-input" type="checkbox" checked><label class="form-check-label">2</label></div>
-                            <div class="form-check"><input class="form-check-input" type="checkbox"><label class="form-check-label">3</label></div>
-                        </div>
-                    </div>
-                    <div class="tab-pane fade" role="tabpanel">
-                        <label class="form-label fw-bold mb-2">Show in Monitor Mode (Cluster screen)</label>
-                        <div class="d-flex flex-wrap gap-3">
-                            <div class="form-check"><input class="form-check-input" type="checkbox" checked><label class="form-check-label">1</label></div>
-                            <div class="form-check"><input class="form-check-input" type="checkbox"><label class="form-check-label">2</label></div>
-                            <div class="form-check"><input class="form-check-input" type="checkbox"><label class="form-check-label">3</label></div>
-                        </div>
-                    </div>
-                </div>
+            <div class="row g-3 mb-3">
+                <div class="col-md-6"><label class="form-label fw-bold">Show in Normal Mode on the SNMP Screen</label><select class="form-select"><option>No</option><option selected>Yes</option></select></div>
+                <div class="col-md-6"><label class="form-label fw-bold">Show in Monitor Mode on the SNMP Screen</label><select class="form-select"><option>No</option><option selected>Yes</option></select></div>
             </div>
             <div class="d-flex justify-content-end"><button class="btn btn-primary" type="button"><i class="bi bi-save me-2"></i>Save Network Devices</button></div>
         </div>
@@ -851,9 +902,11 @@ browser: Chrome</pre>
 
 const clusterStats = `
             <div class="row g-4 mb-4">
-                <div class="col-md-4"><div class="stat-card"><div class="stat-value">4</div><div class="stat-label">Total Nodes</div></div></div>
-                <div class="col-md-4"><div class="stat-card"><div class="stat-value text-success">4</div><div class="stat-label">Online Nodes</div></div></div>
-                <div class="col-md-4"><div class="stat-card"><div class="stat-value">OK</div><div class="stat-label">Quorum</div></div></div>
+                <div class="col-md-6 col-xl"><div class="stat-card"><div class="stat-value">23:43</div><div class="stat-card-meta">Mar 21</div></div></div>
+                <div class="col-md-6 col-xl"><div class="stat-card"><div class="stat-value"><i class="bi bi-cloud-sun me-1"></i>+1°C</div><div class="stat-card-meta">Kansk</div></div></div>
+                <div class="col-md-6 col-xl"><div class="stat-card"><div class="stat-value">4</div><div class="stat-label">Total Nodes</div></div></div>
+                <div class="col-md-6 col-xl"><div class="stat-card"><div class="stat-value text-success">4</div><div class="stat-label">Online Nodes</div></div></div>
+                <div class="col-md-6 col-xl"><div class="stat-card"><div class="stat-value">OK</div><div class="stat-label">Quorum</div></div></div>
             </div>`;
 
 const clusterResources = `
@@ -892,11 +945,80 @@ const clusterResources = `
                                 <div class="col-md-3 col-6">
                                     <div class="text-center p-3">
                                         <h6><i class="bi bi-box-seam me-2"></i><span>CT</span></h6>
-                                        <div class="display-6">11</div>
-                                        <small class="text-muted d-block">Running: <span class="text-success fw-semibold">8</span></small>
+                                        <div class="display-6">8</div>
+                                        <small class="text-muted d-block">Total: <span class="text-success fw-semibold">11</span></small>
                                         <div class="progress mt-2" style="height: 10px;"><div class="progress-bar bg-success" style="width: 73%"></div></div>
                                     </div>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+
+const clusterTiles = `
+            <div class="row mb-4" id="dashboardClusterTilesSection">
+                <div class="col-12">
+                    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+                        <h5 class="mb-0"><i class="bi bi-grid-1x2 me-2"></i><span>Cluster Tiles</span></h5>
+                    </div>
+                    <div class="cluster-scroll-row" id="dashboardClusterTiles">
+                        <div class="cluster-scroll-item">
+                            <div class="node-card ups-node-card h-100">
+                                <div class="d-flex justify-content-between align-items-center mb-3 gap-2">
+                                    <h5 class="mb-0 text-truncate">ups</h5>
+                                    <span class="badge bg-success">Online</span>
+                                </div>
+                                <div class="row g-2">
+                                    <div class="col-6"><div class="p-2 h-100"><small class="text-muted ups-node-card__metric-label">Input V</small><div class="fw-bold ups-node-card__metric-value text-break">226 V</div></div></div>
+                                    <div class="col-6"><div class="p-2 h-100"><small class="text-muted ups-node-card__metric-label">Load</small><div class="fw-bold ups-node-card__metric-value text-break">33 %</div><div class="progress mt-2" style="height: 8px;"><div class="progress-bar bg-warning" style="width: 33%"></div></div></div></div>
+                                    <div class="col-6 mt-2"><div class="p-2 h-100"><small class="text-muted ups-node-card__metric-label">Charge</small><div class="fw-bold ups-node-card__metric-value text-break">100%</div><div class="progress mt-2" style="height: 8px;"><div class="progress-bar bg-success" style="width: 100%"></div></div></div></div>
+                                    <div class="col-6 mt-2"><div class="p-2 h-100"><small class="text-muted ups-node-card__metric-label">Battery runtime</small><div class="fw-bold ups-node-card__metric-value text-break">9m 4s</div></div></div>
+                                </div>
+                                <div class="small text-muted mt-2">NUT · 10.200.0.5</div>
+                            </div>
+                        </div>
+                        <div class="cluster-scroll-item">
+                            <div class="node-card ups-node-card h-100">
+                                <div class="d-flex justify-content-between align-items-center mb-3 gap-2">
+                                    <h5 class="mb-0 text-truncate d-inline-flex align-items-center gap-2"><span class="vm-icon vm-monitor-icon text-primary"><i class="bi bi-pc-display"></i></span><span class="text-truncate">docker-host</span></h5>
+                                    <span class="badge bg-success">Running</span>
+                                </div>
+                                <div class="row g-2">
+                                    <div class="col-6"><div class="p-2 h-100"><small class="text-muted ups-node-card__metric-label">Type</small><div class="fw-bold ups-node-card__metric-value text-break">VM</div></div></div>
+                                    <div class="col-6"><div class="p-2 h-100"><small class="text-muted ups-node-card__metric-label">Node</small><div class="fw-bold ups-node-card__metric-value text-break">pve-01</div></div></div>
+                                    <div class="col-6 mt-2"><div class="p-2 h-100"><small class="text-muted ups-node-card__metric-label">ID</small><div class="fw-bold ups-node-card__metric-value text-break">118</div></div></div>
+                                    <div class="col-6 mt-2"><div class="p-2 h-100"><small class="text-muted ups-node-card__metric-label">Status</small><div class="fw-bold ups-node-card__metric-value text-break">Running</div></div></div>
+                                </div>
+                                <div class="small text-muted mt-2">pve-01 / 118</div>
+                            </div>
+                        </div>
+                        <div class="cluster-scroll-item">
+                            <div class="node-card ups-node-card h-100">
+                                <div class="d-flex justify-content-between align-items-center mb-3 gap-2">
+                                    <h5 class="mb-0 text-truncate d-inline-flex align-items-center gap-2"><span class="service-icon service-monitor-icon text-success"><i class="bi bi-shield-check"></i></span><span class="text-truncate">Vaultwarden</span></h5>
+                                    <span class="badge bg-success">Connected</span>
+                                </div>
+                                <div class="row g-2">
+                                    <div class="col-12"><div class="small text-muted mb-1"><span class="badge bg-secondary me-1">HTTP</span><code>https://vault.example.local/</code></div></div>
+                                    <div class="col-6"><div class="p-2 h-100"><small class="text-muted ups-node-card__metric-label">Latency</small><div class="fw-bold ups-node-card__metric-value text-break">38 ms</div></div></div>
+                                    <div class="col-6"><div class="p-2 h-100"><small class="text-muted ups-node-card__metric-label">Type</small><div class="fw-bold ups-node-card__metric-value text-break">HTTP</div></div></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="cluster-scroll-item">
+                            <div class="node-card ups-node-card h-100">
+                                <div class="d-flex justify-content-between align-items-center mb-3 gap-2">
+                                    <h5 class="mb-0 text-truncate">Speedtest</h5>
+                                    <span class="badge bg-success">OK</span>
+                                </div>
+                                <div class="row g-2">
+                                    <div class="col-6"><div class="p-2 h-100"><small class="text-muted ups-node-card__metric-label">Last Run</small><div class="fw-bold ups-node-card__metric-value text-break">17:20</div></div></div>
+                                    <div class="col-6"><div class="p-2 h-100"><small class="text-muted ups-node-card__metric-label">Average</small><div class="fw-bold ups-node-card__metric-value text-break">940 Mbps</div></div></div>
+                                    <div class="col-6 mt-2"><div class="p-2 h-100"><small class="text-muted ups-node-card__metric-label">Upload</small><div class="fw-bold ups-node-card__metric-value text-break">511 Mbps</div></div></div>
+                                    <div class="col-6 mt-2"><div class="p-2 h-100"><small class="text-muted ups-node-card__metric-label">Ping</small><div class="fw-bold ups-node-card__metric-value text-break">4 ms</div></div></div>
+                                </div>
+                                <div class="small text-muted mt-2">Frankfurt</div>
                             </div>
                         </div>
                     </div>
@@ -913,8 +1035,8 @@ const dashboardTabs = (active, isTrueNAS = false) => `
             </ul>`;
 
 const nodesContent = `
-                        <div class="row">
-                            <div class="col-md-6 col-lg-3">
+                        <div class="cluster-scroll-row">
+                            <div class="cluster-scroll-item">
                                 <div class="node-card">
                                     <div class="d-flex justify-content-between align-items-center mb-3">
                                         <h5 class="mb-0 d-inline-flex align-items-center">pve-01</h5>
@@ -938,7 +1060,7 @@ const nodesContent = `
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-6 col-lg-3">
+                            <div class="cluster-scroll-item">
                                 <div class="node-card">
                                     <div class="d-flex justify-content-between align-items-center mb-3">
                                         <h5 class="mb-0 d-inline-flex align-items-center">pve-02<span class="badge bg-warning text-dark ms-2" title="CPU temperature exceeded threshold"><i class="bi bi-exclamation-triangle-fill"></i></span></h5>
@@ -963,7 +1085,7 @@ const nodesContent = `
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-6 col-lg-3">
+                            <div class="cluster-scroll-item">
                                 <div class="node-card">
                                     <div class="d-flex justify-content-between align-items-center mb-3">
                                         <h5 class="mb-0 d-inline-flex align-items-center">pve-03<span class="badge bg-warning text-dark ms-2" title="Link speed below threshold"><i class="bi bi-exclamation-triangle-fill"></i></span></h5>
@@ -1096,6 +1218,7 @@ const dashboardSection = (active, inner, isTrueNAS = false) => `
                         ${inner}
                     </div>
                 </div>
+                ${clusterTiles}
                 <div class="text-end mt-4"><small class="text-muted">Last update: 2026-03-21 17:10</small></div>
             </div>
         </div>`;
@@ -1189,22 +1312,18 @@ const netdevCards = `
 const upsCards = `
 <div class="row g-2 small" id="upsMonitorCards">
     <div class="col-12">
-        <div class="card h-100">
-            <div class="card-body p-3">
-                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3 pb-3 border-bottom">
-                    <div class="fw-semibold fs-5 text-truncate">APC Smart-UPS</div>
-                    <span class="badge bg-success">OL</span>
-                </div>
-                <div class="row g-2">
-                    <div class="col-6 col-md-4 col-xl-3"><div class="text-center p-3"><h6 class="mb-1"><i class="bi bi-plug me-1"></i>Input Voltage</h6><div class="fs-3 fw-semibold lh-sm text-break">230 V</div></div></div>
-                    <div class="col-6 col-md-4 col-xl-3"><div class="text-center p-3"><h6 class="mb-1"><i class="bi bi-outlet me-1"></i>Output Voltage</h6><div class="fs-3 fw-semibold lh-sm text-break">230 V</div></div></div>
-                    <div class="col-6 col-md-4 col-xl-3"><div class="text-center p-3"><h6 class="mb-1"><i class="bi bi-lightning-charge me-1"></i>Power</h6><div class="fs-3 fw-semibold lh-sm text-break">312 W</div></div></div>
-                    <div class="col-6 col-md-4 col-xl-3"><div class="text-center p-3"><h6 class="mb-1"><i class="bi bi-speedometer2 me-1"></i>Load</h6><div class="fs-3 fw-semibold lh-sm text-break">21 %</div></div></div>
-                    <div class="col-6 col-md-4 col-xl-3"><div class="text-center p-3"><h6 class="mb-1"><i class="bi bi-battery-half me-1"></i>Charge</h6><div class="fs-3 fw-semibold lh-sm text-break">100%</div></div></div>
-                    <div class="col-6 col-md-4 col-xl-3"><div class="text-center p-3"><h6 class="mb-1"><i class="bi bi-clock-history me-1"></i>Runtime</h6><div class="fs-3 fw-semibold lh-sm text-break">54 min</div></div></div>
-                </div>
-                <p class="small text-muted text-center mb-0 mt-3">NUT · 10.200.0.5</p>
+        <div class="node-card ups-node-card ups-node-card--single h-100">
+            <div class="d-flex justify-content-between align-items-center mb-3 gap-2">
+                <h5 class="mb-0 text-truncate">ups</h5>
+                <span class="badge bg-success">Online</span>
             </div>
+            <div class="row g-2">
+                <div class="col-6"><div class="p-2 h-100"><small class="text-muted ups-node-card__metric-label">Input V</small><div class="fw-bold ups-node-card__metric-value text-break">226 V</div></div></div>
+                <div class="col-6"><div class="p-2 h-100"><small class="text-muted ups-node-card__metric-label">Load</small><div class="fw-bold ups-node-card__metric-value text-break">33 %</div><div class="progress mt-2" style="height: 8px;"><div class="progress-bar bg-warning" style="width: 33%"></div></div></div></div>
+                <div class="col-6 mt-2"><div class="p-2 h-100"><small class="text-muted ups-node-card__metric-label">Charge</small><div class="fw-bold ups-node-card__metric-value text-break">100%</div><div class="progress mt-2" style="height: 8px;"><div class="progress-bar bg-success" style="width: 100%"></div></div></div></div>
+                <div class="col-6 mt-2"><div class="p-2 h-100"><small class="text-muted ups-node-card__metric-label">Battery runtime</small><div class="fw-bold ups-node-card__metric-value text-break">9m 4s</div></div></div>
+            </div>
+            <div class="small text-muted mt-2">NUT · 10.200.0.5</div>
         </div>
     </div>
 </div>`;
@@ -1255,6 +1374,12 @@ const monitorToolbar = (title) => `
             <div class="monitor-toolbar-center">
                 <span class="monitor-toolbar-title">${title}</span>
                 <span class="monitor-toolbar-update text-muted small">Updated 2026-03-21 17:20</span>
+                <div class="monitor-toolbar-dots">
+                    <button type="button" class="monitor-toolbar-dot is-active" title="Cluster" aria-label="Cluster"></button>
+                    <button type="button" class="monitor-toolbar-dot" title="Services" aria-label="Services"></button>
+                    <button type="button" class="monitor-toolbar-dot" title="VM / CT" aria-label="VM / CT"></button>
+                    <button type="button" class="monitor-toolbar-dot" title="UPS" aria-label="UPS"></button>
+                </div>
             </div>
             <div class="monitor-toolbar-theme">
                 <button type="button" class="btn btn-sm monitor-toolbar-nav-btn" title="Prev"><i class="bi bi-chevron-left"></i></button>
@@ -1264,6 +1389,9 @@ const monitorToolbar = (title) => `
                 <button type="button" class="btn btn-sm monitor-toolbar-theme-btn" title="Dark theme"><i class="bi bi-moon-stars-fill"></i></button>
             </div>
             <div class="monitor-toolbar-right">
+                <button type="button" class="btn btn-sm monitor-toolbar-settings" title="Settings">
+                    <i class="bi bi-gear me-1"></i><span>Settings</span>
+                </button>
                 <a href="./dashboard.html" class="btn btn-sm monitor-toolbar-exit" title="Exit monitor mode">
                     <i class="bi bi-fullscreen-exit me-1"></i><span>Exit</span>
                 </a>
@@ -1282,6 +1410,7 @@ const monitorPageContent = {
                         ${nodesContent}
                     </div>
                 </div>
+                ${clusterTiles}
                 <div class="text-end mt-4"><small class="text-muted">Last update: 2026-03-21 17:20</small></div>
             </div>
         </div>

@@ -1,13 +1,14 @@
 {
   "name": "homelab-monitor",
-  "version": "1.0-release",
+  "version": "1.0.3-release",
   "description": "HomeLab Monitor",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
     "pm2": "pm2 start server.js --name homelab-monitor",
-    "host-metrics-agent": "node extras/proxmox-host-metrics-agent.js"
+    "host-metrics-agent": "node extras/proxmox-host-metrics-agent.js",
+    "locales:check": "node scripts/check-locales.js"
   },
   "dependencies": {
     "axios": "^1.6.0",
@@ -20,7 +21,8 @@
     "helmet": "^7.0.0",
     "net-snmp": "^3.26.1",
     "node-cache": "^5.1.2",
-    "sql.js": "^1.14.1"
+    "sql.js": "^1.14.1",
+    "ssh2": "^1.16.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"

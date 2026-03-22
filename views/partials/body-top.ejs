@@ -1,31 +1,111 @@
 <body>
     <div class="toast-container" id="toastContainer"></div>
 
-    <!-- Окно авторизации для доступа к настройкам -->
+    <!-- Settings unlock (password) -->
     <div class="modal fade" id="settingsUnlockModal" tabindex="-1" aria-labelledby="settingsUnlockModalTitle" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="settingsUnlockModalTitle"><i class="bi bi-shield-lock me-2"></i><span id="settingsUnlockModalTitleText">Введите пароль для доступа к настройкам</span></h5>
+                    <h5 class="modal-title" id="settingsUnlockModalTitle"><i class="bi bi-shield-lock me-2"></i><span id="settingsUnlockModalTitleText">Enter settings password</span></h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" id="settingsUnlockModalCloseBtn"></button>
                 </div>
                 <div class="modal-body">
                     <div class="mb-3">
-                        <label class="form-label fw-bold" for="settingsUnlockPassword" id="settingsUnlockPasswordLabel">Пароль</label>
+                        <label class="form-label fw-bold" for="settingsUnlockPassword" id="settingsUnlockPasswordLabel">Password</label>
                         <input type="password" class="form-control form-control-lg" id="settingsUnlockPassword" placeholder="" autocomplete="current-password">
                         <div class="invalid-feedback" id="settingsUnlockError"></div>
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-outline-secondary" id="settingsUnlockCancelBtn"><span id="settingsUnlockCancelText">Отмена</span></button>
-                    <button type="button" class="btn btn-primary" id="settingsUnlockSubmitBtn"><i class="bi bi-unlock me-1"></i><span id="settingsUnlockSubmitText">Войти</span></button>
+                    <button type="button" class="btn btn-outline-secondary" id="settingsUnlockCancelBtn"><span id="settingsUnlockCancelText">Cancel</span></button>
+                    <button type="button" class="btn btn-primary" id="settingsUnlockSubmitBtn"><i class="bi bi-unlock me-1"></i><span id="settingsUnlockSubmitText">Unlock</span></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<%- include('./setup-wizard') %>
+
+    <!-- Telegram rule message template -->
+    <div class="modal fade" id="telegramRuleMessageModal" tabindex="-1" aria-labelledby="telegramRuleMessageModalTitle" aria-hidden="true" data-bs-backdrop="true" data-bs-keyboard="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="telegramRuleMessageModalTitle"><i class="bi bi-chat-text me-2"></i><span id="telegramRuleMessageModalTitleText"></span></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="small text-muted mb-2" id="telegramRuleMessageModalTypeLine"></p>
+                    <p class="small text-muted mb-3" id="telegramRuleMessageModalEmptyHint"></p>
+                    <label class="form-label fw-bold" for="telegramRuleMessageModalTextarea" id="telegramRuleMessageModalTextareaLabel"></label>
+                    <textarea class="form-control font-monospace" id="telegramRuleMessageModalTextarea" rows="8" maxlength="4096" placeholder=""></textarea>
+                    <div class="mt-3">
+                        <div class="fw-semibold small mb-2" id="telegramRuleMessageModalVarsTitle"></div>
+                        <ul class="small mb-0 ps-3" id="telegramRuleMessageModalVarsList"></ul>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" id="telegramRuleMessageModalCancelBtn"><span id="telegramRuleMessageModalCancelText"></span></button>
+                    <button type="button" class="btn btn-primary" id="telegramRuleMessageModalSaveBtn"><i class="bi bi-check-lg me-1"></i><span id="telegramRuleMessageModalSaveText"></span></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Host metrics agent install via SSH -->
+    <div class="modal fade" id="hostMetricsAgentInstallModal" tabindex="-1" aria-labelledby="hostMetricsAgentInstallModalTitle" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false" data-agent-mode="install">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="hostMetricsAgentInstallModalTitle"><i class="bi bi-cloud-download me-2" id="hostMetricsAgentInstallModalTitleIcon" aria-hidden="true"></i><span id="hostMetricsAgentInstallTitleText">Install host metrics agent</span></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted small mb-3" id="hostMetricsAgentInstallIntro"></p>
+                    <div id="hostMetricsAgentInstallStep1">
+                        <div class="row g-2 mb-2">
+                            <div class="col-md-8">
+                                <label class="form-label fw-bold" for="hostMetricsAgentSshHost" id="hostMetricsAgentInstallSshHostLabel">SSH host</label>
+                                <input type="text" class="form-control" id="hostMetricsAgentSshHost" placeholder="10.0.0.5 or pve" autocomplete="off">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold" for="hostMetricsAgentSshPort" id="hostMetricsAgentInstallSshPortLabel">Port</label>
+                                <input type="number" class="form-control" id="hostMetricsAgentSshPort" value="22" min="1" max="65535">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold" for="hostMetricsAgentSshUser" id="hostMetricsAgentInstallSshUserLabel">User</label>
+                                <input type="text" class="form-control" id="hostMetricsAgentSshUser" value="root" autocomplete="username">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold" for="hostMetricsAgentSshPassword" id="hostMetricsAgentInstallSshPasswordLabel">Password</label>
+                                <input type="password" class="form-control" id="hostMetricsAgentSshPassword" autocomplete="new-password">
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-primary" id="hostMetricsAgentInstallNextBtn"><span id="hostMetricsAgentInstallNextBtnText">Next: command plan</span></button>
+                    </div>
+                    <div id="hostMetricsAgentInstallStep2" class="d-none">
+                        <label class="form-label fw-bold" for="hostMetricsAgentInstallPlanText" id="hostMetricsAgentInstallPlanLabel">Commands and actions</label>
+                        <textarea id="hostMetricsAgentInstallPlanText" class="form-control font-monospace small" rows="16" readonly></textarea>
+                        <div class="form-check mt-3">
+                            <input class="form-check-input" type="checkbox" id="hostMetricsAgentInstallConfirm">
+                            <label class="form-check-label" for="hostMetricsAgentInstallConfirm" id="hostMetricsAgentInstallConfirmLabel">I confirm that I want to run these commands on the remote host</label>
+                        </div>
+                        <div id="hostMetricsAgentInstallResultWrap" class="mt-3 d-none">
+                            <label class="form-label fw-bold" id="hostMetricsAgentInstallResultLabel">Output</label>
+                            <pre id="hostMetricsAgentInstallResult" class="small bg-light border rounded p-2 mb-0" style="max-height: 200px; overflow: auto;"></pre>
+                        </div>
+                        <div class="d-flex flex-wrap gap-2 mt-3">
+                            <button type="button" class="btn btn-outline-secondary" id="hostMetricsAgentInstallBackBtn"><span id="hostMetricsAgentInstallBackBtnText">Back</span></button>
+                            <button type="button" class="btn btn-danger" id="hostMetricsAgentInstallRunBtn" disabled><span id="hostMetricsAgentInstallRunBtnText">Install / update</span></button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
     <div class="container">
-        <!-- Навигация -->
+        <!-- Top navigation -->
         <nav class="navbar navbar-expand-lg bg-white rounded-3 shadow-sm mb-4 p-3">
             <div class="container-fluid">
                 <a class="navbar-brand fw-bold" href="#">
@@ -52,17 +132,17 @@
                                 <li><hr class="dropdown-divider"></li>
                                 <li>
                                     <button class="dropdown-item" type="button" onclick="openServicesMonitorFromMenu()">
-                                        <i class="bi bi-activity me-2"></i><span id="menuServicesMonitorText">Мониторинг сервисов</span>
+                                        <i class="bi bi-activity me-2"></i><span id="menuServicesMonitorText">Service monitoring</span>
                                     </button>
                                 </li>
                                 <li>
                                     <button class="dropdown-item" type="button" onclick="openVmsMonitorFromMenu()">
-                                        <i class="bi bi-hdd-network me-2"></i><span id="menuVmsMonitorText">Статус VM/CT</span>
+                                        <i class="bi bi-hdd-network me-2"></i><span id="menuVmsMonitorText">VM / CT status</span>
                                     </button>
                                 </li>
                                 <li>
                                     <button class="dropdown-item" type="button" onclick="openNetdevMonitorFromMenu()">
-                                        <i class="bi bi-diagram-3 me-2"></i><span id="menuNetdevMonitorText">Сетевые устройства (SNMP)</span>
+                                        <i class="bi bi-diagram-3 me-2"></i><span id="menuNetdevMonitorText">Network devices (SNMP)</span>
                                     </button>
                                 </li>
                                 <li>
@@ -73,8 +153,8 @@
                             </ul>
                         </li>
                         <li class="nav-item me-2">
-                            <button class="btn btn-outline-info btn-sm" onclick="toggleMonitorMode()" id="monitorModeBtn" title="Режим монитора">
-                                <i class="bi bi-display"></i> <span id="monitorModeText">Монитор</span>
+                            <button class="btn btn-outline-info btn-sm" onclick="toggleMonitorMode()" id="monitorModeBtn" title="Monitor mode">
+                                <i class="bi bi-display"></i> <span id="monitorModeText">Monitor</span>
                             </button>
                         </li>
                         <li class="nav-item">
@@ -84,7 +164,7 @@
                         </li>
                         <li class="nav-item">
                             <span class="badge bg-light text-dark me-2" id="connectionStatus">
-                                <i class="bi bi-wifi-off"></i> <span id="notConnectedText">Не подключено</span>
+                                <i class="bi bi-wifi-off"></i> <span id="notConnectedText">Not connected</span>
                             </span>
                         </li>
                         <li class="nav-item me-3">
@@ -94,7 +174,7 @@
                         </li>
                         <li class="nav-item">
                             <button class="btn btn-primary" onclick="refreshData()" id="refreshBtn">
-                                <i class="bi bi-arrow-repeat me-2"></i><span id="refreshText">Обновить</span>
+                                <i class="bi bi-arrow-repeat me-2"></i><span id="refreshText">Refresh</span>
                             </button>
                         </li>
 

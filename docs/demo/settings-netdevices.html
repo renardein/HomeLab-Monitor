@@ -92,6 +92,9 @@
                             <a class="nav-link" href="./settings-speedtest.html" role="tab">
                                 <i class="bi bi-wifi me-2"></i><span>Speedtest</span>
                             </a>
+                            <a class="nav-link" href="./settings-telegram.html" role="tab">
+                                <i class="bi bi-send me-2"></i><span>Telegram</span>
+                            </a>
                             <a class="nav-link" href="./settings-security.html" role="tab">
                                 <i class="bi bi-shield-lock me-2"></i><span>Security</span>
                             </a>
@@ -187,29 +190,9 @@
                 <div class="form-text">Rows can be added or removed. Empty OIDs are not shown on dashboard or monitor screens.</div>
             </div>
             <hr class="my-4">
-            <div class="mb-3">
-                <ul class="nav nav-pills" role="tablist">
-                    <li class="nav-item"><button class="nav-link active" type="button">Normal Mode</button></li>
-                    <li class="nav-item"><button class="nav-link" type="button">Monitor Mode</button></li>
-                </ul>
-                <div class="tab-content p-3 border border-top-0 rounded-bottom">
-                    <div class="tab-pane fade show active" role="tabpanel">
-                        <label class="form-label fw-bold mb-2">Show on Dashboard</label>
-                        <div class="d-flex flex-wrap gap-3">
-                            <div class="form-check"><input class="form-check-input" type="checkbox" checked><label class="form-check-label">1</label></div>
-                            <div class="form-check"><input class="form-check-input" type="checkbox" checked><label class="form-check-label">2</label></div>
-                            <div class="form-check"><input class="form-check-input" type="checkbox"><label class="form-check-label">3</label></div>
-                        </div>
-                    </div>
-                    <div class="tab-pane fade" role="tabpanel">
-                        <label class="form-label fw-bold mb-2">Show in Monitor Mode (Cluster screen)</label>
-                        <div class="d-flex flex-wrap gap-3">
-                            <div class="form-check"><input class="form-check-input" type="checkbox" checked><label class="form-check-label">1</label></div>
-                            <div class="form-check"><input class="form-check-input" type="checkbox"><label class="form-check-label">2</label></div>
-                            <div class="form-check"><input class="form-check-input" type="checkbox"><label class="form-check-label">3</label></div>
-                        </div>
-                    </div>
-                </div>
+            <div class="row g-3 mb-3">
+                <div class="col-md-6"><label class="form-label fw-bold">Show in Normal Mode on the SNMP Screen</label><select class="form-select"><option>No</option><option selected>Yes</option></select></div>
+                <div class="col-md-6"><label class="form-label fw-bold">Show in Monitor Mode on the SNMP Screen</label><select class="form-select"><option>No</option><option selected>Yes</option></select></div>
             </div>
             <div class="d-flex justify-content-end"><button class="btn btn-primary" type="button"><i class="bi bi-save me-2"></i>Save Network Devices</button></div>
         </div>
@@ -223,7 +206,7 @@
         <footer class="d-flex flex-wrap justify-content-between align-items-center py-3 my-4 border-top">
             <div class="col-md-4 d-flex align-items-center">
                 <span class="mb-3 mb-md-0 text-body-secondary">© 2026 renardein</span>
-                <span class="text-body-secondary ms-2 small">0.38-alpha</span>
+                <span class="text-body-secondary ms-2 small">1.0.3-release demo</span>
             </div>
             <ul class="nav col-md-4 justify-content-end list-unstyled d-flex">
                 <li class="ms-3"><span class="badge bg-secondary">EN</span></li>

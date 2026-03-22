@@ -92,6 +92,9 @@
                             <a class="nav-link" href="./settings-speedtest.html" role="tab">
                                 <i class="bi bi-wifi me-2"></i><span>Speedtest</span>
                             </a>
+                            <a class="nav-link" href="./settings-telegram.html" role="tab">
+                                <i class="bi bi-send me-2"></i><span>Telegram</span>
+                            </a>
                             <a class="nav-link" href="./settings-security.html" role="tab">
                                 <i class="bi bi-shield-lock me-2"></i><span>Security</span>
                             </a>
@@ -158,6 +161,24 @@
         </div>
         <hr class="my-4">
         <div class="mb-2">
+            <label class="form-label fw-bold">Time and Weather</label>
+            <p class="text-muted small mb-3">Settings for the fourth card in the Cluster top row.</p>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label fw-bold">City</label>
+                    <input type="text" class="form-control" value="Berlin">
+                    <div class="form-text">Used to resolve the current weather.</div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold">Time zone</label>
+                    <input type="text" class="form-control" value="Europe/Berlin">
+                    <div class="form-text">Use an IANA time zone such as Europe/Berlin.</div>
+                </div>
+            </div>
+            <button class="btn btn-primary btn-sm mt-3" type="button"><i class="bi bi-save me-1"></i>Save time and weather</button>
+        </div>
+        <hr class="my-4">
+        <div class="mb-2">
             <label class="form-label fw-bold">Monitor Screen Order</label>
             <p class="text-muted small mb-2">Order used by swipe gestures and toolbar arrows. Backup screen is available only for Proxmox.</p>
             <ul class="list-group list-group-flush border rounded overflow-hidden">
@@ -212,6 +233,72 @@
                 </li>
             </ul>
         </div>
+        <hr class="my-4">
+        <div class="mb-2">
+            <label class="form-label fw-bold">Cluster Screen Tiles</label>
+            <p class="text-muted small mb-2">Build up to 12 tiles for the Cluster screen from UPS, VM / CT, services, SNMP devices, and Speedtest. They scroll horizontally on the screen.</p>
+            <div class="border rounded p-3 mb-2">
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold small mb-1">Tile Type</label>
+                        <select class="form-select">
+                            <option selected>UPS</option>
+                            <option>Service</option>
+                            <option>VM / CT</option>
+                            <option>SNMP Device</option>
+                            <option>Speedtest</option>
+                        </select>
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label fw-bold small mb-1">Data Source</label>
+                        <select class="form-select">
+                            <option selected>UPS 1: ups</option>
+                            <option>UPS 2: rack-ups</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="d-flex gap-2 justify-content-md-end">
+                            <button type="button" class="btn btn-outline-secondary btn-sm" disabled><i class="bi bi-arrow-up"></i></button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-down"></i></button>
+                            <button type="button" class="btn btn-outline-danger btn-sm"><i class="bi bi-trash"></i></button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="border rounded p-3 mb-2">
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold small mb-1">Tile Type</label>
+                        <select class="form-select">
+                            <option>UPS</option>
+                            <option selected>Service</option>
+                            <option>VM / CT</option>
+                            <option>SNMP Device</option>
+                            <option>Speedtest</option>
+                        </select>
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label fw-bold small mb-1">Data Source</label>
+                        <select class="form-select">
+                            <option selected>Vaultwarden</option>
+                            <option>Traefik</option>
+                            <option>Grafana</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="d-flex gap-2 justify-content-md-end">
+                            <button type="button" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-up"></i></button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-down"></i></button>
+                            <button type="button" class="btn btn-outline-danger btn-sm"><i class="bi bi-trash"></i></button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="d-flex gap-2 flex-wrap mt-3">
+                <button class="btn btn-outline-primary btn-sm" type="button"><i class="bi bi-plus-lg me-1"></i>Add Tile</button>
+                <button class="btn btn-primary btn-sm" type="button"><i class="bi bi-save me-1"></i>Save Tiles</button>
+            </div>
+        </div>
     </div>
 </div>
                     </div>
@@ -222,7 +309,7 @@
         <footer class="d-flex flex-wrap justify-content-between align-items-center py-3 my-4 border-top">
             <div class="col-md-4 d-flex align-items-center">
                 <span class="mb-3 mb-md-0 text-body-secondary">© 2026 renardein</span>
-                <span class="text-body-secondary ms-2 small">0.38-alpha</span>
+                <span class="text-body-secondary ms-2 small">1.0.3-release demo</span>
             </div>
             <ul class="nav col-md-4 justify-content-end list-unstyled d-flex">
                 <li class="ms-3"><span class="badge bg-secondary">EN</span></li>

@@ -1,0 +1,97 @@
+    <!-- Initial setup wizard (first run or after settings reset) -->
+    <div class="modal fade" id="initialSetupWizardModal" tabindex="-1" aria-labelledby="initialSetupWizardTitle" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+        <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="modal-title" id="initialSetupWizardTitle"><i class="bi bi-magic me-2"></i><span id="setupWizardTitleText">Initial setup</span></h5>
+                </div>
+                <div class="modal-body pt-2">
+                    <div class="d-flex gap-2 mb-3 small text-muted" id="setupWizardStepIndicator" aria-hidden="true">
+                        <span class="badge rounded-pill bg-primary" id="setupWizardBadge1">1</span>
+                        <span class="badge rounded-pill bg-secondary" id="setupWizardBadge2">2</span>
+                        <span class="badge rounded-pill bg-secondary" id="setupWizardBadge3">3</span>
+                        <span class="badge rounded-pill bg-secondary" id="setupWizardBadge4">4</span>
+                    </div>
+
+                    <div id="setupWizardStep1">
+                        <p class="lead" id="setupWizardWelcomeText">Welcome. Choose the interface language and connect to Proxmox or TrueNAS.</p>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold" for="wizardLangSelect" id="setupWizardLangLabel">Interface language</label>
+                            <select class="form-select" id="wizardLangSelect"></select>
+                        </div>
+                        <hr class="my-3">
+                        <p class="small text-muted mb-2" id="setupWizardImportHint"></p>
+                        <input type="file" id="wizardConfigImportFile" accept=".json,application/json" class="d-none">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="setupWizardImportBtn">
+                            <i class="bi bi-upload me-1"></i><span id="setupWizardImportBtnText"></span>
+                        </button>
+                    </div>
+
+                    <div id="setupWizardStep2" class="d-none">
+                        <p class="text-muted mb-3" id="setupWizardTypeHint">What do you want to monitor?</p>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <button type="button" class="btn btn-outline-primary w-100 py-4 h-100 text-start" id="setupWizardPickProxmox">
+                                    <i class="bi bi-diagram-3 fs-3 d-block mb-2"></i>
+                                    <span class="fw-semibold d-block" id="setupWizardProxmoxTitle">Proxmox VE</span>
+                                    <small class="text-muted" id="setupWizardProxmoxSub">Virtualization cluster</small>
+                                </button>
+                            </div>
+                            <div class="col-md-6">
+                                <button type="button" class="btn btn-outline-primary w-100 py-4 h-100 text-start" id="setupWizardPickTrueNAS">
+                                    <i class="bi bi-hdd-stack fs-3 d-block mb-2"></i>
+                                    <span class="fw-semibold d-block" id="setupWizardTrueNASTitle">TrueNAS</span>
+                                    <small class="text-muted" id="setupWizardTrueNASSub">Storage</small>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="setupWizardStep3" class="d-none">
+                        <p class="text-muted small mb-3" id="setupWizardConnHint">Enter the URL and credentials. Secrets are stored in the app database.</p>
+                        <div id="setupWizardProxmoxFields">
+                            <div class="mb-2">
+                                <label class="form-label fw-bold" for="wizardProxmoxUrl" id="setupWizardUrlLabel">Server URL</label>
+                                <input type="text" class="form-control" id="wizardProxmoxUrl" placeholder="https://pve.example.com:8006" autocomplete="off">
+                            </div>
+                            <div class="row g-2">
+                                <div class="col-md-7">
+                                    <label class="form-label small mb-0" for="wizardApiTokenId" id="setupWizardTokenIdLabel">Token (before =)</label>
+                                    <input type="text" class="form-control" id="wizardApiTokenId" placeholder="root@pam!name" autocomplete="off">
+                                </div>
+                                <div class="col-md-5">
+                                    <label class="form-label small mb-0" for="wizardApiTokenSecret" id="setupWizardTokenSecretLabel">Secret</label>
+                                    <input type="password" class="form-control" id="wizardApiTokenSecret" placeholder="UUID" autocomplete="new-password">
+                                </div>
+                            </div>
+                        </div>
+                        <div id="setupWizardTrueNASFields" class="d-none">
+                            <div class="mb-2">
+                                <label class="form-label fw-bold" for="wizardTrueNASUrl" id="setupWizardTnUrlLabel">TrueNAS URL</label>
+                                <input type="text" class="form-control" id="wizardTrueNASUrl" placeholder="https://truenas.local" autocomplete="off">
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label fw-bold" for="wizardTrueNASKey" id="setupWizardTnKeyLabel">API Key</label>
+                                <input type="password" class="form-control" id="wizardTrueNASKey" autocomplete="new-password">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="setupWizardStep4" class="d-none">
+                        <div class="text-center py-3">
+                            <i class="bi bi-check-circle-fill text-success fs-1 d-block mb-3"></i>
+                            <p class="lead mb-1" id="setupWizardDoneTitle">Done</p>
+                            <p class="text-muted small" id="setupWizardDoneText">You can continue in Settings.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-outline-secondary" id="setupWizardBtnBack"><span id="setupWizardBackText">Back</span></button>
+                    <button type="button" class="btn btn-outline-secondary" id="setupWizardBtnSkip"><span id="setupWizardSkipText">Skip connection</span></button>
+                    <button type="button" class="btn btn-primary" id="setupWizardBtnNext"><span id="setupWizardNextText">Next</span></button>
+                    <button type="button" class="btn btn-success d-none" id="setupWizardBtnConnect"><i class="bi bi-plug me-1"></i><span id="setupWizardConnectText">Connect</span></button>
+                    <button type="button" class="btn btn-primary d-none" id="setupWizardBtnFinish"><span id="setupWizardFinishText">Go to main screen</span></button>
+                </div>
+            </div>
+        </div>
+    </div>

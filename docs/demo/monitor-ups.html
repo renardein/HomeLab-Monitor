@@ -27,22 +27,18 @@
                     <div class="monitor-screen__panel-body">
 <div class="row g-2 small" id="upsMonitorCards">
     <div class="col-12">
-        <div class="card h-100">
-            <div class="card-body p-3">
-                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3 pb-3 border-bottom">
-                    <div class="fw-semibold fs-5 text-truncate">APC Smart-UPS</div>
-                    <span class="badge bg-success">OL</span>
-                </div>
-                <div class="row g-2">
-                    <div class="col-6 col-md-4 col-xl-3"><div class="text-center p-3"><h6 class="mb-1"><i class="bi bi-plug me-1"></i>Input Voltage</h6><div class="fs-3 fw-semibold lh-sm text-break">230 V</div></div></div>
-                    <div class="col-6 col-md-4 col-xl-3"><div class="text-center p-3"><h6 class="mb-1"><i class="bi bi-outlet me-1"></i>Output Voltage</h6><div class="fs-3 fw-semibold lh-sm text-break">230 V</div></div></div>
-                    <div class="col-6 col-md-4 col-xl-3"><div class="text-center p-3"><h6 class="mb-1"><i class="bi bi-lightning-charge me-1"></i>Power</h6><div class="fs-3 fw-semibold lh-sm text-break">312 W</div></div></div>
-                    <div class="col-6 col-md-4 col-xl-3"><div class="text-center p-3"><h6 class="mb-1"><i class="bi bi-speedometer2 me-1"></i>Load</h6><div class="fs-3 fw-semibold lh-sm text-break">21 %</div></div></div>
-                    <div class="col-6 col-md-4 col-xl-3"><div class="text-center p-3"><h6 class="mb-1"><i class="bi bi-battery-half me-1"></i>Charge</h6><div class="fs-3 fw-semibold lh-sm text-break">100%</div></div></div>
-                    <div class="col-6 col-md-4 col-xl-3"><div class="text-center p-3"><h6 class="mb-1"><i class="bi bi-clock-history me-1"></i>Runtime</h6><div class="fs-3 fw-semibold lh-sm text-break">54 min</div></div></div>
-                </div>
-                <p class="small text-muted text-center mb-0 mt-3">NUT · 10.200.0.5</p>
+        <div class="node-card ups-node-card ups-node-card--single h-100">
+            <div class="d-flex justify-content-between align-items-center mb-3 gap-2">
+                <h5 class="mb-0 text-truncate">ups</h5>
+                <span class="badge bg-success">Online</span>
             </div>
+            <div class="row g-2">
+                <div class="col-6"><div class="p-2 h-100"><small class="text-muted ups-node-card__metric-label">Input V</small><div class="fw-bold ups-node-card__metric-value text-break">226 V</div></div></div>
+                <div class="col-6"><div class="p-2 h-100"><small class="text-muted ups-node-card__metric-label">Load</small><div class="fw-bold ups-node-card__metric-value text-break">33 %</div><div class="progress mt-2" style="height: 8px;"><div class="progress-bar bg-warning" style="width: 33%"></div></div></div></div>
+                <div class="col-6 mt-2"><div class="p-2 h-100"><small class="text-muted ups-node-card__metric-label">Charge</small><div class="fw-bold ups-node-card__metric-value text-break">100%</div><div class="progress mt-2" style="height: 8px;"><div class="progress-bar bg-success" style="width: 100%"></div></div></div></div>
+                <div class="col-6 mt-2"><div class="p-2 h-100"><small class="text-muted ups-node-card__metric-label">Battery runtime</small><div class="fw-bold ups-node-card__metric-value text-break">9m 4s</div></div></div>
+            </div>
+            <div class="small text-muted mt-2">NUT · 10.200.0.5</div>
         </div>
     </div>
 </div></div>
@@ -60,6 +56,12 @@
             <div class="monitor-toolbar-center">
                 <span class="monitor-toolbar-title">UPS</span>
                 <span class="monitor-toolbar-update text-muted small">Updated 2026-03-21 17:20</span>
+                <div class="monitor-toolbar-dots">
+                    <button type="button" class="monitor-toolbar-dot is-active" title="Cluster" aria-label="Cluster"></button>
+                    <button type="button" class="monitor-toolbar-dot" title="Services" aria-label="Services"></button>
+                    <button type="button" class="monitor-toolbar-dot" title="VM / CT" aria-label="VM / CT"></button>
+                    <button type="button" class="monitor-toolbar-dot" title="UPS" aria-label="UPS"></button>
+                </div>
             </div>
             <div class="monitor-toolbar-theme">
                 <button type="button" class="btn btn-sm monitor-toolbar-nav-btn" title="Prev"><i class="bi bi-chevron-left"></i></button>
@@ -69,6 +71,9 @@
                 <button type="button" class="btn btn-sm monitor-toolbar-theme-btn" title="Dark theme"><i class="bi bi-moon-stars-fill"></i></button>
             </div>
             <div class="monitor-toolbar-right">
+                <button type="button" class="btn btn-sm monitor-toolbar-settings" title="Settings">
+                    <i class="bi bi-gear me-1"></i><span>Settings</span>
+                </button>
                 <a href="./dashboard.html" class="btn btn-sm monitor-toolbar-exit" title="Exit monitor mode">
                     <i class="bi bi-fullscreen-exit me-1"></i><span>Exit</span>
                 </a>

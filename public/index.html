@@ -209,7 +209,7 @@
                                             <button class="btn btn-outline-primary btn-sm mt-2" onclick="addServerByType('proxmox')">
                                                 <i class="bi bi-plus-lg me-1"></i><span id="addServer">Добавить сервер</span>
                                             </button>
-                                            <div class="form-text" id="proxmoxServersHint">Список URL серверов. При недоступности основного будет использован резервный.</div>
+                                            <div class="form-text" id="proxmoxServersHint">По одному URL в каждом поле. Сервер с галочкой — основной, остальные — резервные.</div>
                                         </div>
                                         <div class="mb-3 text-end" id="logoutContainerProxmox" style="display: none;">
                                             <button class="btn btn-outline-danger btn-sm" onclick="logoutAs('proxmox')"><i class="bi bi-box-arrow-right me-1"></i><span id="logoutText">Выйти</span></button>
@@ -313,9 +313,47 @@
 
                     <hr class="my-4">
                     <div class="mb-2">
+                        <label class="form-label fw-bold" id="settingsDashboardTimeWeatherTitle">Время и погода</label>
+                        <p class="text-muted small mb-3" id="settingsDashboardTimeWeatherHint">Настройки для четвёртой карточки в верхней строке Cluster.</p>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold" id="settingsDashboardWeatherCityLabel">Город</label>
+                                <input type="text" class="form-control" id="settingsDashboardWeatherCityInput" placeholder="Moscow">
+                                <div class="form-text" id="settingsDashboardWeatherCityHint">Используется для получения текущей погоды.</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold" id="settingsDashboardTimezoneLabel">Часовой пояс</label>
+                                <input type="text" class="form-control" id="settingsDashboardTimezoneInput" placeholder="Europe/Moscow">
+                                <div class="form-text" id="settingsDashboardTimezoneHint">Используйте IANA-формат, например Europe/Berlin.</div>
+                            </div>
+                        </div>
+                        <div class="d-flex gap-2 flex-wrap mt-3">
+                            <button class="btn btn-primary btn-sm" type="button" onclick="saveDashboardTimeWeatherSettings()" id="settingsDashboardTimeWeatherSaveBtn">
+                                <i class="bi bi-save me-1"></i><span id="settingsDashboardTimeWeatherSaveBtnLabel">Сохранить время и погоду</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+                    <div class="mb-2">
                         <label class="form-label fw-bold" id="settingsMonitorScreensOrderTitle">Порядок экранов монитора</label>
                         <p class="text-muted small mb-2" id="settingsMonitorScreensOrderHint">Порядок при перелистывании (свайп, стрелки на панели). Экран бэкапов доступен только при подключении к Proxmox.</p>
                         <ul class="list-group list-group-flush border rounded overflow-hidden" id="settingsMonitorScreensOrderList"></ul>
+                    </div>
+
+                    <hr class="my-4">
+                    <div class="mb-2">
+                        <label class="form-label fw-bold" id="settingsClusterTilesTitle">Плитки экрана Cluster</label>
+                        <p class="text-muted small mb-2" id="settingsClusterTilesHint">Соберите до 12 плиток для экрана Cluster из VM/CT, сервисов, SNMP и Speedtest. На экране они листаются горизонтально.</p>
+                        <div id="settingsClusterTilesList"></div>
+                        <div class="d-flex gap-2 flex-wrap mt-3">
+                            <button class="btn btn-outline-primary btn-sm" type="button" onclick="addClusterDashboardTile()" id="settingsClusterTilesAddBtn">
+                                <i class="bi bi-plus-lg me-1"></i><span id="settingsClusterTilesAddBtnLabel">Добавить плитку</span>
+                            </button>
+                            <button class="btn btn-primary btn-sm" type="button" onclick="saveClusterDashboardTilesSettings()" id="settingsClusterTilesSaveBtn" disabled>
+                                <i class="bi bi-save me-1"></i><span id="settingsClusterTilesSaveBtnLabel">Сохранить плитки</span>
+                            </button>
+                        </div>
                     </div>
                                 </div>
                             </div>
@@ -701,77 +739,20 @@
 
                             <hr class="my-4">
 
-                                <div class="mb-3">
-                                <ul class="nav nav-pills" id="upsDisplayTabs" role="tablist">
-                                    <li class="nav-item" role="presentation">
-                                        <button class="nav-link active" id="upsDisplayDashboardTab" data-bs-toggle="tab"
-                                            data-bs-target="#upsDisplayDashboardPane" type="button" role="tab"
-                                            aria-controls="upsDisplayDashboardPane" aria-selected="true">
-                                            <span id="upsDisplayDashboardTabLabel">Обычный режим</span>
-                                        </button>
-                                    </li>
-                                    <li class="nav-item" role="presentation">
-                                        <button class="nav-link" id="upsDisplayMonitorTab" data-bs-toggle="tab"
-                                            data-bs-target="#upsDisplayMonitorPane" type="button" role="tab"
-                                            aria-controls="upsDisplayMonitorPane" aria-selected="false">
-                                            <span id="upsDisplayMonitorTabLabel">Режим монитора</span>
-                                        </button>
-                                    </li>
-                                </ul>
-                                <div class="tab-content p-3" id="upsDisplayTabsContent">
-                                    <div class="tab-pane fade show active" id="upsDisplayDashboardPane" role="tabpanel"
-                                        aria-labelledby="upsDisplayDashboardTab">
-                                        <label class="form-label fw-bold mb-2" id="upsShowOnDashboardLabel">Показывать UPS на дашборде</label>
-                                        <div class="d-flex flex-wrap gap-3">
-                                            <div class="form-check">
-                                                <input class="form-check-input upsDisplayDashboardSlot" type="checkbox"
-                                                    id="upsDisplayDashboardSlot1" value="1" checked>
-                                                <label class="form-check-label" for="upsDisplayDashboardSlot1">1</label>
-                                            </div>
-                                            <div class="form-check">
-                                                <input class="form-check-input upsDisplayDashboardSlot" type="checkbox"
-                                                    id="upsDisplayDashboardSlot2" value="2" checked>
-                                                <label class="form-check-label" for="upsDisplayDashboardSlot2">2</label>
-                                            </div>
-                                            <div class="form-check">
-                                                <input class="form-check-input upsDisplayDashboardSlot" type="checkbox"
-                                                    id="upsDisplayDashboardSlot3" value="3" checked>
-                                                <label class="form-check-label" for="upsDisplayDashboardSlot3">3</label>
-                                            </div>
-                                            <div class="form-check">
-                                                <input class="form-check-input upsDisplayDashboardSlot" type="checkbox"
-                                                    id="upsDisplayDashboardSlot4" value="4" checked>
-                                                <label class="form-check-label" for="upsDisplayDashboardSlot4">4</label>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div class="tab-pane fade" id="upsDisplayMonitorPane" role="tabpanel"
-                                        aria-labelledby="upsDisplayMonitorTab">
-                                        <label class="form-label fw-bold mb-2" id="upsShowOnMonitorClusterLabel">Показывать UPS в режиме монитора (экран Cluster)</label>
-                                        <div class="d-flex flex-wrap gap-3">
-                                            <div class="form-check">
-                                                <input class="form-check-input upsDisplayMonitorSlot" type="checkbox"
-                                                    id="upsDisplayMonitorSlot1" value="1" checked>
-                                                <label class="form-check-label" for="upsDisplayMonitorSlot1">1</label>
-                                            </div>
-                                            <div class="form-check">
-                                                <input class="form-check-input upsDisplayMonitorSlot" type="checkbox"
-                                                    id="upsDisplayMonitorSlot2" value="2" checked>
-                                                <label class="form-check-label" for="upsDisplayMonitorSlot2">2</label>
-                                            </div>
-                                            <div class="form-check">
-                                                <input class="form-check-input upsDisplayMonitorSlot" type="checkbox"
-                                                    id="upsDisplayMonitorSlot3" value="3" checked>
-                                                <label class="form-check-label" for="upsDisplayMonitorSlot3">3</label>
-                                            </div>
-                                            <div class="form-check">
-                                                <input class="form-check-input upsDisplayMonitorSlot" type="checkbox"
-                                                    id="upsDisplayMonitorSlot4" value="4" checked>
-                                                <label class="form-check-label" for="upsDisplayMonitorSlot4">4</label>
-                                            </div>
-                                        </div>
-                                    </div>
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold" for="upsShowOnDashboardSelect" id="upsShowOnDashboardLabel">Показывать в обычном режиме на экране UPS</label>
+                                    <select class="form-select" id="upsShowOnDashboardSelect">
+                                        <option value="0">Нет</option>
+                                        <option value="1" selected>Да</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold" for="upsShowOnMonitorSelect" id="upsShowOnMonitorClusterLabel">Показывать в режиме монитора на экране UPS</label>
+                                    <select class="form-select" id="upsShowOnMonitorSelect">
+                                        <option value="0">Нет</option>
+                                        <option value="1" selected>Да</option>
+                                    </select>
                                 </div>
                             </div>
 
@@ -830,35 +811,20 @@
 
                                 <hr class="my-4">
 
-                                <div class="mb-3">
-                                    <ul class="nav nav-pills" id="netdevDisplayTabs" role="tablist">
-                                        <li class="nav-item" role="presentation">
-                                            <button class="nav-link active" id="netdevDisplayDashboardTab" data-bs-toggle="tab"
-                                                data-bs-target="#netdevDisplayDashboardPane" type="button" role="tab"
-                                                aria-controls="netdevDisplayDashboardPane" aria-selected="true">
-                                                <span id="netdevDisplayDashboardTabLabel">Обычный режим</span>
-                                            </button>
-                                        </li>
-                                        <li class="nav-item" role="presentation">
-                                            <button class="nav-link" id="netdevDisplayMonitorTab" data-bs-toggle="tab"
-                                                data-bs-target="#netdevDisplayMonitorPane" type="button" role="tab"
-                                                aria-controls="netdevDisplayMonitorPane" aria-selected="false">
-                                                <span id="netdevDisplayMonitorTabLabel">Режим монитора</span>
-                                            </button>
-                                        </li>
-                                    </ul>
-                                    <div class="tab-content p-3" id="netdevDisplayTabsContent">
-                                        <div class="tab-pane fade show active" id="netdevDisplayDashboardPane" role="tabpanel"
-                                            aria-labelledby="netdevDisplayDashboardTab">
-                                            <label class="form-label fw-bold mb-2" id="netdevShowOnDashboardLabel">Показывать на дашборде</label>
-                                            <div class="d-flex flex-wrap gap-3" id="netdevDisplayDashboardSlotsWrap"></div>
-                                        </div>
-
-                                        <div class="tab-pane fade" id="netdevDisplayMonitorPane" role="tabpanel"
-                                            aria-labelledby="netdevDisplayMonitorTab">
-                                            <label class="form-label fw-bold mb-2" id="netdevShowOnMonitorLabel">Показывать в режиме монитора (экран Cluster)</label>
-                                            <div class="d-flex flex-wrap gap-3" id="netdevDisplayMonitorSlotsWrap"></div>
-                                        </div>
+                                <div class="row g-3 mb-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label fw-bold" for="netdevShowOnDashboardSelect" id="netdevShowOnDashboardLabel">Показывать в обычном режиме на экране SNMP</label>
+                                        <select class="form-select" id="netdevShowOnDashboardSelect">
+                                            <option value="0">Нет</option>
+                                            <option value="1" selected>Да</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label fw-bold" for="netdevShowOnMonitorSelect" id="netdevShowOnMonitorLabel">Показывать в режиме монитора на экране SNMP</label>
+                                        <select class="form-select" id="netdevShowOnMonitorSelect">
+                                            <option value="0">Нет</option>
+                                            <option value="1" selected>Да</option>
+                                        </select>
                                     </div>
                                 </div>
 
@@ -910,11 +876,13 @@
                                     <thead>
                                         <tr>
                                             <th id="hostMetricsNodeHeader">Узел</th>
+                                            <th id="hostMetricsAgentIpHostHeader" class="text-nowrap">IP / хост агента</th>
                                             <th id="hostMetricsEnabledHeader">Включить</th>
                                             <th id="hostMetricsAgentUrlHeader">URL агента</th>
                                             <th id="hostMetricsCpuSensorHeader">Датчик CPU</th>
                                             <th id="hostMetricsInterfaceHeader">Интерфейс</th>
                                             <th id="hostMetricsDiscoveryHeader">Discovery</th>
+                                            <th id="hostMetricsInstallHeader" class="text-end text-nowrap">Агент</th>
                                         </tr>
                                     </thead>
                                     <tbody id="hostMetricsSettingsBody"></tbody>
@@ -1217,19 +1185,31 @@
             <div id="dashboardContent">
             <!-- Статистика кластера -->
             <div class="row g-4 mb-4">
-                <div class="col-md-4">
+                <div class="col-md-6 col-xl">
+                    <div class="stat-card">
+                        <div class="stat-value" id="dashboardTimeValue">--:--</div>
+                        <div class="stat-card-meta" id="dashboardTimeMeta"></div>
+                    </div>
+                </div>
+                <div class="col-md-6 col-xl">
+                    <div class="stat-card">
+                        <div class="stat-value" id="dashboardTemperatureValue">--</div>
+                        <div class="stat-card-meta" id="dashboardTemperatureMeta"></div>
+                    </div>
+                </div>
+                <div class="col-md-6 col-xl">
                     <div class="stat-card">
                         <div class="stat-value" id="totalNodes">0</div>
                         <div class="stat-label" id="totalNodesLabel">Всего узлов</div>
                     </div>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-6 col-xl">
                     <div class="stat-card">
                         <div class="stat-value text-success" id="onlineNodes">0</div>
                         <div class="stat-label" id="onlineNodesLabel">Узлов онлайн</div>
                     </div>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-6 col-xl">
                     <div class="stat-card">
                         <div class="stat-value" id="quorumStatus">-</div>
                         <div class="stat-label" id="quorumLabel">Кворум</div>
@@ -1282,31 +1262,14 @@
                                 <div class="col-md-3 col-6">
                                     <div class="text-center p-3">
                                         <h6><i class="bi bi-box-seam me-2"></i><span id="dashboardClusterCtTitle">CT</span></h6>
-                                        <div class="display-6" id="clusterCtTotal">0</div>
-                                        <small class="text-muted d-block" id="dashboardClusterCtSub"><span id="dashboardClusterCtRunningLbl">Запущено</span>: <span class="text-success fw-semibold" id="clusterCtRunning">0</span></small>
+                                        <div class="display-6" id="clusterCtRunning">0</div>
+                                        <small class="text-muted d-block" id="dashboardClusterCtSub"><span id="dashboardClusterCtTotalLbl">Всего</span>: <span class="text-success fw-semibold" id="clusterCtTotal">0</span></small>
                                         <div class="progress mt-2" style="height: 10px;">
                                             <div class="progress-bar bg-success" id="clusterCtRunningBar" style="width: 0%" title=""></div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- UPS на главном дашборде (при включённом UPS в настройках) -->
-            <div class="row mb-4" id="dashboardUpsSection" style="display: none;">
-                <div class="col-12">
-                    <div class="card">
-                        <div class="card-header">
-                            <h5 class="mb-0"><i class="bi bi-lightning me-2"></i><span id="dashboardUpsTitle">UPS</span></h5>
-                        </div>
-                        <div class="card-body">
-                            <div class="d-flex align-items-center mb-2 flex-wrap gap-2">
-                                <span class="small text-muted" id="dashboardUpsUpdatedAt"></span>
-                            </div>
-                            <div class="row g-2 small" id="dashboardUpsCards"></div>
                         </div>
                     </div>
                 </div>
@@ -1404,7 +1367,7 @@
             <!-- Содержимое вкладок -->
             <div class="tab-content" id="myTabContent">
                 <div class="tab-pane fade show active" id="nodes" role="tabpanel">
-                    <div class="row" id="nodesContainer"></div>
+                    <div class="cluster-scroll-row" id="nodesContainer"></div>
                 </div>
 
                 <div class="tab-pane fade" id="storage" role="tabpanel">
@@ -1493,6 +1456,16 @@
                             <div class="row" id="quorumNodesList"></div>
                         </div>
                     </div>
+                </div>
+            </div>
+
+            <!-- Комбинируемые плитки на экране Cluster -->
+            <div class="row mb-4" id="dashboardClusterTilesSection" style="display: none;">
+                <div class="col-12">
+                    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+                        <h5 class="mb-0"><i class="bi bi-grid-1x2 me-2"></i><span id="dashboardClusterTilesTitle">Плитки Cluster</span></h5>
+                    </div>
+                    <div class="cluster-scroll-row" id="dashboardClusterTiles"></div>
                 </div>
             </div>
 
@@ -1702,7 +1675,8 @@
                         class="bi" width="30" height="24" aria-hidden="true">
                         <use xlink:href="#bootstrap"></use>
                     </svg> </a> <span class="mb-3 mb-md-0 text-body-secondary">© 2026 renardein</span>
-                <span id="footerVersion" class="text-body-secondary ms-2 small">—</span> </div>
+                <span id="footerVersion" class="text-body-secondary ms-2 small">—</span>
+                <span id="footerUpdateStatus" class="text-body-secondary ms-2 small">—</span> </div>
             <ul class="nav col-md-4 justify-content-end list-unstyled d-flex">
                 <li class="ms-3"><a class="text-body-secondary" href="#" aria-label="Instagram"><svg class="bi"
                             width="24" height="24" aria-hidden="true">
@@ -1730,6 +1704,7 @@
             <div class="monitor-toolbar-center">
                 <span class="monitor-toolbar-title" id="monitorToolbarTitle">Монитор</span>
                 <span class="monitor-toolbar-update text-muted small" id="monitorToolbarUpdate"></span>
+                <div class="monitor-toolbar-dots" id="monitorScreenDots" aria-label="Monitor screens"></div>
             </div>
             <div class="monitor-toolbar-theme">
                 <button type="button" class="btn btn-sm monitor-toolbar-nav-btn" id="monitorPrevBtn" onclick="goMonitorView('prev')" title="←">
@@ -1749,6 +1724,9 @@
                 </button>
             </div>
             <div class="monitor-toolbar-right">
+                <button type="button" class="btn btn-sm monitor-toolbar-settings" id="monitorSettingsBtn" onclick="openSettingsFromMonitor()" title="">
+                    <i class="bi bi-gear me-1"></i><span id="monitorSettingsBtnText">Настройки</span>
+                </button>
                 <button type="button" class="btn btn-sm monitor-toolbar-exit" id="monitorExitBtnFixed" onclick="toggleMonitorMode()" title="">
                     <i class="bi bi-fullscreen-exit me-1"></i><span id="monitorExitBtnText">Выход</span>
                 </button>
