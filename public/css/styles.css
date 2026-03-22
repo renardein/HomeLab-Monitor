@@ -1345,6 +1345,10 @@
         body.monitor-mode.monitor-theme-dark #backupsMonitorSection.monitor-backups-screen {
             background: transparent;
         }
+        /* EJS layout: скрыть дублирующий заголовок с «Назад» — навигация в тулбаре монитора */
+        body.monitor-mode #backupsMonitorSection .card.monitor-backups-main-card > .card-header {
+            display: none;
+        }
         body.monitor-mode .monitor-backups-main-card {
             flex: 1;
             min-height: 0;
@@ -1408,6 +1412,10 @@
             overflow-y: hidden;
             -webkit-overflow-scrolling: touch;
             padding-bottom: 4px;
+        }
+        /* Колонки узлов растягиваются по высоте ряда — иначе h-100 у карточки не работает и таблицы «схлопываются» */
+        body.monitor-mode .monitor-backups-nodes-row {
+            align-items: stretch;
         }
         .monitor-backup-node-col {
             flex: 1 1 0;
