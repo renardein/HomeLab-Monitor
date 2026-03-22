@@ -82,6 +82,8 @@ let lastHostMetricsData = null; // { configured, items } for Proxmox host metric
 let hostMetricsSettings = { pollIntervalSec: 10, timeoutMs: 3000, cacheTtlSec: 8, criticalTempC: 85, criticalLinkSpeedMbps: 1000 };
 let hostMetricsConfigs = {}; // connectionId -> { nodes: { [node]: { enabled, agentUrl, cpuTempSensor, linkInterface } } }
 let hostMetricsDiscoveryItems = [];
+let hostMetricsAgentInstallPlanCache = null;
+let lastHostMetricsAgentModalNodeName = '';
 let activeIconPicker = { kind: null, targetId: null, scope: 'all' };
 
 const ICON_PICKER_ITEMS = [
@@ -1613,6 +1615,16 @@ function updateUILanguage() {
     setText('hostMetricsInterfaceHeader', t('hostMetricsInterfaceHeader'));
     setText('hostMetricsDiscoveryHeader', t('hostMetricsDiscoveryHeader'));
     setText('hostMetricsSaveButtonText', t('hostMetricsSaveButtonText'));
+    setText('hostMetricsInstallHeader', t('hostMetricsInstallHeader'));
+    setText('hostMetricsAgentInstallSshHostLabel', t('hostMetricsAgentInstallSshHostLabel'));
+    setText('hostMetricsAgentInstallSshPortLabel', t('hostMetricsAgentInstallSshPortLabel'));
+    setText('hostMetricsAgentInstallSshUserLabel', t('hostMetricsAgentInstallSshUserLabel'));
+    setText('hostMetricsAgentInstallSshPasswordLabel', t('hostMetricsAgentInstallSshPasswordLabel'));
+    setText('hostMetricsAgentInstallNextBtnText', t('hostMetricsAgentInstallNextBtn'));
+    setText('hostMetricsAgentInstallPlanLabel', t('hostMetricsAgentInstallPlanLabel'));
+    setText('hostMetricsAgentInstallBackBtnText', t('hostMetricsAgentInstallBackBtn'));
+    setText('hostMetricsAgentInstallResultLabel', t('hostMetricsAgentInstallResultLabel'));
+    applyHostMetricsAgentModalMode(lastHostMetricsAgentModalNodeName);
 
     setText('speedtestSettingsTitle', t('speedtestSettingsTitle'));
     setText('speedtestSettingsHint', t('speedtestSettingsHint'));
@@ -1748,6 +1760,7 @@ document.addEventListener('DOMContentLoaded', async function() {
             loadHostMetricsSettings().catch(() => {});
         });
     }
+    initHostMetricsAgentInstallModal();
     const debugNav = document.getElementById('settings-nav-debug');
     if (debugNav) {
         debugNav.addEventListener('shown.bs.tab', () => refreshDebugMetrics());
@@ -3649,6 +3662,255 @@ function getHostMetricsNodeConfigForRow(nodeName, item) {
     return normalizeHostMetricsNodeConfigClient(nodes && nodes[nodeName], nodeName || item?.node || '');
 }
 
+function getHostMetricsAgentModalMode() {
+    const el = document.getElementById('hostMetricsAgentInstallModal');
+    if (el && el.getAttribute('data-agent-mode') === 'uninstall') return 'uninstall';
+    return 'install';
+}
+
+function setHostMetricsAgentModalMode(mode) {
+    const el = document.getElementById('hostMetricsAgentInstallModal');
+    if (el) el.setAttribute('data-agent-mode', mode === 'uninstall' ? 'uninstall' : 'install');
+}
+
+function applyHostMetricsAgentModalMode(nodeName) {
+    const isUn = getHostMetricsAgentModalMode() === 'uninstall';
+    const titleEl = document.getElementById('hostMetricsAgentInstallTitleText');
+    if (titleEl) titleEl.textContent = t(isUn ? 'hostMetricsAgentUninstallTitle' : 'hostMetricsAgentInstallTitle');
+    const intro = document.getElementById('hostMetricsAgentInstallIntro');
+    if (intro) {
+        intro.textContent = tParams(
+            isUn ? 'hostMetricsAgentUninstallModalIntro' : 'hostMetricsAgentInstallModalIntro',
+            { node: nodeName || '—' }
+        );
+    }
+    const confirmLbl = document.getElementById('hostMetricsAgentInstallConfirmLabel');
+    if (confirmLbl) {
+        confirmLbl.textContent = t(isUn ? 'hostMetricsAgentUninstallConfirmLabel' : 'hostMetricsAgentInstallConfirmLabel');
+    }
+    const runTxt = document.getElementById('hostMetricsAgentInstallRunBtnText');
+    if (runTxt) runTxt.textContent = t(isUn ? 'hostMetricsAgentUninstallRunBtn' : 'hostMetricsAgentInstallRunBtn');
+    const iconEl = document.getElementById('hostMetricsAgentInstallModalTitleIcon');
+    if (iconEl) {
+        iconEl.className = 'bi me-2 ' + (isUn ? 'bi-trash' : 'bi-cloud-download');
+    }
+}
+
+function buildHostMetricsAgentPlanText(plan, mode) {
+    if (!plan) return '';
+    const isUn = mode === 'uninstall';
+    const lines = [];
+    lines.push(t(isUn ? 'hostMetricsAgentUninstallPlanIntro' : 'hostMetricsAgentInstallPlanIntro'));
+    lines.push('');
+    (plan.steps || []).forEach((s, i) => {
+        lines.push(`${i + 1}. ${s}`);
+    });
+    lines.push('');
+    lines.push(t(isUn ? 'hostMetricsAgentUninstallPlanFooter' : 'hostMetricsAgentInstallPlanFooter'));
+    if (plan.prerequisites) {
+        lines.push('');
+        lines.push(plan.prerequisites);
+    }
+    return lines.join('\n');
+}
+
+function resetHostMetricsAgentInstallModal() {
+    hostMetricsAgentInstallPlanCache = null;
+    const s1 = document.getElementById('hostMetricsAgentInstallStep1');
+    const s2 = document.getElementById('hostMetricsAgentInstallStep2');
+    if (s1) s1.classList.remove('d-none');
+    if (s2) s2.classList.add('d-none');
+    const pw = document.getElementById('hostMetricsAgentSshPassword');
+    if (pw) pw.value = '';
+    const chk = document.getElementById('hostMetricsAgentInstallConfirm');
+    if (chk) chk.checked = false;
+    const rw = document.getElementById('hostMetricsAgentInstallResultWrap');
+    if (rw) rw.classList.add('d-none');
+    const runBtn = document.getElementById('hostMetricsAgentInstallRunBtn');
+    if (runBtn) runBtn.disabled = true;
+    const nextBtn = document.getElementById('hostMetricsAgentInstallNextBtn');
+    if (nextBtn) nextBtn.disabled = false;
+}
+
+function openHostMetricsAgentInstallModal(nodeName) {
+    setHostMetricsAgentModalMode('install');
+    resetHostMetricsAgentInstallModal();
+    lastHostMetricsAgentModalNodeName = nodeName || '';
+    const hostEl = document.getElementById('hostMetricsAgentSshHost');
+    if (hostEl) hostEl.value = nodeName || '';
+    applyHostMetricsAgentModalMode(nodeName);
+    const modalEl = document.getElementById('hostMetricsAgentInstallModal');
+    if (modalEl && typeof bootstrap !== 'undefined') {
+        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+    }
+}
+
+function openHostMetricsAgentUninstallModal(nodeName) {
+    setHostMetricsAgentModalMode('uninstall');
+    resetHostMetricsAgentInstallModal();
+    lastHostMetricsAgentModalNodeName = nodeName || '';
+    const hostEl = document.getElementById('hostMetricsAgentSshHost');
+    if (hostEl) hostEl.value = nodeName || '';
+    applyHostMetricsAgentModalMode(nodeName);
+    const modalEl = document.getElementById('hostMetricsAgentInstallModal');
+    if (modalEl && typeof bootstrap !== 'undefined') {
+        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+    }
+}
+
+async function hostMetricsAgentInstallGoNext() {
+    const base = getCurrentProxmoxHeaders();
+    if (!base) {
+        showToast(t('hostMetricsNeedConnection') || 'Подключитесь к Proxmox', 'warning');
+        return;
+    }
+    const host = document.getElementById('hostMetricsAgentSshHost') && document.getElementById('hostMetricsAgentSshHost').value
+        ? String(document.getElementById('hostMetricsAgentSshHost').value).trim()
+        : '';
+    if (!host) {
+        showToast(t('hostMetricsAgentInstallNeedHost') || 'Укажите SSH host', 'warning');
+        return;
+    }
+    const btn = document.getElementById('hostMetricsAgentInstallNextBtn');
+    if (btn) btn.disabled = true;
+    const mode = getHostMetricsAgentModalMode();
+    try {
+        const previewPath =
+            mode === 'uninstall'
+                ? '/api/host-metrics/agent-uninstall/preview'
+                : '/api/host-metrics/agent-install/preview';
+        const res = await fetch(previewPath, {
+            method: 'POST',
+            headers: { ...base, 'Content-Type': 'application/json' },
+            body: '{}',
+            credentials: 'same-origin'
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.success) throw new Error(data.error || res.statusText);
+        hostMetricsAgentInstallPlanCache = data.plan;
+        const ta = document.getElementById('hostMetricsAgentInstallPlanText');
+        if (ta) ta.value = buildHostMetricsAgentPlanText(data.plan, mode);
+        document.getElementById('hostMetricsAgentInstallStep1').classList.add('d-none');
+        document.getElementById('hostMetricsAgentInstallStep2').classList.remove('d-none');
+    } catch (e) {
+        const previewErrKey =
+            mode === 'uninstall'
+                ? 'hostMetricsAgentUninstallPreviewError'
+                : 'hostMetricsAgentInstallPreviewError';
+        showToast((t(previewErrKey) || 'Ошибка') + ': ' + (e.message || e), 'error');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+function hostMetricsAgentInstallGoBack() {
+    document.getElementById('hostMetricsAgentInstallStep1').classList.remove('d-none');
+    document.getElementById('hostMetricsAgentInstallStep2').classList.add('d-none');
+    const rw = document.getElementById('hostMetricsAgentInstallResultWrap');
+    if (rw) rw.classList.add('d-none');
+}
+
+async function hostMetricsAgentInstallRun() {
+    const mode = getHostMetricsAgentModalMode();
+    const base = getCurrentProxmoxHeaders();
+    if (!base) {
+        showToast(t('hostMetricsNeedConnection') || 'Подключитесь к Proxmox', 'warning');
+        return;
+    }
+    const sshHost = document.getElementById('hostMetricsAgentSshHost') && document.getElementById('hostMetricsAgentSshHost').value
+        ? String(document.getElementById('hostMetricsAgentSshHost').value).trim()
+        : '';
+    const sshPortRaw = document.getElementById('hostMetricsAgentSshPort') && document.getElementById('hostMetricsAgentSshPort').value;
+    const sshPort = parseInt(sshPortRaw != null ? sshPortRaw : '22', 10);
+    const sshUser = document.getElementById('hostMetricsAgentSshUser') && document.getElementById('hostMetricsAgentSshUser').value
+        ? String(document.getElementById('hostMetricsAgentSshUser').value).trim() || 'root'
+        : 'root';
+    const sshPassword = document.getElementById('hostMetricsAgentSshPassword') ? document.getElementById('hostMetricsAgentSshPassword').value : '';
+    if (!sshHost) {
+        showToast(t('hostMetricsAgentInstallNeedHost') || 'Укажите host', 'warning');
+        return;
+    }
+    if (!sshPassword) {
+        showToast(t('hostMetricsAgentInstallNeedPassword') || 'Укажите пароль SSH', 'warning');
+        return;
+    }
+    const confirmEl = document.getElementById('hostMetricsAgentInstallConfirm');
+    if (!confirmEl || !confirmEl.checked) {
+        showToast(t('hostMetricsAgentInstallNeedConfirm') || 'Подтвердите выполнение команд', 'warning');
+        return;
+    }
+    const runBtn = document.getElementById('hostMetricsAgentInstallRunBtn');
+    if (runBtn) runBtn.disabled = true;
+    try {
+        const runPath =
+            mode === 'uninstall'
+                ? '/api/host-metrics/agent-uninstall/run'
+                : '/api/host-metrics/agent-install/run';
+        const res = await fetch(runPath, {
+            method: 'POST',
+            headers: { ...base, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                confirm: true,
+                sshHost,
+                sshPort: Number.isFinite(sshPort) ? sshPort : 22,
+                sshUser,
+                sshPassword
+            }),
+            credentials: 'same-origin'
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.success) throw new Error(data.error || res.statusText);
+        const pre = document.getElementById('hostMetricsAgentInstallResult');
+        const wrap = document.getElementById('hostMetricsAgentInstallResultWrap');
+        if (pre) pre.textContent = data.log || '';
+        if (wrap) wrap.classList.remove('d-none');
+        const okKey =
+            mode === 'uninstall'
+                ? 'hostMetricsAgentUninstallSuccess'
+                : 'hostMetricsAgentInstallSuccess';
+        showToast(t(okKey) || 'Готово', 'success');
+        if (confirmEl) confirmEl.checked = false;
+        if (runBtn) runBtn.disabled = true;
+        await refreshHostMetricsDiscovery({ silent: true });
+    } catch (e) {
+        const errKey =
+            mode === 'uninstall'
+                ? 'hostMetricsAgentUninstallError'
+                : 'hostMetricsAgentInstallError';
+        showToast((t(errKey) || 'Ошибка') + ': ' + (e.message || e), 'error');
+    } finally {
+        if (runBtn) {
+            const c = document.getElementById('hostMetricsAgentInstallConfirm');
+            runBtn.disabled = !(c && c.checked);
+        }
+    }
+}
+
+function initHostMetricsAgentInstallModal() {
+    const nextBtn = document.getElementById('hostMetricsAgentInstallNextBtn');
+    if (nextBtn) nextBtn.addEventListener('click', () => hostMetricsAgentInstallGoNext());
+    const backBtn = document.getElementById('hostMetricsAgentInstallBackBtn');
+    if (backBtn) backBtn.addEventListener('click', () => hostMetricsAgentInstallGoBack());
+    const runBtn = document.getElementById('hostMetricsAgentInstallRunBtn');
+    if (runBtn) runBtn.addEventListener('click', () => hostMetricsAgentInstallRun());
+    const chk = document.getElementById('hostMetricsAgentInstallConfirm');
+    if (chk) {
+        chk.addEventListener('change', () => {
+            const b = document.getElementById('hostMetricsAgentInstallRunBtn');
+            if (b) b.disabled = !chk.checked;
+        });
+    }
+    const modalEl = document.getElementById('hostMetricsAgentInstallModal');
+    if (modalEl) {
+        modalEl.addEventListener('hidden.bs.modal', () => {
+            resetHostMetricsAgentInstallModal();
+            setHostMetricsAgentModalMode('install');
+            lastHostMetricsAgentModalNodeName = '';
+            applyHostMetricsAgentModalMode('');
+        });
+    }
+}
+
 function hostMetricsDiscoveryStatusHtml(item) {
     if (!item) return `<span class="badge bg-secondary">${escapeHtml(t('statusDash') || '—')}</span>`;
     if (item.error) {
@@ -3734,6 +3996,16 @@ function renderHostMetricsRows(items, state = null) {
                     </datalist>
                 </td>
                 <td>${hostMetricsDiscoveryStatusHtml(item)}</td>
+                <td class="text-end">
+                    <div class="d-inline-flex gap-1 flex-wrap justify-content-end">
+                        <button type="button" class="btn btn-sm btn-outline-primary" title="${escapeHtml(t('hostMetricsAgentInstallButtonTitle') || '')}" onclick='openHostMetricsAgentInstallModal(${JSON.stringify(nodeName)})'>
+                            <i class="bi bi-cloud-download"></i>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-danger" title="${escapeHtml(t('hostMetricsAgentUninstallButtonTitle') || '')}" onclick='openHostMetricsAgentUninstallModal(${JSON.stringify(nodeName)})'>
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </td>
             </tr>
         `;
     }).join('');

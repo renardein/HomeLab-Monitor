@@ -6,6 +6,7 @@ const settingsStore = require('../settings-store');
 const connectionStore = require('../connection-store');
 const checkAuth = require('../middleware/auth');
 const { log } = require('../utils');
+const hostMetricsAgentInstall = require('../host-metrics-agent-install');
 
 const router = express.Router();
 
@@ -382,6 +383,92 @@ router.post('/settings', (req, res) => {
     } catch (e) {
         log('error', `[HostMetrics] POST /settings: ${e.message}`);
         res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+router.post('/agent-install/preview', checkAuth, (req, res) => {
+    try {
+        const plan = hostMetricsAgentInstall.getInstallPlan();
+        res.json({ success: true, plan });
+    } catch (e) {
+        log('error', `[HostMetrics] agent-install/preview: ${e.message}`);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+router.post('/agent-install/run', checkAuth, async (req, res) => {
+    try {
+        const body = req.body || {};
+        if (!body.confirm) {
+            return res.status(400).json({ success: false, error: 'confirm required' });
+        }
+        const sshHost = safeString(body.sshHost).trim();
+        const sshPort = body.sshPort != null ? parseInt(body.sshPort, 10) : 22;
+        const sshUser = safeString(body.sshUser).trim() || 'root';
+        const sshPassword = body.sshPassword != null ? String(body.sshPassword) : '';
+
+        if (!sshHost) {
+            return res.status(400).json({ success: false, error: 'ssh_host required' });
+        }
+        if (!sshPassword) {
+            return res.status(400).json({ success: false, error: 'ssh_password required' });
+        }
+
+        const result = await hostMetricsAgentInstall.runRemoteInstall({
+            sshHost,
+            sshPort: Number.isFinite(sshPort) ? sshPort : 22,
+            sshUser,
+            sshPassword
+        });
+
+        log('info', '[HostMetrics] agent install SSH', { host: sshHost, user: sshUser });
+        res.json({ success: true, log: result.log });
+    } catch (e) {
+        log('warn', `[HostMetrics] agent-install/run: ${e.message}`);
+        res.status(500).json({ success: false, error: e.message || String(e) });
+    }
+});
+
+router.post('/agent-uninstall/preview', checkAuth, (req, res) => {
+    try {
+        const plan = hostMetricsAgentInstall.getUninstallPlan();
+        res.json({ success: true, plan });
+    } catch (e) {
+        log('error', `[HostMetrics] agent-uninstall/preview: ${e.message}`);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+router.post('/agent-uninstall/run', checkAuth, async (req, res) => {
+    try {
+        const body = req.body || {};
+        if (!body.confirm) {
+            return res.status(400).json({ success: false, error: 'confirm required' });
+        }
+        const sshHost = safeString(body.sshHost).trim();
+        const sshPort = body.sshPort != null ? parseInt(body.sshPort, 10) : 22;
+        const sshUser = safeString(body.sshUser).trim() || 'root';
+        const sshPassword = body.sshPassword != null ? String(body.sshPassword) : '';
+
+        if (!sshHost) {
+            return res.status(400).json({ success: false, error: 'ssh_host required' });
+        }
+        if (!sshPassword) {
+            return res.status(400).json({ success: false, error: 'ssh_password required' });
+        }
+
+        const result = await hostMetricsAgentInstall.runRemoteUninstall({
+            sshHost,
+            sshPort: Number.isFinite(sshPort) ? sshPort : 22,
+            sshUser,
+            sshPassword
+        });
+
+        log('info', '[HostMetrics] agent uninstall SSH', { host: sshHost, user: sshUser });
+        res.json({ success: true, log: result.log });
+    } catch (e) {
+        log('warn', `[HostMetrics] agent-uninstall/run: ${e.message}`);
+        res.status(500).json({ success: false, error: e.message || String(e) });
     }
 });
 

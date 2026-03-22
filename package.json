@@ -21,7 +21,8 @@
     "helmet": "^7.0.0",
     "net-snmp": "^3.26.1",
     "node-cache": "^5.1.2",
-    "sql.js": "^1.14.1"
+    "sql.js": "^1.14.1",
+    "ssh2": "^1.16.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
