@@ -1609,6 +1609,7 @@ function updateUILanguage() {
     setText('hostMetricsCriticalLinkHint', t('hostMetricsCriticalLinkHint'));
     setText('hostMetricsRefreshDiscoveryText', t('hostMetricsRefreshDiscoveryText'));
     setText('hostMetricsNodeHeader', t('tabNodes') || 'Узел');
+    setText('hostMetricsAgentIpHostHeader', t('hostMetricsAgentIpHostHeader'));
     setText('hostMetricsEnabledHeader', t('hostMetricsEnabledHeader'));
     setText('hostMetricsAgentUrlHeader', t('hostMetricsAgentUrlHeader'));
     setText('hostMetricsCpuSensorHeader', t('hostMetricsCpuSensorHeader'));
@@ -3608,10 +3609,11 @@ function createDefaultHostMetricsSettings() {
     };
 }
 
-function createDefaultHostMetricsNodeConfig(nodeName = '') {
+function createDefaultHostMetricsNodeConfig() {
     return {
         enabled: false,
-        agentUrl: nodeName ? `http://${nodeName}:9105/host-metrics` : '',
+        agentUrl: '',
+        agentHost: '',
         cpuTempSensor: '',
         linkInterface: ''
     };
@@ -3636,13 +3638,28 @@ function normalizeHostMetricsSettingsClient(raw) {
 
 function normalizeHostMetricsNodeConfigClient(raw, nodeName = '') {
     const src = raw && typeof raw === 'object' ? raw : {};
-    const base = createDefaultHostMetricsNodeConfig(nodeName);
+    const base = createDefaultHostMetricsNodeConfig();
     return {
         enabled: src.enabled === true || src.enabled === '1' || src.enabled === 1 || src.enabled === 'true',
         agentUrl: String(src.agentUrl != null ? src.agentUrl : base.agentUrl).trim(),
+        agentHost: String(src.agentHost != null ? src.agentHost : base.agentHost).trim(),
         cpuTempSensor: String(src.cpuTempSensor || '').trim(),
         linkInterface: String(src.linkInterface || '').trim()
     };
+}
+
+function hostMetricsResolvedAgentHostForUrl(nodeName, cfg, item) {
+    const ah = (cfg.agentHost || '').trim();
+    if (ah) return ah;
+    const nip = item && item.nodeIp ? String(item.nodeIp).trim() : '';
+    if (nip) return nip;
+    return String(nodeName || '').trim() || 'localhost';
+}
+
+function getHostMetricsSshHostForNode(nodeName) {
+    const item = hostMetricsDiscoveryItems.find((i) => i.node === nodeName);
+    const cfg = getHostMetricsNodeConfigForRow(nodeName, item);
+    return hostMetricsResolvedAgentHostForUrl(nodeName, cfg, item);
 }
 
 function hostMetricsDomIdPart(s) {
@@ -3737,7 +3754,7 @@ function openHostMetricsAgentInstallModal(nodeName) {
     resetHostMetricsAgentInstallModal();
     lastHostMetricsAgentModalNodeName = nodeName || '';
     const hostEl = document.getElementById('hostMetricsAgentSshHost');
-    if (hostEl) hostEl.value = nodeName || '';
+    if (hostEl) hostEl.value = getHostMetricsSshHostForNode(nodeName) || nodeName || '';
     applyHostMetricsAgentModalMode(nodeName);
     const modalEl = document.getElementById('hostMetricsAgentInstallModal');
     if (modalEl && typeof bootstrap !== 'undefined') {
@@ -3750,7 +3767,7 @@ function openHostMetricsAgentUninstallModal(nodeName) {
     resetHostMetricsAgentInstallModal();
     lastHostMetricsAgentModalNodeName = nodeName || '';
     const hostEl = document.getElementById('hostMetricsAgentSshHost');
-    if (hostEl) hostEl.value = nodeName || '';
+    if (hostEl) hostEl.value = getHostMetricsSshHostForNode(nodeName) || nodeName || '';
     applyHostMetricsAgentModalMode(nodeName);
     const modalEl = document.getElementById('hostMetricsAgentInstallModal');
     if (modalEl && typeof bootstrap !== 'undefined') {
@@ -3965,11 +3982,20 @@ function renderHostMetricsRows(items, state = null) {
         const ifaceListId = 'hostMetricsInterfaces_' + hostMetricsDomIdPart(nodeName);
         const cpuSensors = Array.isArray(item.cpuSensors) ? item.cpuSensors : [];
         const interfaces = Array.isArray(item.interfaces) ? item.interfaces : [];
+        const resolvedHost = hostMetricsResolvedAgentHostForUrl(nodeName, cfg, item);
+        const clusterIp = item.nodeIp ? String(item.nodeIp).trim() : '';
         return `
             <tr data-host-metrics-node="${escapeHtml(nodeName)}">
                 <td>
                     <div class="fw-semibold">${escapeHtml(nodeName)}</div>
                     <div class="small text-muted">${escapeHtml(t('hostMetricsAgentHintShort') || 'Локальный HTTP endpoint на узле')}</div>
+                </td>
+                <td>
+                    <div class="small text-muted mb-1" title="${escapeHtml(t('hostMetricsAgentIpClusterHint') || '')}">${clusterIp
+            ? `${escapeHtml(t('hostMetricsAgentIpClusterLabel') || 'IP')} ${escapeHtml(clusterIp)}`
+            : escapeHtml(t('hostMetricsAgentIpClusterDash') || '—')}</div>
+                    <input type="text" class="form-control form-control-sm host-metrics-agent-host" autocomplete="off"
+                        value="${escapeHtml(cfg.agentHost || '')}" placeholder="${escapeHtml(t('hostMetricsAgentHostPlaceholder') || '10.0.0.5')}">
                 </td>
                 <td>
                     <select class="form-select form-select-sm host-metrics-enabled">
@@ -3979,7 +4005,7 @@ function renderHostMetricsRows(items, state = null) {
                 </td>
                 <td>
                     <input type="text" class="form-control form-control-sm host-metrics-agent-url"
-                        value="${escapeHtml(cfg.agentUrl || '')}" placeholder="http://${escapeHtml(nodeName)}:9105/host-metrics">
+                        value="${escapeHtml(cfg.agentUrl || '')}" placeholder="http://${escapeHtml(resolvedHost)}:9105/host-metrics">
                 </td>
                 <td>
                     <input type="text" class="form-control form-control-sm host-metrics-sensor" list="${cpuListId}"
@@ -4088,11 +4114,13 @@ async function saveHostMetricsSettings() {
         const nodeName = row.getAttribute('data-host-metrics-node') || '';
         const enabled = row.querySelector('.host-metrics-enabled')?.value === '1';
         const agentUrl = (row.querySelector('.host-metrics-agent-url')?.value || '').trim();
+        const agentHost = (row.querySelector('.host-metrics-agent-host')?.value || '').trim();
         const cpuTempSensor = (row.querySelector('.host-metrics-sensor')?.value || '').trim();
         const linkInterface = (row.querySelector('.host-metrics-interface')?.value || '').trim();
         nodes[nodeName] = {
             enabled,
             agentUrl,
+            agentHost,
             cpuTempSensor,
             linkInterface
         };
@@ -7062,7 +7090,9 @@ function updateMonitorView(clusterData) {
         } else {
             listEl.innerHTML = nodes.map(node => {
                 const statusClass = node.status === 'online' ? 'online' : 'offline';
-                return `<div class="monitor-view__node-row"><span class="monitor-view__node-name">${escapeHtml(node.name)}</span><span class="monitor-view__node-status ${statusClass}" title="${node.status === 'online' ? t('nodeOnline') : t('nodeOffline')}"></span></div>`;
+                const nip = node.ip ? String(node.ip).trim() : '';
+                const ipHtml = nip ? `<span class="monitor-view__node-ip text-muted">${escapeHtml(nip)}</span>` : '';
+                return `<div class="monitor-view__node-row"><span class="monitor-view__node-name">${escapeHtml(node.name)}</span>${ipHtml ? ' ' + ipHtml : ''}<span class="monitor-view__node-status ${statusClass}" title="${node.status === 'online' ? t('nodeOnline') : t('nodeOffline')}"></span></div>`;
             }).join('');
         }
     }
@@ -7302,11 +7332,18 @@ function updateDashboard(clusterData, storageData, backupsData, hostMetricsData 
         const hostMetricWarning = hostMetricAlerts.length
             ? `<span class="badge bg-warning text-dark ms-2" title="${escapeHtml(hostMetricAlerts.map((item) => item.message).join(' | ') || (t('hostMetricsCriticalNodeTitle') || 'Есть предупреждение по метрикам узла'))}"><i class="bi bi-exclamation-triangle-fill"></i></span>`
             : '';
+        const nodeIpDisplay = node.ip || (hostMetric && hostMetric.nodeIp) || '';
+        const nodeIpLine = nodeIpDisplay
+            ? `<div class="small text-muted mt-1"><i class="bi bi-hdd-network me-1"></i>${escapeHtml(String(nodeIpDisplay))}</div>`
+            : '';
         return `
             <div class="cluster-scroll-item">
                 <div class="node-card">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <div>
                         <h5 class="mb-0 d-inline-flex align-items-center">${node.name}${hostMetricWarning}</h5>
+                        ${nodeIpLine}
+                        </div>
                         <span class="badge ${node.status === 'online' ? 'bg-success' : 'bg-danger'}">
                             ${node.status === 'online' ? t('nodeOnline') : t('nodeOffline')}
                         </span>

@@ -57,6 +57,7 @@ function normalizeNodeConfig(raw) {
     return {
         enabled: toBool(cfg.enabled),
         agentUrl: safeString(cfg.agentUrl).trim(),
+        agentHost: safeString(cfg.agentHost).trim(),
         cpuTempSensor: safeString(cfg.cpuTempSensor).trim(),
         linkInterface: safeString(cfg.linkInterface).trim()
     };
@@ -127,12 +128,16 @@ function resolveConnectionId(req) {
     return null;
 }
 
-function getDefaultAgentUrl(nodeName) {
-    return `http://${safeString(nodeName).trim()}:${DEFAULT_AGENT_URL_PORT}${DEFAULT_AGENT_URL_PATH}`;
+function getDefaultAgentUrl(nodeName, agentHost = '') {
+    const host = safeString(agentHost).trim() || safeString(nodeName).trim();
+    return `http://${host}:${DEFAULT_AGENT_URL_PORT}${DEFAULT_AGENT_URL_PATH}`;
 }
 
 function resolveAgentUrl(nodeName, cfg) {
-    return safeString(cfg && cfg.agentUrl).trim() || getDefaultAgentUrl(nodeName);
+    const custom = safeString(cfg && cfg.agentUrl).trim();
+    if (custom) return custom;
+    const ah = cfg && cfg.agentHost != null ? safeString(cfg.agentHost).trim() : '';
+    return getDefaultAgentUrl(nodeName, ah);
 }
 
 function joinAgentUrl(baseUrl, suffix) {
@@ -263,23 +268,24 @@ function parseCurrentPayload(data, cfg) {
 }
 
 function cacheKey(connectionId, nodeName, cfg) {
-    return `${connectionId}::${nodeName}::${safeString(cfg.agentUrl)}::${safeString(cfg.cpuTempSensor)}::${safeString(cfg.linkInterface)}`;
+    return `${connectionId}::${nodeName}::${safeString(cfg.agentUrl)}::${safeString(cfg.agentHost)}::${safeString(cfg.cpuTempSensor)}::${safeString(cfg.linkInterface)}`;
 }
 
-async function getCachedCurrent(connectionId, nodeName, cfg, settings) {
+async function getCachedCurrent(connectionId, nodeName, cfg, settings, nodeIp = null) {
     const key = cacheKey(connectionId, nodeName, cfg);
     const now = Date.now();
     const existing = runtimeCache.get(key) || null;
     const freshForMs = Math.max(settings.pollIntervalSec, settings.cacheTtlSec) * 1000;
 
     if (existing && (now - existing.fetchedAt) < freshForMs) {
-        return { ...existing.payload, stale: false };
+        return { ...existing.payload, nodeIp: nodeIp || existing.payload.nodeIp || null, stale: false };
     }
 
     try {
         const payload = await fetchNodeCurrent(nodeName, cfg, settings);
-        runtimeCache.set(key, { fetchedAt: now, payload });
-        return { ...payload, stale: false };
+        const merged = { ...payload, nodeIp: nodeIp || null };
+        runtimeCache.set(key, { fetchedAt: now, payload: merged });
+        return { ...merged, stale: false };
     } catch (error) {
         if (existing && existing.payload) {
             return {
@@ -290,6 +296,7 @@ async function getCachedCurrent(connectionId, nodeName, cfg, settings) {
         }
         return {
             node: nodeName,
+            nodeIp: nodeIp || null,
             enabled: true,
             agentUrl: resolveAgentUrl(nodeName, cfg),
             cpu: {
@@ -312,12 +319,13 @@ async function getCachedCurrent(connectionId, nodeName, cfg, settings) {
     }
 }
 
-async function fetchNodeDiscovery(nodeName, cfg, settings) {
+async function fetchNodeDiscovery(nodeName, cfg, settings, nodeIp = null) {
     const agentUrl = resolveAgentUrl(nodeName, cfg);
     const data = await fetchAgentJson(agentUrl, 'discovery', settings.timeoutMs);
     const parsed = parseDiscoveryPayload(data);
     return {
         node: nodeName,
+        nodeIp: nodeIp || null,
         agentUrl,
         config: normalizeNodeConfig(cfg),
         cpuSensors: parsed.cpuSensors,
@@ -484,15 +492,18 @@ router.get('/discovery', checkAuth, async (req, res) => {
         const clusterStatus = await proxmox.getClusterStatus(req.token, req.serverUrl || null);
         const orderedNodes = proxmox.sortRowsByClusterNodeOrder(nodes, clusterStatus);
         const nodeNames = (orderedNodes || []).map((n) => n.node || n.name).filter(Boolean);
+        const nodeIpMap = proxmox.extractNodeIpMap(clusterStatus);
         const connCfg = loadConfigs()[connectionId] || { nodes: {} };
 
         const items = await Promise.all(nodeNames.map(async (nodeName) => {
             const cfg = normalizeNodeConfig(connCfg.nodes && connCfg.nodes[nodeName]);
+            const nodeIp = nodeIpMap[nodeName] || null;
             try {
-                return await fetchNodeDiscovery(nodeName, cfg, settings);
+                return await fetchNodeDiscovery(nodeName, cfg, settings, nodeIp);
             } catch (e) {
                 return {
                     node: nodeName,
+                    nodeIp,
                     agentUrl: resolveAgentUrl(nodeName, cfg),
                     config: cfg,
                     cpuSensors: [],
@@ -528,6 +539,7 @@ router.get('/current', checkAuth, async (req, res) => {
         const clusterStatus = await proxmox.getClusterStatus(req.token, req.serverUrl || null);
         const orderedNodes = proxmox.sortRowsByClusterNodeOrder(nodes, clusterStatus);
         const nodeNames = (orderedNodes || []).map((n) => n.node || n.name).filter(Boolean);
+        const nodeIpMap = proxmox.extractNodeIpMap(clusterStatus);
         const connCfg = loadConfigs()[connectionId] || { nodes: {} };
 
         const enabledNodeNames = nodeNames.filter((nodeName) => {
@@ -545,7 +557,8 @@ router.get('/current', checkAuth, async (req, res) => {
 
         const items = await Promise.all(enabledNodeNames.map(async (nodeName) => {
             const cfg = normalizeNodeConfig(connCfg.nodes && connCfg.nodes[nodeName]);
-            return getCachedCurrent(connectionId, nodeName, cfg, settings);
+            const nodeIp = nodeIpMap[nodeName] || null;
+            return getCachedCurrent(connectionId, nodeName, cfg, settings, nodeIp);
         }));
 
         res.json({

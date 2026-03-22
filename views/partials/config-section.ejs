@@ -194,6 +194,21 @@
                         <p class="text-muted small mb-2" id="settingsMonitorScreensOrderHint">Порядок при перелистывании (свайп, стрелки на панели). Экран бэкапов доступен только при подключении к Proxmox.</p>
                         <ul class="list-group list-group-flush border rounded overflow-hidden" id="settingsMonitorScreensOrderList"></ul>
                     </div>
+
+                    <hr class="my-4">
+                    <div class="mb-2">
+                        <label class="form-label fw-bold" id="settingsClusterTilesTitle">Плитки экрана Cluster</label>
+                        <p class="text-muted small mb-2" id="settingsClusterTilesHint">Соберите до 12 плиток для экрана Cluster из UPS, VM/CT, Services, SNMP и Speedtest. На экране они листаются горизонтально.</p>
+                        <div id="settingsClusterTilesList"></div>
+                        <div class="d-flex gap-2 flex-wrap mt-3">
+                            <button class="btn btn-outline-primary btn-sm" type="button" onclick="addClusterDashboardTile()" id="settingsClusterTilesAddBtn">
+                                <i class="bi bi-plus-lg me-1"></i><span id="settingsClusterTilesAddBtnLabel">Добавить плитку</span>
+                            </button>
+                            <button class="btn btn-primary btn-sm" type="button" onclick="saveClusterDashboardTilesSettings()" id="settingsClusterTilesSaveBtn" disabled>
+                                <i class="bi bi-save me-1"></i><span id="settingsClusterTilesSaveBtnLabel">Сохранить плитки</span>
+                            </button>
+                        </div>
+                    </div>
                                 </div>
                             </div>
                             <!-- Стили -->
@@ -714,6 +729,7 @@
                                     <thead>
                                         <tr>
                                             <th id="hostMetricsNodeHeader">Узел</th>
+                                            <th id="hostMetricsAgentIpHostHeader" class="text-nowrap">IP / хост агента</th>
                                             <th id="hostMetricsEnabledHeader">Включить</th>
                                             <th id="hostMetricsAgentUrlHeader">URL агента</th>
                                             <th id="hostMetricsCpuSensorHeader">Датчик CPU</th>

@@ -188,6 +188,22 @@ function buildClusterNodeOrderMap(clusterStatus) {
     return map;
 }
 
+/**
+ * IP адреса узлов из /cluster/status (type=node), для отображения и host metrics.
+ */
+function extractNodeIpMap(clusterStatus) {
+    const map = {};
+    const rows = Array.isArray(clusterStatus) ? clusterStatus : [];
+    for (const row of rows) {
+        if (!row || String(row.type || '').toLowerCase() !== 'node') continue;
+        const name = String(row.node || row.name || '').trim();
+        if (!name) continue;
+        const ip = String(row.ip || '').trim();
+        if (ip) map[name] = ip;
+    }
+    return map;
+}
+
 function sortRowsByClusterNodeOrder(rows, clusterStatus = null, nameGetter = getNodeName) {
     const list = Array.isArray(rows) ? rows.slice() : [];
     const orderMap = buildClusterNodeOrderMap(clusterStatus);
@@ -328,6 +344,7 @@ module.exports = {
     getNodes,
     getNodeStatus,
     getClusterStatus,
+    extractNodeIpMap,
     sortRowsByClusterNodeOrder,
     buildClusterNodeOrderMap,
     getClusterResources,
