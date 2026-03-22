@@ -103,6 +103,10 @@ const SETTING_KEYS = [
     'cluster_dashboard_tiles',
     'dashboard_weather_city',
     'dashboard_timezone',
+    'dashboard_show_time',
+    'dashboard_show_weather',
+    'monitor_show_time',
+    'monitor_show_weather',
     // Speedtest (Ookla CLI)
     'speedtest_enabled',
     'speedtest_server',
@@ -160,6 +164,13 @@ router.get('/', (req, res) => {
                     payload[key] = parseInt(value, 10);
                 } else if (key === 'telegram_notify_enabled') {
                     payload[key] = value === '1' || value === 'true';
+                } else if (
+                    key === 'dashboard_show_time' ||
+                    key === 'dashboard_show_weather' ||
+                    key === 'monitor_show_time' ||
+                    key === 'monitor_show_weather'
+                ) {
+                    payload[key] = !(value === '0' || value === 'false' || value === false);
                 } else {
                     payload[key] = value;
                 }
@@ -171,6 +182,10 @@ router.get('/', (req, res) => {
         if (payload.telegram_notify_enabled === undefined) payload.telegram_notify_enabled = false;
         if (payload.telegram_notify_interval_sec == null || !Number.isFinite(parseInt(payload.telegram_notify_interval_sec, 10))) {
             payload.telegram_notify_interval_sec = 60;
+        }
+        for (const k of ['dashboard_show_time', 'dashboard_show_weather', 'monitor_show_time', 'monitor_show_weather']) {
+            if (payload[k] === undefined) payload[k] = true;
+            else payload[k] = !(payload[k] === false || payload[k] === '0' || payload[k] === 0 || payload[k] === 'false');
         }
         if (!payload.telegram_routes || typeof payload.telegram_routes !== 'object') {
             payload.telegram_routes = { service: {}, vm: {}, node: {}, netdev: {} };
@@ -220,6 +235,26 @@ router.post('/', (req, res) => {
             cluster_dashboard_tiles: body.cluster_dashboard_tiles ?? body.clusterDashboardTiles,
             dashboard_weather_city: body.dashboard_weather_city ?? body.dashboardWeatherCity,
             dashboard_timezone: body.dashboard_timezone ?? body.dashboardTimezone,
+            dashboard_show_time: (() => {
+                const v = body.dashboard_show_time ?? body.dashboardShowTime;
+                if (v === undefined) return undefined;
+                return v === true || v === '1' || v === 1 || v === 'true' ? '1' : '0';
+            })(),
+            dashboard_show_weather: (() => {
+                const v = body.dashboard_show_weather ?? body.dashboardShowWeather;
+                if (v === undefined) return undefined;
+                return v === true || v === '1' || v === 1 || v === 'true' ? '1' : '0';
+            })(),
+            monitor_show_time: (() => {
+                const v = body.monitor_show_time ?? body.monitorShowTime;
+                if (v === undefined) return undefined;
+                return v === true || v === '1' || v === 1 || v === 'true' ? '1' : '0';
+            })(),
+            monitor_show_weather: (() => {
+                const v = body.monitor_show_weather ?? body.monitorShowWeather;
+                if (v === undefined) return undefined;
+                return v === true || v === '1' || v === 1 || v === 'true' ? '1' : '0';
+            })(),
             speedtest_enabled: (() => {
                 const v = body.speedtest_enabled ?? body.speedtestEnabled;
                 if (v === undefined) return undefined;

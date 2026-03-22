@@ -116,6 +116,37 @@ let dashboardWeatherError = '';
 let dashboardWeatherLastFetchMs = 0;
 let dashboardWeatherFetchPromise = null;
 let dashboardClockInterval = null;
+/** Показ карточек «время» / «погода» на дашборде в обычном режиме */
+let dashboardShowTime = true;
+let dashboardShowWeather = true;
+/** То же для экрана кластера в режиме монитора */
+let monitorShowTime = true;
+let monitorShowWeather = true;
+
+function parseBoolSettingClient(v, defaultVal = true) {
+    if (v === undefined || v === null || v === '') return defaultVal;
+    if (v === false || v === '0' || v === 0 || v === 'false') return false;
+    return true;
+}
+
+function isDashboardTimeVisibleForCurrentMode() {
+    return monitorMode ? monitorShowTime : dashboardShowTime;
+}
+
+function isDashboardWeatherVisibleForCurrentMode() {
+    return monitorMode ? monitorShowWeather : dashboardShowWeather;
+}
+
+function applyDashboardTimeWeatherVisibility() {
+    const timeWrap = el('dashboardTimeCardWrap');
+    const weatherWrap = el('dashboardWeatherCardWrap');
+    const toolbarUpd = el('monitorToolbarUpdate');
+    const showT = isDashboardTimeVisibleForCurrentMode();
+    const showW = isDashboardWeatherVisibleForCurrentMode();
+    if (timeWrap) timeWrap.style.display = showT ? '' : 'none';
+    if (weatherWrap) weatherWrap.style.display = showW ? '' : 'none';
+    if (toolbarUpd) toolbarUpd.style.display = monitorMode && !showT ? 'none' : '';
+}
 const UPDATE_NOTICE_STORAGE_KEY = 'update_notice_seen_version';
 let updateCheckPromise = null;
 let latestUpdateInfo = null;
@@ -443,12 +474,18 @@ function renderDashboardTimeWeatherCard() {
     setHTMLIfChanged('dashboardTemperatureValue', weatherValue);
     setHTMLIfChanged('dashboardTemperatureMeta', cityValue);
     temperatureMetaEl.style.display = '';
+    applyDashboardTimeWeatherVisibility();
 }
 
 async function refreshDashboardWeather(force = false) {
     const requestedCity = normalizeDashboardWeatherCity(dashboardWeatherCity);
     if (!requestedCity) {
         resetDashboardWeatherState();
+        renderDashboardTimeWeatherCard();
+        return null;
+    }
+
+    if (!force && !isDashboardWeatherVisibleForCurrentMode()) {
         renderDashboardTimeWeatherCard();
         return null;
     }
@@ -531,7 +568,7 @@ function startDashboardClockTimer() {
     if (dashboardClockInterval) clearInterval(dashboardClockInterval);
     dashboardClockInterval = setInterval(() => {
         renderDashboardTimeWeatherCard();
-        if (dashboardWeatherCity && !dashboardWeatherFetchPromise) {
+        if (dashboardWeatherCity && !dashboardWeatherFetchPromise && isDashboardWeatherVisibleForCurrentMode()) {
             const ageMs = Date.now() - dashboardWeatherLastFetchMs;
             if (!dashboardWeatherLastFetchMs || ageMs >= DASHBOARD_WEATHER_REFRESH_MS) {
                 refreshDashboardWeather().catch(() => {});
@@ -555,6 +592,11 @@ async function saveDashboardTimeWeatherSettings() {
     const cityChanged = nextCity !== dashboardWeatherCity;
     const timezoneChanged = nextTimezone !== dashboardTimezone;
 
+    dashboardShowTime = !!(el('settingsDashboardShowTimeCheckbox') && el('settingsDashboardShowTimeCheckbox').checked);
+    dashboardShowWeather = !!(el('settingsDashboardShowWeatherCheckbox') && el('settingsDashboardShowWeatherCheckbox').checked);
+    monitorShowTime = !!(el('settingsMonitorShowTimeCheckbox') && el('settingsMonitorShowTimeCheckbox').checked);
+    monitorShowWeather = !!(el('settingsMonitorShowWeatherCheckbox') && el('settingsMonitorShowWeatherCheckbox').checked);
+
     dashboardWeatherCity = nextCity;
     dashboardTimezone = nextTimezone;
     if (cityChanged || timezoneChanged) resetDashboardWeatherState();
@@ -565,7 +607,11 @@ async function saveDashboardTimeWeatherSettings() {
     try {
         await saveSettingsToServer({
             dashboardWeatherCity: dashboardWeatherCity,
-            dashboardTimezone: dashboardTimezone
+            dashboardTimezone: dashboardTimezone,
+            dashboardShowTime,
+            dashboardShowWeather,
+            monitorShowTime,
+            monitorShowWeather
         });
         refreshDashboardWeather(true).catch(() => {});
         showToast(t('dataUpdated') || 'Настройки сохранены', 'success');
@@ -972,6 +1018,10 @@ async function saveSettingsToServer(payload) {
     if (payload.clusterDashboardTiles !== undefined) body.clusterDashboardTiles = payload.clusterDashboardTiles;
     if (payload.dashboardWeatherCity !== undefined) body.dashboardWeatherCity = payload.dashboardWeatherCity;
     if (payload.dashboardTimezone !== undefined) body.dashboardTimezone = payload.dashboardTimezone;
+    if (payload.dashboardShowTime !== undefined) body.dashboardShowTime = !!payload.dashboardShowTime;
+    if (payload.dashboardShowWeather !== undefined) body.dashboardShowWeather = !!payload.dashboardShowWeather;
+    if (payload.monitorShowTime !== undefined) body.monitorShowTime = !!payload.monitorShowTime;
+    if (payload.monitorShowWeather !== undefined) body.monitorShowWeather = !!payload.monitorShowWeather;
     if (payload.speedtestEnabled !== undefined) body.speedtestEnabled = !!payload.speedtestEnabled;
     if (payload.speedtestServer !== undefined) body.speedtestServer = payload.speedtestServer;
     if (payload.speedtestPerDay !== undefined) body.speedtestPerDay = payload.speedtestPerDay;
@@ -1616,6 +1666,12 @@ function updateUILanguage() {
     setText('settingsDashboardTimezoneLabel', t('settingsDashboardTimezoneLabel'));
     setText('settingsDashboardTimezoneHint', t('settingsDashboardTimezoneHint'));
     setText('settingsDashboardTimeWeatherSaveBtnLabel', t('settingsDashboardTimeWeatherSaveBtn'));
+    setText('settingsDashboardVisibilityNormalTitle', t('settingsDashboardVisibilityNormalTitle'));
+    setText('settingsDashboardVisibilityMonitorTitle', t('settingsDashboardVisibilityMonitorTitle'));
+    setText('settingsDashboardShowTimeLabel', t('settingsDashboardShowTimeLabel'));
+    setText('settingsDashboardShowWeatherLabel', t('settingsDashboardShowWeatherLabel'));
+    setText('settingsMonitorShowTimeLabel', t('settingsMonitorShowTimeLabel'));
+    setText('settingsMonitorShowWeatherLabel', t('settingsMonitorShowWeatherLabel'));
     setPlaceholder('settingsDashboardWeatherCityInput', t('settingsDashboardWeatherCityPlaceholder') || 'Berlin');
     setPlaceholder('settingsDashboardTimezoneInput', t('settingsDashboardTimezonePlaceholder') || 'Europe/Berlin');
     setText('settingsClusterTilesTitle', t('settingsClusterTilesTitle'));
@@ -5783,6 +5839,7 @@ async function toggleMonitorMode() {
     }
 
     if (apiToken || getCurrentConnectionId()) refreshData();
+    renderDashboardTimeWeatherCard();
 }
 
 let monitorSwipeStartX = null;
@@ -9156,8 +9213,20 @@ async function loadSettings() {
     clusterDashboardTilesDirty = false;
     dashboardWeatherCity = normalizeDashboardWeatherCity(data.dashboard_weather_city);
     dashboardTimezone = normalizeDashboardTimezone(data.dashboard_timezone);
+    dashboardShowTime = parseBoolSettingClient(data.dashboard_show_time, true);
+    dashboardShowWeather = parseBoolSettingClient(data.dashboard_show_weather, true);
+    monitorShowTime = parseBoolSettingClient(data.monitor_show_time, true);
+    monitorShowWeather = parseBoolSettingClient(data.monitor_show_weather, true);
     setValue('settingsDashboardWeatherCityInput', dashboardWeatherCity);
     setValue('settingsDashboardTimezoneInput', dashboardTimezone);
+    const cDashT = el('settingsDashboardShowTimeCheckbox');
+    if (cDashT) cDashT.checked = dashboardShowTime;
+    const cDashW = el('settingsDashboardShowWeatherCheckbox');
+    if (cDashW) cDashW.checked = dashboardShowWeather;
+    const cMonT = el('settingsMonitorShowTimeCheckbox');
+    if (cMonT) cMonT.checked = monitorShowTime;
+    const cMonW = el('settingsMonitorShowWeatherCheckbox');
+    if (cMonW) cMonW.checked = monitorShowWeather;
     monitorVmIcons = normalizeMonitorVmIconsMap(data.monitor_vm_icons);
     monitorVmIconColors = normalizeMonitorVmIconColorsMap(data.monitor_vm_icon_colors);
     if (data.current_server_index != null) currentServerIndex = parseInt(data.current_server_index, 10) || 0;
@@ -9215,8 +9284,6 @@ async function loadSettings() {
     renderTelegramRulesTable();
     renderSettingsMonitorScreensOrderList();
     renderClusterDashboardTilesSettings();
-    startDashboardClockTimer();
-    refreshDashboardWeather().catch(() => {});
     const ttlSel = document.getElementById('settingsSessionTtlSelect');
     if (ttlSel) {
         const v = String(settingsSessionTtlMinutes);
@@ -9241,6 +9308,8 @@ async function loadSettings() {
         initMonitorKeyboardNavigation();
         applyMonitorToolbarHiddenState();
     }
+    startDashboardClockTimer();
+    refreshDashboardWeather().catch(() => {});
     // Preferred language select in settings
     const langSelect = document.getElementById('settingsPreferredLanguageSelect');
     if (langSelect && Array.isArray(availableLanguages) && availableLanguages.length) {

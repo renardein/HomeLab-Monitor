@@ -198,6 +198,53 @@
 
                     <hr class="my-4">
                     <div class="mb-2">
+                        <label class="form-label fw-bold" id="settingsDashboardTimeWeatherTitle">Время и погода</label>
+                        <p class="text-muted small mb-3" id="settingsDashboardTimeWeatherHint">Настройки верхней строки дашборда (время, погода, город).</p>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold" id="settingsDashboardWeatherCityLabel">Город</label>
+                                <input type="text" class="form-control" id="settingsDashboardWeatherCityInput" placeholder="Moscow">
+                                <div class="form-text" id="settingsDashboardWeatherCityHint">Используется для получения текущей погоды.</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold" id="settingsDashboardTimezoneLabel">Часовой пояс</label>
+                                <input type="text" class="form-control" id="settingsDashboardTimezoneInput" placeholder="Europe/Moscow">
+                                <div class="form-text" id="settingsDashboardTimezoneHint">Используйте IANA-формат, например Europe/Berlin.</div>
+                            </div>
+                        </div>
+                        <div class="row g-3 mt-1">
+                            <div class="col-md-6">
+                                <div class="fw-semibold mb-2" id="settingsDashboardVisibilityNormalTitle">Обычный режим</div>
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="checkbox" id="settingsDashboardShowTimeCheckbox" checked>
+                                    <label class="form-check-label" for="settingsDashboardShowTimeCheckbox" id="settingsDashboardShowTimeLabel">Показывать дату и время</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="settingsDashboardShowWeatherCheckbox" checked>
+                                    <label class="form-check-label" for="settingsDashboardShowWeatherCheckbox" id="settingsDashboardShowWeatherLabel">Показывать погоду</label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="fw-semibold mb-2" id="settingsDashboardVisibilityMonitorTitle">Режим монитора</div>
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="checkbox" id="settingsMonitorShowTimeCheckbox" checked>
+                                    <label class="form-check-label" for="settingsMonitorShowTimeCheckbox" id="settingsMonitorShowTimeLabel">Показывать дату и время</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="settingsMonitorShowWeatherCheckbox" checked>
+                                    <label class="form-check-label" for="settingsMonitorShowWeatherCheckbox" id="settingsMonitorShowWeatherLabel">Показывать погоду</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="d-flex gap-2 flex-wrap mt-3">
+                            <button class="btn btn-primary btn-sm" type="button" onclick="saveDashboardTimeWeatherSettings()" id="settingsDashboardTimeWeatherSaveBtn">
+                                <i class="bi bi-save me-1"></i><span id="settingsDashboardTimeWeatherSaveBtnLabel">Сохранить время и погоду</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+                    <div class="mb-2">
                         <label class="form-label fw-bold" id="settingsMonitorScreensOrderTitle">Порядок экранов монитора</label>
                         <p class="text-muted small mb-2" id="settingsMonitorScreensOrderHint">Порядок при перелистывании (свайп, стрелки на панели). Экран бэкапов доступен только при подключении к Proxmox.</p>
                         <ul class="list-group list-group-flush border rounded overflow-hidden" id="settingsMonitorScreensOrderList"></ul>
