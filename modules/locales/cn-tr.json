@@ -540,7 +540,7 @@
     "dashboardWeatherUnavailable": "無法取得天氣",
     "dashboardWeatherCityMissing": "請在設定中指定城市",
     "settingsClusterTilesTitle": "Cluster 畫面圖塊",
-    "settingsClusterTilesHint": "從 UPS、VM/CT、服務、SNMP 裝置與 Speedtest 組合最多 12 個圖塊；畫面上可水平捲動。",
+    "settingsClusterTilesHint": "從 VM/CT、服務、SNMP 裝置與 Speedtest 組合最多 12 個圖塊；畫面上可水平捲動。",
     "settingsClusterTilesAddBtn": "新增圖塊",
     "settingsClusterTilesSaveBtn": "儲存圖塊",
     "settingsClusterTilesEmpty": "尚未設定任何圖塊。",

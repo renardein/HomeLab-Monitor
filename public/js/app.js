@@ -52,10 +52,10 @@ let monitorVmIconColors = {}; // vmid -> CSS hex color
 /** @type {Array<object>} */
 let telegramNotificationRules = [];
 let telegramBotTokenSet = false;
-let clusterDashboardTiles = []; // [{ type: 'ups'|'service'|'vmct'|'netdev'|'speedtest', sourceId: 'type:id' }]
+let clusterDashboardTiles = []; // [{ type: 'service'|'vmct'|'netdev'|'speedtest', sourceId: 'type:id' }]
 let clusterDashboardTilesDirty = false;
 let clusterDashboardTilesSettingPresent = false;
-const CLUSTER_DASHBOARD_TILE_TYPES = ['ups', 'service', 'vmct', 'netdev', 'speedtest'];
+const CLUSTER_DASHBOARD_TILE_TYPES = ['service', 'vmct', 'netdev', 'speedtest'];
 const MAX_CLUSTER_DASHBOARD_TILES = 12;
 const DEFAULT_DASHBOARD_TIMEZONE = (() => {
     try {
@@ -1407,7 +1407,6 @@ function updateUILanguage() {
     setText('dashboardClusterVmRunningLbl', t('monitorGuestRunning'));
     setText('dashboardClusterCtTotalLbl', t('monitorGuestTotal'));
     setText('upsTitle', t('upsTitle') || 'UPS');
-    setText('dashboardUpsTitle', t('upsTitle') || 'UPS');
     setText('upsLabelInputVoltage', t('upsLabelInputVoltage') || 'Вход U');
     setText('upsLabelOutputVoltage', t('upsLabelOutputVoltage') || 'Выход U');
     setText('upsLabelPower', t('upsLabelPower') || 'Мощность');
@@ -2527,7 +2526,6 @@ async function loadSettingsPanelData() {
     await ensureNetdevDisplaySlotsLoaded();
     await loadHostMetricsSettings();
     await loadAboutContent();
-    await ensureClusterDashboardTilesMigratedFromLegacy();
     renderClusterDashboardTilesSettings();
     renderServerList();
 }
@@ -2551,7 +2549,6 @@ function normalizeClusterDashboardTiles(raw) {
 }
 
 function getClusterDashboardTileTypeLabel(type) {
-    if (type === 'ups') return t('settingsClusterTileTypeUps');
     if (type === 'service') return t('settingsClusterTileTypeService');
     if (type === 'vmct') return t('settingsClusterTileTypeVmct');
     if (type === 'netdev') return t('settingsClusterTileTypeNetdev');
@@ -2560,16 +2557,6 @@ function getClusterDashboardTileTypeLabel(type) {
 }
 
 function getClusterDashboardTileSourceOptions(type) {
-    if (type === 'ups') {
-        return (Array.isArray(upsConfigs) ? upsConfigs : [])
-            .map((cfg, idx) => ({ cfg, slot: idx + 1 }))
-            .filter(({ cfg }) => cfg && cfg.enabled && String(cfg.host || '').trim() !== '')
-            .map(({ cfg, slot }) => ({
-                value: `ups:${slot}`,
-                label: `UPS ${slot}: ${cfg.name || cfg.host || ('#' + slot)}`
-            }));
-    }
-
     if (type === 'netdev') {
         return (Array.isArray(netdevConfigs) ? netdevConfigs : [])
             .map((cfg, idx) => ({ cfg, slot: idx + 1 }))
@@ -2699,7 +2686,7 @@ function renderClusterDashboardTilesSettings() {
 
 function addClusterDashboardTile() {
     if (clusterDashboardTiles.length >= MAX_CLUSTER_DASHBOARD_TILES) return;
-    let selectedType = 'ups';
+    let selectedType = CLUSTER_DASHBOARD_TILE_TYPES[0];
     for (const type of CLUSTER_DASHBOARD_TILE_TYPES) {
         if (getClusterDashboardTileSourceOptions(type).length > 0) {
             selectedType = type;
@@ -2764,36 +2751,6 @@ async function saveClusterDashboardTilesSettings() {
     renderClusterDashboardTilesSettings();
     await renderClusterDashboardTiles();
     showToast(t('settingsClusterTilesSaved') || t('dataUpdated'), 'success');
-}
-
-async function ensureClusterDashboardTilesMigratedFromLegacy() {
-    if (clusterDashboardTilesSettingPresent || clusterDashboardTiles.length > 0) return;
-    try {
-        const [upsSettingsRes, upsDisplayRes] = await Promise.all([
-            fetch('/api/ups/settings'),
-            fetch('/api/ups/display')
-        ]);
-        if (!upsSettingsRes.ok || !upsDisplayRes.ok) return;
-        const upsSettingsData = await upsSettingsRes.json();
-        const upsDisplayData = await upsDisplayRes.json();
-        const configs = Array.isArray(upsSettingsData?.configs) ? upsSettingsData.configs : [];
-        const dashboardSlots = Array.isArray(upsDisplayData?.dashboardSlots) ? upsDisplayData.dashboardSlots : [1, 2, 3, 4];
-        const migrated = dashboardSlots
-            .slice(0, 4)
-            .map((slot) => {
-                const cfg = configs[slot - 1];
-                if (!cfg || !cfg.enabled || !String(cfg.host || '').trim()) return null;
-                return { type: 'ups', sourceId: `ups:${slot}` };
-            })
-            .filter(Boolean);
-        if (!migrated.length) return;
-        clusterDashboardTiles = migrated;
-        clusterDashboardTilesSettingPresent = true;
-        markClusterDashboardTilesDirty(false);
-        await saveSettingsToServer({ clusterDashboardTiles });
-    } catch (e) {
-        console.warn('Failed to migrate legacy cluster UPS tiles:', e);
-    }
 }
 
 // ==================== UPS MONITORING (NUT/SNMP) ====================
@@ -4702,49 +4659,6 @@ function getClusterNetdevFieldValue(field) {
     return raw ? formatNetdevMetricValue(raw) : '—';
 }
 
-function buildClusterUpsTileHtml(tile, payload) {
-    const slot = clusterTileSourceNumericId(tile, 'ups');
-    const item = Array.isArray(payload?.items) ? payload.items.find((entry) => Number(entry.slot) === slot) : null;
-    if (!item) {
-        return buildClusterDashboardUnavailableTile(`UPS ${Number.isFinite(slot) ? slot : ''}`.trim(), t('upsNotConfigured') || 'UPS не настроен');
-    }
-
-    const statusRaw = item.status?.raw ?? null;
-    const statusLabel = item.status?.label ?? (statusRaw != null ? String(statusRaw) : 'unknown');
-    const lowStr = String(statusLabel).toLowerCase();
-    const badgeClass = lowStr.includes('low')
-        ? 'bg-danger'
-        : (item.status?.up === true ? 'bg-success' : (item.status?.up === false ? 'bg-warning text-dark' : 'bg-secondary'));
-
-    const inVText = formatUpsMetric(item.electrical?.inputVoltage, ' V');
-    const loadText = formatUpsMetric(item.electrical?.loadPercent, ' %');
-    const chargePct = item.battery?.chargePct;
-    const chargeText = chargePct != null && Number.isFinite(Number(chargePct))
-        ? `${chargePct}%`
-        : (item.battery?.chargeRaw != null ? String(item.battery.chargeRaw) : '—');
-    const runtimeText = item.battery?.runtimeFormatted != null
-        ? item.battery.runtimeFormatted
-        : (item.battery?.runtimeRaw != null ? String(item.battery.runtimeRaw) : '—');
-    const staleTs = Date.parse(item.updatedAt || payload.updatedAt || '');
-    const isStale = Number.isFinite(staleTs) && (Date.now() - staleTs) > (10 * 60 * 1000);
-
-    const bodyHtml = [
-        buildClusterDashboardMetricCell(t('upsLabelInputVoltage') || 'Input V', inVText, null, null, 'col-6'),
-        buildClusterDashboardMetricCell(t('upsLabelLoad') || 'Load', loadText, item.electrical?.loadPercent?.value, 'bg-warning', 'col-6'),
-        buildClusterDashboardMetricCell(t('upsLabelCharge') || 'Charge', chargeText, chargePct != null ? Number(chargePct) : null, 'bg-success', 'col-6 mt-2'),
-        buildClusterDashboardMetricCell(t('upsLabelRuntime') || 'Battery runtime', runtimeText, null, null, 'col-6 mt-2'),
-        isStale ? `<div class="col-12 mt-2"><small class="text-warning">${escapeHtml(t('hostMetricsStale') || 'Stale data')}</small></div>` : ''
-    ].join('');
-
-    const footer = escapeHtml(item.host ? `${(item.type ? String(item.type).toUpperCase() : 'UPS')} · ${item.host}` : (item.type ? String(item.type).toUpperCase() : 'UPS'));
-    return buildClusterDashboardTileShell(
-        escapeHtml(item.name || `UPS ${slot}`),
-        `<span class="badge ${badgeClass}">${escapeHtml(statusLabel)}</span>`,
-        bodyHtml,
-        footer
-    );
-}
-
 function buildClusterServiceTileHtml(tile) {
     const id = clusterTileSourceNumericId(tile, 'service');
     const service = (Array.isArray(monitoredServices) ? monitoredServices : []).find((svc) => Number(svc.id) === id);
@@ -4862,7 +4776,6 @@ async function renderClusterDashboardTiles() {
         return;
     }
 
-    const needUps = tiles.some((tile) => tile.type === 'ups');
     const needNetdev = tiles.some((tile) => tile.type === 'netdev');
     const needSpeedtest = tiles.some((tile) => tile.type === 'speedtest');
 
@@ -4876,14 +4789,12 @@ async function renderClusterDashboardTiles() {
         }
     };
 
-    const [upsPayload, netdevPayload, speedtestSummary] = await Promise.all([
-        needUps ? fetchJson('/api/ups/current') : Promise.resolve(null),
+    const [netdevPayload, speedtestSummary] = await Promise.all([
         needNetdev ? fetchJson('/api/netdevices/current') : Promise.resolve(null),
         needSpeedtest ? fetchJson('/api/speedtest/summary') : Promise.resolve(null)
     ]);
 
     const html = tiles.map((tile) => {
-        if (tile.type === 'ups') return buildClusterUpsTileHtml(tile, upsPayload);
         if (tile.type === 'service') return buildClusterServiceTileHtml(tile);
         if (tile.type === 'vmct') return buildClusterVmTileHtml(tile);
         if (tile.type === 'netdev') return buildClusterNetdevTileHtml(tile, netdevPayload);
@@ -6871,10 +6782,7 @@ function paintUpsMount(cardsEl, updatedAtEl, data, options) {
 
 async function updateUPSDashboard() {
     const monitorCards = document.getElementById('upsMonitorCards');
-    const dashboardCards = document.getElementById('dashboardUpsCards');
-    const dashSection = document.getElementById('dashboardUpsSection');
-
-    if (!monitorCards && !dashboardCards) return;
+    if (!monitorCards) return;
 
     const resetRow = (el) => {
         if (!el) return;
@@ -6882,11 +6790,8 @@ async function updateUPSDashboard() {
         el.className = 'row g-2 small';
     };
     resetRow(monitorCards);
-    resetRow(dashboardCards);
     const upsUpdatedAt = document.getElementById('upsUpdatedAt');
-    const dashboardUpsUpdatedAt = document.getElementById('dashboardUpsUpdatedAt');
     if (upsUpdatedAt) upsUpdatedAt.textContent = '';
-    if (dashboardUpsUpdatedAt) dashboardUpsUpdatedAt.textContent = '';
 
     try {
         const res = await fetch('/api/ups/current');
@@ -6895,35 +6800,10 @@ async function updateUPSDashboard() {
         // Обновляем кеш доступности экрана для корректного свайп-порядка.
         upsMonitorConfigured = !!(data && data.configured && Array.isArray(data.items) && data.items.length > 0);
 
-        await ensureUpsDisplaySlotsLoaded();
-        const isMonitorCluster = monitorMode && monitorCurrentView === 'cluster';
-        const slotsForDashboard = isMonitorCluster ? upsDisplaySlotsMonitor : upsDisplaySlotsDashboard;
-        const safeSlotsForDashboard = (Array.isArray(slotsForDashboard) && slotsForDashboard.length > 0)
-            ? slotsForDashboard
-            : (upsDisplaySlotsLoadedOnce ? [] : [1, 2, 3, 4]);
-
-        const dashboardItems = (Array.isArray(safeSlotsForDashboard) && safeSlotsForDashboard.length)
-            ? (data.items || []).filter((it) => safeSlotsForDashboard.includes(it.slot))
-            : data.items;
-
-        const showDash = !!(data && data.configured && Array.isArray(dashboardItems) && dashboardItems.length > 0);
-        if (dashSection) dashSection.style.display = showDash ? '' : 'none';
-
         paintUpsMount(monitorCards, upsUpdatedAt, data, {});
-        const dashboardData = { ...data, items: dashboardItems };
-        paintUpsMount(dashboardCards, dashboardUpsUpdatedAt, dashboardData, {
-            // На дашборде одиночный UPS должен выглядеть “как карточка”, а не растягиваться на всю ширину.
-            singleUpsVariant: 'card',
-            singleUpsColClass: 'col-12 col-md-6 col-lg-4',
-            singleRowClass: 'row g-2 justify-content-center'
-        });
     } catch (e) {
         const errHtml = `<div class="col-12"><div class="text-danger small">${escapeHtml((e && e.message) ? e.message : String(e))}</div></div>`;
         if (monitorCards) monitorCards.innerHTML = errHtml;
-        if (dashboardCards) {
-            dashboardCards.innerHTML = errHtml;
-            if (dashSection) dashSection.style.display = '';
-        }
     }
 }
 
@@ -8718,7 +8598,6 @@ async function loadSettings() {
         tgInt.value = String(n);
     }
     renderTelegramRulesTable();
-    await ensureClusterDashboardTilesMigratedFromLegacy();
     renderSettingsMonitorScreensOrderList();
     renderClusterDashboardTilesSettings();
     startDashboardClockTimer();

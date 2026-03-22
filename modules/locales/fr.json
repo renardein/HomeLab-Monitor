@@ -540,7 +540,7 @@
     "dashboardWeatherUnavailable": "Météo indisponible",
     "dashboardWeatherCityMissing": "Indiquez une ville dans les paramètres",
     "settingsClusterTilesTitle": "Tuiles de l’écran Cluster",
-    "settingsClusterTilesHint": "Jusqu’à 12 tuiles pour l’écran Cluster à partir d’UPS, VM/CT, services, périphériques SNMP et Speedtest. Défilement horizontal à l’écran.",
+    "settingsClusterTilesHint": "Jusqu’à 12 tuiles pour l’écran Cluster à partir de VM/CT, services, périphériques SNMP et Speedtest. Défilement horizontal à l’écran.",
     "settingsClusterTilesAddBtn": "Ajouter une tuile",
     "settingsClusterTilesSaveBtn": "Enregistrer les tuiles",
     "settingsClusterTilesEmpty": "Aucune tuile configurée.",

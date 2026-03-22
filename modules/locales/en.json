@@ -402,7 +402,7 @@
     "dashboardWeatherUnavailable": "Weather unavailable",
     "dashboardWeatherCityMissing": "Set a city in settings",
     "settingsClusterTilesTitle": "Cluster screen tiles",
-    "settingsClusterTilesHint": "Build up to 12 tiles for the Cluster screen from UPS, VM / CT, services, SNMP devices, and Speedtest. They scroll horizontally on the screen.",
+    "settingsClusterTilesHint": "Build up to 12 tiles for the Cluster screen from VM / CT, services, SNMP devices, and Speedtest. They scroll horizontally on the screen.",
     "settingsClusterTilesAddBtn": "Add tile",
     "settingsClusterTilesSaveBtn": "Save tiles",
     "settingsClusterTilesEmpty": "No tiles configured yet.",

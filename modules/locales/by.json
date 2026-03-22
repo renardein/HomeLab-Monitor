@@ -540,7 +540,7 @@
     "dashboardWeatherUnavailable": "Надвор'е недаступна",
     "dashboardWeatherCityMissing": "Укажыце горад у наладах",
     "settingsClusterTilesTitle": "Пліткі экрана Cluster",
-    "settingsClusterTilesHint": "Да 12 плітак для экрана Cluster з UPS, VM/CT, сэрвісаў, SNMP-прылад і Speedtest. На экране пракручваюцца гарызантальна.",
+    "settingsClusterTilesHint": "Да 12 плітак для экрана Cluster з VM/CT, сэрвісаў, SNMP-прылад і Speedtest. На экране пракручваюцца гарызантальна.",
     "settingsClusterTilesAddBtn": "Дадаць плітку",
     "settingsClusterTilesSaveBtn": "Захаваць пліткі",
     "settingsClusterTilesEmpty": "Пліткі пакуль не наладжаны.",

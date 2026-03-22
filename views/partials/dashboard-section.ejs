@@ -4,19 +4,31 @@
             <div id="dashboardContent">
             <!-- Статистика кластера -->
             <div class="row g-4 mb-4">
-                <div class="col-md-4">
+                <div class="col-md-6 col-xl">
+                    <div class="stat-card">
+                        <div class="stat-value" id="dashboardTimeValue">--:--</div>
+                        <div class="stat-card-meta" id="dashboardTimeMeta"></div>
+                    </div>
+                </div>
+                <div class="col-md-6 col-xl">
+                    <div class="stat-card">
+                        <div class="stat-value" id="dashboardTemperatureValue">--</div>
+                        <div class="stat-card-meta" id="dashboardTemperatureMeta"></div>
+                    </div>
+                </div>
+                <div class="col-md-6 col-xl">
                     <div class="stat-card">
                         <div class="stat-value" id="totalNodes">0</div>
                         <div class="stat-label" id="totalNodesLabel">Всего узлов</div>
                     </div>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-6 col-xl">
                     <div class="stat-card">
                         <div class="stat-value text-success" id="onlineNodes">0</div>
                         <div class="stat-label" id="onlineNodesLabel">Узлов онлайн</div>
                     </div>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-6 col-xl">
                     <div class="stat-card">
                         <div class="stat-value" id="quorumStatus">-</div>
                         <div class="stat-label" id="quorumLabel">Кворум</div>
@@ -77,23 +89,6 @@
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- UPS на главном дашборде (при включённом UPS в настройках) -->
-            <div class="row mb-4" id="dashboardUpsSection" style="display: none;">
-                <div class="col-12">
-                    <div class="card">
-                        <div class="card-header">
-                            <h5 class="mb-0"><i class="bi bi-lightning me-2"></i><span id="dashboardUpsTitle">UPS</span></h5>
-                        </div>
-                        <div class="card-body">
-                            <div class="d-flex align-items-center mb-2 flex-wrap gap-2">
-                                <span class="small text-muted" id="dashboardUpsUpdatedAt"></span>
-                            </div>
-                            <div class="row g-2 small" id="dashboardUpsCards"></div>
                         </div>
                     </div>
                 </div>

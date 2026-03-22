@@ -540,7 +540,7 @@
     "dashboardWeatherUnavailable": "天気を取得できません",
     "dashboardWeatherCityMissing": "設定で都市を指定してください",
     "settingsClusterTilesTitle": "Cluster 画面のタイル",
-    "settingsClusterTilesHint": "UPS、VM/CT、サービス、SNMP 機器、Speedtest から最大 12 枚のタイルを構成します。画面上では横スクロールします。",
+    "settingsClusterTilesHint": "VM/CT、サービス、SNMP 機器、Speedtest から最大 12 枚のタイルを構成します。画面上では横スクロールします。",
     "settingsClusterTilesAddBtn": "タイルを追加",
     "settingsClusterTilesSaveBtn": "タイルを保存",
     "settingsClusterTilesEmpty": "タイルがまだ設定されていません。",

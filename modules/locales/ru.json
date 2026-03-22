@@ -402,7 +402,7 @@
     "dashboardWeatherUnavailable": "Погода недоступна",
     "dashboardWeatherCityMissing": "Укажите город в настройках",
     "settingsClusterTilesTitle": "Плитки экрана Cluster",
-    "settingsClusterTilesHint": "Соберите до 12 плиток для экрана Cluster из UPS, VM/CT, сервисов, SNMP-устройств и Speedtest. На экране они листаются горизонтально.",
+    "settingsClusterTilesHint": "Соберите до 12 плиток для экрана Cluster из VM/CT, сервисов, SNMP-устройств и Speedtest. На экране они листаются горизонтально.",
     "settingsClusterTilesAddBtn": "Добавить плитку",
     "settingsClusterTilesSaveBtn": "Сохранить плитки",
     "settingsClusterTilesEmpty": "Плитки пока не настроены.",

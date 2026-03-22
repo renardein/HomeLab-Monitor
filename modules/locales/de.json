@@ -540,7 +540,7 @@
     "dashboardWeatherUnavailable": "Wetter nicht verfügbar",
     "dashboardWeatherCityMissing": "Stadt in den Einstellungen festlegen",
     "settingsClusterTilesTitle": "Cluster-Bildschirm-Kacheln",
-    "settingsClusterTilesHint": "Bis zu 12 Kacheln für den Cluster-Bildschirm aus UPS, VM/CT, Diensten, SNMP-Geräten und Speedtest. Auf dem Bildschirm horizontal scrollbar.",
+    "settingsClusterTilesHint": "Bis zu 12 Kacheln für den Cluster-Bildschirm aus VM/CT, Diensten, SNMP-Geräten und Speedtest. Auf dem Bildschirm horizontal scrollbar.",
     "settingsClusterTilesAddBtn": "Kachel hinzufügen",
     "settingsClusterTilesSaveBtn": "Kacheln speichern",
     "settingsClusterTilesEmpty": "Noch keine Kacheln konfiguriert.",
