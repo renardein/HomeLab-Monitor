@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HomeLab Monitor Demo Styles</title>
+    <title>HomeLab Monitor Demo Telegram</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <link rel="stylesheet" href="./demo.css">
@@ -71,7 +71,7 @@
                             <a class="nav-link" href="./settings-display.html" role="tab">
                                 <i class="bi bi-eye me-2"></i><span>Display</span>
                             </a>
-                            <a class="nav-link active" href="./settings-styles.html" role="tab">
+                            <a class="nav-link" href="./settings-styles.html" role="tab">
                                 <i class="bi bi-palette me-2"></i><span>Styles</span>
                             </a>
                             <a class="nav-link" href="./settings-thresholds.html" role="tab">
@@ -92,7 +92,7 @@
                             <a class="nav-link" href="./settings-speedtest.html" role="tab">
                                 <i class="bi bi-wifi me-2"></i><span>Speedtest</span>
                             </a>
-                            <a class="nav-link" href="./settings-telegram.html" role="tab">
+                            <a class="nav-link active" href="./settings-telegram.html" role="tab">
                                 <i class="bi bi-send me-2"></i><span>Telegram</span>
                             </a>
                             <a class="nav-link" href="./settings-security.html" role="tab">
@@ -117,44 +117,86 @@
                     <div class="col-md-9 col-lg-10">
                         
 <div class="tab-pane fade show active" role="tabpanel">
+    <div class="settings-section mb-4">
+        <h5 class="mb-2"><i class="bi bi-send me-2"></i><span>Telegram integration</span></h5>
+        <p class="text-muted small mb-3">Shared bot token and poll interval. Rules define chat_id, event type, and optional custom message templates.</p>
+        <div class="row g-3 align-items-end mb-4">
+            <div class="col-md-5">
+                <label class="form-label fw-bold">Bot token</label>
+                <input type="password" class="form-control" value="" placeholder="123456:ABC..." autocomplete="off">
+                <div class="form-text">Leave empty to keep the saved token.</div>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fw-bold">Notifications</label>
+                <select class="form-select"><option value="0">Disabled</option><option value="1" selected>Enabled</option></select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fw-bold">Interval (s)</label>
+                <input type="number" class="form-control" min="15" max="3600" value="60">
+            </div>
+            <div class="col-md-3">
+                <button class="btn btn-primary" type="button"><i class="bi bi-save me-1"></i>Save</button>
+            </div>
+        </div>
+    </div>
     <div class="settings-section">
-        <h5 class="mb-3"><i class="bi bi-palette me-2"></i><span>Styles</span></h5>
-        <div class="mb-3">
-            <label class="form-label fw-bold">Editable Variant</label>
-            <select class="form-select">
-                <option selected>normalLight</option>
-                <option>normalDark</option>
-                <option>monitorLight</option>
-                <option>monitorDark</option>
-            </select>
-            <div class="form-text">Overrides apply only to the selected visual variant.</div>
+        <h6 class="fw-semibold mb-2"><i class="bi bi-bell me-2"></i>Notification rules</h6>
+        <p class="text-muted small mb-3">Edit the message text from the <strong>Text</strong> column — placeholders shown are only for the selected rule type.</p>
+        <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle">
+                <thead>
+                    <tr>
+                        <th style="width:2.5rem"></th>
+                        <th>Type</th>
+                        <th>Target</th>
+                        <th>Parameter</th>
+                        <th>Text</th>
+                        <th>Chat</th>
+                        <th>Thread</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="text-center"><input type="checkbox" class="form-check-input" checked></td>
+                        <td><select class="form-select form-select-sm"><option selected>Service (availability)</option></select></td>
+                        <td><select class="form-select form-select-sm"><option>Web UI</option></select></td>
+                        <td><span class="text-muted small">—</span></td>
+                        <td>
+                            <button type="button" class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil-square me-1"></i>Edit</button>
+                            <div class="text-muted small mt-1">Built-in</div>
+                        </td>
+                        <td><input type="text" class="form-control form-control-sm" value="-1001234567890"></td>
+                        <td><input type="text" class="form-control form-control-sm" placeholder="thread"></td>
+                        <td class="text-nowrap">
+                            <button type="button" class="btn btn-sm btn-outline-secondary me-1" title="Test"><i class="bi bi-send"></i></button>
+                            <button type="button" class="btn btn-sm btn-outline-danger" title="Remove"><i class="bi bi-trash"></i></button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
         </div>
-        <hr class="my-4">
-        <div class="row g-3">
-            <div class="col-md-6"><label class="form-label fw-bold">Card Background</label><input type="text" class="form-control" value="#ffffff"></div>
-            <div class="col-md-6"><label class="form-label fw-bold">Card Text Color</label><input type="text" class="form-control" value="#2d3748"></div>
-            <div class="col-md-6"><label class="form-label fw-bold">Header Gradient Start</label><input type="text" class="form-control" value="#667eea"></div>
-            <div class="col-md-6"><label class="form-label fw-bold">Header Gradient End</label><input type="text" class="form-control" value="#764ba2"></div>
-            <div class="col-md-6"><label class="form-label fw-bold">Header Text Color</label><input type="text" class="form-control" value="#ffffff"></div>
-            <div class="col-md-6"><label class="form-label fw-bold">Stat Value Color</label><input type="text" class="form-control" value="#333333"></div>
-            <div class="col-md-6"><label class="form-label fw-bold">Stat Label Color</label><input type="text" class="form-control" value="#666666"></div>
-            <div class="col-md-6"><label class="form-label fw-bold">Table Header Background</label><input type="text" class="form-control" value="#f8f9fa"></div>
-            <div class="col-md-6"><label class="form-label fw-bold">Table Header Text</label><input type="text" class="form-control" value="#2d3748"></div>
-            <div class="col-md-6"><label class="form-label fw-bold">Table Cell Text</label><input type="text" class="form-control" value="#2d3748"></div>
-            <div class="col-md-6"><label class="form-label fw-bold">Table Border Color</label><input type="text" class="form-control" value="rgba(0,0,0,0.125)"></div>
-            <div class="col-md-6"><label class="form-label fw-bold">Hover Row Background</label><input type="text" class="form-control" value="rgba(0,0,0,0.03)"></div>
-            <div class="col-md-6"><label class="form-label fw-bold">Progress Background</label><input type="text" class="form-control" value="#e2e8f0"></div>
-            <div class="col-md-6"><label class="form-label fw-bold">Monitor Card Background</label><input type="text" class="form-control" value="#1a2740"></div>
-        </div>
-        <div class="d-flex gap-2 flex-wrap mt-4 mb-2">
-            <button class="btn btn-primary btn-sm" type="button"><i class="bi bi-save me-1"></i>Save</button>
-            <button class="btn btn-outline-secondary btn-sm" type="button"><i class="bi bi-eraser me-1"></i>Reset Variant</button>
-        </div>
-        <hr class="my-4">
-        <div class="d-flex gap-2 flex-wrap mb-2">
-            <button class="btn btn-outline-primary btn-sm" type="button"><i class="bi bi-box-arrow-down me-1"></i>Export JSON</button>
-            <button class="btn btn-outline-primary btn-sm" type="button"><i class="bi bi-box-arrow-in-up me-1"></i>Import JSON</button>
-            <button class="btn btn-outline-danger btn-sm" type="button"><i class="bi bi-trash me-1"></i>Disable Custom Styles</button>
+    </div>
+    <div class="card border mt-4">
+        <div class="card-header py-2"><i class="bi bi-chat-text me-2"></i><strong>Message template</strong> (modal preview)</div>
+        <div class="card-body">
+            <p class="small text-muted mb-2">Service (availability)</p>
+            <p class="small text-muted mb-2">Leave empty to use the built-in default text for this event type.</p>
+            <label class="form-label fw-bold">Message template</label>
+            <textarea class="form-control font-monospace" rows="4" placeholder="Default if empty"></textarea>
+            <div class="mt-3">
+                <div class="fw-semibold small mb-2">Placeholders for this rule type</div>
+                <ul class="small mb-0 font-monospace">
+                    <li><code>{name}</code> <span class="text-muted">— service display name</span></li>
+                    <li><code>{serviceId}</code> <span class="text-muted">— monitored service id</span></li>
+                    <li><code>{state}</code> <span class="text-muted">— up or down (en)</span></li>
+                    <li><code>{stateRu}</code> <span class="text-muted">— state in Russian</span></li>
+                </ul>
+            </div>
+            <div class="mt-3 text-end">
+                <button type="button" class="btn btn-outline-secondary btn-sm">Cancel</button>
+                <button type="button" class="btn btn-primary btn-sm"><i class="bi bi-check-lg me-1"></i>Apply</button>
+            </div>
         </div>
     </div>
 </div>

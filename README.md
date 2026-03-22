@@ -22,7 +22,7 @@ Local web dashboard for Proxmox and TrueNAS with separate dashboard and monitor 
 
 ## UI Mockup
 
-The current interface demo is available in the repository: [`demo/index.html`](./demo/index.html).
+The current interface demo is in [`docs/demo/index.html`](./docs/demo/index.html) (root [`demo/index.html`](./demo/index.html) redirects there).
 
 ## Quick Start
 
@@ -72,7 +72,7 @@ http://localhost:81
 ## Notes
 
 - PBS is not supported at the moment.
-- The demo pages in [`demo/`](./demo/) reflect the current repository UI mockup.
+- The demo pages in [`docs/demo/`](./docs/demo/) reflect the current repository UI mockup.
 
 ## Donations
 
