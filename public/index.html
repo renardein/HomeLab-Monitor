@@ -366,7 +366,7 @@
                     <hr class="my-4">
                     <div class="mb-2">
                         <label class="form-label fw-bold" id="settingsClusterTilesTitle">Плитки экрана Cluster</label>
-                        <p class="text-muted small mb-2" id="settingsClusterTilesHint">Соберите до 12 плиток для экрана Cluster из VM/CT, сервисов, SNMP и Speedtest. На экране они листаются горизонтально.</p>
+                        <p class="text-muted small mb-2" id="settingsClusterTilesHint">Соберите до 12 плиток для экрана Cluster из VM/CT, сервисов, SNMP, UPS и Speedtest. На экране они листаются горизонтально.</p>
                         <div id="settingsClusterTilesList"></div>
                         <div class="d-flex gap-2 flex-wrap mt-3">
                             <button class="btn btn-outline-primary btn-sm" type="button" onclick="addClusterDashboardTile()" id="settingsClusterTilesAddBtn">
@@ -1138,6 +1138,11 @@
                                                 </button>
                                             </div>
                                         </div>
+                                        <div class="mb-2">
+                                            <button type="button" class="btn btn-outline-danger btn-sm" id="speedtestClearHistoryBtn" onclick="clearSpeedtestHistory()">
+                                                <i class="bi bi-trash me-1"></i><span id="speedtestClearHistoryText">Очистить историю замеров</span>
+                                            </button>
+                                        </div>
                                         <div class="small" id="speedtestCliStatus"></div>
                                 </div>
                             </div>
@@ -1383,38 +1388,6 @@
                                 <span class="small text-muted" id="dashboardNetdevUpdatedAt"></span>
                             </div>
                             <div class="row g-2 small" id="dashboardNetdevCards"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Speedtest на дашборде -->
-            <div class="row mb-4" id="dashboardSpeedtestSection" style="display: none;">
-                <div class="col-12">
-                    <div class="card">
-                        <div class="card-header">
-                            <h5 class="mb-0"><i class="bi bi-speedometer2 me-2"></i><span id="dashboardSpeedtestTitle">Speedtest</span></h5>
-                        </div>
-                        <div class="card-body">
-                            <div class="row g-3 small">
-                                <div class="col-md-4 col-6">
-                                    <div class="text-muted" id="speedtestLastRunLabel">Последний замер</div>
-                                    <div class="fs-5 fw-semibold" id="dashboardSpeedtestLastRun">—</div>
-                                </div>
-                                <div class="col-md-4 col-6">
-                                    <div class="text-muted" id="speedtestAvgLabel">Средняя скорость (сегодня)</div>
-                                    <div class="fs-5 fw-semibold" id="dashboardSpeedtestAvg">—</div>
-                                </div>
-                                <div class="col-md-2 col-6">
-                                    <div class="text-muted" id="speedtestMinLabel">Минимум</div>
-                                    <div class="fs-6 fw-semibold" id="dashboardSpeedtestMin">—</div>
-                                </div>
-                                <div class="col-md-2 col-6">
-                                    <div class="text-muted" id="speedtestMaxLabel">Максимум</div>
-                                    <div class="fs-6 fw-semibold" id="dashboardSpeedtestMax">—</div>
-                                </div>
-                            </div>
-                            <div class="mt-2 small text-muted" id="dashboardSpeedtestExtra"></div>
                         </div>
                     </div>
                 </div>

@@ -8,6 +8,21 @@ const { log } = require('./utils');
 let runLock = false;
 let cliCache = { ok: false, checkedAt: 0 };
 
+/** Исполняемый файл Ookla CLI: иначе ищется `speedtest` в PATH процесса Node (может отличаться от интерактивной оболочки). */
+function speedtestExecutable() {
+    const p = process.env.SPEEDTEST_CLI || process.env.SPEEDTEST_PATH;
+    const s = p != null ? String(p).trim() : '';
+    return s || 'speedtest';
+}
+
+function speedtestSpawnOptions() {
+    return {
+        windowsHide: true,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: { ...process.env }
+    };
+}
+
 function readSettings() {
     const rawEn = store.getSetting('speedtest_enabled');
     const enabled = rawEn === '1' || rawEn === 'true' || rawEn === true;
@@ -61,10 +76,8 @@ function parseStdout(stdout) {
 
 function probeCli() {
     return new Promise((resolve) => {
-        const proc = spawn('speedtest', ['--version'], {
-            windowsHide: true,
-            stdio: ['ignore', 'pipe', 'pipe']
-        });
+        const exe = speedtestExecutable();
+        const proc = spawn(exe, ['--version'], speedtestSpawnOptions());
         let done = false;
         const finish = (ok) => {
             if (done) return;
@@ -94,14 +107,12 @@ async function checkCliAvailable() {
 
 function runSpeedtestProcess(serverIdOrEmpty) {
     return new Promise((resolve, reject) => {
+        const exe = speedtestExecutable();
         const args = ['--format=json', '--accept-license', '--accept-gdpr'];
         if (serverIdOrEmpty && /^\d+$/.test(serverIdOrEmpty)) {
             args.push(`--server-id=${serverIdOrEmpty}`);
         }
-        const proc = spawn('speedtest', args, {
-            windowsHide: true,
-            stdio: ['ignore', 'pipe', 'pipe']
-        });
+        const proc = spawn(exe, args, speedtestSpawnOptions());
         let out = '';
         let err = '';
         const t = setTimeout(() => {
@@ -157,6 +168,12 @@ function trimOldResults() {
         db.run(`DELETE FROM speedtest_results WHERE datetime(run_at) < datetime('now', '-120 days')`);
         saveDb();
     } catch (_) { /* ignore */ }
+}
+
+function clearAllResults() {
+    const db = getDbSync();
+    db.run('DELETE FROM speedtest_results');
+    saveDb();
 }
 
 function localDayBoundsIso() {
@@ -356,5 +373,6 @@ module.exports = {
     checkCliAvailable,
     getSummaryPayload,
     runManual,
-    startScheduler
+    startScheduler,
+    clearAllResults
 };

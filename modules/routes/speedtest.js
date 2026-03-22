@@ -24,4 +24,13 @@ router.post('/run', async (req, res) => {
     }
 });
 
+router.delete('/results', (req, res) => {
+    try {
+        speedtest.clearAllResults();
+        res.json({ ok: true, summary: speedtest.getSummaryPayload() });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 module.exports = router;

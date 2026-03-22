@@ -95,10 +95,10 @@ let setupWizardServerType = 'proxmox';
 let setupWizardListenersBound = false;
 let telegramRuleMessageModalBound = false;
 let setupWizardFinishMode = 'success';
-let clusterDashboardTiles = []; // [{ type: 'service'|'vmct'|'netdev'|'speedtest', sourceId: 'type:id' }]
+let clusterDashboardTiles = []; // [{ type: 'service'|'vmct'|'netdev'|'ups'|'speedtest', sourceId: 'type:id' }]
 let clusterDashboardTilesDirty = false;
 let clusterDashboardTilesSettingPresent = false;
-const CLUSTER_DASHBOARD_TILE_TYPES = ['service', 'vmct', 'netdev', 'speedtest'];
+const CLUSTER_DASHBOARD_TILE_TYPES = ['service', 'vmct', 'netdev', 'ups', 'speedtest'];
 const MAX_CLUSTER_DASHBOARD_TILES = 12;
 const DEFAULT_DASHBOARD_TIMEZONE = (() => {
     try {
@@ -1750,7 +1750,7 @@ function updateUILanguage() {
     setText('speedtestServerHint', t('speedtestServerHint'));
     setText('speedtestPerDayLabel', t('speedtestPerDayLabel'));
     setText('speedtestRunNowText', t('speedtestRunNowText'));
-    setText('dashboardSpeedtestTitle', t('dashboardSpeedtestTitle'));
+    setText('speedtestClearHistoryText', t('speedtestClearHistoryText'));
     setText('dashboardClusterTilesTitle', t('dashboardClusterTilesTitle'));
     setText('speedtestMonitorTitle', t('dashboardSpeedtestTitle'));
     setText('speedtestLastRunLabel', t('speedtestLastRunLabel'));
@@ -2142,6 +2142,10 @@ document.addEventListener('DOMContentLoaded', async function() {
     const debugNav = document.getElementById('settings-nav-debug');
     if (debugNav) {
         debugNav.addEventListener('shown.bs.tab', () => refreshDebugMetrics());
+    }
+    const speedtestNav = document.getElementById('settings-nav-speedtest');
+    if (speedtestNav) {
+        speedtestNav.addEventListener('shown.bs.tab', () => updateSpeedtestDashboard().catch(() => {}));
     }
     const reloadBtn = document.getElementById('settingsDebugReloadBtn');
     if (reloadBtn) {
@@ -3119,6 +3123,13 @@ function normalizeClusterDashboardTile(raw) {
     if (!CLUSTER_DASHBOARD_TILE_TYPES.includes(type)) return null;
     let sourceId = String(tile.sourceId || '').trim();
     if (type === 'speedtest') sourceId = 'speedtest:default';
+    if (type === 'ups') {
+        const m = /^ups:(\d+)$/.exec(sourceId);
+        if (!m) return null;
+        const slot = parseInt(m[1], 10);
+        if (!Number.isFinite(slot) || slot < 1 || slot > 4) return null;
+        sourceId = `ups:${slot}`;
+    }
     if (!sourceId) return null;
     return { type, sourceId };
 }
@@ -3135,11 +3146,22 @@ function getClusterDashboardTileTypeLabel(type) {
     if (type === 'service') return t('settingsClusterTileTypeService');
     if (type === 'vmct') return t('settingsClusterTileTypeVmct');
     if (type === 'netdev') return t('settingsClusterTileTypeNetdev');
+    if (type === 'ups') return t('settingsClusterTileTypeUps');
     if (type === 'speedtest') return t('settingsClusterTileTypeSpeedtest');
     return type || '—';
 }
 
 function getClusterDashboardTileSourceOptions(type) {
+    if (type === 'ups') {
+        return (Array.isArray(upsConfigs) ? upsConfigs : [])
+            .map((cfg, idx) => ({ cfg, slot: idx + 1 }))
+            .filter(({ cfg }) => cfg && cfg.enabled && String(cfg.host || '').trim() !== '')
+            .map(({ cfg, slot }) => ({
+                value: `ups:${slot}`,
+                label: `UPS ${slot}: ${cfg.name || cfg.host || ('#' + slot)}`
+            }));
+    }
+
     if (type === 'netdev') {
         return (Array.isArray(netdevConfigs) ? netdevConfigs : [])
             .map((cfg, idx) => ({ cfg, slot: idx + 1 }))
@@ -3279,7 +3301,7 @@ function addClusterDashboardTile() {
     const firstSource = getClusterDashboardTileSourceOptions(selectedType)[0];
     clusterDashboardTiles = clusterDashboardTiles.concat([{
         type: selectedType,
-        sourceId: firstSource ? firstSource.value : (selectedType === 'speedtest' ? 'speedtest:default' : '')
+        sourceId: firstSource ? firstSource.value : (selectedType === 'speedtest' ? 'speedtest:default' : (selectedType === 'ups' ? 'ups:1' : ''))
     }]).slice(0, MAX_CLUSTER_DASHBOARD_TILES);
     markClusterDashboardTilesDirty(true);
     renderClusterDashboardTilesSettings();
@@ -3291,7 +3313,7 @@ function updateClusterDashboardTileType(index, nextType) {
     const firstSource = getClusterDashboardTileSourceOptions(type)[0];
     clusterDashboardTiles[index] = {
         type,
-        sourceId: firstSource ? firstSource.value : (type === 'speedtest' ? 'speedtest:default' : '')
+        sourceId: firstSource ? firstSource.value : (type === 'speedtest' ? 'speedtest:default' : (type === 'ups' ? 'ups:1' : ''))
     };
     clusterDashboardTiles = normalizeClusterDashboardTiles(clusterDashboardTiles);
     markClusterDashboardTilesDirty(true);
@@ -5082,17 +5104,22 @@ function formatSpeedtestMbps(v) {
     return `${n} Mbps`;
 }
 
+function isSpeedtestSettingsTabActive() {
+    const pane = document.getElementById('settings-tab-speedtest');
+    return !!(pane && pane.classList.contains('show'));
+}
+
 async function updateSpeedtestDashboard() {
-    const dashSection = document.getElementById('dashboardSpeedtestSection');
     const speedtestMonSection = document.getElementById('speedtestMonitorSection');
-    const isSpeedtestMonitorScreen = (monitorMode && monitorCurrentView === 'speedtest')
+    /** Полноэкранный Speedtest в мониторе (или открыт из меню). */
+    const onDedicatedSpeedtestMonitor = (monitorMode && monitorCurrentView === 'speedtest')
         || (!!speedtestMonSection && speedtestMonSection.style.display !== 'none');
+    const shouldFetchSpeedtest = onDedicatedSpeedtestMonitor || isSpeedtestSettingsTabActive();
     const setEl = (id, text) => {
         const el = document.getElementById(id);
         if (el) el.textContent = text;
     };
-    if (!isSpeedtestMonitorScreen) {
-        if (dashSection) dashSection.style.display = 'none';
+    if (!shouldFetchSpeedtest) {
         return;
     }
     try {
@@ -5102,29 +5129,22 @@ async function updateSpeedtestDashboard() {
 
         const enabled = !!(summary.enabled === true || summary.enabled === '1' || summary.enabled === 1);
 
-        // Обновляем кеш доступности экрана для корректного свайп-порядка.
-        speedtestMonitorConfigured = enabled;
+        const last = summary.last;
+        const hasHistory = !!(last && last.runAt);
 
-        // Если открыли Speedtest из меню (как отдельный экран), не показываем/не скрываем основной dashboard блок.
-        if (dashSection) dashSection.style.display = isSpeedtestMonitorScreen ? 'none' : (enabled ? '' : 'none');
-        if (!enabled) {
-            // Чтобы на экране монитора не оставались “старые” значения.
+        // Экран Speedtest в мониторе доступен при включённых замерах или при наличии истории в БД.
+        speedtestMonitorConfigured = enabled || hasHistory;
+
+        // Выключенный «Замер» не должен стирать уже сохранённые в БД результаты.
+        if (!enabled && !hasHistory) {
             setEl('speedtestMonitorLastRun', '—');
             setEl('speedtestMonitorAvg', '—');
             setEl('speedtestMonitorMin', '—');
             setEl('speedtestMonitorMax', '—');
             setEl('speedtestMonitorExtra', t('backupNoData') || 'Нет данных');
-
-            // На главном дашборде оставим “—” на полях, если они есть.
-            setEl('dashboardSpeedtestLastRun', '—');
-            setEl('dashboardSpeedtestAvg', '—');
-            setEl('dashboardSpeedtestMin', '—');
-            setEl('dashboardSpeedtestMax', '—');
-            setEl('dashboardSpeedtestExtra', '');
             return;
         }
 
-        const last = summary.last;
         const lastTime = last && last.runAt ? new Date(last.runAt).toLocaleString() : '—';
         let lastMain = lastTime;
         if (last && last.error) {
@@ -5136,11 +5156,6 @@ async function updateSpeedtestDashboard() {
         const td = summary.today || {};
         const dl = td.download || {};
         const ul = td.upload || {};
-
-        setEl('dashboardSpeedtestLastRun', lastMain);
-        setEl('dashboardSpeedtestAvg', formatSpeedtestMbps(dl.avg));
-        setEl('dashboardSpeedtestMin', formatSpeedtestMbps(dl.min));
-        setEl('dashboardSpeedtestMax', formatSpeedtestMbps(dl.max));
 
         let extra = '';
         if (last && !last.error && last.uploadMbps != null) {
@@ -5155,7 +5170,6 @@ async function updateSpeedtestDashboard() {
         if (ul.avg != null) {
             extra += (extra ? ' · ' : '') + `${t('speedtestUploadAvgToday')}: ${formatSpeedtestMbps(ul.avg)}`;
         }
-        setEl('dashboardSpeedtestExtra', extra);
 
         setEl('speedtestMonitorLastRun', lastMain);
         setEl('speedtestMonitorAvg', formatSpeedtestMbps(dl.avg));
@@ -5171,8 +5185,6 @@ async function updateSpeedtestDashboard() {
             cliEl.className = 'small ' + (summary.cliAvailable ? 'text-success' : 'text-warning');
         }
     } catch (e) {
-        // If speedtest fetch fails, show clear placeholders on the monitor screen.
-        if (dashSection) dashSection.style.display = 'none';
         setEl('speedtestMonitorLastRun', '—');
         setEl('speedtestMonitorAvg', '—');
         setEl('speedtestMonitorMin', '—');
@@ -5320,6 +5332,62 @@ function buildClusterNetdevTileHtml(tile, payload) {
     );
 }
 
+function buildClusterUpsTileHtml(tile, payload) {
+    const slot = clusterTileSourceNumericId(tile, 'ups');
+    const item = Array.isArray(payload?.items) ? payload.items.find((entry) => Number(entry.slot) === slot) : null;
+    if (!item) {
+        return buildClusterDashboardUnavailableTile(`UPS ${Number.isFinite(slot) ? slot : ''}`.trim(), t('upsNotConfigured') || 'UPS не настроен');
+    }
+    if (item.error) {
+        return buildClusterDashboardUnavailableTile(item.name || `UPS ${slot}`, String(item.error));
+    }
+    const statusLabel = item.status?.label ?? (item.status?.raw != null ? String(item.status.raw) : '—');
+    const up = item.status?.up;
+    let badgeClass = 'bg-secondary';
+    const lowStr = String(statusLabel).toLowerCase();
+    if (lowStr.includes('low')) badgeClass = 'bg-danger';
+    else if (up === true) badgeClass = 'bg-success';
+    else if (up === false) badgeClass = 'bg-warning text-dark';
+
+    const electrical = item.electrical || {};
+    const inVText = formatUpsMetric(electrical.inputVoltage, ' V');
+    const loadText = formatUpsMetric(electrical.loadPercent, ' %');
+    const chargePct = item.battery?.chargePct;
+    const chargeText = (chargePct != null && Number.isFinite(Number(chargePct)))
+        ? `${chargePct}%`
+        : (item.battery?.chargeRaw != null ? String(item.battery.chargeRaw) : '—');
+    const runtimeText = item.battery?.runtimeFormatted != null
+        ? item.battery.runtimeFormatted
+        : (item.battery?.runtimeRaw != null ? String(item.battery.runtimeRaw) : '—');
+
+    const ul = {
+        inV: t('upsLabelInputVoltage') || 'Вход U',
+        load: t('upsLabelLoad') || 'Нагрузка',
+        charge: t('upsLabelCharge') || 'Заряд',
+        runtime: t('upsLabelRuntime') || 'Время на батарее'
+    };
+    const loadPctNum = electrical.loadPercent && typeof electrical.loadPercent.value === 'number'
+        ? electrical.loadPercent.value
+        : null;
+    const chargeBarNum = (chargePct != null && Number.isFinite(Number(chargePct))) ? Number(chargePct) : null;
+
+    const bodyHtml = [
+        buildClusterDashboardMetricCell(ul.inV, inVText, null, null, 'col-6'),
+        buildClusterDashboardMetricCell(ul.load, loadText, loadPctNum, 'bg-warning', 'col-6'),
+        buildClusterDashboardMetricCell(ul.charge, chargeText, chargeBarNum, 'bg-success', 'col-6 mt-2'),
+        buildClusterDashboardMetricCell(ul.runtime, runtimeText, null, null, 'col-6 mt-2')
+    ].join('');
+    const name = item.name || `UPS ${item.slot}`;
+    const backend = item.type ? String(item.type).toUpperCase() : 'UPS';
+    const footer = item.host ? `${backend} · ${item.host}` : backend;
+    return buildClusterDashboardTileShell(
+        `<i class="bi bi-lightning-charge me-2 text-warning"></i><span class="text-truncate">${escapeHtml(name)}</span>`,
+        `<span class="badge ${badgeClass}">${escapeHtml(statusLabel)}</span>`,
+        bodyHtml,
+        escapeHtml(footer)
+    );
+}
+
 function buildClusterSpeedtestTileHtml(summary) {
     if (!summary || !summary.enabled) {
         return buildClusterDashboardUnavailableTile(t('dashboardSpeedtestTitle') || 'Speedtest', t('backupNoData') || 'Нет данных');
@@ -5360,6 +5428,7 @@ async function renderClusterDashboardTiles() {
     }
 
     const needNetdev = tiles.some((tile) => tile.type === 'netdev');
+    const needUps = tiles.some((tile) => tile.type === 'ups');
     const needSpeedtest = tiles.some((tile) => tile.type === 'speedtest');
 
     const fetchJson = async (url) => {
@@ -5372,8 +5441,9 @@ async function renderClusterDashboardTiles() {
         }
     };
 
-    const [netdevPayload, speedtestSummary] = await Promise.all([
+    const [netdevPayload, upsPayload, speedtestSummary] = await Promise.all([
         needNetdev ? fetchJson('/api/netdevices/current') : Promise.resolve(null),
+        needUps ? fetchJson('/api/ups/current') : Promise.resolve(null),
         needSpeedtest ? fetchJson('/api/speedtest/summary') : Promise.resolve(null)
     ]);
 
@@ -5381,6 +5451,7 @@ async function renderClusterDashboardTiles() {
         if (tile.type === 'service') return buildClusterServiceTileHtml(tile);
         if (tile.type === 'vmct') return buildClusterVmTileHtml(tile);
         if (tile.type === 'netdev') return buildClusterNetdevTileHtml(tile, netdevPayload);
+        if (tile.type === 'ups') return buildClusterUpsTileHtml(tile, upsPayload);
         if (tile.type === 'speedtest') return buildClusterSpeedtestTileHtml(speedtestSummary);
         return '';
     }).join('');
@@ -5428,6 +5499,31 @@ async function runSpeedtestNow() {
     } catch (e) {
         const msg = (e && e.message) ? e.message : String(e);
         showToast((t('speedtestRunError') || 'Speedtest: {msg}').replace('{msg}', msg), 'error');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+async function clearSpeedtestHistory() {
+    if (!confirm(t('speedtestClearConfirm') || 'Delete all speedtest records?')) return;
+    const btn = document.getElementById('speedtestClearHistoryBtn');
+    if (btn) btn.disabled = true;
+    try {
+        const res = await fetch('/api/speedtest/results', { method: 'DELETE' });
+        const data = await res.json();
+        if (!res.ok) {
+            throw new Error(data.error || data.message || `HTTP ${res.status}`);
+        }
+        showToast(t('speedtestClearDone') || t('dataUpdated'), 'success');
+        updateSpeedtestDashboard().catch(() => {});
+        renderClusterDashboardTiles().catch(() => {});
+        await refreshMonitorScreensAvailability();
+        if (monitorMode && monitorCurrentView === 'speedtest' && speedtestMonitorConfigured === false) {
+            applyMonitorView('cluster');
+        }
+    } catch (e) {
+        const msg = (e && e.message) ? e.message : String(e);
+        showToast((t('speedtestClearError') || '{msg}').replace('{msg}', msg), 'error');
     } finally {
         if (btn) btn.disabled = false;
     }
