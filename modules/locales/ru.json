@@ -114,6 +114,8 @@
     "updateStatusAvailableShort": "Обновление: {latest}",
     "updateStatusCurrentShort": "Последняя: {version}",
     "updateStatusCheckFailed": "Ошибка проверки обновлений",
+    "checkUpdatesButton": "Проверить обновления",
+    "checkUpdatesUpToDate": "Установлена последняя версия ({current}).",
     "days": "дн",
     "displaySettings": "Отображение",
     "settingsPreferredLanguageLabel": "Язык по умолчанию",

@@ -564,6 +564,8 @@
     "updateStatusAvailableShort": "Update: {latest}",
     "updateStatusCurrentShort": "Neueste: {version}",
     "updateStatusCheckFailed": "Update-Prüfung fehlgeschlagen",
+    "checkUpdatesButton": "Nach Updates suchen",
+    "checkUpdatesUpToDate": "Sie nutzen die neueste Version ({current}).",
     "settingsNavAbout": "Über",
     "settingsAboutTitle": "Über",
     "settingsAboutLoading": "Laden...",

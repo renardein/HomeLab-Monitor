@@ -79,9 +79,12 @@ function fetchJson(url) {
     });
 }
 
-async function loadLatestReleaseInfo() {
-    const cached = cache.get(RELEASES_CACHE_KEY);
-    if (cached) return cached;
+async function loadLatestReleaseInfo(options = {}) {
+    const bypassCache = !!options.bypassCache;
+    if (!bypassCache) {
+        const cached = cache.get(RELEASES_CACHE_KEY);
+        if (cached) return cached;
+    }
 
     const url = `https://api.github.com/repos/${config.github.owner}/${config.github.repo}/releases?per_page=20`;
     const releases = await fetchJson(url);
@@ -123,7 +126,9 @@ async function loadLatestReleaseInfo() {
 
 router.get('/', async (req, res) => {
     try {
-        const payload = await loadLatestReleaseInfo();
+        const q = req.query || {};
+        const bypassCache = q.refresh === '1' || q.refresh === 'true' || q.force === '1' || q.force === 'true';
+        const payload = await loadLatestReleaseInfo({ bypassCache });
         res.json(payload);
     } catch (error) {
         log('warn', '[Updates] GitHub releases check failed', {

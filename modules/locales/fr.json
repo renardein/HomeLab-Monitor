@@ -564,6 +564,8 @@
     "updateStatusAvailableShort": "Mise à jour : {latest}",
     "updateStatusCurrentShort": "Dernière : {version}",
     "updateStatusCheckFailed": "Échec de la vérification des mises à jour",
+    "checkUpdatesButton": "Vérifier les mises à jour",
+    "checkUpdatesUpToDate": "Vous utilisez la dernière version ({current}).",
     "settingsNavAbout": "À propos",
     "settingsAboutTitle": "À propos",
     "settingsAboutLoading": "Chargement...",

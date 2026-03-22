@@ -564,6 +564,8 @@
     "updateStatusAvailableShort": "Абнаўленне: {latest}",
     "updateStatusCurrentShort": "Апошняя: {version}",
     "updateStatusCheckFailed": "Памылка праверкі абнаўленняў",
+    "checkUpdatesButton": "Праверыць абнаўленні",
+    "checkUpdatesUpToDate": "Апошняя версія ўсталявана ({current}).",
     "settingsNavAbout": "Пра праграму",
     "settingsAboutTitle": "Пра праграму",
     "settingsAboutLoading": "Загрузка...",

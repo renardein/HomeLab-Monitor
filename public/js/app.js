@@ -1744,6 +1744,12 @@ function updateUILanguage() {
     setText('settingsSecurityTitle', t('settingsSecurityTitle'));
     setText('settingsSecurityHint', t('settingsSecurityHint'));
     setText('settingsAboutTitle', t('settingsAboutTitle') || 'About');
+    const footerUpdBtn = document.getElementById('footerCheckUpdatesBtn');
+    if (footerUpdBtn) {
+        const lbl = t('checkUpdatesButton') || 'Check for updates';
+        footerUpdBtn.setAttribute('title', lbl);
+        footerUpdBtn.setAttribute('aria-label', lbl);
+    }
     setText('settingsPasswordCurrentLabel', t('settingsPasswordCurrentLabel'));
     setText('settingsPasswordNewLabel', t('settingsPasswordNewLabel'));
     setText('settingsPasswordRepeatLabel', t('settingsPasswordRepeatLabel'));
@@ -2985,15 +2991,38 @@ async function checkServerStatus() {
     }
 }
 
-async function checkForAppUpdates(force = false) {
+async function checkForAppUpdates(force = false, options = {}) {
+    const manual = !!options.manual;
+    const refresh = !!options.refresh;
     if (!force && updateCheckPromise) return updateCheckPromise;
 
     updateCheckPromise = (async () => {
         try {
-            const response = await fetch('/api/updates');
+            const url = refresh ? '/api/updates?refresh=1' : '/api/updates';
+            const response = await fetch(url);
             const data = await response.json();
             latestUpdateInfo = data || null;
             renderFooterUpdateStatus();
+
+            if (manual) {
+                if (!response.ok || (data && data.error)) {
+                    const errMsg = (data && data.error) ? String(data.error) : (t('updateStatusCheckFailed') || 'Update check failed');
+                    showToast(escapeHtml(errMsg), 'error');
+                    return data;
+                }
+                if (data.updateAvailable && data.latestVersion) {
+                    const message = `${escapeHtml(tParams('updateAvailableToast', {
+                        latest: data.latestVersion,
+                        current: data.currentVersion || 'unknown'
+                    }))} <a href="${escapeHtml(data.releaseUrl || data.repoUrl || '#')}" target="_blank" rel="noopener noreferrer">${escapeHtml(t('updateAvailableOpenRelease'))}</a>`;
+                    showToast(message, 'warning');
+                } else {
+                    const v = data.currentVersion != null ? String(data.currentVersion) : '—';
+                    showToast(tParams('checkUpdatesUpToDate', { current: v }), 'success');
+                }
+                return data;
+            }
+
             if (!response.ok || !data || !data.updateAvailable || !data.latestVersion) return data;
 
             if (getSeenUpdateVersion() === data.latestVersion) return data;
@@ -3011,6 +3040,9 @@ async function checkForAppUpdates(force = false) {
                 error: error && error.message ? error.message : String(error)
             };
             renderFooterUpdateStatus();
+            if (manual) {
+                showToast(t('updateStatusCheckFailed') || 'Update check failed', 'error');
+            }
             console.warn('Update check failed:', error);
             throw error;
         } finally {
@@ -3019,6 +3051,18 @@ async function checkForAppUpdates(force = false) {
     })();
 
     return updateCheckPromise;
+}
+
+async function manualCheckForAppUpdates() {
+    const btn = document.getElementById('footerCheckUpdatesBtn');
+    if (btn) btn.disabled = true;
+    try {
+        await checkForAppUpdates(true, { manual: true, refresh: true });
+    } catch (_) {
+        /* toasts handled in checkForAppUpdates */
+    } finally {
+        if (btn) btn.disabled = false;
+    }
 }
 
 // Show notification

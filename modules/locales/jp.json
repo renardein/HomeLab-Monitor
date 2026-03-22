@@ -564,6 +564,8 @@
     "updateStatusAvailableShort": "更新: {latest}",
     "updateStatusCurrentShort": "最新: {version}",
     "updateStatusCheckFailed": "更新の確認に失敗しました",
+    "checkUpdatesButton": "更新を確認",
+    "checkUpdatesUpToDate": "最新バージョンです（{current}）。",
     "settingsNavAbout": "情報",
     "settingsAboutTitle": "情報",
     "settingsAboutLoading": "読み込み中...",

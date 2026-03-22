@@ -564,6 +564,8 @@
     "updateStatusAvailableShort": "更新：{latest}",
     "updateStatusCurrentShort": "最新：{version}",
     "updateStatusCheckFailed": "更新檢查失敗",
+    "checkUpdatesButton": "檢查更新",
+    "checkUpdatesUpToDate": "已為最新版本（{current}）。",
     "settingsNavAbout": "關於",
     "settingsAboutTitle": "關於",
     "settingsAboutLoading": "載入中...",

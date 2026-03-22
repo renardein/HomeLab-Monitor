@@ -114,6 +114,8 @@
     "updateStatusAvailableShort": "Update: {latest}",
     "updateStatusCurrentShort": "Latest: {version}",
     "updateStatusCheckFailed": "Update check failed",
+    "checkUpdatesButton": "Check for updates",
+    "checkUpdatesUpToDate": "You are on the latest version ({current}).",
     "days": "d",
     "displaySettings": "Display",
     "settingsPreferredLanguageLabel": "Default language",
