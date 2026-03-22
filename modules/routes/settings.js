@@ -73,7 +73,8 @@ const SETTING_KEYS = [
     'telegram_notify_enabled',
     'telegram_notify_interval_sec',
     'telegram_routes',
-    'telegram_notification_rules'
+    'telegram_notification_rules',
+    'telegram_proxy_url'
 ];
 
 // GET /api/settings — все настройки (без пароля), флаг password_required
@@ -193,6 +194,11 @@ router.post('/', (req, res) => {
             telegram_notify_interval_sec: body.telegram_notify_interval_sec ?? body.telegramNotifyIntervalSec,
             telegram_routes: body.telegram_routes ?? body.telegramRoutes,
             telegram_notification_rules: body.telegram_notification_rules ?? body.telegramNotificationRules,
+            telegram_proxy_url: (() => {
+                const v = body.telegram_proxy_url ?? body.telegramProxyUrl;
+                if (v === undefined) return undefined;
+                return String(v).trim();
+            })(),
             setup_completed: (() => {
                 const v = body.setup_completed ?? body.setupCompleted;
                 if (v === undefined) return undefined;
@@ -201,12 +207,16 @@ router.post('/', (req, res) => {
         };
         const clearTg = body.telegram_clear_bot_token === true || body.telegramClearBotToken === true;
         const newTgTok = body.telegram_bot_token ?? body.telegramBotToken;
+        const { isValidTelegramBotTokenFormat } = require('../telegram');
         if (clearTg) {
             store.setSetting('telegram_bot_token', '');
             map._telegram_cleared = true;
         } else if (newTgTok !== undefined && newTgTok !== null && String(newTgTok).trim() !== '') {
-            store.setSetting('telegram_bot_token', String(newTgTok).trim());
-            map._telegram_token_set = true;
+            const t = String(newTgTok).trim();
+            if (isValidTelegramBotTokenFormat(t)) {
+                store.setSetting('telegram_bot_token', t);
+                map._telegram_token_set = true;
+            }
         }
         const savedKeys = [];
         for (const [key, value] of Object.entries(map)) {
@@ -452,7 +462,7 @@ router.post('/import/all', (req, res) => {
 // POST /api/settings/telegram-test-rule — тестовое сообщение по одному правилу (токен из тела или из БД)
 router.post('/telegram-test-rule', async (req, res) => {
     try {
-        const { sendTelegramMessage, buildTelegramTestRuleMessage } = require('../telegram');
+        const { sendTelegramMessage, buildTelegramTestRuleMessage, isValidTelegramBotTokenFormat } = require('../telegram');
         const body = req.body || {};
         const rule = body.rule && typeof body.rule === 'object' ? body.rule : {};
         const chatId = String(rule.chatId != null ? rule.chatId : body.chatId || '').trim();
@@ -463,13 +473,20 @@ router.post('/telegram-test-rule', async (req, res) => {
         const threadId = threadRaw != null && String(threadRaw).trim() !== '' ? threadRaw : undefined;
 
         let token = String(body.telegramBotToken ?? body.telegram_bot_token ?? '').trim();
+        if (token && !isValidTelegramBotTokenFormat(token)) {
+            token = '';
+        }
         if (!token) token = String(store.getSetting('telegram_bot_token') || '').trim();
         if (!token) {
             return res.status(400).json({ success: false, error: 'bot_token required' });
         }
 
+        const proxyUrl = String(
+            body.telegramProxyUrl ?? body.telegram_proxy_url ?? store.getSetting('telegram_proxy_url') ?? ''
+        ).trim();
+
         const text = buildTelegramTestRuleMessage(rule);
-        await sendTelegramMessage(token, chatId, text, threadId);
+        await sendTelegramMessage(token, chatId, text, threadId, { proxyUrl });
         res.json({ success: true });
     } catch (e) {
         log('warn', `[Settings] telegram-test-rule: ${e.message}`);

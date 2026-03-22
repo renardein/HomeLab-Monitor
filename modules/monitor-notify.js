@@ -166,6 +166,7 @@ async function runNotifyTick() {
         store.getSetting('telegram_notify_enabled') === '1' ||
         store.getSetting('telegram_notify_enabled') === 'true';
     const token = String(store.getSetting('telegram_bot_token') || '').trim();
+    const telegramProxyUrl = String(store.getSetting('telegram_proxy_url') || '').trim();
     if (!enabled || !token) return;
 
     const rules = getEffectiveRules(store, parseTelegramRoutes);
@@ -250,7 +251,7 @@ async function runNotifyTick() {
                         },
                         `Сервис «${title}»\n${stateRu}`
                     );
-                    await sendTelegramMessage(token, chatId, msg, threadId);
+                    await sendTelegramMessage(token, chatId, msg, threadId, { proxyUrl: telegramProxyUrl });
                 }
                 state.service[sid] = stateNow;
                 continue;
@@ -278,7 +279,7 @@ async function runNotifyTick() {
                         },
                         `${kind} «${label}» (${rule.vmid})\n${stateRu}`
                     );
-                    await sendTelegramMessage(token, chatId, msg, threadId);
+                    await sendTelegramMessage(token, chatId, msg, threadId, { proxyUrl: telegramProxyUrl });
                 }
                 state.vm[key] = stateNow;
                 continue;
@@ -302,7 +303,7 @@ async function runNotifyTick() {
                         },
                         `Узел Proxmox «${nname}»\n${stateRu}`
                     );
-                    await sendTelegramMessage(token, chatId, msg, threadId);
+                    await sendTelegramMessage(token, chatId, msg, threadId, { proxyUrl: telegramProxyUrl });
                 }
                 state.node[nname] = stateNow;
                 continue;
@@ -330,7 +331,7 @@ async function runNotifyTick() {
                         },
                         `SNMP «${disp}»\n${stateRu}`
                     );
-                    await sendTelegramMessage(token, chatId, msg, threadId);
+                    await sendTelegramMessage(token, chatId, msg, threadId, { proxyUrl: telegramProxyUrl });
                 }
                 state.netdev[slot] = stateNow;
                 continue;
@@ -355,7 +356,7 @@ async function runNotifyTick() {
                         },
                         `Узел «${nname}»: температура CPU ${tempC.toFixed(1)}°C (порог ${thr}°C)`
                     );
-                    await sendTelegramMessage(token, chatId, msg, threadId);
+                    await sendTelegramMessage(token, chatId, msg, threadId, { proxyUrl: telegramProxyUrl });
                 }
                 state.hostTemp[nname] = nowLevel;
                 continue;
@@ -377,7 +378,7 @@ async function runNotifyTick() {
                         },
                         `Узел «${nname}»: скорость линка ${Number(prev)} → ${mbps} Мбит/с`
                     );
-                    await sendTelegramMessage(token, chatId, msg, threadId);
+                    await sendTelegramMessage(token, chatId, msg, threadId, { proxyUrl: telegramProxyUrl });
                 }
                 state.hostLink[nname] = mbps;
                 continue;

@@ -504,6 +504,8 @@
     "telegramRulesEmpty": "Няма правіл. Дадайце правіла або захавайце налады — старыя прывязкі з папярэдняй версіі падцягнуцца пры першай загрузцы.",
     "settingsTelegramBotTokenLabel": "Токен бота",
     "settingsTelegramBotTokenHelp": "Пакіньце пустым, каб не мяняць захаваны токен.",
+    "settingsTelegramProxyUrlLabel": "Проксі для выхадных запытаў у Telegram",
+    "settingsTelegramProxyUrlHelp": "Неабавязкова. Запыты да api.telegram.org ідуць праз гэты проксі (http, https, socks).",
     "settingsTelegramNotifyEnabledLabel": "Апавяшчэнні",
     "settingsTelegramIntervalLabel": "Інтэрвал апытання (с)",
     "settingsTelegramSaveText": "Захаваць",

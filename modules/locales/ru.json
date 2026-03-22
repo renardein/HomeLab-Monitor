@@ -640,6 +640,8 @@
     "telegramRulesEmpty": "Нет правил. Добавьте правило или сохраните настройки — старые привязки из предыдущей версии подтянутся при первой загрузке.",
     "settingsTelegramBotTokenLabel": "Токен бота",
     "settingsTelegramBotTokenHelp": "Оставьте пустым, чтобы не менять сохранённый токен.",
+    "settingsTelegramProxyUrlLabel": "Прокси для исходящих запросов к Telegram",
+    "settingsTelegramProxyUrlHelp": "Необязательно. Запросы к api.telegram.org идут через этот прокси (http, https, socks).",
     "settingsTelegramNotifyEnabledLabel": "Уведомления",
     "settingsTelegramIntervalLabel": "Интервал опроса (с)",
     "settingsTelegramSaveText": "Сохранить",

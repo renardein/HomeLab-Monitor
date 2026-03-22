@@ -504,6 +504,8 @@
     "telegramRulesEmpty": "Keine Regeln. Regel hinzufügen oder Einstellungen speichern — alte Zuordnungen werden beim ersten Laden migriert.",
     "settingsTelegramBotTokenLabel": "Bot-Token",
     "settingsTelegramBotTokenHelp": "Leer lassen, um das gespeicherte Token nicht zu ändern.",
+    "settingsTelegramProxyUrlLabel": "Ausgehender Telegram-Proxy (HTTP/HTTPS/SOCKS)",
+    "settingsTelegramProxyUrlHelp": "Optional. Ausgehende Anfragen an api.telegram.org laufen über diesen Proxy (http, https, socks).",
     "settingsTelegramNotifyEnabledLabel": "Benachrichtigungen",
     "settingsTelegramIntervalLabel": "Abfrageintervall (s)",
     "settingsTelegramSaveText": "Speichern",

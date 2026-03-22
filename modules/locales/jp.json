@@ -504,6 +504,8 @@
     "telegramRulesEmpty": "ルールがありません。追加するか設定を保存してください — 旧形式の割り当ては初回読み込み時に移行されます。",
     "settingsTelegramBotTokenLabel": "ボットトークン",
     "settingsTelegramBotTokenHelp": "保存済みトークンを変更しない場合は空のままにしてください。",
+    "settingsTelegramProxyUrlLabel": "Telegram 送信プロキシ（HTTP/HTTPS/SOCKS）",
+    "settingsTelegramProxyUrlHelp": "任意。api.telegram.org への送信はこのプロキシ経由（http、https、socks）。",
     "settingsTelegramNotifyEnabledLabel": "通知",
     "settingsTelegramIntervalLabel": "ポーリング間隔（秒）",
     "settingsTelegramSaveText": "保存",

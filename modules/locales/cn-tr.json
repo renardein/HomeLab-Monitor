@@ -504,6 +504,8 @@
     "telegramRulesEmpty": "尚無規則。請新增規則或儲存設定 — 舊版綁定將在首次載入時遷移。",
     "settingsTelegramBotTokenLabel": "機器人令牌",
     "settingsTelegramBotTokenHelp": "留空則不變更已儲存的令牌。",
+    "settingsTelegramProxyUrlLabel": "Telegram 外連代理（HTTP/HTTPS/SOCKS）",
+    "settingsTelegramProxyUrlHelp": "選填。對 api.telegram.org 的請求經由此代理（支援 http、https、socks）。",
     "settingsTelegramNotifyEnabledLabel": "通知",
     "settingsTelegramIntervalLabel": "輪詢間隔（秒）",
     "settingsTelegramSaveText": "儲存",

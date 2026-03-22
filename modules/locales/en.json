@@ -640,6 +640,8 @@
     "telegramRulesEmpty": "No rules. Add a rule or save settings — legacy bindings from the previous version will migrate on first load.",
     "settingsTelegramBotTokenLabel": "Bot token",
     "settingsTelegramBotTokenHelp": "Leave empty to keep the saved token unchanged.",
+    "settingsTelegramProxyUrlLabel": "Telegram outbound proxy (HTTP/HTTPS/SOCKS)",
+    "settingsTelegramProxyUrlHelp": "Optional. Outgoing requests to api.telegram.org go through this proxy (http, https, socks supported).",
     "settingsTelegramNotifyEnabledLabel": "Notifications",
     "settingsTelegramIntervalLabel": "Poll interval (s)",
     "settingsTelegramSaveText": "Save",

@@ -504,6 +504,8 @@
     "telegramRulesEmpty": "Aucune règle. Ajoutez une règle ou enregistrez — les anciennes associations seront migrées au premier chargement.",
     "settingsTelegramBotTokenLabel": "Jeton du bot",
     "settingsTelegramBotTokenHelp": "Laisser vide pour ne pas modifier le jeton enregistré.",
+    "settingsTelegramProxyUrlLabel": "Proxy sortant Telegram (HTTP/HTTPS/SOCKS)",
+    "settingsTelegramProxyUrlHelp": "Facultatif. Les requêtes vers api.telegram.org passent par ce proxy (http, https, socks).",
     "settingsTelegramNotifyEnabledLabel": "Notifications",
     "settingsTelegramIntervalLabel": "Intervalle d’interrogation (s)",
     "settingsTelegramSaveText": "Enregistrer",

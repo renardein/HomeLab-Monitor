@@ -1,7 +1,38 @@
 'use strict';
 
 const axios = require('axios');
+const { HttpsProxyAgent } = require('https-proxy-agent');
+const { SocksProxyAgent } = require('socks-proxy-agent');
 const { log } = require('./utils');
+
+/** Bot token: digits:secret (Telegram Bot API). Used to reject masked/invalid input overwriting stored token. */
+function isValidTelegramBotTokenFormat(s) {
+    const t = String(s || '').trim();
+    return /^[0-9]{5,}:[A-Za-z0-9_-]{25,}$/.test(t);
+}
+
+/**
+ * @param {string} [proxyUrl] — http(s)://host:port or with user:pass
+ * @returns {import('axios').AxiosRequestConfig}
+ */
+function buildAxiosConfigForTelegram(proxyUrl) {
+    const p = String(proxyUrl || '').trim();
+    const base = { timeout: 25000, validateStatus: () => true };
+    if (!p) return base;
+    try {
+        const u = new URL(p);
+        const proto = (u.protocol || '').toLowerCase();
+        if (proto === 'socks5:' || proto === 'socks4:' || proto === 'socks:') {
+            base.httpsAgent = new SocksProxyAgent(p);
+        } else {
+            base.httpsAgent = new HttpsProxyAgent(p);
+        }
+        base.proxy = false;
+    } catch (e) {
+        log('warn', `[Telegram] invalid proxy URL (${e.message})`);
+    }
+    return base;
+}
 
 /**
  * Telegram Bot API MarkdownV2: escape dynamic text so sendMessage(parse_mode=MarkdownV2) succeeds.
@@ -115,7 +146,11 @@ function buildSampleVarsForTelegramRule(rule) {
  * @param {string} text
  * @param {string|number|null|undefined} threadId message_thread_id (forum topics)
  */
-async function sendTelegramMessage(botToken, chatId, text, threadId) {
+/**
+ * @param {string|number|null|undefined} threadId message_thread_id (forum topics)
+ * @param {{ proxyUrl?: string }} [options]
+ */
+async function sendTelegramMessage(botToken, chatId, text, threadId, options) {
     const token = String(botToken || '').trim();
     const cid = String(chatId || '').trim();
     if (!token) throw new Error('bot token required');
@@ -124,6 +159,7 @@ async function sendTelegramMessage(botToken, chatId, text, threadId) {
     if (!msg.trim()) throw new Error('message text empty');
 
     const url = `https://api.telegram.org/bot${encodeURIComponent(token)}/sendMessage`;
+    const axiosCfg = buildAxiosConfigForTelegram(options && options.proxyUrl);
 
     const buildBody = (withMarkdown) => {
         const body = {
@@ -140,7 +176,7 @@ async function sendTelegramMessage(botToken, chatId, text, threadId) {
     };
 
     const post = async (body) => {
-        const resp = await axios.post(url, body, { timeout: 25000, validateStatus: () => true });
+        const resp = await axios.post(url, body, axiosCfg);
         return { resp, data: resp.data };
     };
 
@@ -217,5 +253,7 @@ module.exports = {
     applyTelegramTemplate,
     buildSampleVarsForTelegramRule,
     escapeMarkdownV2,
-    formatTelegramNotifyMessage
+    formatTelegramNotifyMessage,
+    isValidTelegramBotTokenFormat,
+    buildAxiosConfigForTelegram
 };

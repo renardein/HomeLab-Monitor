@@ -944,6 +944,7 @@ async function saveSettingsToServer(payload) {
     if (payload.telegramRoutes !== undefined) body.telegramRoutes = payload.telegramRoutes;
     if (payload.telegramNotificationRules !== undefined) body.telegramNotificationRules = payload.telegramNotificationRules;
     if (payload.telegramBotToken !== undefined) body.telegramBotToken = payload.telegramBotToken;
+    if (payload.telegramProxyUrl !== undefined) body.telegramProxyUrl = payload.telegramProxyUrl;
     if (payload.telegramClearBotToken === true) body.telegramClearBotToken = true;
     if (payload.setupCompleted !== undefined) body.setupCompleted = !!payload.setupCompleted;
     try {
@@ -1344,6 +1345,8 @@ function updateUILanguage() {
         settingsTelegramHint: 'settingsTelegramHint',
         settingsTelegramBotTokenLabel: 'settingsTelegramBotTokenLabel',
         settingsTelegramBotTokenHelp: 'settingsTelegramBotTokenHelp',
+        settingsTelegramProxyUrlLabel: 'settingsTelegramProxyUrlLabel',
+        settingsTelegramProxyUrlHelp: 'settingsTelegramProxyUrlHelp',
         settingsTelegramNotifyEnabledLabel: 'settingsTelegramNotifyEnabledLabel',
         settingsTelegramIntervalLabel: 'settingsTelegramIntervalLabel',
         settingsTelegramSaveText: 'settingsTelegramSaveText',
@@ -2439,6 +2442,11 @@ function telegramTestRuleApiErrorMessage(errText) {
     return String(errText || 'error');
 }
 
+/** Совпадает с серверной проверкой — только реальный токен бота, не маска из поля. */
+function isTelegramBotTokenFormatClient(s) {
+    return /^[0-9]{5,}:[A-Za-z0-9_-]{25,}$/.test(String(s || '').trim());
+}
+
 async function testTelegramNotificationRule(ruleId) {
     syncTelegramRuleMessageFromModalIfOpen();
     syncTelegramRulesFromDom();
@@ -2449,13 +2457,16 @@ async function testTelegramNotificationRule(ruleId) {
         return;
     }
     const tokEl = document.getElementById('settingsTelegramBotTokenInput');
-    const hasNewToken = tokEl && String(tokEl.value).trim();
+    const rawTok = tokEl ? String(tokEl.value).trim() : '';
+    const hasNewToken = rawTok && isTelegramBotTokenFormatClient(rawTok);
     if (!hasNewToken && !telegramBotTokenSet) {
         showToast(t('telegramTestRuleNeedToken') || 'Нужен токен бота', 'warning');
         return;
     }
     const payload = { rule: { ...rule } };
-    if (hasNewToken) payload.telegramBotToken = String(tokEl.value).trim();
+    if (hasNewToken) payload.telegramBotToken = rawTok;
+    const proxyEl = document.getElementById('settingsTelegramProxyUrlInput');
+    if (proxyEl && String(proxyEl.value || '').trim()) payload.telegramProxyUrl = String(proxyEl.value).trim();
     try {
         const res = await fetch('/api/settings/telegram-test-rule', {
             method: 'POST',
@@ -2579,6 +2590,7 @@ async function saveTelegramSettings() {
     const en = document.getElementById('settingsTelegramNotifyEnabled');
     const intervalEl = document.getElementById('settingsTelegramIntervalSec');
     const tokEl = document.getElementById('settingsTelegramBotTokenInput');
+    const proxyEl = document.getElementById('settingsTelegramProxyUrlInput');
     const enabled = en && String(en.value) === '1';
     let interval = intervalEl ? parseInt(intervalEl.value, 10) : 60;
     if (!Number.isFinite(interval) || interval < 15) interval = 15;
@@ -2586,11 +2598,15 @@ async function saveTelegramSettings() {
     const payload = {
         telegramNotifyEnabled: enabled,
         telegramNotifyIntervalSec: interval,
-        telegramNotificationRules: [...telegramNotificationRules]
+        telegramNotificationRules: [...telegramNotificationRules],
+        telegramProxyUrl: proxyEl ? String(proxyEl.value || '').trim() : ''
     };
-    if (tokEl && String(tokEl.value).trim()) payload.telegramBotToken = String(tokEl.value).trim();
+    const rawTok = tokEl ? String(tokEl.value).trim() : '';
+    if (rawTok && isTelegramBotTokenFormatClient(rawTok)) {
+        payload.telegramBotToken = rawTok;
+    }
     await saveSettingsToServer(payload);
-    if (tokEl) tokEl.value = '';
+    if (tokEl && payload.telegramBotToken) tokEl.value = '';
     showToast(t('dataUpdated') || 'Сохранено', 'success');
 }
 
@@ -9080,6 +9096,8 @@ async function loadSettings() {
         if (n > 3600) n = 3600;
         tgInt.value = String(n);
     }
+    const tgProxy = document.getElementById('settingsTelegramProxyUrlInput');
+    if (tgProxy) tgProxy.value = data.telegram_proxy_url != null ? String(data.telegram_proxy_url) : '';
     renderTelegramRulesTable();
     renderSettingsMonitorScreensOrderList();
     renderClusterDashboardTilesSettings();
