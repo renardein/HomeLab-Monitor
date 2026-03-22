@@ -57,6 +57,7 @@ let setupCompleted = true;
 let setupWizardStep = 1;
 let setupWizardServerType = 'proxmox';
 let setupWizardListenersBound = false;
+let telegramRuleMessageModalBound = false;
 let setupWizardFinishMode = 'success';
 let clusterDashboardTiles = []; // [{ type: 'service'|'vmct'|'netdev'|'speedtest', sourceId: 'type:id' }]
 let clusterDashboardTilesDirty = false;
@@ -1354,7 +1355,7 @@ function updateUILanguage() {
         settingsTelegramRuleTargetHeader: 'settingsTelegramRuleTargetHeader',
         settingsTelegramRuleExtraHeader: 'settingsTelegramRuleExtraHeader',
         settingsTelegramRuleMessageHeader: 'settingsTelegramRuleMessageHeader',
-        settingsTelegramMessageTemplateHelp: 'telegramMessageTemplateHelp',
+        settingsTelegramRulesMessageHintShort: 'telegramRulesMessageHintShort',
         settingsTelegramRuleChatHeader: 'settingsTelegramRuleChatHeader',
         settingsTelegramRuleThreadHeader: 'settingsTelegramRuleThreadHeader',
         settingsTelegramNotifyOpt0: 'settingsTelegramNotifyOptionOff',
@@ -1367,6 +1368,7 @@ function updateUILanguage() {
         const el = document.getElementById(id);
         if (el) el.textContent = t(key);
     }
+    localizeTelegramMessageModal();
     
     // Update theme and units button texts
     const themeLight = document.getElementById('themeLight');
@@ -2030,6 +2032,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         });
     }
     initHostMetricsAgentInstallModal();
+    bindTelegramRuleMessageModalOnce();
     const debugNav = document.getElementById('settings-nav-debug');
     if (debugNav) {
         debugNav.addEventListener('shown.bs.tab', () => refreshDebugMetrics());
@@ -2199,6 +2202,94 @@ function getTelegramRuleTypeLabel(type) {
     return t(m[type] || type);
 }
 
+function syncTelegramRuleMessageFromModalIfOpen() {
+    const modalEl = document.getElementById('telegramRuleMessageModal');
+    if (!modalEl) return;
+    const rid = modalEl.dataset.editingRuleId;
+    if (!rid) return;
+    const ta = document.getElementById('telegramRuleMessageModalTextarea');
+    if (!ta) return;
+    const rule = (telegramNotificationRules || []).find((r) => r.id === rid);
+    if (!rule) return;
+    const mt = String(ta.value || '').trim();
+    if (mt) rule.messageTemplate = mt;
+    else delete rule.messageTemplate;
+}
+
+function buildTelegramVarsListHtml(type) {
+    const key = 'telegramMessageVars_' + String(type || 'service_updown');
+    const raw = t(key);
+    if (!raw || raw === key) {
+        return `<li class="text-muted small">${escapeHtml(t('telegramVarsFallback') || '—')}</li>`;
+    }
+    const parts = String(raw).split('|').map((s) => s.trim()).filter(Boolean);
+    return parts.map((line) => {
+        const m = line.match(/^(\{[^}]+\})\s*[—–\-]\s*(.+)$/);
+        if (m) {
+            return `<li><code>${escapeHtml(m[1])}</code> <span class="text-muted">${escapeHtml(m[2].trim())}</span></li>`;
+        }
+        return `<li class="small">${escapeHtml(line)}</li>`;
+    }).join('');
+}
+
+function localizeTelegramMessageModal() {
+    setText('telegramRuleMessageModalTitleText', t('telegramMessageModalTitle'));
+    setText('telegramRuleMessageModalEmptyHint', t('telegramMessageModalEmptyHint'));
+    setText('telegramRuleMessageModalTextareaLabel', t('telegramMessageModalTextareaLabel'));
+    setText('telegramRuleMessageModalVarsTitle', t('telegramMessageModalVarsTitle'));
+    setText('telegramRuleMessageModalCancelText', t('telegramMessageModalCancel'));
+    setText('telegramRuleMessageModalSaveText', t('telegramMessageModalSave'));
+    const ta = document.getElementById('telegramRuleMessageModalTextarea');
+    if (ta) ta.placeholder = t('settingsTelegramMessageTemplatePlaceholder') || '';
+}
+
+function openTelegramRuleMessageModal(ruleId) {
+    syncTelegramRulesFromDom();
+    const rule = (telegramNotificationRules || []).find((r) => r.id === ruleId);
+    if (!rule) return;
+    const modalEl = document.getElementById('telegramRuleMessageModal');
+    const ta = document.getElementById('telegramRuleMessageModalTextarea');
+    if (!modalEl || !ta) return;
+    modalEl.dataset.editingRuleId = ruleId;
+    ta.value = rule.messageTemplate || '';
+    const typeLine = document.getElementById('telegramRuleMessageModalTypeLine');
+    if (typeLine) typeLine.textContent = getTelegramRuleTypeLabel(rule.type || 'service_updown');
+    const ul = document.getElementById('telegramRuleMessageModalVarsList');
+    if (ul) ul.innerHTML = buildTelegramVarsListHtml(String(rule.type || 'service_updown'));
+    localizeTelegramMessageModal();
+    const m = bootstrap.Modal.getOrCreateInstance(modalEl);
+    m.show();
+}
+
+function saveTelegramRuleMessageModal() {
+    const modalEl = document.getElementById('telegramRuleMessageModal');
+    const rid = modalEl && modalEl.dataset.editingRuleId;
+    if (!rid) return;
+    const ta = document.getElementById('telegramRuleMessageModalTextarea');
+    const rule = (telegramNotificationRules || []).find((r) => r.id === rid);
+    if (!rule) return;
+    const mt = ta ? String(ta.value || '').trim() : '';
+    if (mt) rule.messageTemplate = mt;
+    else delete rule.messageTemplate;
+    const inst = modalEl && bootstrap.Modal.getInstance(modalEl);
+    if (inst) inst.hide();
+    delete modalEl.dataset.editingRuleId;
+    renderTelegramRulesTable();
+}
+
+function bindTelegramRuleMessageModalOnce() {
+    if (telegramRuleMessageModalBound) return;
+    telegramRuleMessageModalBound = true;
+    const modalEl = document.getElementById('telegramRuleMessageModal');
+    const saveBtn = document.getElementById('telegramRuleMessageModalSaveBtn');
+    if (saveBtn) saveBtn.addEventListener('click', () => saveTelegramRuleMessageModal());
+    if (modalEl) {
+        modalEl.addEventListener('hidden.bs.modal', () => {
+            delete modalEl.dataset.editingRuleId;
+        });
+    }
+}
+
 function buildTelegramRuleTargetSelectHtml(rule) {
     const typ = String(rule.type || 'service_updown');
     if (typ === 'service_updown') {
@@ -2254,6 +2345,7 @@ function buildTelegramRuleExtraHtml(rule) {
 }
 
 function renderTelegramRulesTable() {
+    syncTelegramRuleMessageFromModalIfOpen();
     const body = document.getElementById('telegramRulesTableBody');
     if (!body) return;
     const rules = Array.isArray(telegramNotificationRules) ? telegramNotificationRules : [];
@@ -2266,6 +2358,8 @@ function renderTelegramRulesTable() {
             const sel = String(rule.type) === tp ? ' selected' : '';
             return `<option value="${tp}"${sel}>${escapeHtml(getTelegramRuleTypeLabel(tp))}</option>`;
         }).join('');
+        const hasTpl = !!(rule.messageTemplate && String(rule.messageTemplate).trim());
+        const statusText = hasTpl ? (t('telegramMessageTemplateStatusCustom') || 'Custom') : (t('telegramMessageTemplateStatusDefault') || 'Default');
         return `
             <tr data-rule-row="${escapeHtml(rule.id)}">
                 <td class="text-center align-middle">
@@ -2277,7 +2371,10 @@ function renderTelegramRulesTable() {
                 <td class="telegram-rule-target">${buildTelegramRuleTargetSelectHtml(rule)}</td>
                 <td class="telegram-rule-extra">${buildTelegramRuleExtraHtml(rule)}</td>
                 <td class="align-top">
-                    <textarea class="form-control form-control-sm" rows="2" data-tr-field="messageTemplate" data-rule-id="${escapeHtml(rule.id)}" placeholder="${escapeHtml(t('settingsTelegramMessageTemplatePlaceholder') || '')}">${escapeHtml(rule.messageTemplate || '')}</textarea>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-tr-edit-msg="${escapeHtml(rule.id)}">
+                        <i class="bi bi-pencil-square me-1"></i>${escapeHtml(t('telegramRuleEditMessage') || 'Edit')}
+                    </button>
+                    <div class="text-muted small mt-1">${escapeHtml(statusText)}</div>
                 </td>
                 <td><input type="text" class="form-control form-control-sm" data-tr-field="chatId" data-rule-id="${escapeHtml(rule.id)}" value="${escapeHtml(rule.chatId || '')}" placeholder="${escapeHtml(t('settingsTelegramChatIdPlaceholder') || 'chat_id')}" autocomplete="off"></td>
                 <td><input type="text" class="form-control form-control-sm" data-tr-field="threadId" data-rule-id="${escapeHtml(rule.id)}" value="${escapeHtml(rule.threadId || '')}" placeholder="${escapeHtml(t('settingsTelegramThreadPlaceholder') || 'thread')}" autocomplete="off"></td>
@@ -2296,6 +2393,9 @@ function renderTelegramRulesTable() {
             el.addEventListener('input', onTelegramRuleFieldChange);
         }
     });
+    body.querySelectorAll('[data-tr-edit-msg]').forEach((btn) => {
+        btn.addEventListener('click', () => openTelegramRuleMessageModal(btn.getAttribute('data-tr-edit-msg')));
+    });
     body.querySelectorAll('[data-tr-remove]').forEach((btn) => {
         btn.addEventListener('click', () => removeTelegramNotificationRule(btn.getAttribute('data-tr-remove')));
     });
@@ -2312,6 +2412,7 @@ function telegramTestRuleApiErrorMessage(errText) {
 }
 
 async function testTelegramNotificationRule(ruleId) {
+    syncTelegramRuleMessageFromModalIfOpen();
     syncTelegramRulesFromDom();
     const rule = (telegramNotificationRules || []).find((r) => r.id === ruleId);
     if (!rule) return;
@@ -2348,6 +2449,13 @@ function onTelegramRuleTypeChange(ev) {
     const el = ev && ev.target;
     const rid = el && el.getAttribute('data-rule-id');
     if (!rid) return;
+    syncTelegramRuleMessageFromModalIfOpen();
+    const modalEl = document.getElementById('telegramRuleMessageModal');
+    if (modalEl && modalEl.dataset.editingRuleId === rid) {
+        const inst = bootstrap.Modal.getInstance(modalEl);
+        if (inst) inst.hide();
+        delete modalEl.dataset.editingRuleId;
+    }
     const rule = (telegramNotificationRules || []).find((r) => r.id === rid);
     if (!rule) return;
     rule.type = String(el.value || 'service_updown');
@@ -2378,6 +2486,7 @@ function onTelegramRuleFieldChange() {
 }
 
 function syncTelegramRulesFromDom() {
+    syncTelegramRuleMessageFromModalIfOpen();
     const body = document.getElementById('telegramRulesTableBody');
     if (!body) return;
     const map = new Map((telegramNotificationRules || []).map((r) => [r.id, { ...r }]));
@@ -2394,12 +2503,6 @@ function syncTelegramRulesFromDom() {
         if (thEl) {
             const t0 = String(thEl.value || '').trim();
             rule.threadId = t0 || undefined;
-        }
-        const msgTmpl = tr.querySelector('[data-tr-field="messageTemplate"]');
-        if (msgTmpl) {
-            const mt = String(msgTmpl.value || '').trim();
-            if (mt) rule.messageTemplate = mt;
-            else delete rule.messageTemplate;
         }
         const tgt = tr.querySelector('[data-tr-field="target"]');
         if (tgt) {
@@ -2433,6 +2536,12 @@ function addTelegramNotificationRule() {
 
 function removeTelegramNotificationRule(ruleId) {
     syncTelegramRulesFromDom();
+    const modalEl = document.getElementById('telegramRuleMessageModal');
+    if (modalEl && modalEl.dataset.editingRuleId === ruleId) {
+        const inst = bootstrap.Modal.getInstance(modalEl);
+        if (inst) inst.hide();
+        delete modalEl.dataset.editingRuleId;
+    }
     telegramNotificationRules = (telegramNotificationRules || []).filter((r) => r.id !== ruleId);
     renderTelegramRulesTable();
 }

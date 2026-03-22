@@ -26,6 +26,32 @@
 
 <%- include('./setup-wizard') %>
 
+    <!-- Редактирование текста уведомления Telegram для одного правила -->
+    <div class="modal fade" id="telegramRuleMessageModal" tabindex="-1" aria-labelledby="telegramRuleMessageModalTitle" aria-hidden="true" data-bs-backdrop="true" data-bs-keyboard="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="telegramRuleMessageModalTitle"><i class="bi bi-chat-text me-2"></i><span id="telegramRuleMessageModalTitleText"></span></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="small text-muted mb-2" id="telegramRuleMessageModalTypeLine"></p>
+                    <p class="small text-muted mb-3" id="telegramRuleMessageModalEmptyHint"></p>
+                    <label class="form-label fw-bold" for="telegramRuleMessageModalTextarea" id="telegramRuleMessageModalTextareaLabel"></label>
+                    <textarea class="form-control font-monospace" id="telegramRuleMessageModalTextarea" rows="8" maxlength="4096" placeholder=""></textarea>
+                    <div class="mt-3">
+                        <div class="fw-semibold small mb-2" id="telegramRuleMessageModalVarsTitle"></div>
+                        <ul class="small mb-0 ps-3" id="telegramRuleMessageModalVarsList"></ul>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" id="telegramRuleMessageModalCancelBtn"><span id="telegramRuleMessageModalCancelText"></span></button>
+                    <button type="button" class="btn btn-primary" id="telegramRuleMessageModalSaveBtn"><i class="bi bi-check-lg me-1"></i><span id="telegramRuleMessageModalSaveText"></span></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Установка агента метрик на узел Proxmox по SSH -->
     <div class="modal fade" id="hostMetricsAgentInstallModal" tabindex="-1" aria-labelledby="hostMetricsAgentInstallModalTitle" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false" data-agent-mode="install">
         <div class="modal-dialog modal-lg modal-dialog-scrollable modal-dialog-centered">
