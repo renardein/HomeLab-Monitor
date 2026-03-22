@@ -1103,6 +1103,15 @@
         body.monitor-mode {
             padding: 0;
             overflow: hidden;
+            --monitor-toolbar-h: 52px;
+            --monitor-toolbar-top: var(--monitor-toolbar-h);
+            --monitor-dock-h: 52px;
+        }
+        body.monitor-mode.monitor-toolbar-hidden {
+            --monitor-toolbar-top: 0px;
+        }
+        body.monitor-mode.monitor-dots-hidden {
+            --monitor-dock-h: 0px;
         }
 
         body.monitor-mode .container {
@@ -1125,7 +1134,8 @@
             max-width: 100%;
             height: 100vh;
             padding: 0;
-            padding-top: 52px;
+            padding-top: var(--monitor-toolbar-top);
+            padding-bottom: var(--monitor-dock-h);
             overflow: hidden;
             box-sizing: border-box;
         }
@@ -1396,7 +1406,7 @@
             width: 100%;
             display: flex;
             flex-direction: column;
-            max-height: min(calc(100vh - 118px), 920px);
+            max-height: min(calc(100vh - var(--monitor-toolbar-top) - var(--monitor-dock-h) - 66px), 920px);
         }
         body.monitor-mode.monitor-theme-dark .monitor-backup-node-card {
             box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
@@ -1505,10 +1515,10 @@
         /* Полноэкранные окна монитора: общий shell в стиле экрана Cluster */
         body.monitor-mode .monitor-screen {
             position: fixed;
-            top: 52px;
+            top: var(--monitor-toolbar-top);
             left: 0;
             right: 0;
-            bottom: 0;
+            bottom: var(--monitor-dock-h);
             z-index: 1020;
             margin: 0 !important;
             padding: 0.75rem 1rem 1rem;
@@ -1641,11 +1651,11 @@
             border-radius: 0;
             background: transparent;
             color: inherit;
-            height: calc(100vh - 52px);
-            max-height: calc(100vh - 52px);
+            height: calc(100vh - var(--monitor-toolbar-top) - var(--monitor-dock-h));
+            max-height: calc(100vh - var(--monitor-toolbar-top) - var(--monitor-dock-h));
             overflow: hidden;
             position: fixed;
-            top: 52px;
+            top: var(--monitor-toolbar-top);
             left: 0;
             right: 0;
             display: flex;
@@ -2004,6 +2014,9 @@
         body.monitor-mode .monitor-toolbar {
             display: flex !important;
         }
+        body.monitor-mode.monitor-toolbar-hidden #monitorToolbar {
+            display: none !important;
+        }
 
         body.monitor-mode.monitor-theme-dark .monitor-toolbar {
             background: linear-gradient(180deg, rgba(15, 52, 96, 0.98) 0%, rgba(26, 33, 62, 0.98) 100%);
@@ -2114,6 +2127,89 @@
             padding-bottom: 0.35rem;
         }
 
+        .monitor-toolbar-hide-btn {
+            padding: 6px 10px;
+            border-radius: 8px;
+            font-weight: 500;
+            transition: background 0.2s, transform 0.2s, border-color 0.2s, color 0.2s;
+        }
+        body.monitor-mode.monitor-theme-dark .monitor-toolbar-hide-btn {
+            background: rgba(255, 255, 255, 0.08);
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        body.monitor-mode.monitor-theme-dark .monitor-toolbar-hide-btn:hover {
+            background: rgba(255, 255, 255, 0.16);
+            color: #fff;
+        }
+        body.monitor-mode:not(.monitor-theme-dark) .monitor-toolbar-hide-btn {
+            background: #edf2f7;
+            color: #2d3748;
+            border: 1px solid #cbd5e0;
+        }
+        body.monitor-mode:not(.monitor-theme-dark) .monitor-toolbar-hide-btn:hover {
+            background: #e2e8f0;
+            color: #1a202c;
+        }
+
+        .monitor-dots-dock {
+            display: none;
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 10040;
+            align-items: center;
+            justify-content: center;
+            padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+            pointer-events: none;
+            box-sizing: border-box;
+        }
+        .monitor-dots-dock .monitor-toolbar-dots {
+            pointer-events: auto;
+            justify-content: center;
+            max-width: 100%;
+        }
+
+        .monitor-toolbar-reveal {
+            position: fixed;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 9998;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 44px;
+            min-height: 36px;
+            padding: 6px 14px;
+            border: none;
+            border-radius: 0 0 12px 12px;
+            cursor: pointer;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+            transition: background 0.2s, color 0.2s, transform 0.15s;
+        }
+        body.monitor-mode.monitor-theme-dark .monitor-toolbar-reveal {
+            background: linear-gradient(180deg, rgba(15, 52, 96, 0.98) 0%, rgba(26, 33, 62, 0.98) 100%);
+            color: #e2e8f0;
+            border: 1px solid rgba(102, 126, 234, 0.4);
+            border-top: none;
+        }
+        body.monitor-mode.monitor-theme-dark .monitor-toolbar-reveal:hover {
+            background: rgba(26, 33, 62, 0.98);
+            color: #fff;
+        }
+        body.monitor-mode:not(.monitor-theme-dark) .monitor-toolbar-reveal {
+            background: rgba(255, 255, 255, 0.96);
+            color: #2d3748;
+            border: 1px solid #e2e8f0;
+            border-top: none;
+        }
+        body.monitor-mode:not(.monitor-theme-dark) .monitor-toolbar-reveal:hover {
+            background: #fff;
+            color: #1a202c;
+        }
+
         .monitor-toolbar-settings,
         .monitor-toolbar-exit {
             padding: 7px 14px;
@@ -2191,10 +2287,12 @@
         @media (min-width: 1920px) and (min-height: 1200px) {
             body.monitor-mode #dashboardSection {
                 height: 100vh;
-                padding-top: 52px;
+                padding-top: var(--monitor-toolbar-top);
+                padding-bottom: var(--monitor-dock-h);
             }
             .monitor-view {
-                height: calc(100vh - 52px);
+                height: calc(100vh - var(--monitor-toolbar-top) - var(--monitor-dock-h));
+                max-height: calc(100vh - var(--monitor-toolbar-top) - var(--monitor-dock-h));
                 padding: 1rem 1.25rem 1.25rem;
             }
             .monitor-view__stat-value { font-size: 2rem; }

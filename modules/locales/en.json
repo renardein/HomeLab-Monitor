@@ -129,6 +129,8 @@
     "minutes": "m",
     "monitorExitText": "Exit",
     "monitorExitTitle": "Exit monitor mode",
+    "monitorToolbarHideTitle": "Hide toolbar",
+    "monitorToolbarShowTitle": "Show toolbar",
     "monitorRefreshText": "Refresh",
     "monitorRefreshTitle": "Refresh data",
     "monitorMode": "Monitor",

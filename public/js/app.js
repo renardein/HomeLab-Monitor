@@ -1391,6 +1391,10 @@ function updateUILanguage() {
     if (monitorSettingsBtnText) monitorSettingsBtnText.textContent = t('settings');
     const monitorSettingsBtn = document.getElementById('monitorSettingsBtn');
     if (monitorSettingsBtn) monitorSettingsBtn.title = t('settingsTitle') || t('settings');
+    const monitorToolbarHideBtn = document.getElementById('monitorToolbarHideBtn');
+    if (monitorToolbarHideBtn) monitorToolbarHideBtn.title = t('monitorToolbarHideTitle');
+    const monitorToolbarReveal = document.getElementById('monitorToolbarReveal');
+    if (monitorToolbarReveal) monitorToolbarReveal.title = t('monitorToolbarShowTitle');
     const monitorRefreshBtn = document.getElementById('monitorRefreshBtn');
     if (monitorRefreshBtn) monitorRefreshBtn.title = t('monitorRefreshTitle');
     const monitorThemeLight = document.getElementById('monitorThemeLight');
@@ -5618,6 +5622,7 @@ async function toggleMonitorMode() {
         await refreshMonitorScreensAvailability();
 
         applyMonitorView(monitorCurrentView);
+        applyMonitorToolbarHiddenState();
     } else {
         // Выходим из режима монитора: возвращаем обычный дашборд
         if (btn) {
@@ -5636,6 +5641,8 @@ async function toggleMonitorMode() {
         const backupsMonExit = document.getElementById('backupsMonitorSection');
         if (backupsMonExit) backupsMonExit.style.display = 'none';
         if (monitorView) monitorView.style.display = 'none';
+        document.body.classList.remove('monitor-toolbar-hidden', 'monitor-dots-hidden');
+        syncMonitorToolbarRevealButton();
         renderMonitorScreenDots();
     }
 
@@ -5804,6 +5811,42 @@ function updateMonitorToolbarTitleForView() {
     renderMonitorScreenDots();
 }
 
+function syncMonitorDotsDock() {
+    const dotsEl = document.getElementById('monitorScreenDots');
+    const dock = document.getElementById('monitorDotsDock');
+    if (!dock) return;
+    const hideDock = !monitorMode || !dotsEl || dotsEl.style.display === 'none';
+    dock.style.display = hideDock ? 'none' : 'flex';
+    document.body.classList.toggle('monitor-dots-hidden', hideDock);
+}
+
+function syncMonitorToolbarRevealButton() {
+    const reveal = document.getElementById('monitorToolbarReveal');
+    if (!reveal) return;
+    const show = monitorMode && document.body.classList.contains('monitor-toolbar-hidden');
+    reveal.style.display = show ? 'inline-flex' : 'none';
+    reveal.setAttribute('aria-hidden', show ? 'false' : 'true');
+}
+
+function toggleMonitorToolbarHidden() {
+    if (!monitorMode) return;
+    document.body.classList.toggle('monitor-toolbar-hidden');
+    try {
+        localStorage.setItem('monitorToolbarHidden', document.body.classList.contains('monitor-toolbar-hidden') ? '1' : '0');
+    } catch (_) {}
+    syncMonitorToolbarRevealButton();
+}
+
+function applyMonitorToolbarHiddenState() {
+    if (!monitorMode) return;
+    let hidden = false;
+    try {
+        hidden = localStorage.getItem('monitorToolbarHidden') === '1';
+    } catch (_) {}
+    document.body.classList.toggle('monitor-toolbar-hidden', hidden);
+    syncMonitorToolbarRevealButton();
+}
+
 function renderMonitorScreenDots() {
     const dotsEl = document.getElementById('monitorScreenDots');
     if (!dotsEl) return;
@@ -5811,6 +5854,7 @@ function renderMonitorScreenDots() {
     if (!monitorMode) {
         dotsEl.innerHTML = '';
         dotsEl.style.display = 'none';
+        syncMonitorDotsDock();
         return;
     }
 
@@ -5831,6 +5875,7 @@ function renderMonitorScreenDots() {
             ></button>
         `;
     }).join('');
+    syncMonitorDotsDock();
 }
 
 // Переключение экранов в режиме монитора:
@@ -9029,6 +9074,7 @@ async function loadSettings() {
         applyMonitorTheme();
         initMonitorSwipes();
         initMonitorKeyboardNavigation();
+        applyMonitorToolbarHiddenState();
     }
     // Preferred language select in settings
     const langSelect = document.getElementById('settingsPreferredLanguageSelect');

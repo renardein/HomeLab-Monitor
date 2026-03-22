@@ -129,6 +129,8 @@
     "minutes": "мин",
     "monitorExitText": "Выход",
     "monitorExitTitle": "Выход из режима монитора",
+    "monitorToolbarHideTitle": "Скрыть панель",
+    "monitorToolbarShowTitle": "Показать панель",
     "monitorRefreshText": "Обновить",
     "monitorRefreshTitle": "Обновить данные",
     "monitorMode": "Монитор",
