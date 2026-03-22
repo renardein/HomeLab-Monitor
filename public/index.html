@@ -43,27 +43,26 @@
 
     <div class="container">
         <!-- Навигация -->
-        <nav class="navbar navbar-expand-lg bg-white rounded-3 shadow-sm mb-4 p-3">
-            <div class="container-fluid">
-                <a class="navbar-brand fw-bold" href="#">
-                    <i class="bi bi-diagram-3 text-primary me-2"></i>
+        <nav class="navbar app-topbar navbar-expand-lg mb-4">
+            <div class="container-fluid app-topbar-inner">
+                <a class="navbar-brand app-topbar-brand mb-0" href="#">
+                    <span class="app-topbar-brand-icon"><i class="bi bi-diagram-3"></i></span>
                     <span id="appName">HomeLab Monitor</span>
                 </a>
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <button class="navbar-toggler app-topbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
                     <span class="navbar-toggler-icon"></span>
                 </button>
-                <div class="collapse navbar-collapse justify-content-end" id="navbarNav">
-                    <ul class="navbar-nav align-items-center">
-                        <li class="nav-item me-3">
-                            <button class="btn btn-outline-primary btn-sm" onclick="toggleSettings()" id="settingsBtn">
-                                <i class="bi bi-sliders"></i> <span id="settingsText">Settings</span>
+                <div class="collapse navbar-collapse app-topbar-collapse justify-content-lg-end" id="navbarNav">
+                    <div class="app-topbar-toolbar">
+                        <div class="app-topbar-actions">
+                            <button type="button" class="btn btn-sm btn-outline-secondary app-topbar-btn" onclick="toggleSettings()" id="settingsBtn">
+                                <i class="bi bi-sliders"></i><span id="settingsText">Settings</span>
                             </button>
-                        </li>
-                        <li class="nav-item dropdown me-2">
-                            <a class="btn btn-outline-secondary btn-sm dropdown-toggle" href="#" id="serverMenuDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                <i class="bi bi-server me-1"></i><span id="serverMenuTitle">Proxmox</span>
-                            </a>
-                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="serverMenuDropdown">
+                            <div class="dropdown">
+                                <a class="btn btn-sm btn-outline-secondary app-topbar-btn dropdown-toggle" href="#" id="serverMenuDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    <i class="bi bi-server"></i><span id="serverMenuTitle">Proxmox</span>
+                                </a>
+                                <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="serverMenuDropdown">
                                 <li><button class="dropdown-item" type="button" onclick="setServerType('proxmox')"><i class="bi bi-diagram-3 me-2"></i>Proxmox</button></li>
                                 <li><button class="dropdown-item" type="button" onclick="setServerType('truenas')"><i class="bi bi-hdd-stack me-2"></i>TrueNAS</button></li>
                                 <li><hr class="dropdown-divider"></li>
@@ -88,38 +87,26 @@
                                     </button>
                                 </li>
                             </ul>
-                        </li>
-                        <li class="nav-item me-2">
-                            <button class="btn btn-outline-info btn-sm" onclick="toggleMonitorMode()" id="monitorModeBtn" title="Режим монитора">
-                                <i class="bi bi-display"></i> <span id="monitorModeText">Монитор</span>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-secondary app-topbar-btn" onclick="toggleMonitorMode()" id="monitorModeBtn" title="Режим монитора">
+                                <i class="bi bi-display"></i><span id="monitorModeText">Монитор</span>
                             </button>
-                        </li>
-                        <li class="nav-item">
-                            <span class="badge bg-success" id="serverStatus">
-                                <i class="bi bi-check-circle"></i> <span id="serverStatusText">Server OK</span>
+                        </div>
+                        <div class="app-topbar-status" role="group" aria-label="Status">
+                            <span class="app-topbar-pill app-topbar-pill--server app-topbar-pill--ok" id="serverStatus">
+                                <i class="bi bi-check-circle"></i><span id="serverStatusText">Server OK</span>
                             </span>
-                        </li>
-                        <li class="nav-item">
-                            <span class="badge bg-light text-dark me-2" id="connectionStatus">
-                                <i class="bi bi-wifi-off"></i> <span id="notConnectedText">Не подключено</span>
+                            <span class="app-topbar-pill app-topbar-pill--conn" id="connectionStatus">
+                                <i class="bi bi-wifi-off"></i><span id="notConnectedText">Не подключено</span>
                             </span>
-                        </li>
-                        <li class="nav-item me-3">
-                            <span class="badge bg-info" id="currentServerBadge" style="display: none;">
-                                <i class="bi bi-server me-1"></i> <span id="currentServerName"></span>
+                            <span class="app-topbar-pill app-topbar-pill--host" id="currentServerBadge" style="display: none;">
+                                <i class="bi bi-server"></i><span id="currentServerName"></span>
                             </span>
-                        </li>
-                        <li class="nav-item">
-                            <button class="btn btn-primary" onclick="refreshData()" id="refreshBtn">
-                                <i class="bi bi-arrow-repeat me-2"></i><span id="refreshText">Обновить</span>
-                            </button>
-                        </li>
-
-
-
-
-
-                    </ul>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-primary app-topbar-refresh" onclick="refreshData()" id="refreshBtn">
+                            <i class="bi bi-arrow-repeat"></i><span id="refreshText">Обновить</span>
+                        </button>
+                    </div>
                 </div>
             </div>
         </nav>
@@ -1696,17 +1683,17 @@
         <!-- Панель режима монитора (тип сервера + навигация экранов + темы + выход) -->
         <div id="monitorToolbar" class="monitor-toolbar">
             <div class="monitor-toolbar-left">
-                <select class="form-select form-select-sm monitor-toolbar-select" id="monitorServerTypeSelect" onchange="setServerType(this.value)">
-                    <option value="proxmox">Proxmox</option>
-                    <option value="truenas">TrueNAS</option>
-                </select>
-            </div>
-            <div class="monitor-toolbar-center">
+                <div id="monitorServerTypeSelectWrap" class="monitor-toolbar-server-wrap">
+                    <select class="form-select form-select-sm monitor-toolbar-select" id="monitorServerTypeSelect" onchange="setServerType(this.value)">
+                        <option value="proxmox">Proxmox</option>
+                        <option value="truenas">TrueNAS</option>
+                    </select>
+                </div>
                 <span class="monitor-toolbar-title" id="monitorToolbarTitle">Монитор</span>
-                <span class="monitor-toolbar-update text-muted small" id="monitorToolbarUpdate"></span>
                 <div class="monitor-toolbar-dots" id="monitorScreenDots" aria-label="Monitor screens"></div>
             </div>
             <div class="monitor-toolbar-theme">
+                <span class="monitor-toolbar-update" id="monitorToolbarUpdate"></span>
                 <button type="button" class="btn btn-sm monitor-toolbar-nav-btn" id="monitorPrevBtn" onclick="goMonitorView('prev')" title="←">
                     <i class="bi bi-chevron-left"></i>
                 </button>

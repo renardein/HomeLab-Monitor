@@ -2654,11 +2654,21 @@ async function checkServerStatus() {
     try {
         const response = await fetch('/api/status');
         const data = await response.json();
-        setHTML('serverStatus', '<i class="bi bi-check-circle"></i> <span id="serverStatusText">' + t('serverWorking') + '</span>');
+        setHTML('serverStatus', '<i class="bi bi-check-circle"></i><span id="serverStatusText">' + t('serverWorking') + '</span>');
+        const ss = document.getElementById('serverStatus');
+        if (ss) {
+            ss.classList.remove('app-topbar-pill--error');
+            ss.classList.add('app-topbar-pill--ok');
+        }
         const verEl = document.getElementById('footerVersion');
         if (verEl && data.version) verEl.textContent = 'v' + data.version;
     } catch (error) {
-        setHTML('serverStatus', '<i class="bi bi-exclamation-circle"></i> <span id="serverStatusText">' + t('serverError') + '</span>');
+        setHTML('serverStatus', '<i class="bi bi-exclamation-circle"></i><span id="serverStatusText">' + t('serverError') + '</span>');
+        const ss = document.getElementById('serverStatus');
+        if (ss) {
+            ss.classList.remove('app-topbar-pill--ok');
+            ss.classList.add('app-topbar-pill--error');
+        }
     }
 }
 
@@ -5595,9 +5605,9 @@ async function toggleMonitorMode() {
         // Входим в режим монитора: fullscreen, крупные блоки, свайпы, текущий экран — кластер
         if (btn) {
             btn.classList.add('active');
-            btn.classList.remove('btn-outline-info');
-            btn.classList.add('btn-info');
-            btn.innerHTML = '<i class="bi bi-check-lg"></i> <span id="monitorModeText">' + t('monitorModeOn') + '</span>';
+            btn.classList.remove('btn-outline-secondary');
+            btn.classList.add('btn-primary');
+            btn.innerHTML = '<i class="bi bi-check-lg"></i><span id="monitorModeText">' + t('monitorModeOn') + '</span>';
         }
         monitorCurrentView = 'cluster';
         applyMonitorTheme();
@@ -5611,10 +5621,9 @@ async function toggleMonitorMode() {
     } else {
         // Выходим из режима монитора: возвращаем обычный дашборд
         if (btn) {
-            btn.classList.remove('active');
-            btn.classList.remove('btn-info');
-            btn.classList.add('btn-outline-info');
-            btn.innerHTML = '<i class="bi bi-display"></i> <span id="monitorModeText">' + t('monitorMode') + '</span>';
+            btn.classList.remove('active', 'btn-primary');
+            btn.classList.add('btn-outline-secondary', 'app-topbar-btn');
+            btn.innerHTML = '<i class="bi bi-display"></i><span id="monitorModeText">' + t('monitorMode') + '</span>';
         }
         document.body.classList.remove('monitor-theme-dark');
         destroyMonitorSwipes();
@@ -5805,12 +5814,8 @@ function renderMonitorScreenDots() {
         return;
     }
 
-    const views = getMonitorViewsOrder();
-    if (views.length <= 1) {
-        dotsEl.innerHTML = '';
-        dotsEl.style.display = 'none';
-        return;
-    }
+    let views = getMonitorViewsOrder();
+    if (!views.length) views = ['cluster'];
 
     dotsEl.style.display = 'flex';
     dotsEl.innerHTML = views.map((viewId) => {
@@ -9014,9 +9019,9 @@ async function loadSettings() {
         const monitorBtn = document.getElementById('monitorModeBtn');
         if (monitorBtn) {
             monitorBtn.classList.add('active');
-            monitorBtn.classList.remove('btn-outline-info');
-            monitorBtn.classList.add('btn-info');
-            monitorBtn.innerHTML = '<i class="bi bi-check-lg"></i> <span id="monitorModeText">' + t('monitorModeOn') + '</span>';
+            monitorBtn.classList.remove('btn-outline-secondary');
+            monitorBtn.classList.add('btn-primary');
+            monitorBtn.innerHTML = '<i class="bi bi-check-lg"></i><span id="monitorModeText">' + t('monitorModeOn') + '</span>';
         }
         // По умолчанию после перезагрузки открываем экран кластера (без автозапуска fullscreen — только по клику пользователя)
         monitorCurrentView = 'cluster';
@@ -9185,6 +9190,49 @@ function setCurrentIndexForType(index) {
     }
 }
 
+/** URL считается настроенным, если задан хост (пустой «https://» не считается). */
+function isMonitorServerUrlConfigured(url) {
+    const u = String(url || '').trim();
+    if (!u) return false;
+    if (u === 'https://' || u === 'http://') return false;
+    try {
+        const parsed = new URL(u);
+        return parsed.hostname.length > 0;
+    } catch {
+        return false;
+    }
+}
+
+function hasProxmoxBackendConfigured() {
+    return Array.isArray(proxmoxServers) && proxmoxServers.some(isMonitorServerUrlConfigured);
+}
+
+function hasTrueNASBackendConfigured() {
+    return Array.isArray(truenasServers) && truenasServers.some(isMonitorServerUrlConfigured);
+}
+
+/** Если настроен только один тип — переключаемся на него (без выбора в шапке). */
+function enforceMonitorServerTypeForAvailableBackends() {
+    const p = hasProxmoxBackendConfigured();
+    const t = hasTrueNASBackendConfigured();
+    if (p && !t && currentServerType !== 'proxmox') {
+        setServerType('proxmox');
+        return;
+    }
+    if (t && !p && currentServerType !== 'truenas') {
+        setServerType('truenas');
+        return;
+    }
+}
+
+function updateMonitorToolbarServerSelectVisibility() {
+    enforceMonitorServerTypeForAvailableBackends();
+    const wrap = document.getElementById('monitorServerTypeSelectWrap');
+    if (!wrap) return;
+    const show = hasProxmoxBackendConfigured() && hasTrueNASBackendConfigured();
+    wrap.classList.toggle('d-none', !show);
+}
+
 // Render one server list into a container
 function renderOneServerList(containerId, servers, currentIdx, type) {
     const container = document.getElementById(containerId);
@@ -9217,6 +9265,7 @@ function renderOneServerList(containerId, servers, currentIdx, type) {
 function renderServerList() {
     renderOneServerList('serverListProxmox', proxmoxServers, currentServerIndex, 'proxmox');
     renderOneServerList('serverListTrueNAS', truenasServers, currentTrueNASServerIndex, 'truenas');
+    updateMonitorToolbarServerSelectVisibility();
 }
 
 // Add new server by type

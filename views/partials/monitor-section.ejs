@@ -1,16 +1,17 @@
 <!-- Панель режима монитора (тип сервера + навигация экранов + темы + выход) -->
         <div id="monitorToolbar" class="monitor-toolbar">
             <div class="monitor-toolbar-left">
-                <select class="form-select form-select-sm monitor-toolbar-select" id="monitorServerTypeSelect" onchange="setServerType(this.value)">
-                    <option value="proxmox">Proxmox</option>
-                    <option value="truenas">TrueNAS</option>
-                </select>
-            </div>
-            <div class="monitor-toolbar-center">
+                <div id="monitorServerTypeSelectWrap" class="monitor-toolbar-server-wrap">
+                    <select class="form-select form-select-sm monitor-toolbar-select" id="monitorServerTypeSelect" onchange="setServerType(this.value)">
+                        <option value="proxmox">Proxmox</option>
+                        <option value="truenas">TrueNAS</option>
+                    </select>
+                </div>
                 <span class="monitor-toolbar-title" id="monitorToolbarTitle">Монитор</span>
-                <span class="monitor-toolbar-update text-muted small" id="monitorToolbarUpdate"></span>
+                <div class="monitor-toolbar-dots" id="monitorScreenDots" aria-label="Monitor screens"></div>
             </div>
             <div class="monitor-toolbar-theme">
+                <span class="monitor-toolbar-update" id="monitorToolbarUpdate"></span>
                 <button type="button" class="btn btn-sm monitor-toolbar-nav-btn" id="monitorPrevBtn" onclick="goMonitorView('prev')" title="←">
                     <i class="bi bi-chevron-left"></i>
                 </button>
@@ -28,6 +29,9 @@
                 </button>
             </div>
             <div class="monitor-toolbar-right">
+                <button type="button" class="btn btn-sm monitor-toolbar-settings" id="monitorSettingsBtn" onclick="openSettingsFromMonitor()" title="">
+                    <i class="bi bi-gear me-1"></i><span id="monitorSettingsBtnText">Настройки</span>
+                </button>
                 <button type="button" class="btn btn-sm monitor-toolbar-exit" id="monitorExitBtnFixed" onclick="toggleMonitorMode()" title="">
                     <i class="bi bi-fullscreen-exit me-1"></i><span id="monitorExitBtnText">Выход</span>
                 </button>
