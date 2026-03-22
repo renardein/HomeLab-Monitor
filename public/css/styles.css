@@ -758,6 +758,23 @@
         #settingsNav .nav-link i {
             opacity: 0.9;
         }
+        #settingsNav .settings-nav-category {
+            font-size: 0.6875rem;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            color: var(--bs-secondary-color, #6c757d);
+            padding: 0.65rem 0.5rem 0.2rem;
+            margin-top: 0.3rem;
+            line-height: 1.25;
+        }
+        #settingsNav .settings-nav-category:first-of-type {
+            margin-top: 0;
+            padding-top: 0;
+        }
+        body.dark-mode #settingsNav .settings-nav-category {
+            color: rgba(255, 255, 255, 0.5);
+        }
         .settings-section {
             border: 1px solid #dee2e6;
             border-radius: 10px;

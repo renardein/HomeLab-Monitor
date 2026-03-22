@@ -117,9 +117,11 @@
                 <div class="row">
                     <div class="col-md-3 col-lg-2 mb-3 mb-md-0 d-flex flex-column">
                         <nav class="nav flex-column nav-pills" id="settingsNav" role="tablist">
+                            <div class="settings-nav-category" role="presentation"><span id="settingsNavCategoryConnection"></span></div>
                             <button class="nav-link active" id="settings-nav-connection" data-bs-toggle="pill" data-bs-target="#settings-tab-connection" type="button" role="tab">
                                 <i class="bi bi-key me-2"></i><span id="settingsNavConnection">Подключение</span>
                             </button>
+                            <div class="settings-nav-category" role="presentation"><span id="settingsNavCategoryInterface"></span></div>
                             <button class="nav-link" id="settings-nav-display" data-bs-toggle="pill" data-bs-target="#settings-tab-display" type="button" role="tab">
                                 <i class="bi bi-eye me-2"></i><span id="settingsNavDisplay">Отображение</span>
                             </button>
@@ -129,8 +131,12 @@
                             <button class="nav-link" id="settings-nav-thresholds" data-bs-toggle="pill" data-bs-target="#settings-tab-thresholds" type="button" role="tab">
                                 <i class="bi bi-speedometer2 me-2"></i><span id="settingsNavThresholds">Пороги</span>
                             </button>
+                            <div class="settings-nav-category" role="presentation"><span id="settingsNavCategoryMonitoring"></span></div>
                             <button class="nav-link" id="settings-nav-services" data-bs-toggle="pill" data-bs-target="#settings-tab-services" type="button" role="tab" onclick="onSettingsNavSectionChange('services')">
                                 <i class="bi bi-activity me-2"></i><span id="settingsNavServices">Мониторинг сервисов</span>
+                            </button>
+                            <button class="nav-link" id="settings-nav-vms" data-bs-toggle="pill" data-bs-target="#settings-tab-services" type="button" role="tab" onclick="onSettingsNavSectionChange('vms')">
+                                <i class="bi bi-hdd-network me-2"></i><span id="settingsNavVms">VM/CT</span>
                             </button>
                             <button class="nav-link" id="settings-nav-ups" data-bs-toggle="pill" data-bs-target="#settings-tab-services" type="button" role="tab" onclick="onSettingsNavSectionChange('ups')">
                                 <i class="bi bi-lightning me-2"></i><span id="settingsNavUps">UPS</span>
@@ -144,6 +150,11 @@
                             <button class="nav-link" id="settings-nav-speedtest" data-bs-toggle="pill" data-bs-target="#settings-tab-speedtest" type="button" role="tab">
                                 <i class="bi bi-wifi me-2"></i><span id="settingsNavSpeedtest">Speedtest</span>
                             </button>
+                            <div class="settings-nav-category" role="presentation"><span id="settingsNavCategoryAlerts"></span></div>
+                            <button class="nav-link" id="settings-nav-telegram" data-bs-toggle="pill" data-bs-target="#settings-tab-telegram" type="button" role="tab">
+                                <i class="bi bi-send me-2"></i><span id="settingsNavTelegramIntegration">Интеграция Telegram</span>
+                            </button>
+                            <div class="settings-nav-category" role="presentation"><span id="settingsNavCategorySystem"></span></div>
                             <button class="nav-link" id="settings-nav-security" data-bs-toggle="pill" data-bs-target="#settings-tab-security" type="button" role="tab">
                                 <i class="bi bi-shield-lock me-2"></i><span id="settingsNavSecurity">Безопасность</span>
                             </button>
@@ -1096,6 +1107,65 @@
                                             </div>
                                         </div>
                                         <div class="small" id="speedtestCliStatus"></div>
+                                </div>
+                            </div>
+                            <div class="tab-pane fade" id="settings-tab-telegram" role="tabpanel">
+                                <div class="settings-section mb-4">
+                                    <h5 class="mb-2"><i class="bi bi-send me-2"></i><span id="settingsTelegramTitle">Интеграция Telegram</span></h5>
+                                    <p class="text-muted small mb-3" id="settingsTelegramHint">Общий токен бота и интервал опроса. Куда слать уведомления и по каким событиям — в таблице правил ниже.</p>
+                                    <div class="row g-3 align-items-end mb-3">
+                                        <div class="col-md-5">
+                                            <label class="form-label fw-bold" for="settingsTelegramBotTokenInput" id="settingsTelegramBotTokenLabel">Токен бота</label>
+                                            <input type="password" class="form-control" id="settingsTelegramBotTokenInput" autocomplete="off" placeholder="123456:ABC...">
+                                            <div class="form-text" id="settingsTelegramBotTokenHelp">Оставьте пустым, чтобы не менять сохранённый токен.</div>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <label class="form-label fw-bold" for="settingsTelegramNotifyEnabled" id="settingsTelegramNotifyEnabledLabel">Уведомления</label>
+                                            <select class="form-select" id="settingsTelegramNotifyEnabled">
+                                                <option value="0" id="settingsTelegramNotifyOpt0">Выключено</option>
+                                                <option value="1" id="settingsTelegramNotifyOpt1">Включено</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <label class="form-label fw-bold" for="settingsTelegramIntervalSec" id="settingsTelegramIntervalLabel">Интервал (с)</label>
+                                            <input type="number" class="form-control" id="settingsTelegramIntervalSec" min="15" max="3600" value="60">
+                                        </div>
+                                        <div class="col-md-3 d-flex flex-wrap gap-2 align-items-end">
+                                            <button type="button" class="btn btn-primary" onclick="saveTelegramSettings()" id="settingsTelegramSaveBtn">
+                                                <i class="bi bi-save me-1"></i><span id="settingsTelegramSaveText">Сохранить</span>
+                                            </button>
+                                            <button type="button" class="btn btn-outline-danger" onclick="clearTelegramBotToken()" id="settingsTelegramClearTokenBtn">
+                                                <span id="settingsTelegramClearTokenText">Удалить токен</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="settings-section">
+                                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                                        <h6 class="fw-semibold mb-0"><i class="bi bi-bell me-2"></i><span id="settingsTelegramRulesTitle">Правила уведомлений</span></h6>
+                                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="addTelegramNotificationRule()" id="settingsTelegramAddRuleBtn">
+                                            <i class="bi bi-plus-lg me-1"></i><span id="settingsTelegramAddRuleText">Добавить правило</span>
+                                        </button>
+                                    </div>
+                                    <p class="text-muted small mb-3" id="settingsTelegramRulesHint">Выберите тип события, объект и chat_id (и при необходимости thread_id для темы). Для температуры CPU и скорости линка нужны метрики хоста (агент на узле) в разделе метрик Proxmox.</p>
+                                    <p class="text-muted small mb-3" id="settingsTelegramRulesMessageHintShort"></p>
+                                    <div class="table-responsive">
+                                        <table class="table table-sm table-hover align-middle">
+                                            <thead>
+                                                <tr>
+                                                    <th class="text-center" id="settingsTelegramRuleEnabledHeader" style="width:2.5rem"></th>
+                                                    <th id="settingsTelegramRuleTypeHeader">Тип</th>
+                                                    <th id="settingsTelegramRuleTargetHeader">Объект</th>
+                                                    <th id="settingsTelegramRuleExtraHeader">Параметр</th>
+                                                    <th id="settingsTelegramRuleMessageHeader" style="min-width:7rem">Текст</th>
+                                                    <th id="settingsTelegramRuleChatHeader">Chat</th>
+                                                    <th id="settingsTelegramRuleThreadHeader">Thread</th>
+                                                    <th id="settingsTelegramRuleActionsHeader"></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="telegramRulesTableBody"></tbody>
+                                        </table>
+                                    </div>
                                 </div>
                             </div>
                             <!-- Отладка -->

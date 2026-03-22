@@ -4,9 +4,11 @@
                 <div class="row">
                     <div class="col-md-3 col-lg-2 mb-3 mb-md-0 d-flex flex-column">
                         <nav class="nav flex-column nav-pills" id="settingsNav" role="tablist">
+                            <div class="settings-nav-category" role="presentation"><span id="settingsNavCategoryConnection"></span></div>
                             <button class="nav-link active" id="settings-nav-connection" data-bs-toggle="pill" data-bs-target="#settings-tab-connection" type="button" role="tab">
                                 <i class="bi bi-key me-2"></i><span id="settingsNavConnection">Подключение</span>
                             </button>
+                            <div class="settings-nav-category" role="presentation"><span id="settingsNavCategoryInterface"></span></div>
                             <button class="nav-link" id="settings-nav-display" data-bs-toggle="pill" data-bs-target="#settings-tab-display" type="button" role="tab">
                                 <i class="bi bi-eye me-2"></i><span id="settingsNavDisplay">Отображение</span>
                             </button>
@@ -16,6 +18,7 @@
                             <button class="nav-link" id="settings-nav-thresholds" data-bs-toggle="pill" data-bs-target="#settings-tab-thresholds" type="button" role="tab">
                                 <i class="bi bi-speedometer2 me-2"></i><span id="settingsNavThresholds">Пороги</span>
                             </button>
+                            <div class="settings-nav-category" role="presentation"><span id="settingsNavCategoryMonitoring"></span></div>
                             <button class="nav-link" id="settings-nav-services" data-bs-toggle="pill" data-bs-target="#settings-tab-services" type="button" role="tab" onclick="onSettingsNavSectionChange('services')">
                                 <i class="bi bi-activity me-2"></i><span id="settingsNavServices">Мониторинг сервисов</span>
                             </button>
@@ -34,9 +37,11 @@
                             <button class="nav-link" id="settings-nav-speedtest" data-bs-toggle="pill" data-bs-target="#settings-tab-speedtest" type="button" role="tab">
                                 <i class="bi bi-wifi me-2"></i><span id="settingsNavSpeedtest">Speedtest</span>
                             </button>
+                            <div class="settings-nav-category" role="presentation"><span id="settingsNavCategoryAlerts"></span></div>
                             <button class="nav-link" id="settings-nav-telegram" data-bs-toggle="pill" data-bs-target="#settings-tab-telegram" type="button" role="tab">
                                 <i class="bi bi-send me-2"></i><span id="settingsNavTelegramIntegration">Интеграция Telegram</span>
                             </button>
+                            <div class="settings-nav-category" role="presentation"><span id="settingsNavCategorySystem"></span></div>
                             <button class="nav-link" id="settings-nav-security" data-bs-toggle="pill" data-bs-target="#settings-tab-security" type="button" role="tab">
                                 <i class="bi bi-shield-lock me-2"></i><span id="settingsNavSecurity">Безопасность</span>
                             </button>

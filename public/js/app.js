@@ -1474,6 +1474,11 @@ function updateUILanguage() {
     setText('settingsExportAllBtn', t('settingsExportAllBtn') || 'Экспорт всех настроек');
     setText('settingsImportAllBtn', t('settingsImportAllBtn') || 'Импорт всех настроек');
     setText('settingsNavConnection', t('settingsNavConnection'));
+        setText('settingsNavCategoryConnection', t('settingsNavCategoryConnection'));
+        setText('settingsNavCategoryInterface', t('settingsNavCategoryInterface'));
+        setText('settingsNavCategoryMonitoring', t('settingsNavCategoryMonitoring'));
+        setText('settingsNavCategoryAlerts', t('settingsNavCategoryAlerts'));
+        setText('settingsNavCategorySystem', t('settingsNavCategorySystem'));
         setText('settingsNavDisplay', t('settingsNavDisplay'));
         setText('settingsNavStyles', t('settingsNavStyles'));
         setText('settingsStylesTitle', t('settingsStylesTitle') || 'Стили');
