@@ -2619,18 +2619,53 @@ async function clearTelegramBotToken() {
 
 function getCurrentConnectionId() {
     const url = getCurrentServerUrl();
-    return connectionIdMap[connectionKey(currentServerType, url)] || null;
+    const direct = connectionIdMap[connectionKey(currentServerType, url)] || null;
+    if (direct) return direct;
+    // Один токен в БД часто привязан только к URL активного сервера при «Подключить» — используем его для любого адреса из списка
+    if (currentServerType === 'proxmox') {
+        for (const u of proxmoxServers) {
+            const id = connectionIdMap[connectionKey('proxmox', u)];
+            if (id) return id;
+        }
+    } else if (currentServerType === 'truenas') {
+        for (const u of truenasServers) {
+            const id = connectionIdMap[connectionKey('truenas', u)];
+            if (id) return id;
+        }
+    }
+    return null;
 }
 
 function getCurrentProxmoxHeaders() {
     if (currentServerType !== 'proxmox') return null;
     const connId = getCurrentConnectionId();
-    if (connId) return { 'X-Connection-Id': connId };
+    const serverUrl = getCurrentServerUrl();
+    if (connId) {
+        return { 'X-Connection-Id': connId, 'X-Server-Url': serverUrl };
+    }
     if (!apiToken) return null;
     return {
         'Authorization': apiToken,
-        'X-Server-Url': getCurrentServerUrl()
+        'X-Server-Url': serverUrl
     };
+}
+
+function getCurrentTrueNASHeaders() {
+    if (currentServerType !== 'truenas') return null;
+    const connId = getCurrentConnectionId();
+    const serverUrl = getCurrentServerUrl();
+    if (connId) {
+        return { 'X-Connection-Id': connId, 'X-Server-Url': serverUrl };
+    }
+    if (!apiToken) return null;
+    return {
+        'Authorization': apiToken,
+        'X-Server-Url': serverUrl
+    };
+}
+
+function getAuthHeadersForCurrentServerType() {
+    return currentServerType === 'truenas' ? getCurrentTrueNASHeaders() : getCurrentProxmoxHeaders();
 }
 
 function saveConnectionId(type, url, id) {
@@ -6931,8 +6966,8 @@ async function refreshData(options = {}) {
 
     if (isRefreshing) return;
     isRefreshing = true;
-    const connId = getCurrentConnectionId();
-    if (!connId && !apiToken) {
+    const authHeaders = getAuthHeadersForCurrentServerType();
+    if (!authHeaders) {
         if (!silent) showToast(t('errorNoToken'), 'error');
         isRefreshing = false;
         return;
@@ -6946,10 +6981,9 @@ async function refreshData(options = {}) {
 
         if (currentServerType === 'truenas') {
             lastHostMetricsData = null;
-            const serverUrl = getCurrentServerUrl();
             const [systemRes, poolsRes] = await Promise.all([
-                fetch('/api/truenas/system', { headers: connId ? { 'X-Connection-Id': connId } : { 'Authorization': apiToken, 'X-Server-Url': serverUrl } }),
-                fetch('/api/truenas/storage/pools', { headers: connId ? { 'X-Connection-Id': connId } : { 'Authorization': apiToken, 'X-Server-Url': serverUrl } })
+                fetch('/api/truenas/system', { headers: authHeaders }),
+                fetch('/api/truenas/storage/pools', { headers: authHeaders })
             ]);
             const systemData = await systemRes.json();
             const poolsData = await poolsRes.json();
@@ -6967,11 +7001,10 @@ async function refreshData(options = {}) {
                 updateSpeedtestDashboard().catch(() => {});
             }
         } else {
-            const serverUrl = getCurrentServerUrl();
             const [clusterRes, storageRes, backupsRes] = await Promise.all([
-                fetch('/api/cluster/full', { headers: connId ? { 'X-Connection-Id': connId } : { 'Authorization': apiToken, 'X-Server-Url': serverUrl } }),
-                fetch('/api/storage', { headers: connId ? { 'X-Connection-Id': connId } : { 'Authorization': apiToken, 'X-Server-Url': serverUrl } }),
-                fetch('/api/backups/jobs', { headers: connId ? { 'X-Connection-Id': connId } : { 'Authorization': apiToken, 'X-Server-Url': serverUrl } })
+                fetch('/api/cluster/full', { headers: authHeaders }),
+                fetch('/api/storage', { headers: authHeaders }),
+                fetch('/api/backups/jobs', { headers: authHeaders })
             ]);
 
             const clusterData = await clusterRes.json();
@@ -8286,9 +8319,11 @@ async function loadClusterVmsForSettings(options) {
     const btn = document.getElementById('loadClusterVmsBtn');
     if (btn && !silent) { btn.disabled = true; setText('loadClusterVmsBtnText', t('loading') || 'Загрузка…'); }
     try {
-        const connId = getCurrentConnectionId();
-        const serverUrl = getCurrentServerUrl();
-        const headers = connId ? { 'X-Connection-Id': connId } : { 'Authorization': apiToken, 'X-Server-Url': serverUrl };
+        const headers = getCurrentProxmoxHeaders();
+        if (!headers) {
+            if (!silent) showToast(t('errorNoToken') || t('tokenRequired'), 'error');
+            return;
+        }
         const res = await fetch('/api/cluster/full', { headers });
         const data = await res.json();
         if (res.ok && data && Array.isArray(data.vms)) {

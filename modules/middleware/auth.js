@@ -1,5 +1,6 @@
 const { log } = require('../utils');
 const connectionStore = require('../connection-store');
+const { resolveServerUrlForConnection } = require('./auth-utils');
 
 // Middleware для проверки авторизации (из заголовка или cookies)
 function checkAuth(req, res, next) {
@@ -10,7 +11,7 @@ function checkAuth(req, res, next) {
             return res.status(401).json({ error: 'Неверный connectionId для Proxmox' });
         }
         req.token = conn.secret;
-        req.serverUrl = conn.url;
+        req.serverUrl = resolveServerUrlForConnection(req, conn.url, 'proxmox_servers');
         return next();
     }
 

@@ -37,7 +37,7 @@ function parseTelegramRoutes() {
     }
 }
 
-function getProxmoxConnection() {
+function resolveProxmoxConnectionFromStore() {
     const raw = store.getSetting('proxmox_servers');
     const idx = parseInt(store.getSetting('current_server_index'), 10) || 0;
     let servers = [];
@@ -57,35 +57,30 @@ function getProxmoxConnection() {
         map = {};
     }
     const key = `proxmox|${url}`;
-    const connId = map[key];
+    let connId = map[key];
+    if (!connId) {
+        for (const k of Object.keys(map)) {
+            if (String(k).startsWith('proxmox|')) {
+                connId = map[k];
+                if (connId) break;
+            }
+        }
+    }
     if (!connId) return null;
     const conn = connectionStore.getConnectionById(String(connId));
     if (!conn || conn.type !== 'proxmox') return null;
-    return { token: conn.secret, serverUrl: conn.url };
+    return { token: conn.secret, serverUrl: url, connectionId: connId };
+}
+
+function getProxmoxConnection() {
+    const r = resolveProxmoxConnectionFromStore();
+    if (!r) return null;
+    return { token: r.token, serverUrl: r.serverUrl };
 }
 
 function getProxmoxConnectionId() {
-    const raw = store.getSetting('proxmox_servers');
-    const idx = parseInt(store.getSetting('current_server_index'), 10) || 0;
-    let servers = [];
-    try {
-        servers = JSON.parse(raw);
-    } catch {
-        servers = [];
-    }
-    if (!Array.isArray(servers) || !servers.length) return null;
-    const url = normalizeUrl(servers[idx] || servers[0]);
-    if (!url) return null;
-    const mapRaw = store.getSetting('connection_id_map');
-    let map = {};
-    try {
-        map = JSON.parse(mapRaw);
-    } catch {
-        map = {};
-    }
-    const key = `proxmox|${url}`;
-    const connId = map[key];
-    return connId ? String(connId) : null;
+    const r = resolveProxmoxConnectionFromStore();
+    return r ? String(r.connectionId) : null;
 }
 
 function parseNotifyState() {
