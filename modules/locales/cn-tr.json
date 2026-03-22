@@ -114,7 +114,7 @@
     "notApplicable": "不适用",
     "notConnected": "未连接",
     "pingAllText": "全部检查",
-    "proxmoxServersHint": "服务器URL列表（每行一个）。如果主服务器不可用，将使用备用服务器。",
+    "proxmoxServersHint": "每个字段一个 URL。带勾选的是主服务器，其余为备用。",
     "proxmoxServersLabel": "Proxmox服务器",
     "quorum": "法定人数",
     "quorumEnough": "法定人数满足",

@@ -120,7 +120,7 @@
     "notApplicable": "N/A",
     "notConnected": "Not connected",
     "pingAllText": "Check all",
-    "proxmoxServersHint": "List of server URLs (one per line). If the primary server is unavailable, a fallback will be used.",
+    "proxmoxServersHint": "One URL per field. The server marked with the check is primary; others are fallbacks if it is unavailable.",
     "proxmoxServersLabel": "Proxmox servers",
     "quorum": "Quorum",
     "quorumEnough": "Quorum OK",

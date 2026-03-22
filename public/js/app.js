@@ -6302,9 +6302,13 @@ async function connect() {
         : document.getElementById('apiToken');
     if (currentServerType === 'proxmox') syncProxmoxApiTokenFromParts();
     const rawToken = tokenInput ? tokenInput.value.trim() : '';
-    const token = (rawToken && rawToken.includes('•')) ? (apiToken || '') : rawToken;
+    const masked = rawToken.includes('•');
+    const token = masked ? (apiToken || '') : rawToken;
+    const connId = getCurrentConnectionId();
+    // Секрет только в БД: поле с маской, apiToken в памяти уже null — используем сохранённое подключение
+    const reuseExistingSecret = connId && (!rawToken || (masked && !apiToken));
 
-    if (!token) {
+    if (!reuseExistingSecret && !token) {
         showToast(t('tokenRequired'), 'error');
         return;
     }
@@ -6317,6 +6321,20 @@ async function connect() {
     
     const serverUrl = getCurrentServerUrl();
     try {
+        if (reuseExistingSecret) {
+            const testRes = await fetch(`/api/connections/${connId}/test`, { method: 'POST' });
+            const testData = await testRes.json().catch(() => ({}));
+            if (!testRes.ok || !testData.success) {
+                throw new Error(testData?.error || `HTTP ${testRes.status}`);
+            }
+            showToast(t('connectSuccess'), 'success');
+            const logoutContainerId = currentServerType === 'truenas' ? 'logoutContainerTrueNAS' : 'logoutContainerProxmox';
+            setDisplay(logoutContainerId, 'block');
+            updateConnectionStatus(true, currentServerType);
+            showDashboard();
+            return;
+        }
+
         // Всегда сохраняем секрет в DB и используем connectionId
         const upsertRes = await fetch('/api/connections/upsert', {
             method: 'POST',
@@ -6375,24 +6393,20 @@ async function testConnection() {
         : document.getElementById('apiToken');
     if (currentServerType === 'proxmox') syncProxmoxApiTokenFromParts();
     const rawToken = tokenInput ? tokenInput.value.trim() : '';
-    const token = (rawToken && rawToken.includes('•')) ? (apiToken || '') : rawToken;
-
-    if (!token) {
-        showToast(t('tokenRequired'), 'warning');
-        updateConnectionStatus(false, currentServerType);
-        return;
-    }
+    const masked = rawToken.includes('•');
+    const token = masked ? (apiToken || '') : rawToken;
+    const connId = getCurrentConnectionId();
+    const reuseExistingSecret = connId && (!rawToken || (masked && !apiToken));
 
     const testBtnId = currentServerType === 'truenas' ? 'testConnectionBtnTrueNAS' : 'testConnectionBtnProxmox';
     const testBtn = document.getElementById(testBtnId);
     const originalText = testBtn.innerHTML;
     testBtn.disabled = true;
     testBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>' + t('loading');
-    
+
     const serverUrl = getCurrentServerUrl();
     try {
-        const connId = getCurrentConnectionId();
-        if (connId) {
+        if (reuseExistingSecret) {
             const testRes = await fetch(`/api/connections/${connId}/test`, { method: 'POST' });
             const testData = await testRes.json();
             if (testRes.ok && testData.success) {
@@ -6401,6 +6415,12 @@ async function testConnection() {
                 return;
             }
             showToast(t('connectionStatusDisconnected') + ': ' + (testData.error || `HTTP ${testRes.status}`), 'error');
+            updateConnectionStatus(false, currentServerType);
+            return;
+        }
+
+        if (!token) {
+            showToast(t('tokenRequired'), 'warning');
             updateConnectionStatus(false, currentServerType);
             return;
         }
@@ -8612,6 +8632,12 @@ async function loadSettings() {
     monitorVmIconColors = normalizeMonitorVmIconColorsMap(data.monitor_vm_icon_colors);
     if (data.current_server_index != null) currentServerIndex = parseInt(data.current_server_index, 10) || 0;
     if (data.current_truenas_index != null) currentTrueNASServerIndex = parseInt(data.current_truenas_index, 10) || 0;
+    if (proxmoxServers.length) {
+        currentServerIndex = Math.max(0, Math.min(currentServerIndex, proxmoxServers.length - 1));
+    }
+    if (truenasServers.length) {
+        currentTrueNASServerIndex = Math.max(0, Math.min(currentTrueNASServerIndex, truenasServers.length - 1));
+    }
     if (data.server_type) currentServerType = data.server_type === 'truenas' ? 'truenas' : 'proxmox';
     if (data.monitor_theme === 'light' || data.monitor_theme === 'dark') monitorTheme = data.monitor_theme;
     if (data.custom_theme_style_settings !== undefined) {
@@ -8853,7 +8879,6 @@ function renderOneServerList(containerId, servers, currentIdx, type) {
         const div = document.createElement('div');
         div.className = 'input-group mb-2';
         const isCurrent = index === currentIdx;
-        const statusBadge = isCurrent ? '<span class="badge bg-success ms-2">✓</span>' : '';
         div.innerHTML = `
             <input type="text" class="form-control form-control-sm ${isCurrent ? 'border-success' : ''}"
                    value="${escapeHtml(server)}" data-index="${index}"
@@ -8867,7 +8892,6 @@ function renderOneServerList(containerId, servers, currentIdx, type) {
                     title="${t('removeServer')}">
                 <i class="bi bi-trash"></i>
             </button>
-            ${statusBadge}
         `;
         container.appendChild(div);
     });
@@ -8922,17 +8946,27 @@ function removeServerByType(type, index) {
         showToast(t('toastCannotRemoveLastServer'), 'warning');
         return;
     }
+    const removedUrl = servers[index];
     servers.splice(index, 1);
-    const currentIdx = type === 'truenas' ? currentTrueNASServerIndex : currentServerIndex;
-    if (currentIdx >= servers.length) {
-        if (type === 'truenas') {
-            currentTrueNASServerIndex = servers.length - 1;
-            saveSettingsToServer({ currentTrueNASServerIndex: currentTrueNASServerIndex });
-        } else {
-            currentServerIndex = servers.length - 1;
-            saveSettingsToServer({ currentServerIndex: currentServerIndex });
-        }
+
+    let currentIdx = type === 'truenas' ? currentTrueNASServerIndex : currentServerIndex;
+    if (index < currentIdx) {
+        currentIdx -= 1;
+    } else if (index === currentIdx) {
+        currentIdx = Math.min(currentIdx, servers.length - 1);
     }
+    currentIdx = Math.max(0, Math.min(currentIdx, servers.length - 1));
+
+    if (type === 'truenas') {
+        currentTrueNASServerIndex = currentIdx;
+    } else {
+        currentServerIndex = currentIdx;
+    }
+
+    if (removedUrl != null && String(removedUrl).trim() !== '') {
+        delete connectionIdMap[connectionKey(type, normalizeUrlClient(removedUrl))];
+    }
+
     renderServerList();
     saveServers();
 }
@@ -8943,7 +8977,8 @@ function saveServers() {
         proxmoxServers: [...proxmoxServers],
         truenasServers: [...truenasServers],
         currentServerIndex: currentServerIndex,
-        currentTrueNASServerIndex: currentTrueNASServerIndex
+        currentTrueNASServerIndex: currentTrueNASServerIndex,
+        connectionIdMap: { ...connectionIdMap }
     });
     updateCurrentServerBadge();
 }

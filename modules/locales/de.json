@@ -115,7 +115,7 @@
     "notApplicable": "N/V",
     "notConnected": "Nicht verbunden",
     "pingAllText": "Alle prüfen",
-    "proxmoxServersHint": "Liste der Server-URLs (eine pro Zeile). Wenn der primäre Server nicht verfügbar ist, wird ein Ausweichserver verwendet.",
+    "proxmoxServersHint": "Je ein URL pro Feld. Der mit dem Häkchen markierte Server ist primär; die übrigen sind Ausweichserver.",
     "proxmoxServersLabel": "Proxmox-Server",
     "quorum": "Quorum",
     "quorumEnough": "Quorum in Ordnung",

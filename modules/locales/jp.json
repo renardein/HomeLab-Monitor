@@ -114,7 +114,7 @@
     "notApplicable": "N/A",
     "notConnected": "未接続",
     "pingAllText": "すべて確認",
-    "proxmoxServersHint": "サーバーURLのリスト（1行に1つ）。プライマリサーバーが利用できない場合は、フォールバックが使用されます。",
+    "proxmoxServersHint": "フィールドごとに1つのURL。チェックの付いたサーバーがプライマリ、他はフォールバックです。",
     "proxmoxServersLabel": "Proxmoxサーバー",
     "quorum": "クォーラム",
     "quorumEnough": "クォーラムOK",

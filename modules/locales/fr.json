@@ -115,7 +115,7 @@
     "notApplicable": "N/A",
     "notConnected": "Non connecté",
     "pingAllText": "Tout vérifier",
-    "proxmoxServersHint": "Liste des URL des serveurs (une par ligne). Si le serveur principal est indisponible, un serveur de secours sera utilisé.",
+    "proxmoxServersHint": "Une URL par champ. Le serveur avec la coche est le principal ; les autres servent de secours.",
     "proxmoxServersLabel": "Serveurs Proxmox",
     "quorum": "Quorum",
     "quorumEnough": "Quorum OK",
