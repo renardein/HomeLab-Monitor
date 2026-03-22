@@ -1,8 +1,8 @@
-<!-- Дашборд -->
+<!-- Dashboard -->
         <div id="dashboardSection" style="display: none;">
-            <!-- Обычный контент дашборда (скрыт в режиме монитора) -->
+            <!-- Normal dashboard content (hidden in monitor mode) -->
             <div id="dashboardContent">
-            <!-- Статистика кластера -->
+            <!-- Cluster stats -->
             <div class="row g-4 mb-4">
                 <div class="col-md-6 col-xl">
                     <div class="stat-card">
@@ -19,30 +19,29 @@
                 <div class="col-md-6 col-xl">
                     <div class="stat-card">
                         <div class="stat-value" id="totalNodes">0</div>
-                        <div class="stat-label" id="totalNodesLabel">Всего узлов</div>
+                        <div class="stat-label" id="totalNodesLabel">Total nodes</div>
                     </div>
                 </div>
                 <div class="col-md-6 col-xl">
                     <div class="stat-card">
                         <div class="stat-value text-success" id="onlineNodes">0</div>
-                        <div class="stat-label" id="onlineNodesLabel">Узлов онлайн</div>
+                        <div class="stat-label" id="onlineNodesLabel">Nodes online</div>
                     </div>
                 </div>
                 <div class="col-md-6 col-xl">
                     <div class="stat-card">
                         <div class="stat-value" id="quorumStatus">-</div>
-                        <div class="stat-label" id="quorumLabel">Кворум</div>
+                        <div class="stat-label" id="quorumLabel">Quorum</div>
                     </div>
                 </div>
             </div>
 
-            <!-- Сводка ресурсов кластера -->
+            <!-- Cluster resource summary -->
             <div class="row mb-4">
                 <div class="col-12">
                     <div class="card">
                         <div class="card-header">
-                            <h5 class="mb-0"><i class="bi bi-pie-chart me-2"></i><span id="clusterResources">Ресурсы
-                                    кластера</span></h5>
+                            <h5 class="mb-0"><i class="bi bi-pie-chart me-2"></i><span id="clusterResources">Cluster resources</span></h5>
                         </div>
                         <div class="card-body">
                             <div class="row g-2">
@@ -50,7 +49,7 @@
                                     <div class="text-center p-3">
                                         <h6><i class="bi bi-cpu me-2"></i><span id="cpuLabel">CPU</span></h6>
                                         <div class="display-6" id="clusterCpu">0</div>
-                                        <small class="text-muted" id="clusterCpuDetail">0/0 ядер</small>
+                                        <small class="text-muted" id="clusterCpuDetail">0/0 cores</small>
                                         <div class="progress mt-2" style="height: 10px;">
                                             <div class="progress-bar bg-primary" id="clusterCpuBar" style="width: 0%">
                                             </div>
@@ -59,7 +58,7 @@
                                 </div>
                                 <div class="col-md-3 col-6">
                                     <div class="text-center p-3">
-                                        <h6><i class="bi bi-memory me-2"></i><span id="memoryLabel">Память</span></h6>
+                                        <h6><i class="bi bi-memory me-2"></i><span id="memoryLabel">Memory</span></h6>
                                         <div class="display-6" id="clusterMemory">0</div>
                                         <small class="text-muted" id="clusterMemoryDetail">0/0</small>
                                         <div class="progress mt-2" style="height: 10px;">
@@ -72,7 +71,7 @@
                                     <div class="text-center p-3">
                                         <h6><i class="bi bi-pc-display me-2"></i><span id="dashboardClusterVmTitle">VM</span></h6>
                                         <div class="display-6" id="clusterVmTotal">0</div>
-                                        <small class="text-muted d-block" id="dashboardClusterVmSub"><span id="dashboardClusterVmRunningLbl">Запущено</span>: <span class="text-success fw-semibold" id="clusterVmRunning">0</span></small>
+                                        <small class="text-muted d-block" id="dashboardClusterVmSub"><span id="dashboardClusterVmRunningLbl">Running</span>: <span class="text-success fw-semibold" id="clusterVmRunning">0</span></small>
                                         <div class="progress mt-2" style="height: 10px;">
                                             <div class="progress-bar bg-success" id="clusterVmRunningBar" style="width: 0%" title=""></div>
                                         </div>
@@ -82,7 +81,7 @@
                                     <div class="text-center p-3">
                                         <h6><i class="bi bi-box-seam me-2"></i><span id="dashboardClusterCtTitle">CT</span></h6>
                                         <div class="display-6" id="clusterCtTotal">0</div>
-                                        <small class="text-muted d-block" id="dashboardClusterCtSub"><span id="dashboardClusterCtRunningLbl">Запущено</span>: <span class="text-success fw-semibold" id="clusterCtRunning">0</span></small>
+                                        <small class="text-muted d-block" id="dashboardClusterCtSub"><span id="dashboardClusterCtRunningLbl">Running</span>: <span class="text-success fw-semibold" id="clusterCtRunning">0</span></small>
                                         <div class="progress mt-2" style="height: 10px;">
                                             <div class="progress-bar bg-success" id="clusterCtRunningBar" style="width: 0%" title=""></div>
                                         </div>
@@ -94,12 +93,12 @@
                 </div>
             </div>
 
-            <!-- Сетевые устройства (SNMP) на главном дашборде -->
+            <!-- SNMP dashboard block -->
             <div class="row mb-4" id="dashboardNetdevSection" style="display: none;">
                 <div class="col-12">
                     <div class="card">
                         <div class="card-header">
-                            <h5 class="mb-0"><i class="bi bi-diagram-3 me-2"></i><span id="dashboardNetdevTitle">Сетевые устройства (SNMP)</span></h5>
+                            <h5 class="mb-0"><i class="bi bi-diagram-3 me-2"></i><span id="dashboardNetdevTitle">Network devices (SNMP)</span></h5>
                         </div>
                         <div class="card-body">
                             <div class="d-flex align-items-center mb-2 flex-wrap gap-2">
@@ -111,7 +110,7 @@
                 </div>
             </div>
 
-            <!-- Speedtest на дашборде -->
+            <!-- Speedtest on dashboard -->
             <div class="row mb-4" id="dashboardSpeedtestSection" style="display: none;">
                 <div class="col-12">
                     <div class="card">
@@ -121,19 +120,19 @@
                         <div class="card-body">
                             <div class="row g-3 small">
                                 <div class="col-md-4 col-6">
-                                    <div class="text-muted" id="speedtestLastRunLabel">Последний замер</div>
+                                    <div class="text-muted" id="speedtestLastRunLabel">Last run</div>
                                     <div class="fs-5 fw-semibold" id="dashboardSpeedtestLastRun">—</div>
                                 </div>
                                 <div class="col-md-4 col-6">
-                                    <div class="text-muted" id="speedtestAvgLabel">Средняя скорость (сегодня)</div>
+                                    <div class="text-muted" id="speedtestAvgLabel">Average speed (today)</div>
                                     <div class="fs-5 fw-semibold" id="dashboardSpeedtestAvg">—</div>
                                 </div>
                                 <div class="col-md-2 col-6">
-                                    <div class="text-muted" id="speedtestMinLabel">Минимум</div>
+                                    <div class="text-muted" id="speedtestMinLabel">Minimum</div>
                                     <div class="fs-6 fw-semibold" id="dashboardSpeedtestMin">—</div>
                                 </div>
                                 <div class="col-md-2 col-6">
-                                    <div class="text-muted" id="speedtestMaxLabel">Максимум</div>
+                                    <div class="text-muted" id="speedtestMaxLabel">Maximum</div>
                                     <div class="fs-6 fw-semibold" id="dashboardSpeedtestMax">—</div>
                                 </div>
                             </div>
@@ -143,47 +142,47 @@
                 </div>
             </div>
 
-            <!-- Вкладки -->
+            <!-- Tabs -->
             <ul class="nav nav-tabs mb-4" id="myTab" role="tablist">
                 <li class="nav-item" role="presentation">
                     <button class="nav-link active" id="nodes-tab" data-bs-toggle="tab" data-bs-target="#nodes"
                         type="button" role="tab">
-                        <span id="tabNodes">Узлы</span>
+                        <span id="tabNodes">Nodes</span>
                     </button>
                 </li>
                 <li class="nav-item" role="presentation">
                     <button class="nav-link" id="storage-tab" data-bs-toggle="tab" data-bs-target="#storage"
                         type="button" role="tab">
-                        <i class="bi bi-hdd-stack me-1"></i><span id="tabStorage">Хранилища</span>
+                        <i class="bi bi-hdd-stack me-1"></i><span id="tabStorage">Storage</span>
                     </button>
                 </li>
                 <li class="nav-item" role="presentation">
                     <button class="nav-link" id="servers-tab" data-bs-toggle="tab" data-bs-target="#servers"
                         type="button" role="tab">
-                        <i class="bi bi-server me-1"></i><span id="tabServers">Серверы</span>
+                        <i class="bi bi-server me-1"></i><span id="tabServers">Servers</span>
                     </button>
                 </li>
                 <li class="nav-item" role="presentation">
                     <button class="nav-link" id="backups-tab" data-bs-toggle="tab" data-bs-target="#backups"
                         type="button" role="tab">
-                        <i class="bi bi-archive me-1"></i><span id="tabBackups">Задания бэкапа</span>
+                        <i class="bi bi-archive me-1"></i><span id="tabBackups">Backup jobs</span>
                     </button>
                 </li>
                 <li class="nav-item" role="presentation">
                     <button class="nav-link" id="quorum-tab" data-bs-toggle="tab" data-bs-target="#quorum" type="button"
                         role="tab">
-                        <i class="bi bi-people me-1"></i><span id="tabQuorum">Кворум</span>
+                        <i class="bi bi-people me-1"></i><span id="tabQuorum">Quorum</span>
                     </button>
                 </li>
             </ul>
 
-            <!-- Индикатор загрузки -->
+            <!-- Loading indicator -->
             <div id="loadingIndicator" class="text-center py-5">
                 <div class="spinner-border text-primary mb-3" role="status"></div>
-                <p class="text-muted" id="loadingText">Загрузка данных из кластера...</p>
+                <p class="text-muted" id="loadingText">Loading cluster data…</p>
             </div>
 
-            <!-- Содержимое вкладок -->
+            <!-- Tab panes -->
             <div class="tab-content" id="myTabContent">
                 <div class="tab-pane fade show active" id="nodes" role="tabpanel">
                     <div class="row" id="nodesContainer"></div>
@@ -198,14 +197,14 @@
                                 <table class="table table-hover" id="storageTable">
                                     <thead>
                                         <tr>
-                                            <th id="storageNodeHeader">Узел</th>
-                                            <th id="storageNameHeader">Хранилище</th>
-                                            <th id="storageTypeHeader">Тип</th>
-                                            <th id="storageStatusHeader">Статус</th>
-                                            <th id="storageUsedHeader">Использовано</th>
-                                            <th id="storageTotalHeader">Всего</th>
-                                            <th id="storageUsageHeader">Загрузка</th>
-                                            <th id="storageDetailsHeader">Детали</th>
+                                            <th id="storageNodeHeader">Node</th>
+                                            <th id="storageNameHeader">Storage</th>
+                                            <th id="storageTypeHeader">Type</th>
+                                            <th id="storageStatusHeader">Status</th>
+                                            <th id="storageUsedHeader">Used</th>
+                                            <th id="storageTotalHeader">Total</th>
+                                            <th id="storageUsageHeader">Usage</th>
+                                            <th id="storageDetailsHeader">Details</th>
                                         </tr>
                                     </thead>
                                     <tbody id="storageBody"></tbody>
@@ -222,19 +221,19 @@
                 <div class="tab-pane fade" id="backups" role="tabpanel">
                     <div class="card mb-4">
                         <div class="card-body">
-                            <h5 class="card-title mb-3"><i class="bi bi-calendar-check me-2"></i><span id="backupSectionJobsTitle">Существующие задания</span></h5>
+                            <h5 class="card-title mb-3"><i class="bi bi-calendar-check me-2"></i><span id="backupSectionJobsTitle">Scheduled jobs</span></h5>
                             <div class="row mb-3 g-2" id="backupJobsStats"></div>
                             <div class="table-responsive">
                                 <table class="table table-hover" id="backupJobsTable">
                                     <thead>
                                         <tr>
                                             <th id="backupIdHeader">ID</th>
-                                            <th id="backupScheduleHeader">Расписание</th>
-                                            <th id="backupJobStateHeader">Состояние</th>
-                                            <th id="backupStorageHeader">Хранилище</th>
+                                            <th id="backupScheduleHeader">Schedule</th>
+                                            <th id="backupJobStateHeader">State</th>
+                                            <th id="backupStorageHeader">Storage</th>
                                             <th id="backupVmidHeader">VM/CT</th>
-                                            <th id="backupModeHeader">Режим</th>
-                                            <th id="backupNextRunHeader">Следующий запуск</th>
+                                            <th id="backupModeHeader">Mode</th>
+                                            <th id="backupNextRunHeader">Next run</th>
                                         </tr>
                                     </thead>
                                     <tbody id="backupJobsBody"></tbody>
@@ -244,20 +243,20 @@
                     </div>
                     <div class="card">
                         <div class="card-body">
-                            <h5 class="card-title mb-3"><i class="bi bi-activity me-2"></i><span id="backupSectionExecTitle">Статус выполнения</span></h5>
-                            <p class="text-muted small mb-2" id="backupExecHint">Последние запуски резервного копирования (vzdump) в кластере.</p>
+                            <h5 class="card-title mb-3"><i class="bi bi-activity me-2"></i><span id="backupSectionExecTitle">Execution status</span></h5>
+                            <p class="text-muted small mb-2" id="backupExecHint">Recent vzdump backup runs in the cluster.</p>
                             <div class="row mb-3 g-2" id="backupExecStats"></div>
                             <div class="table-responsive">
                                 <table class="table table-hover" id="backupExecutionsTable">
                                     <thead>
                                         <tr>
-                                            <th id="backupExecStartHeader">Начало</th>
-                                            <th id="backupExecEndHeader">Окончание</th>
-                                            <th id="backupExecNodeHeader">Узел</th>
+                                            <th id="backupExecStartHeader">Start</th>
+                                            <th id="backupExecEndHeader">End</th>
+                                            <th id="backupExecNodeHeader">Node</th>
                                             <th id="backupExecTargetHeader">VM/CT</th>
-                                            <th id="backupExecStatusHeader">Статус</th>
-                                            <th id="backupExecResultHeader">Результат</th>
-                                            <th id="backupExecUserHeader">Пользователь</th>
+                                            <th id="backupExecStatusHeader">Status</th>
+                                            <th id="backupExecResultHeader">Result</th>
+                                            <th id="backupExecUserHeader">User</th>
                                             <th id="backupExecUpidHeader">UPID</th>
                                         </tr>
                                     </thead>
@@ -278,11 +277,11 @@
                 </div>
             </div>
 
-            <!-- Комбинируемые плитки на экране Cluster -->
+            <!-- Cluster screen tiles -->
             <div class="row mb-4" id="dashboardClusterTilesSection" style="display: none;">
                 <div class="col-12">
                     <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
-                        <h5 class="mb-0"><i class="bi bi-grid-1x2 me-2"></i><span id="dashboardClusterTilesTitle">Плитки Cluster</span></h5>
+                        <h5 class="mb-0"><i class="bi bi-grid-1x2 me-2"></i><span id="dashboardClusterTilesTitle">Cluster tiles</span></h5>
                     </div>
                     <div class="cluster-scroll-row" id="dashboardClusterTiles"></div>
                 </div>
@@ -292,34 +291,34 @@
                 <small class="text-muted" id="lastUpdate"></small>
             </div>
             </div>
-            <!-- Компактный вид режима монитора (1920×1200 без скролла, свайпы + стрелки) -->
+            <!-- Monitor mode compact view -->
             <div id="monitorView" class="monitor-view" style="display: none;">
                 <div class="monitor-view__stats">
-                    <div class="monitor-view__stat"><span class="monitor-view__stat-value" id="monitorTotalNodes">0</span><span class="monitor-view__stat-label" id="monitorTotalNodesLabel">Узлов</span></div>
-                    <div class="monitor-view__stat"><span class="monitor-view__stat-value monitor-view__stat-ok" id="monitorOnlineNodes">0</span><span class="monitor-view__stat-label" id="monitorOnlineNodesLabel">Онлайн</span></div>
-                    <div class="monitor-view__stat"><span class="monitor-view__stat-value" id="monitorQuorum">—</span><span class="monitor-view__stat-label" id="monitorQuorumLabel">Кворум</span></div>
+                    <div class="monitor-view__stat"><span class="monitor-view__stat-value" id="monitorTotalNodes">0</span><span class="monitor-view__stat-label" id="monitorTotalNodesLabel">Nodes</span></div>
+                    <div class="monitor-view__stat"><span class="monitor-view__stat-value monitor-view__stat-ok" id="monitorOnlineNodes">0</span><span class="monitor-view__stat-label" id="monitorOnlineNodesLabel">Online</span></div>
+                    <div class="monitor-view__stat"><span class="monitor-view__stat-value" id="monitorQuorum">—</span><span class="monitor-view__stat-label" id="monitorQuorumLabel">Quorum</span></div>
                 </div>
                 <div class="monitor-view__resources">
                     <div class="monitor-view__res"><span class="monitor-view__res-label">CPU</span><span class="monitor-view__res-value" id="monitorCpu">0%</span><div class="monitor-view__res-bar"><div class="monitor-view__res-fill" id="monitorCpuBar"></div></div></div>
                     <div class="monitor-view__res"><span class="monitor-view__res-label">RAM</span><span class="monitor-view__res-value" id="monitorMemory">0%</span><div class="monitor-view__res-bar"><div class="monitor-view__res-fill monitor-view__res-fill--mem" id="monitorMemoryBar"></div></div></div>
                     <div class="monitor-view__res monitor-view__res--guest" aria-label="VM">
                         <div class="monitor-view__res-guest-title" id="monitorBlockVmTitle">VM</div>
-                        <div class="monitor-view__res-guest-line"><span class="monitor-view__res-guest-lbl" id="monitorVmTotalLbl">Всего</span><span class="monitor-view__res-guest-val" id="monitorVmTotal">0</span></div>
-                        <div class="monitor-view__res-guest-line"><span class="monitor-view__res-guest-lbl" id="monitorVmRunningLbl">Запущено</span><span class="monitor-view__res-guest-val monitor-view__res-guest-val--run" id="monitorVmRunning">0</span></div>
+                        <div class="monitor-view__res-guest-line"><span class="monitor-view__res-guest-lbl" id="monitorVmTotalLbl">Total</span><span class="monitor-view__res-guest-val" id="monitorVmTotal">0</span></div>
+                        <div class="monitor-view__res-guest-line"><span class="monitor-view__res-guest-lbl" id="monitorVmRunningLbl">Running</span><span class="monitor-view__res-guest-val monitor-view__res-guest-val--run" id="monitorVmRunning">0</span></div>
                     </div>
                     <div class="monitor-view__res monitor-view__res--guest" aria-label="CT">
                         <div class="monitor-view__res-guest-title" id="monitorBlockCtTitle">CT</div>
-                        <div class="monitor-view__res-guest-line"><span class="monitor-view__res-guest-lbl" id="monitorCtTotalLbl">Всего</span><span class="monitor-view__res-guest-val" id="monitorCtTotal">0</span></div>
-                        <div class="monitor-view__res-guest-line"><span class="monitor-view__res-guest-lbl" id="monitorCtRunningLbl">Запущено</span><span class="monitor-view__res-guest-val monitor-view__res-guest-val--run" id="monitorCtRunning">0</span></div>
+                        <div class="monitor-view__res-guest-line"><span class="monitor-view__res-guest-lbl" id="monitorCtTotalLbl">Total</span><span class="monitor-view__res-guest-val" id="monitorCtTotal">0</span></div>
+                        <div class="monitor-view__res-guest-line"><span class="monitor-view__res-guest-lbl" id="monitorCtRunningLbl">Running</span><span class="monitor-view__res-guest-val monitor-view__res-guest-val--run" id="monitorCtRunning">0</span></div>
                     </div>
                 </div>
                 <div class="monitor-view__body">
                     <div class="monitor-view__panel monitor-view__nodes">
-                        <div class="monitor-view__panel-title" id="monitorNodesTitle">Узлы</div>
+                        <div class="monitor-view__panel-title" id="monitorNodesTitle">Nodes</div>
                         <div class="monitor-view__list" id="monitorNodesList"></div>
                     </div>
                     <div class="monitor-view__panel monitor-view__services-panel">
-                        <div class="monitor-view__panel-title" id="monitorServicesTitle">Сервисы</div>
+                        <div class="monitor-view__panel-title" id="monitorServicesTitle">Services</div>
                         <div class="monitor-view__list monitor-view__services-list" id="monitorServicesList"></div>
                     </div>
                     <div class="monitor-view__panel monitor-view__services-panel">
@@ -338,19 +337,19 @@
             </div>
         </div>
 
-        <!-- Раздел мониторинга сервисов: карточки статусов (управление — в настройках) -->
+        <!-- Services monitor section -->
         <div id="servicesMonitorSection" class="mb-4" style="display: none;">
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <button type="button" class="btn btn-outline-secondary btn-sm" onclick="closeServicesMonitor()">
-                    <i class="bi bi-arrow-left me-1"></i><span id="backToDashboardText">К дашборду</span>
+                    <i class="bi bi-arrow-left me-1"></i><span id="backToDashboardText">Back to dashboard</span>
                 </button>
                 <button class="btn btn-sm btn-outline-success" onclick="checkAllServices()" id="pingAllBtn">
-                    <i class="bi bi-arrow-repeat me-1"></i><span id="pingAllText">Проверить все</span>
+                    <i class="bi bi-arrow-repeat me-1"></i><span id="pingAllText">Check all</span>
                 </button>
             </div>
             <div class="card">
                 <div class="card-header">
-                    <h5 class="mb-0"><i class="bi bi-activity me-2"></i><span id="servicesMonitorTitle">Мониторинг сервисов</span></h5>
+                    <h5 class="mb-0"><i class="bi bi-activity me-2"></i><span id="servicesMonitorTitle">Service monitoring</span></h5>
                 </div>
                 <div class="card-body">
                     <p class="text-muted small mb-3" id="servicesMonitorHint"></p>
@@ -359,16 +358,16 @@
             </div>
         </div>
 
-        <!-- Раздел мониторинга VM/CT: карточки статусов (управление — в настройках) -->
+        <!-- VM/CT monitor section -->
         <div id="vmsMonitorSection" class="mb-4" style="display: none;">
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <button type="button" class="btn btn-outline-secondary btn-sm" onclick="closeVmsMonitor()">
-                    <i class="bi bi-arrow-left me-1"></i><span id="backToDashboardTextVms">К дашборду</span>
+                    <i class="bi bi-arrow-left me-1"></i><span id="backToDashboardTextVms">Back to dashboard</span>
                 </button>
             </div>
             <div class="card">
                 <div class="card-header">
-                    <h5 class="mb-0"><i class="bi bi-hdd-network me-2"></i><span id="vmsMonitorTitle">Статус VM/CT</span></h5>
+                    <h5 class="mb-0"><i class="bi bi-hdd-network me-2"></i><span id="vmsMonitorTitle">VM / CT status</span></h5>
                 </div>
                 <div class="card-body">
                     <p class="text-muted small mb-3" id="vmsMonitorHint"></p>
@@ -377,11 +376,11 @@
             </div>
         </div>
 
-        <!-- Режим монитора: UPS — один экран без скролла -->
+        <!-- Monitor: UPS screen -->
         <div id="upsMonitorSection" class="mb-4" style="display: none;">
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <button type="button" class="btn btn-outline-secondary btn-sm" onclick="applyMonitorView('cluster')">
-                    <i class="bi bi-arrow-left me-1"></i><span id="upsMonitorBackText">К кластеру</span>
+                    <i class="bi bi-arrow-left me-1"></i><span id="upsMonitorBackText">Back to cluster</span>
                 </button>
             </div>
             <div class="card">
@@ -397,16 +396,16 @@
             </div>
         </div>
 
-        <!-- Режим монитора: сетевые устройства (SNMP) — один экран без скролла -->
+        <!-- Monitor: SNMP screen -->
         <div id="netdevMonitorSection" class="mb-4" style="display: none;">
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <button type="button" class="btn btn-outline-secondary btn-sm" onclick="closeNetdevMonitor()">
-                    <i class="bi bi-arrow-left me-1"></i><span id="netdevMonitorBackText">К кластеру</span>
+                    <i class="bi bi-arrow-left me-1"></i><span id="netdevMonitorBackText">Back to cluster</span>
                 </button>
             </div>
             <div class="card">
                 <div class="card-header py-2 px-3">
-                    <h5 class="mb-0"><i class="bi bi-diagram-3 me-2"></i><span id="netdevTitle">Сетевые устройства (SNMP)</span></h5>
+                    <h5 class="mb-0"><i class="bi bi-diagram-3 me-2"></i><span id="netdevTitle">Network devices (SNMP)</span></h5>
                 </div>
                 <div class="card-body">
                     <div class="d-flex align-items-center mb-3">
@@ -417,11 +416,11 @@
             </div>
         </div>
 
-        <!-- Режим монитора: Speedtest -->
+        <!-- Monitor: Speedtest -->
         <div id="speedtestMonitorSection" class="mb-4" style="display: none;">
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <button type="button" class="btn btn-outline-secondary btn-sm" onclick="closeSpeedtestMonitor()">
-                    <i class="bi bi-arrow-left me-1"></i><span id="speedtestMonitorBackText">К кластеру</span>
+                    <i class="bi bi-arrow-left me-1"></i><span id="speedtestMonitorBackText">Back to cluster</span>
                 </button>
             </div>
             <div class="card">
@@ -431,19 +430,19 @@
                 <div class="card-body">
                     <div class="row g-3 small">
                         <div class="col-md-4 col-6">
-                            <div class="text-muted" id="speedtestMonitorLastRunLabel">Последний замер</div>
+                            <div class="text-muted" id="speedtestMonitorLastRunLabel">Last run</div>
                             <div class="fs-5 fw-semibold" id="speedtestMonitorLastRun">—</div>
                         </div>
                         <div class="col-md-4 col-6">
-                            <div class="text-muted" id="speedtestMonitorAvgLabel">Средняя скорость (сегодня)</div>
+                            <div class="text-muted" id="speedtestMonitorAvgLabel">Average speed (today)</div>
                             <div class="fs-5 fw-semibold" id="speedtestMonitorAvg">—</div>
                         </div>
                         <div class="col-md-2 col-6">
-                            <div class="text-muted" id="speedtestMonitorMinLabel">Минимум</div>
+                            <div class="text-muted" id="speedtestMonitorMinLabel">Minimum</div>
                             <div class="fs-6 fw-semibold" id="speedtestMonitorMin">—</div>
                         </div>
                         <div class="col-md-2 col-6">
-                            <div class="text-muted" id="speedtestMonitorMaxLabel">Максимум</div>
+                            <div class="text-muted" id="speedtestMonitorMaxLabel">Maximum</div>
                             <div class="fs-6 fw-semibold" id="speedtestMonitorMax">—</div>
                         </div>
                     </div>
@@ -452,14 +451,14 @@
             </div>
         </div>
 
-        <!-- Режим монитора: бэкапы — один экран без скролла -->
+        <!-- Monitor: backups screen -->
         <div id="backupsMonitorSection" class="monitor-backups-screen" style="display: none;">
             <div class="card monitor-backups-main-card border-0 shadow-sm">
                 <div class="card-header py-2 px-3 d-flex flex-wrap align-items-center gap-2">
                     <button type="button" class="btn btn-outline-secondary btn-sm" onclick="applyMonitorView('cluster')">
-                        <i class="bi bi-arrow-left me-1"></i><span id="monitorBackupBackText">К кластеру</span>
+                        <i class="bi bi-arrow-left me-1"></i><span id="monitorBackupBackText">Back to cluster</span>
                     </button>
-                    <h5 class="mb-0 flex-grow-1 text-center text-md-start"><i class="bi bi-cloud-arrow-down me-2"></i><span id="backupsMonitorTitle">Статус выполнения</span></h5>
+                    <h5 class="mb-0 flex-grow-1 text-center text-md-start"><i class="bi bi-cloud-arrow-down me-2"></i><span id="backupsMonitorTitle">Execution status</span></h5>
                 </div>
                 <div class="card-body d-flex flex-column py-2 px-2 pt-1 monitor-backups-body">
                     <div class="monitor-backups-nodes-row flex-grow-1 min-h-0" id="backupsMonitorCardsRow"></div>
