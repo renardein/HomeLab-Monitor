@@ -2283,6 +2283,17 @@
             pointer-events: auto;
         }
 
+        body.monitor-mode.monitor-theme-dark .stat-value {
+            color: #fff;
+        }
+
+        body.monitor-mode.monitor-theme-dark #dashboardClusterTilesTitle {
+            color: #fff;
+        }
+
+
+        
+
         /* Режим монитора: подгонка под 1920×1200, без скролла */
         @media (min-width: 1920px) and (min-height: 1200px) {
             body.monitor-mode #dashboardSection {
@@ -2305,3 +2316,4 @@
                 padding: 0.6rem 0.85rem;
             }
         }
+
