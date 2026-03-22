@@ -2122,6 +2122,25 @@ function connectionKey(type, url) {
     return `${type}|${normalizeUrlClient(url)}`;
 }
 
+/**
+ * При смене URL в списке серверов переносим connectionId на новый ключ.
+ * Иначе токен остаётся привязанным к старому URL и «пропадает» для новой строки.
+ */
+function migrateConnectionIdOnUrlChange(type, oldUrl, newUrl) {
+    const oldNorm = normalizeUrlClient(oldUrl);
+    const newNorm = normalizeUrlClient(newUrl);
+    if (!oldNorm || !newNorm || oldNorm === newNorm) return;
+    const oldKey = connectionKey(type, oldNorm);
+    const newKey = connectionKey(type, newNorm);
+    if (oldKey === newKey) return;
+    const id = connectionIdMap[oldKey];
+    if (id == null || id === '') return;
+    if (!connectionIdMap[newKey]) {
+        connectionIdMap[newKey] = id;
+    }
+    delete connectionIdMap[oldKey];
+}
+
 function normalizeTelegramRoutes(raw) {
     const o = raw && typeof raw === 'object' ? raw : {};
     return {
@@ -2595,13 +2614,17 @@ function getCurrentProxmoxHeaders() {
 
 function saveConnectionId(type, url, id) {
     const normalizedUrl = normalizeUrlClient(url);
-    connectionIdMap[connectionKey(type, normalizedUrl)] = id;
+    const newKey = connectionKey(type, normalizedUrl);
 
     // Обновляем списки серверов, чтобы URL в настройках совпадал с тем, что в DB
     if (type === 'proxmox') {
         const servers = getServersForCurrentType();
         const idx = getCurrentIndexForType();
         if (servers && typeof idx === 'number' && servers[idx]) {
+            const previousUrl = servers[idx];
+            const oldKey = connectionKey(type, previousUrl);
+            if (oldKey !== newKey) delete connectionIdMap[oldKey];
+            connectionIdMap[newKey] = id;
             servers[idx] = normalizedUrl;
             proxmoxServers = [...servers];
             saveSettingsToServer({ proxmoxServers: [...proxmoxServers], connectionIdMap: { ...connectionIdMap } });
@@ -2611,6 +2634,10 @@ function saveConnectionId(type, url, id) {
         const servers = getServersForCurrentType();
         const idx = getCurrentIndexForType();
         if (servers && typeof idx === 'number' && servers[idx]) {
+            const previousUrl = servers[idx];
+            const oldKey = connectionKey(type, previousUrl);
+            if (oldKey !== newKey) delete connectionIdMap[oldKey];
+            connectionIdMap[newKey] = id;
             servers[idx] = normalizedUrl;
             truenasServers = [...servers];
             saveSettingsToServer({ truenasServers: [...truenasServers], connectionIdMap: { ...connectionIdMap } });
@@ -2618,6 +2645,7 @@ function saveConnectionId(type, url, id) {
         }
     }
 
+    connectionIdMap[newKey] = id;
     saveSettingsToServer({ connectionIdMap: { ...connectionIdMap } });
 }
 
@@ -9328,7 +9356,11 @@ function addServerByType(type) {
 // Update server URL by type
 function updateServerUrlByType(type, index, url) {
     const servers = type === 'truenas' ? truenasServers : proxmoxServers;
-    servers[index] = String(url || '').trim();
+    const oldUrl = servers[index];
+    const trimmed = String(url || '').trim();
+    migrateConnectionIdOnUrlChange(type, oldUrl, trimmed);
+    servers[index] = normalizeUrlClient(trimmed) || trimmed;
+    renderServerList();
     saveServers();
 }
 

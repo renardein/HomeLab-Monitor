@@ -605,7 +605,7 @@
     "settingsTelegramRuleExtraHeader": "Параметр",
     "settingsTelegramRuleMessageHeader": "Текст уведомления",
     "settingsTelegramMessageTemplatePlaceholder": "По умолчанию",
-    "telegramMessageTemplateHelp": "Необязательно. Пустое поле — стандартный текст. Подстановки: сервис — {name}, {serviceId}, {state}, {stateRu}; VM/CT — {name}, {vmid}, {kind}, {state}, {stateRu}; узел — {nodeName}, {state}, {stateRu}; SNMP — {name}, {host}, {slot}, {state}, {stateRu}; температура CPU — {nodeName}, {tempC}, {thr}; линк — {nodeName}, {prev}, {mbps}.",
+    "telegramMessageTemplateHelp": "Необязательно. Пустое поле — стандартный текст. Сообщения в Telegram в формате MarkdownV2 (например *жирный*, _курсив_, `код`); подставляемые значения экранируются автоматически. Подстановки: сервис — {name}, {serviceId}, {state}, {stateRu}; VM/CT — {name}, {vmid}, {kind}, {state}, {stateRu}; узел — {nodeName}, {state}, {stateRu}; SNMP — {name}, {host}, {slot}, {state}, {stateRu}; температура CPU — {nodeName}, {tempC}, {thr}; линк — {nodeName}, {prev}, {mbps}.",
     "telegramRulesMessageHintShort": "Текст уведомления редактируется кнопкой в колонке «Текст» — откроется окно только с переменными для выбранного типа правила.",
     "telegramMessageModalTitle": "Текст уведомления",
     "telegramMessageModalEmptyHint": "Пустое поле — встроенный текст по умолчанию для этого типа события.",

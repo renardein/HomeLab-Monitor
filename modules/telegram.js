@@ -4,20 +4,59 @@ const axios = require('axios');
 const { log } = require('./utils');
 
 /**
+ * Telegram Bot API MarkdownV2: escape dynamic text so sendMessage(parse_mode=MarkdownV2) succeeds.
+ * @see https://core.telegram.org/bots/api#markdownv2-style
+ */
+function escapeMarkdownV2(text) {
+    return String(text ?? '')
+        .replace(/\\/g, '\\\\')
+        .replace(/_/g, '\\_')
+        .replace(/\*/g, '\\*')
+        .replace(/\[/g, '\\[')
+        .replace(/\]/g, '\\]')
+        .replace(/\(/g, '\\(')
+        .replace(/\)/g, '\\)')
+        .replace(/~/g, '\\~')
+        .replace(/`/g, '\\`')
+        .replace(/>/g, '\\>')
+        .replace(/#/g, '\\#')
+        .replace(/\+/g, '\\+')
+        .replace(/-/g, '\\-')
+        .replace(/=/g, '\\=')
+        .replace(/\|/g, '\\|')
+        .replace(/\{/g, '\\{')
+        .replace(/\}/g, '\\}')
+        .replace(/\./g, '\\.')
+        .replace(/!/g, '\\!');
+}
+
+/**
  * Replace `{name}`-style placeholders; unknown keys stay unchanged.
  * @param {string} template
  * @param {Record<string, string|number|boolean|null|undefined>} vars
+ * @param {{ escapeMdV2Values?: boolean }} [options] — escape values for MarkdownV2 (recommended for notify bodies)
  */
-function applyTelegramTemplate(template, vars) {
+function applyTelegramTemplate(template, vars, options) {
+    const escapeVals = options && options.escapeMdV2Values === true;
     const t = String(template || '');
     const v = vars && typeof vars === 'object' ? vars : {};
     return t.replace(/\{([a-zA-Z0-9_]+)\}/g, (match, key) => {
         if (Object.prototype.hasOwnProperty.call(v, key)) {
             const val = v[key];
-            return val == null ? '' : String(val);
+            const s = val == null ? '' : String(val);
+            return escapeVals ? escapeMarkdownV2(s) : s;
         }
         return match;
     });
+}
+
+/**
+ * Шаблон из правила или экранированный текст по умолчанию (MarkdownV2).
+ */
+function formatTelegramNotifyMessage(rule, vars, defaultText) {
+    const tmpl = rule && String(rule.messageTemplate || '').trim();
+    if (tmpl) return applyTelegramTemplate(tmpl, vars, { escapeMdV2Values: true });
+    return escapeMarkdownV2(String(defaultText || ''));
 }
 
 function buildSampleVarsForTelegramRule(rule) {
@@ -81,20 +120,42 @@ async function sendTelegramMessage(botToken, chatId, text, threadId) {
     const cid = String(chatId || '').trim();
     if (!token) throw new Error('bot token required');
     if (!cid) throw new Error('chat_id required');
+    const msg = String(text || '').slice(0, 4096);
+    if (!msg.trim()) throw new Error('message text empty');
+
     const url = `https://api.telegram.org/bot${encodeURIComponent(token)}/sendMessage`;
-    const body = {
-        chat_id: cid,
-        text: String(text || ''),
-        disable_web_page_preview: true
+
+    const buildBody = (withMarkdown) => {
+        const body = {
+            chat_id: cid,
+            text: msg,
+            disable_web_page_preview: true
+        };
+        if (withMarkdown) body.parse_mode = 'MarkdownV2';
+        if (threadId != null && String(threadId).trim() !== '') {
+            const n = parseInt(String(threadId).trim(), 10);
+            if (Number.isFinite(n)) body.message_thread_id = n;
+        }
+        return body;
     };
-    if (threadId != null && String(threadId).trim() !== '') {
-        const n = parseInt(String(threadId).trim(), 10);
-        if (Number.isFinite(n)) body.message_thread_id = n;
-    }
-    const resp = await axios.post(url, body, { timeout: 25000, validateStatus: () => true });
-    const data = resp.data;
+
+    const post = async (body) => {
+        const resp = await axios.post(url, body, { timeout: 25000, validateStatus: () => true });
+        return { resp, data: resp.data };
+    };
+
+    let { data } = await post(buildBody(true));
     if (!data || data.ok !== true) {
-        const desc = data && data.description ? String(data.description) : `HTTP ${resp.status}`;
+        const desc = data && data.description ? String(data.description) : '';
+        const retryPlain = desc && /parse|entity|markdown/i.test(desc);
+        if (retryPlain) {
+            log('warn', `[Telegram] MarkdownV2 send failed, retrying plain: ${desc}`);
+            const second = await post(buildBody(false));
+            data = second.data;
+        }
+    }
+    if (!data || data.ok !== true) {
+        const desc = data && data.description ? String(data.description) : `HTTP error`;
         log('warn', `[Telegram] sendMessage failed: ${desc}`);
         throw new Error(desc);
     }
@@ -110,39 +171,51 @@ function buildTelegramTestRuleMessage(rule) {
     const tmpl = String(r.messageTemplate || '').trim();
     if (tmpl) {
         const sample = buildSampleVarsForTelegramRule(r);
-        const preview = applyTelegramTemplate(tmpl, sample);
-        return [
-            '🔔 Proxmox Monitor — test (message template preview)',
-            '',
-            preview,
-            '',
+        const preview = applyTelegramTemplate(tmpl, sample, { escapeMdV2Values: true });
+        const header = escapeMarkdownV2('🔔 Proxmox Monitor — test (message template preview)');
+        const footer = escapeMarkdownV2(
             'Sample placeholder values were used. Save the rule and use the same {placeholders} in real notifications.'
-        ].join('\n');
+        );
+        return [header, '', preview, '', footer].join('\n');
     }
-    const lines = ['🔔 Proxmox Monitor — test'];
-    lines.push(`Rule: ${type}`);
+    const lines = [];
+    lines.push(escapeMarkdownV2('🔔 Proxmox Monitor — test'));
+    lines.push(escapeMarkdownV2(`Rule: ${type}`));
     switch (type) {
         case 'service_updown':
-            lines.push(`Target: service id ${r.serviceId != null ? r.serviceId : '—'}`);
+            lines.push(escapeMarkdownV2(`Target: service id ${r.serviceId != null ? r.serviceId : '—'}`));
             break;
         case 'vm_state':
-            lines.push(`Target: VM/CT vmid ${r.vmid != null ? r.vmid : '—'}`);
+            lines.push(escapeMarkdownV2(`Target: VM/CT vmid ${r.vmid != null ? r.vmid : '—'}`));
             break;
         case 'node_online':
         case 'host_temp':
         case 'host_link_speed':
-            lines.push(`Target: node ${r.nodeName ? String(r.nodeName) : '—'}`);
-            if (type === 'host_temp') lines.push(`Threshold: ${r.tempThresholdC != null ? r.tempThresholdC : '—'} °C`);
+            lines.push(escapeMarkdownV2(`Target: node ${r.nodeName ? String(r.nodeName) : '—'}`));
+            if (type === 'host_temp') {
+                lines.push(escapeMarkdownV2(`Threshold: ${r.tempThresholdC != null ? r.tempThresholdC : '—'} °C`));
+            }
             break;
         case 'netdev_updown':
-            lines.push(`Target: SNMP slot ${r.netdevSlot != null ? r.netdevSlot : '—'}`);
+            lines.push(escapeMarkdownV2(`Target: SNMP slot ${r.netdevSlot != null ? r.netdevSlot : '—'}`));
             break;
         default:
-            lines.push('Target: —');
+            lines.push(escapeMarkdownV2('Target: —'));
     }
     lines.push('');
-    lines.push('If you see this message, the bot token and chat_id (and thread_id if used) are configured correctly.');
+    lines.push(
+        escapeMarkdownV2(
+            'If you see this message, the bot token and chat_id (and thread_id if used) are configured correctly.'
+        )
+    );
     return lines.join('\n');
 }
 
-module.exports = { sendTelegramMessage, buildTelegramTestRuleMessage, applyTelegramTemplate, buildSampleVarsForTelegramRule };
+module.exports = {
+    sendTelegramMessage,
+    buildTelegramTestRuleMessage,
+    applyTelegramTemplate,
+    buildSampleVarsForTelegramRule,
+    escapeMarkdownV2,
+    formatTelegramNotifyMessage
+};

@@ -605,7 +605,7 @@
     "settingsTelegramRuleExtraHeader": "Parameter",
     "settingsTelegramRuleMessageHeader": "Notification text",
     "settingsTelegramMessageTemplatePlaceholder": "Default if empty",
-    "telegramMessageTemplateHelp": "Optional. Empty field uses the built-in message. Placeholders: service — {name}, {serviceId}, {state}, {stateRu}; VM/CT — {name}, {vmid}, {kind}, {state}, {stateRu}; node — {nodeName}, {state}, {stateRu}; SNMP — {name}, {host}, {slot}, {state}, {stateRu}; CPU temp — {nodeName}, {tempC}, {thr}; link speed — {nodeName}, {prev}, {mbps}.",
+    "telegramMessageTemplateHelp": "Optional. Empty field uses the built-in message. Messages use Telegram MarkdownV2 (e.g. *bold*, _italic_, `code`); placeholder values are escaped automatically. Placeholders: service — {name}, {serviceId}, {state}, {stateRu}; VM/CT — {name}, {vmid}, {kind}, {state}, {stateRu}; node — {nodeName}, {state}, {stateRu}; SNMP — {name}, {host}, {slot}, {state}, {stateRu}; CPU temp — {nodeName}, {tempC}, {thr}; link speed — {nodeName}, {prev}, {mbps}.",
     "telegramRulesMessageHintShort": "Edit the notification text from the Text column — a dialog opens with placeholders only for this rule type.",
     "telegramMessageModalTitle": "Notification message",
     "telegramMessageModalEmptyHint": "Leave empty to use the built-in default text for this event type.",
