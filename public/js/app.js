@@ -52,6 +52,12 @@ let monitorVmIconColors = {}; // vmid -> CSS hex color
 /** @type {Array<object>} */
 let telegramNotificationRules = [];
 let telegramBotTokenSet = false;
+/** false → показать мастер начальной настройки (первый запуск или сброс) */
+let setupCompleted = true;
+let setupWizardStep = 1;
+let setupWizardServerType = 'proxmox';
+let setupWizardListenersBound = false;
+let setupWizardFinishMode = 'success';
 let clusterDashboardTiles = []; // [{ type: 'service'|'vmct'|'netdev'|'speedtest', sourceId: 'type:id' }]
 let clusterDashboardTilesDirty = false;
 let clusterDashboardTilesSettingPresent = false;
@@ -938,6 +944,7 @@ async function saveSettingsToServer(payload) {
     if (payload.telegramNotificationRules !== undefined) body.telegramNotificationRules = payload.telegramNotificationRules;
     if (payload.telegramBotToken !== undefined) body.telegramBotToken = payload.telegramBotToken;
     if (payload.telegramClearBotToken === true) body.telegramClearBotToken = true;
+    if (payload.setupCompleted !== undefined) body.setupCompleted = !!payload.setupCompleted;
     try {
         await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     } catch (e) {
@@ -1683,6 +1690,266 @@ function updateUILanguage() {
             if (cur.length) renderNetdevFieldsEditors(cur);
         }
     } catch (_) {}
+
+    localizeSetupWizard();
+}
+
+function localizeSetupWizard() {
+    setText('setupWizardTitleText', t('setupWizardTitle'));
+    setText('setupWizardWelcomeText', t('setupWizardWelcome'));
+    setText('setupWizardLangLabel', t('setupWizardLangLabel'));
+    setText('setupWizardTypeHint', t('setupWizardTypeHint'));
+    setText('setupWizardProxmoxTitle', t('setupWizardProxmoxTitle'));
+    setText('setupWizardProxmoxSub', t('setupWizardProxmoxSub'));
+    setText('setupWizardTrueNASTitle', t('setupWizardTrueNASTitle'));
+    setText('setupWizardTrueNASSub', t('setupWizardTrueNASSub'));
+    setText('setupWizardConnHint', t('setupWizardConnHint'));
+    setText('setupWizardUrlLabel', t('setupWizardUrlLabel'));
+    setText('setupWizardTokenIdLabel', t('setupWizardTokenIdLabel'));
+    setText('setupWizardTokenSecretLabel', t('setupWizardTokenSecretLabel'));
+    setText('setupWizardTnUrlLabel', t('setupWizardTnUrlLabel'));
+    setText('setupWizardTnKeyLabel', t('setupWizardTnKeyLabel'));
+    setText('setupWizardBackText', t('setupWizardBack'));
+    setText('setupWizardSkipText', t('setupWizardSkip'));
+    setText('setupWizardNextText', t('setupWizardNext'));
+    setText('setupWizardConnectText', t('connectButton'));
+    setText('setupWizardFinishText', t('setupWizardFinish'));
+    setText('setupWizardDoneTitle', t('setupWizardDoneTitle'));
+    if (setupWizardFinishMode === 'skip') {
+        setText('setupWizardDoneText', t('setupWizardDoneSkipped'));
+    } else {
+        setText('setupWizardDoneText', t('setupWizardDoneConnected'));
+    }
+    setText('setupWizardImportHint', t('setupWizardImportHint'));
+    setText('setupWizardImportBtnText', t('setupWizardImportButton'));
+}
+
+function setupWizardFillLangSelect() {
+    const sel = document.getElementById('wizardLangSelect');
+    if (!sel || !Array.isArray(availableLanguages) || !availableLanguages.length) return;
+    sel.innerHTML = availableLanguages.map((code) => `<option value="${escapeHtml(code)}">${escapeHtml(code.toUpperCase())}</option>`).join('');
+    try {
+        const stored = localStorage.getItem('preferred_language');
+        if (stored && availableLanguages.includes(stored)) sel.value = stored;
+        else if (currentLanguage && availableLanguages.includes(currentLanguage)) sel.value = currentLanguage;
+        else sel.value = availableLanguages[0];
+    } catch (_) {
+        sel.value = availableLanguages[0];
+    }
+}
+
+function setupWizardSyncFromWizardToConfig() {
+    currentServerType = setupWizardServerType === 'truenas' ? 'truenas' : 'proxmox';
+    if (setupWizardServerType === 'proxmox') {
+        const url = (document.getElementById('wizardProxmoxUrl') && document.getElementById('wizardProxmoxUrl').value.trim()) || '';
+        const idPart = (document.getElementById('wizardApiTokenId') && document.getElementById('wizardApiTokenId').value.trim()) || '';
+        const secPart = (document.getElementById('wizardApiTokenSecret') && document.getElementById('wizardApiTokenSecret').value.trim()) || '';
+        proxmoxServers = url ? [normalizeUrlClient(url)] : [];
+        currentServerIndex = 0;
+        const tid = document.getElementById('apiTokenId');
+        const ts = document.getElementById('apiTokenSecret');
+        if (tid) tid.value = idPart;
+        if (ts) ts.value = secPart;
+        syncProxmoxApiTokenFromParts();
+    } else {
+        const url = (document.getElementById('wizardTrueNASUrl') && document.getElementById('wizardTrueNASUrl').value.trim()) || '';
+        const key = (document.getElementById('wizardTrueNASKey') && document.getElementById('wizardTrueNASKey').value.trim()) || '';
+        truenasServers = url ? [normalizeUrlClient(url)] : [];
+        currentTrueNASServerIndex = 0;
+        const k = document.getElementById('apiTokenTrueNAS');
+        if (k) k.value = key;
+    }
+    renderServerList();
+}
+
+function setupWizardUpdateUI() {
+    const step = setupWizardStep;
+    const s1 = document.getElementById('setupWizardStep1');
+    const s2 = document.getElementById('setupWizardStep2');
+    const s3 = document.getElementById('setupWizardStep3');
+    const s4 = document.getElementById('setupWizardStep4');
+    if (s1) s1.classList.toggle('d-none', step !== 1);
+    if (s2) s2.classList.toggle('d-none', step !== 2);
+    if (s3) s3.classList.toggle('d-none', step !== 3);
+    if (s4) s4.classList.toggle('d-none', step !== 4);
+    for (let i = 1; i <= 4; i++) {
+        const b = document.getElementById('setupWizardBadge' + i);
+        if (b) {
+            b.classList.toggle('bg-primary', i === step);
+            b.classList.toggle('bg-secondary', i !== step);
+        }
+    }
+    const back = document.getElementById('setupWizardBtnBack');
+    const skip = document.getElementById('setupWizardBtnSkip');
+    const next = document.getElementById('setupWizardBtnNext');
+    const conn = document.getElementById('setupWizardBtnConnect');
+    const fin = document.getElementById('setupWizardBtnFinish');
+    if (back) back.classList.toggle('d-none', step === 1);
+    if (skip) skip.classList.toggle('d-none', step !== 3);
+    if (next) next.classList.toggle('d-none', step !== 1);
+    if (conn) conn.classList.toggle('d-none', step !== 3);
+    if (fin) fin.classList.toggle('d-none', step !== 4);
+    if (step === 3) {
+        const prox = document.getElementById('setupWizardProxmoxFields');
+        const tn = document.getElementById('setupWizardTrueNASFields');
+        const isTn = setupWizardServerType === 'truenas';
+        if (prox) prox.classList.toggle('d-none', isTn);
+        if (tn) tn.classList.toggle('d-none', !isTn);
+    }
+}
+
+function setupWizardBindOnce() {
+    if (setupWizardListenersBound) return;
+    setupWizardListenersBound = true;
+    const pickPx = document.getElementById('setupWizardPickProxmox');
+    const pickTn = document.getElementById('setupWizardPickTrueNAS');
+    if (pickPx) pickPx.addEventListener('click', () => {
+        setupWizardServerType = 'proxmox';
+        setupWizardStep = 3;
+        setupWizardUpdateUI();
+    });
+    if (pickTn) pickTn.addEventListener('click', () => {
+        setupWizardServerType = 'truenas';
+        setupWizardStep = 3;
+        setupWizardUpdateUI();
+    });
+    const back = document.getElementById('setupWizardBtnBack');
+    if (back) back.addEventListener('click', () => {
+        if (setupWizardStep === 3) {
+            setupWizardStep = 2;
+        } else if (setupWizardStep === 2) {
+            setupWizardStep = 1;
+        }
+        setupWizardUpdateUI();
+    });
+    const next = document.getElementById('setupWizardBtnNext');
+    if (next) next.addEventListener('click', async () => {
+        if (setupWizardStep !== 1) return;
+        const sel = document.getElementById('wizardLangSelect');
+        const lang = sel && sel.value ? sel.value : currentLanguage;
+        setLanguage(lang);
+        await saveSettingsToServer({ preferredLanguage: lang });
+        setupWizardStep = 2;
+        setupWizardUpdateUI();
+    });
+    const skip = document.getElementById('setupWizardBtnSkip');
+    if (skip) skip.addEventListener('click', () => {
+        setupWizardFinishMode = 'skip';
+        setupWizardStep = 4;
+        localizeSetupWizard();
+        setupWizardUpdateUI();
+    });
+    const connectBtn = document.getElementById('setupWizardBtnConnect');
+    if (connectBtn) connectBtn.addEventListener('click', async () => {
+        if (setupWizardServerType === 'proxmox') {
+            const url = document.getElementById('wizardProxmoxUrl') && document.getElementById('wizardProxmoxUrl').value.trim();
+            const idPart = document.getElementById('wizardApiTokenId') && document.getElementById('wizardApiTokenId').value.trim();
+            const secPart = document.getElementById('wizardApiTokenSecret') && document.getElementById('wizardApiTokenSecret').value.trim();
+            if (!url || !idPart || !secPart) {
+                showToast(t('setupWizardFillRequired') || t('tokenRequired'), 'warning');
+                return;
+            }
+        } else {
+            const url = document.getElementById('wizardTrueNASUrl') && document.getElementById('wizardTrueNASUrl').value.trim();
+            const key = document.getElementById('wizardTrueNASKey') && document.getElementById('wizardTrueNASKey').value.trim();
+            if (!url || !key) {
+                showToast(t('setupWizardFillRequired') || t('tokenRequired'), 'warning');
+                return;
+            }
+        }
+        setupWizardSyncFromWizardToConfig();
+        await saveSettingsToServer({
+            serverType: setupWizardServerType === 'truenas' ? 'truenas' : 'proxmox',
+            proxmoxServers,
+            truenasServers,
+            currentServerIndex,
+            currentTrueNASServerIndex
+        });
+        connectBtn.disabled = true;
+        try {
+            const ok = await connect({ skipDashboard: true });
+            if (ok) {
+                setupWizardFinishMode = 'success';
+                setupWizardStep = 4;
+                localizeSetupWizard();
+                setupWizardUpdateUI();
+            }
+        } finally {
+            connectBtn.disabled = false;
+        }
+    });
+    const fin = document.getElementById('setupWizardBtnFinish');
+    if (fin) fin.addEventListener('click', () => setupWizardFinishFlow());
+    const importBtn = document.getElementById('setupWizardImportBtn');
+    const importFile = document.getElementById('wizardConfigImportFile');
+    if (importBtn && importFile) {
+        importBtn.addEventListener('click', () => importFile.click());
+        importFile.addEventListener('change', (ev) => setupWizardOnImportConfigFile(ev));
+    }
+}
+
+async function setupWizardOnImportConfigFile(ev) {
+    const file = ev.target.files && ev.target.files[0];
+    if (!file) return;
+    let parsed;
+    try {
+        parsed = JSON.parse(await file.text());
+    } catch {
+        showToast(t('settingsImportError') || 'Неверный файл импорта', 'error');
+        ev.target.value = '';
+        return;
+    }
+    const importBtn = document.getElementById('setupWizardImportBtn');
+    if (importBtn) importBtn.disabled = true;
+    try {
+        await importAllConfigFromParsedJson(parsed);
+        showToast(t('settingsImportSuccess') || 'Настройки импортированы, данные обновлены', 'success');
+        await setupWizardFinishFlow();
+    } catch (err) {
+        showToast((t('settingsImportError') || t('errorUpdate')) + ': ' + err.message, 'error');
+    } finally {
+        ev.target.value = '';
+        if (importBtn) importBtn.disabled = false;
+    }
+}
+
+function showInitialSetupWizard() {
+    setupWizardStep = 1;
+    setupWizardServerType = 'proxmox';
+    setupWizardFinishMode = 'success';
+    setupWizardFillLangSelect();
+    setupWizardBindOnce();
+    setupWizardUpdateUI();
+    localizeSetupWizard();
+    const el = document.getElementById('initialSetupWizardModal');
+    if (!el) return;
+    const m = bootstrap.Modal.getOrCreateInstance(el, { backdrop: 'static', keyboard: false });
+    m.show();
+}
+
+async function setupWizardFinishFlow() {
+    await saveSettingsToServer({ setupCompleted: true });
+    setupCompleted = true;
+    const modalEl = document.getElementById('initialSetupWizardModal');
+    const inst = modalEl && bootstrap.Modal.getInstance(modalEl);
+    if (inst) inst.hide();
+    const data = await loadSettings();
+    if (data.preferred_language && availableLanguages.includes(data.preferred_language)) {
+        setLanguage(data.preferred_language);
+    }
+    const hasConnIds = connectionIdMap && typeof connectionIdMap === 'object' && Object.keys(connectionIdMap).length > 0;
+    if (hasConnIds) {
+        try {
+            await refreshData();
+            startAutoRefresh();
+            if (!monitorMode) showDashboard();
+        } catch (e) {
+            console.warn('Initial refresh after wizard:', e);
+            showConfigSectionOnly();
+        }
+    } else {
+        showConfigSectionOnly();
+    }
 }
 
 // Available languages (will be populated from server)
@@ -1796,20 +2063,24 @@ document.addEventListener('DOMContentLoaded', async function() {
     checkForAppUpdates().catch(() => {});
     updateCurrentServerBadge();
 
-    // Показать дашборд или настройки: при сохранённом подключении — загрузить данные и показать контент, иначе — форму входа
-    const hasConnIds = connectionIdMap && typeof connectionIdMap === 'object' && Object.keys(connectionIdMap).length > 0;
-    if (apiToken || hasConnIds) {
-        try {
-            await refreshData();
-            startAutoRefresh();
-            if (!monitorMode) showDashboard();
-            // если monitorMode — видимость уже задана в loadSettings() через applyMonitorView
-        } catch (e) {
-            console.warn('Initial refresh failed:', e);
+    const needsSetupWizard = settingsData && settingsData.setup_completed === false;
+    if (needsSetupWizard) {
+        showInitialSetupWizard();
+    } else {
+        // Показать дашборд или настройки: при сохранённом подключении — загрузить данные и показать контент, иначе — форму входа
+        const hasConnIds = connectionIdMap && typeof connectionIdMap === 'object' && Object.keys(connectionIdMap).length > 0;
+        if (apiToken || hasConnIds) {
+            try {
+                await refreshData();
+                startAutoRefresh();
+                if (!monitorMode) showDashboard();
+            } catch (e) {
+                console.warn('Initial refresh failed:', e);
+                showConfigSectionOnly();
+            }
+        } else {
             showConfigSectionOnly();
         }
-    } else {
-        showConfigSectionOnly();
     }
 });
 
@@ -6246,7 +6517,10 @@ function startAutoRefresh() {
 }
 
 // Connect (called after connectAs(type) sets currentServerType)
-async function connect() {
+/** @param {{ skipDashboard?: boolean }} [options] — для мастера: не переключать экран до завершения шагов */
+async function connect(options) {
+    const opt = options && typeof options === 'object' ? options : {};
+    const skipDashboard = !!opt.skipDashboard;
     const tokenInput = currentServerType === 'truenas'
         ? document.getElementById('apiTokenTrueNAS')
         : document.getElementById('apiToken');
@@ -6260,15 +6534,17 @@ async function connect() {
 
     if (!reuseExistingSecret && !token) {
         showToast(t('tokenRequired'), 'error');
-        return;
+        return false;
     }
 
     const connectBtnId = currentServerType === 'truenas' ? 'connectBtnTrueNAS' : 'connectBtnProxmox';
     const connectBtn = document.getElementById(connectBtnId);
-    const originalText = connectBtn.innerHTML;
-    connectBtn.disabled = true;
-    connectBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>' + t('loading');
-    
+    const originalText = connectBtn ? connectBtn.innerHTML : '';
+    if (connectBtn) {
+        connectBtn.disabled = true;
+        connectBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>' + t('loading');
+    }
+
     const serverUrl = getCurrentServerUrl();
     try {
         if (reuseExistingSecret) {
@@ -6281,8 +6557,8 @@ async function connect() {
             const logoutContainerId = currentServerType === 'truenas' ? 'logoutContainerTrueNAS' : 'logoutContainerProxmox';
             setDisplay(logoutContainerId, 'block');
             updateConnectionStatus(true, currentServerType);
-            showDashboard();
-            return;
+            if (!skipDashboard) showDashboard();
+            return true;
         }
 
         // Всегда сохраняем секрет в DB и используем connectionId
@@ -6309,25 +6585,29 @@ async function connect() {
                 ? { apiKey: token, serverUrl }
                 : { token, serverUrl })
         });
-        
+
         const data = await response.json();
-        
+
         if (data.success) {
             showToast(t('connectSuccess'), 'success');
             const logoutContainerId = currentServerType === 'truenas' ? 'logoutContainerTrueNAS' : 'logoutContainerProxmox';
             setDisplay(logoutContainerId, 'block');
             updateConnectionStatus(true, currentServerType);
-            showDashboard();
-        } else {
-            showToast(t('connectError') + ': ' + data.error, 'error');
-            updateConnectionStatus(false, currentServerType);
+            if (!skipDashboard) showDashboard();
+            return true;
         }
+        showToast(t('connectError') + ': ' + data.error, 'error');
+        updateConnectionStatus(false, currentServerType);
+        return false;
     } catch (error) {
         showToast(t('connectError') + ': ' + error.message, 'error');
         updateConnectionStatus(false, currentServerType);
+        return false;
     } finally {
-        connectBtn.disabled = false;
-        connectBtn.innerHTML = originalText;
+        if (connectBtn) {
+            connectBtn.disabled = false;
+            connectBtn.innerHTML = originalText;
+        }
     }
 }
 
@@ -8249,43 +8529,42 @@ function triggerImportAllConfig() {
     if (input) input.click();
 }
 
+async function importAllConfigFromParsedJson(parsed) {
+    const resp = await fetch('/api/settings/import/all', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(parsed)
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || data.success === false) {
+        throw new Error(data.error || `HTTP ${resp.status}`);
+    }
+    await loadSettings();
+    renderMonitoredServices();
+    renderSettingsMonitoredServices();
+    renderSettingsMonitoredVms();
+    renderMonitorVmsList();
+}
+
 async function handleImportAllConfigFile(event) {
     const file = event.target.files && event.target.files[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-        let parsed;
-        try {
-            parsed = JSON.parse(String(e.target.result || ''));
-        } catch {
-            showToast(t('settingsImportError') || 'Неверный файл импорта', 'error');
-            return;
-        }
-        try {
-            const resp = await fetch('/api/settings/import/all', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(parsed)
-            });
-            const data = await resp.json().catch(() => ({}));
-            if (!resp.ok || data.success === false) {
-                throw new Error(data.error || `HTTP ${resp.status}`);
-            }
-            showToast(t('settingsImportSuccess') || 'Настройки импортированы, данные обновлены', 'success');
-            await loadSettings();
-            const servicesData = await fetch('/api/settings/services').then(r => r.json()).catch(() => ({ services: [] }));
-            monitoredServices = Array.isArray(servicesData.services) ? servicesData.services : [];
-            renderMonitoredServices();
-            renderSettingsMonitoredServices();
-            renderSettingsMonitoredVms();
-            renderMonitorVmsList();
-        } catch (err) {
-            showToast((t('settingsImportError') || t('errorUpdate')) + ': ' + err.message, 'error');
-        } finally {
-            event.target.value = '';
-        }
-    };
-    reader.readAsText(file, 'utf-8');
+    let parsed;
+    try {
+        parsed = JSON.parse(await file.text());
+    } catch {
+        showToast(t('settingsImportError') || 'Неверный файл импорта', 'error');
+        event.target.value = '';
+        return;
+    }
+    try {
+        await importAllConfigFromParsedJson(parsed);
+        showToast(t('settingsImportSuccess') || 'Настройки импортированы, данные обновлены', 'success');
+    } catch (err) {
+        showToast((t('settingsImportError') || t('errorUpdate')) + ': ' + err.message, 'error');
+    } finally {
+        event.target.value = '';
+    }
 }
 
 async function addMonitoredService() {
@@ -8491,6 +8770,7 @@ async function loadSettings() {
     }
 
     settingsPasswordRequired = !!data.password_required;
+    setupCompleted = data.setup_completed !== false;
     settingsSessionTtlMinutes = parseInt(data.session_ttl_minutes, 10) || 30;
     try {
         const expiry = sessionStorage.getItem(SETTINGS_UNLOCK_EXPIRY_KEY);

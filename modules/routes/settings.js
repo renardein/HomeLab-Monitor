@@ -3,6 +3,36 @@ const router = express.Router();
 const { log } = require('../utils');
 const store = require('../settings-store');
 
+/**
+ * Первый запуск / сброс: setup_completed отсутствует или '0' → показать мастер.
+ * Обновление с существующими серверами/подключениями: миграция в '1' без мастера.
+ */
+function computeSetupCompleted(st) {
+    const raw = st.getSetting('setup_completed');
+    if (raw === '0' || raw === 'false') return false;
+    if (raw === '1' || raw === 'true') return true;
+    let hasProxmoxServers = false;
+    try {
+        const ps = JSON.parse(st.getSetting('proxmox_servers') || '[]');
+        hasProxmoxServers = Array.isArray(ps) && ps.length > 0;
+    } catch (_) {}
+    let hasMap = false;
+    try {
+        const m = JSON.parse(st.getSetting('connection_id_map') || '{}');
+        hasMap = m && typeof m === 'object' && Object.keys(m).length > 0;
+    } catch (_) {}
+    let hasTrueNAS = false;
+    try {
+        const ts = JSON.parse(st.getSetting('truenas_servers') || '[]');
+        hasTrueNAS = Array.isArray(ts) && ts.length > 0;
+    } catch (_) {}
+    if (hasProxmoxServers || hasMap || hasTrueNAS) {
+        st.setSetting('setup_completed', '1');
+        return true;
+    }
+    return false;
+}
+
 const SETTING_KEYS = [
     'theme', 'refresh_interval', 'units', 'thresholds',
     'monitor_theme', 'monitor_mode', 'server_type',
@@ -52,6 +82,7 @@ router.get('/', (req, res) => {
         const payload = { password_required: store.hasSettingsPassword() };
         const tok = store.getSetting('telegram_bot_token');
         payload.telegram_bot_token_set = !!(tok && String(tok).trim());
+        payload.setup_completed = computeSetupCompleted(store);
 
         for (const key of SETTING_KEYS) {
             const value = store.getSetting(key);
@@ -161,7 +192,12 @@ router.post('/', (req, res) => {
             })(),
             telegram_notify_interval_sec: body.telegram_notify_interval_sec ?? body.telegramNotifyIntervalSec,
             telegram_routes: body.telegram_routes ?? body.telegramRoutes,
-            telegram_notification_rules: body.telegram_notification_rules ?? body.telegramNotificationRules
+            telegram_notification_rules: body.telegram_notification_rules ?? body.telegramNotificationRules,
+            setup_completed: (() => {
+                const v = body.setup_completed ?? body.setupCompleted;
+                if (v === undefined) return undefined;
+                return v === true || v === '1' || v === 1 ? '1' : '0';
+            })()
         };
         const clearTg = body.telegram_clear_bot_token === true || body.telegramClearBotToken === true;
         const newTgTok = body.telegram_bot_token ?? body.telegramBotToken;
