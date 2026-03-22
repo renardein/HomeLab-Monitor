@@ -1346,6 +1346,8 @@ function updateUILanguage() {
         settingsTelegramRuleTypeHeader: 'settingsTelegramRuleTypeHeader',
         settingsTelegramRuleTargetHeader: 'settingsTelegramRuleTargetHeader',
         settingsTelegramRuleExtraHeader: 'settingsTelegramRuleExtraHeader',
+        settingsTelegramRuleMessageHeader: 'settingsTelegramRuleMessageHeader',
+        settingsTelegramMessageTemplateHelp: 'telegramMessageTemplateHelp',
         settingsTelegramRuleChatHeader: 'settingsTelegramRuleChatHeader',
         settingsTelegramRuleThreadHeader: 'settingsTelegramRuleThreadHeader',
         settingsTelegramNotifyOpt0: 'settingsTelegramNotifyOptionOff',
@@ -1985,7 +1987,7 @@ function renderTelegramRulesTable() {
     if (!body) return;
     const rules = Array.isArray(telegramNotificationRules) ? telegramNotificationRules : [];
     if (!rules.length) {
-        body.innerHTML = `<tr><td colspan="7" class="text-muted small">${escapeHtml(t('telegramRulesEmpty') || 'Нет правил — добавьте или сохраните настройки после миграции со старого формата.')}</td></tr>`;
+        body.innerHTML = `<tr><td colspan="8" class="text-muted small">${escapeHtml(t('telegramRulesEmpty') || 'Нет правил — добавьте или сохраните настройки после миграции со старого формата.')}</td></tr>`;
         return;
     }
     body.innerHTML = rules.map((rule) => {
@@ -2003,6 +2005,9 @@ function renderTelegramRulesTable() {
                 </td>
                 <td class="telegram-rule-target">${buildTelegramRuleTargetSelectHtml(rule)}</td>
                 <td class="telegram-rule-extra">${buildTelegramRuleExtraHtml(rule)}</td>
+                <td class="align-top">
+                    <textarea class="form-control form-control-sm" rows="2" data-tr-field="messageTemplate" data-rule-id="${escapeHtml(rule.id)}" placeholder="${escapeHtml(t('settingsTelegramMessageTemplatePlaceholder') || '')}">${escapeHtml(rule.messageTemplate || '')}</textarea>
+                </td>
                 <td><input type="text" class="form-control form-control-sm" data-tr-field="chatId" data-rule-id="${escapeHtml(rule.id)}" value="${escapeHtml(rule.chatId || '')}" placeholder="${escapeHtml(t('settingsTelegramChatIdPlaceholder') || 'chat_id')}" autocomplete="off"></td>
                 <td><input type="text" class="form-control form-control-sm" data-tr-field="threadId" data-rule-id="${escapeHtml(rule.id)}" value="${escapeHtml(rule.threadId || '')}" placeholder="${escapeHtml(t('settingsTelegramThreadPlaceholder') || 'thread')}" autocomplete="off"></td>
                 <td class="text-nowrap">
@@ -2118,6 +2123,12 @@ function syncTelegramRulesFromDom() {
         if (thEl) {
             const t0 = String(thEl.value || '').trim();
             rule.threadId = t0 || undefined;
+        }
+        const msgTmpl = tr.querySelector('[data-tr-field="messageTemplate"]');
+        if (msgTmpl) {
+            const mt = String(msgTmpl.value || '').trim();
+            if (mt) rule.messageTemplate = mt;
+            else delete rule.messageTemplate;
         }
         const tgt = tr.querySelector('[data-tr-field="target"]');
         if (tgt) {

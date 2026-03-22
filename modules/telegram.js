@@ -4,6 +4,73 @@ const axios = require('axios');
 const { log } = require('./utils');
 
 /**
+ * Replace `{name}`-style placeholders; unknown keys stay unchanged.
+ * @param {string} template
+ * @param {Record<string, string|number|boolean|null|undefined>} vars
+ */
+function applyTelegramTemplate(template, vars) {
+    const t = String(template || '');
+    const v = vars && typeof vars === 'object' ? vars : {};
+    return t.replace(/\{([a-zA-Z0-9_]+)\}/g, (match, key) => {
+        if (Object.prototype.hasOwnProperty.call(v, key)) {
+            const val = v[key];
+            return val == null ? '' : String(val);
+        }
+        return match;
+    });
+}
+
+function buildSampleVarsForTelegramRule(rule) {
+    const r = rule && typeof rule === 'object' ? rule : {};
+    const type = String(r.type || '');
+    switch (type) {
+        case 'service_updown':
+            return {
+                name: 'My Service',
+                serviceId: String(r.serviceId != null ? r.serviceId : 1),
+                state: 'up',
+                stateRu: 'Онлайн'
+            };
+        case 'vm_state':
+            return {
+                name: 'vm-example',
+                vmid: String(r.vmid != null ? r.vmid : 100),
+                kind: 'VM',
+                state: 'running',
+                stateRu: 'Запущен'
+            };
+        case 'node_online':
+            return {
+                nodeName: String(r.nodeName || 'pve'),
+                state: 'online',
+                stateRu: 'Онлайн'
+            };
+        case 'netdev_updown':
+            return {
+                name: 'switch-01',
+                host: '192.168.1.1',
+                slot: String(r.netdevSlot != null ? r.netdevSlot : 1),
+                state: 'up',
+                stateRu: 'Онлайн'
+            };
+        case 'host_temp':
+            return {
+                nodeName: String(r.nodeName || 'pve'),
+                tempC: '72.5',
+                thr: String(r.tempThresholdC != null ? r.tempThresholdC : 85)
+            };
+        case 'host_link_speed':
+            return {
+                nodeName: String(r.nodeName || 'pve'),
+                prev: '1000',
+                mbps: '100'
+            };
+        default:
+            return {};
+    }
+}
+
+/**
  * @param {string} botToken
  * @param {string} chatId
  * @param {string} text
@@ -40,6 +107,18 @@ async function sendTelegramMessage(botToken, chatId, text, threadId) {
 function buildTelegramTestRuleMessage(rule) {
     const r = rule && typeof rule === 'object' ? rule : {};
     const type = String(r.type || 'unknown');
+    const tmpl = String(r.messageTemplate || '').trim();
+    if (tmpl) {
+        const sample = buildSampleVarsForTelegramRule(r);
+        const preview = applyTelegramTemplate(tmpl, sample);
+        return [
+            '🔔 Proxmox Monitor — test (message template preview)',
+            '',
+            preview,
+            '',
+            'Sample placeholder values were used. Save the rule and use the same {placeholders} in real notifications.'
+        ].join('\n');
+    }
     const lines = ['🔔 Proxmox Monitor — test'];
     lines.push(`Rule: ${type}`);
     switch (type) {
@@ -66,4 +145,4 @@ function buildTelegramTestRuleMessage(rule) {
     return lines.join('\n');
 }
 
-module.exports = { sendTelegramMessage, buildTelegramTestRuleMessage };
+module.exports = { sendTelegramMessage, buildTelegramTestRuleMessage, applyTelegramTemplate, buildSampleVarsForTelegramRule };

@@ -5,7 +5,7 @@ const store = require('./settings-store');
 const connectionStore = require('./connection-store');
 const proxmox = require('./proxmox-api');
 const { checkOne } = require('./routes/health');
-const { sendTelegramMessage } = require('./telegram');
+const { sendTelegramMessage, applyTelegramTemplate } = require('./telegram');
 const { pollNetdevMonitoringItems } = require('./routes/netdevices-snmp');
 const { getEffectiveRules } = require('./telegram-rules');
 const hostMetricsRoute = require('./routes/host-metrics');
@@ -161,6 +161,12 @@ function routeChat(rule) {
     return { chatId, threadId };
 }
 
+function telegramMessageFromTemplate(rule, vars, defaultText) {
+    const tmpl = rule && String(rule.messageTemplate || '').trim();
+    if (tmpl) return applyTelegramTemplate(tmpl, vars);
+    return defaultText;
+}
+
 async function runNotifyTick() {
     const enabled =
         store.getSetting('telegram_notify_enabled') === '1' ||
@@ -239,7 +245,17 @@ async function runNotifyTick() {
                 const prev = state.service[sid];
                 if (prev !== undefined && prev !== stateNow) {
                     const title = svc.name || r.name || sid;
-                    const msg = `Сервис «${title}»\n${stateNow === 'up' ? 'Онлайн' : 'Офлайн'}`;
+                    const stateRu = stateNow === 'up' ? 'Онлайн' : 'Офлайн';
+                    const msg = telegramMessageFromTemplate(
+                        rule,
+                        {
+                            name: title,
+                            serviceId: sid,
+                            state: stateNow,
+                            stateRu
+                        },
+                        `Сервис «${title}»\n${stateRu}`
+                    );
                     await sendTelegramMessage(token, chatId, msg, threadId);
                 }
                 state.service[sid] = stateNow;
@@ -256,7 +272,18 @@ async function runNotifyTick() {
                 if (prev !== undefined && prev !== stateNow) {
                     const label = res && res.name ? String(res.name) : `VM/CT ${rule.vmid}`;
                     const kind = res && res.type === 'lxc' ? 'CT' : 'VM';
-                    const msg = `${kind} «${label}» (${rule.vmid})\n${stateNow === 'running' ? 'Запущен' : 'Остановлен'}`;
+                    const stateRu = stateNow === 'running' ? 'Запущен' : 'Остановлен';
+                    const msg = telegramMessageFromTemplate(
+                        rule,
+                        {
+                            name: label,
+                            vmid: String(rule.vmid),
+                            kind,
+                            state: stateNow,
+                            stateRu
+                        },
+                        `${kind} «${label}» (${rule.vmid})\n${stateRu}`
+                    );
                     await sendTelegramMessage(token, chatId, msg, threadId);
                 }
                 state.vm[key] = stateNow;
@@ -271,7 +298,16 @@ async function runNotifyTick() {
                 const stateNow = nd.online ? 'online' : 'offline';
                 const prev = state.node[nname];
                 if (prev !== undefined && prev !== stateNow) {
-                    const msg = `Узел Proxmox «${nname}»\n${stateNow === 'online' ? 'Онлайн' : 'Офлайн'}`;
+                    const stateRu = stateNow === 'online' ? 'Онлайн' : 'Офлайн';
+                    const msg = telegramMessageFromTemplate(
+                        rule,
+                        {
+                            nodeName: nname,
+                            state: stateNow,
+                            stateRu
+                        },
+                        `Узел Proxmox «${nname}»\n${stateRu}`
+                    );
                     await sendTelegramMessage(token, chatId, msg, threadId);
                 }
                 state.node[nname] = stateNow;
@@ -286,7 +322,20 @@ async function runNotifyTick() {
                 const slot = String(rule.netdevSlot);
                 const prev = state.netdev[slot];
                 if (prev !== undefined && prev !== stateNow) {
-                    const msg = `SNMP «${it.name || it.host || slot}»\n${stateNow === 'up' ? 'Онлайн' : 'Офлайн'}`;
+                    const disp = String(it.name || it.host || slot);
+                    const host = String(it.host || '');
+                    const stateRu = stateNow === 'up' ? 'Онлайн' : 'Офлайн';
+                    const msg = telegramMessageFromTemplate(
+                        rule,
+                        {
+                            name: disp,
+                            host,
+                            slot,
+                            state: stateNow,
+                            stateRu
+                        },
+                        `SNMP «${disp}»\n${stateRu}`
+                    );
                     await sendTelegramMessage(token, chatId, msg, threadId);
                 }
                 state.netdev[slot] = stateNow;
@@ -303,7 +352,15 @@ async function runNotifyTick() {
                 const nowHigh = tempC >= thr;
                 const nowLevel = nowHigh ? 'high' : 'ok';
                 if (prevLevel === 'ok' && nowLevel === 'high') {
-                    const msg = `Узел «${nname}»: температура CPU ${tempC.toFixed(1)}°C (порог ${thr}°C)`;
+                    const msg = telegramMessageFromTemplate(
+                        rule,
+                        {
+                            nodeName: nname,
+                            tempC: tempC.toFixed(1),
+                            thr: String(thr)
+                        },
+                        `Узел «${nname}»: температура CPU ${tempC.toFixed(1)}°C (порог ${thr}°C)`
+                    );
                     await sendTelegramMessage(token, chatId, msg, threadId);
                 }
                 state.hostTemp[nname] = nowLevel;
@@ -317,7 +374,15 @@ async function runNotifyTick() {
                 if (mbps == null || !Number.isFinite(mbps)) continue;
                 const prev = state.hostLink[nname];
                 if (prev !== undefined && Number.isFinite(Number(prev)) && Number(prev) !== mbps) {
-                    const msg = `Узел «${nname}»: скорость линка ${Number(prev)} → ${mbps} Мбит/с`;
+                    const msg = telegramMessageFromTemplate(
+                        rule,
+                        {
+                            nodeName: nname,
+                            prev: String(Number(prev)),
+                            mbps: String(mbps)
+                        },
+                        `Узел «${nname}»: скорость линка ${Number(prev)} → ${mbps} Мбит/с`
+                    );
                     await sendTelegramMessage(token, chatId, msg, threadId);
                 }
                 state.hostLink[nname] = mbps;

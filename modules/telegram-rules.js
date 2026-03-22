@@ -93,12 +93,15 @@ function normalizeRule(raw) {
     const chatId = safeStr(raw.chatId);
     const id = safeStr(raw.id) || `r_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
     const threadId = safeStr(raw.threadId);
+    let messageTemplate = safeStr(raw.messageTemplate);
+    if (messageTemplate.length > 4096) messageTemplate = messageTemplate.slice(0, 4096);
     const base = {
         id,
         enabled: raw.enabled !== false,
         type,
         chatId,
-        threadId: threadId || undefined
+        threadId: threadId || undefined,
+        messageTemplate: messageTemplate || undefined
     };
 
     if (type === 'service_updown') {
