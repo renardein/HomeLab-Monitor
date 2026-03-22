@@ -145,6 +145,16 @@ function clearConnections() {
     saveDb();
 }
 
+/** Удаляет только подключения указанного типа (proxmox | truenas). */
+function deleteConnectionsByType(type) {
+    const t = String(type || '').toLowerCase();
+    if (t !== 'proxmox' && t !== 'truenas') return false;
+    const db = getDbSync();
+    db.run('DELETE FROM connections WHERE type = ?', [t]);
+    saveDb();
+    return true;
+}
+
 module.exports = {
     listConnections,
     getConnectionById,
@@ -153,5 +163,6 @@ module.exports = {
     deleteConnection,
     exportConnectionsWithSecrets,
     importConnectionsWithSecrets,
-    clearConnections
+    clearConnections,
+    deleteConnectionsByType
 };

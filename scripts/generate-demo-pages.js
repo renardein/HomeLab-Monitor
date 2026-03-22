@@ -1319,11 +1319,11 @@ const upsCards = `
                 <h5 class="mb-0 text-truncate">ups</h5>
                 <span class="badge bg-success">Online</span>
             </div>
-            <div class="row g-2">
-                <div class="col-6"><div class="p-2 h-100"><small class="text-muted ups-node-card__metric-label">Input V</small><div class="fw-bold ups-node-card__metric-value text-break">226 V</div></div></div>
-                <div class="col-6"><div class="p-2 h-100"><small class="text-muted ups-node-card__metric-label">Load</small><div class="fw-bold ups-node-card__metric-value text-break">33 %</div><div class="progress mt-2" style="height: 8px;"><div class="progress-bar bg-warning" style="width: 33%"></div></div></div></div>
-                <div class="col-6 mt-2"><div class="p-2 h-100"><small class="text-muted ups-node-card__metric-label">Charge</small><div class="fw-bold ups-node-card__metric-value text-break">100%</div><div class="progress mt-2" style="height: 8px;"><div class="progress-bar bg-success" style="width: 100%"></div></div></div></div>
-                <div class="col-6 mt-2"><div class="p-2 h-100"><small class="text-muted ups-node-card__metric-label">Battery runtime</small><div class="fw-bold ups-node-card__metric-value text-break">9m 4s</div></div></div>
+            <div class="row g-2 hm-cluster-metric-panel">
+                <div class="col-6 col-md-3"><div class="text-center p-3 hm-cluster-metric-cell h-100"><h6><i class="bi bi-plug me-2"></i><span>Input V</span></h6><div class="display-6 text-break">226 V</div></div></div>
+                <div class="col-6 col-md-3"><div class="text-center p-3 hm-cluster-metric-cell h-100"><h6><i class="bi bi-speedometer2 me-2"></i><span>Load</span></h6><div class="display-6 text-break">33 %</div><div class="progress mt-2 hm-progress hm-progress--cluster"><div class="progress-bar bg-success" style="width: 33%"></div></div></div></div>
+                <div class="col-6 col-md-3"><div class="text-center p-3 hm-cluster-metric-cell h-100"><h6><i class="bi bi-battery-half me-2"></i><span>Charge</span></h6><div class="display-6 text-break">100%</div><div class="progress mt-2 hm-progress hm-progress--cluster"><div class="progress-bar bg-success" style="width: 100%"></div></div></div></div>
+                <div class="col-6 col-md-3"><div class="text-center p-3 hm-cluster-metric-cell h-100"><h6><i class="bi bi-clock-history me-2"></i><span>Battery runtime</span></h6><div class="display-6 text-break">9m 4s</div></div></div>
             </div>
             <div class="small text-muted mt-2">NUT · 10.200.0.5</div>
         </div>
@@ -1334,23 +1334,18 @@ const speedtestPanel = `
 <div class="card">
     <div class="card-header"><h5 class="mb-0"><i class="bi bi-speedometer2 me-2"></i>Speedtest</h5></div>
     <div class="card-body">
-        <div class="row g-3 small">
-            <div class="col-md-4 col-6"><div class="text-muted">Last Run</div><div class="fs-5 fw-semibold">2026-03-21 09:12</div></div>
-            <div class="col-md-4 col-6"><div class="text-muted">Average Today</div><div class="fs-5 fw-semibold">940 / 511 Mbps</div></div>
-            <div class="col-md-2 col-6"><div class="text-muted">Minimum</div><div class="fs-6 fw-semibold">902 Mbps</div></div>
-            <div class="col-md-2 col-6"><div class="text-muted">Maximum</div><div class="fs-6 fw-semibold">951 Mbps</div></div>
+        <div class="row g-2 hm-cluster-metric-panel">
+            <div class="col-md-3 col-6"><div class="text-center p-3 hm-cluster-metric-cell"><h6><i class="bi bi-clock-history me-2"></i><span>Last run</span></h6><div class="hm-speedtest-last-run text-break">2026-03-21 09:12 · 951 Mbps ↓</div></div></div>
+            <div class="col-md-3 col-6"><div class="text-center p-3 hm-cluster-metric-cell"><h6><i class="bi bi-graph-up-arrow me-2"></i><span>Average (today)</span></h6><div class="display-6">940 Mbps</div><div class="progress mt-2 hm-progress hm-progress--cluster"><div class="progress-bar bg-success" style="width: 99%"></div></div></div></div>
+            <div class="col-md-3 col-6"><div class="text-center p-3 hm-cluster-metric-cell"><h6><i class="bi bi-arrow-down-circle me-2"></i><span>Minimum</span></h6><div class="display-6">902 Mbps</div><div class="progress mt-2 hm-progress hm-progress--cluster"><div class="progress-bar bg-success" style="width: 96%"></div></div></div></div>
+            <div class="col-md-3 col-6"><div class="text-center p-3 hm-cluster-metric-cell"><h6><i class="bi bi-arrow-up-circle me-2"></i><span>Maximum</span></h6><div class="display-6">951 Mbps</div><div class="progress mt-2 hm-progress hm-progress--cluster"><div class="progress-bar bg-success" style="width: 100%"></div></div></div></div>
         </div>
-        <div class="mt-2 small text-muted">Ping 4 ms, server Frankfurt, packet loss 0%</div>
+        <div class="mt-2 small text-muted">Ping 4 ms · server Frankfurt · Upload avg today: 511 Mbps</div>
     </div>
 </div>`;
 
 const normalScreenSection = (id, title, icon, body) => `
         <div id="${id}" class="mb-4 monitor-screen" style="display: block;">
-            <div class="d-flex justify-content-between align-items-center mb-3 monitor-screen__backrow">
-                <a type="button" class="btn btn-outline-secondary btn-sm" href="./dashboard.html">
-                    <i class="bi bi-arrow-left me-1"></i><span>Back to dashboard</span>
-                </a>
-            </div>
             <div class="monitor-screen__layout">
                 <div class="monitor-screen__panel">
                     <div class="monitor-view__panel-title monitor-screen__panel-title">
@@ -1384,8 +1379,11 @@ const monitorToolbar = (title) => `
                 </div>
             </div>
             <div class="monitor-toolbar-theme">
-                <button type="button" class="btn btn-sm monitor-toolbar-nav-btn" title="Prev"><i class="bi bi-chevron-left"></i></button>
-                <button type="button" class="btn btn-sm monitor-toolbar-nav-btn" title="Next"><i class="bi bi-chevron-right"></i></button>
+                <div class="monitor-toolbar-nav-group" role="group" aria-label="Screens">
+                    <button type="button" class="btn btn-sm monitor-toolbar-nav-btn" title="Prev"><i class="bi bi-chevron-left"></i></button>
+                    <button type="button" class="btn btn-sm monitor-toolbar-nav-btn" title="Home"><i class="bi bi-house-door"></i></button>
+                    <button type="button" class="btn btn-sm monitor-toolbar-nav-btn" title="Next"><i class="bi bi-chevron-right"></i></button>
+                </div>
                 <button type="button" class="btn btn-sm monitor-toolbar-theme-btn" title="Refresh"><i class="bi bi-arrow-repeat"></i></button>
                 <button type="button" class="btn btn-sm monitor-toolbar-theme-btn active" title="Light theme"><i class="bi bi-sun-fill"></i></button>
                 <button type="button" class="btn btn-sm monitor-toolbar-theme-btn" title="Dark theme"><i class="bi bi-moon-stars-fill"></i></button>
@@ -1419,14 +1417,6 @@ const monitorPageContent = {
         ${monitorToolbar('Cluster')}`,
     services: `
         <div id="servicesMonitorSection" class="mb-4 monitor-screen" style="display: block;">
-            <div class="d-flex justify-content-between align-items-center mb-3 monitor-screen__backrow">
-                <button type="button" class="btn btn-outline-secondary btn-sm">
-                    <i class="bi bi-arrow-left me-1"></i><span>Back to dashboard</span>
-                </button>
-                <button class="btn btn-sm btn-outline-success">
-                    <i class="bi bi-arrow-repeat me-1"></i><span>Check all</span>
-                </button>
-            </div>
             <div class="monitor-screen__layout">
                 <div class="monitor-screen__panel">
                     <div class="monitor-view__panel-title monitor-screen__panel-title">
@@ -1447,11 +1437,6 @@ const monitorPageContent = {
         ${monitorToolbar('Services')}`,
     vms: `
         <div id="vmsMonitorSection" class="mb-4 monitor-screen" style="display: block;">
-            <div class="d-flex justify-content-between align-items-center mb-3 monitor-screen__backrow">
-                <button type="button" class="btn btn-outline-secondary btn-sm">
-                    <i class="bi bi-arrow-left me-1"></i><span>Back to dashboard</span>
-                </button>
-            </div>
             <div class="monitor-screen__layout">
                 <div class="monitor-screen__panel">
                     <div class="monitor-view__panel-title monitor-screen__panel-title">
@@ -1467,11 +1452,6 @@ const monitorPageContent = {
         ${monitorToolbar('VM / CT')}`,
     ups: `
         <div id="upsMonitorSection" class="mb-4 monitor-screen" style="display: block;">
-            <div class="d-flex justify-content-between align-items-center mb-3 monitor-screen__backrow">
-                <button type="button" class="btn btn-outline-secondary btn-sm">
-                    <i class="bi bi-arrow-left me-1"></i><span>Back to cluster</span>
-                </button>
-            </div>
             <div class="monitor-screen__layout">
                 <div class="monitor-screen__panel">
                     <div class="monitor-view__panel-title monitor-screen__panel-title d-flex flex-wrap align-items-center justify-content-between gap-2">
@@ -1485,11 +1465,6 @@ const monitorPageContent = {
         ${monitorToolbar('UPS')}`,
     netdev: `
         <div id="netdevMonitorSection" class="mb-4 monitor-screen" style="display: block;">
-            <div class="d-flex justify-content-between align-items-center mb-3 monitor-screen__backrow">
-                <button type="button" class="btn btn-outline-secondary btn-sm">
-                    <i class="bi bi-arrow-left me-1"></i><span>Back to cluster</span>
-                </button>
-            </div>
             <div class="monitor-screen__layout">
                 <div class="monitor-screen__panel">
                     <div class="monitor-view__panel-title monitor-screen__panel-title d-flex flex-wrap align-items-center justify-content-between gap-2">
@@ -1503,26 +1478,19 @@ const monitorPageContent = {
         ${monitorToolbar('Network Devices')}`,
     speedtest: `
         <div id="speedtestMonitorSection" class="mb-4 monitor-screen" style="display: block;">
-            <div class="d-flex justify-content-between align-items-center mb-3 monitor-screen__backrow">
-                <button type="button" class="btn btn-outline-secondary btn-sm">
-                    <i class="bi bi-arrow-left me-1"></i><span>Back to cluster</span>
-                </button>
-            </div>
             <div class="monitor-screen__layout">
-                <div class="monitor-view__stats monitor-screen__stats">
-                    <div class="monitor-view__stat"><div class="monitor-view__stat-value">940</div><div class="monitor-view__stat-label">Average Today</div></div>
-                    <div class="monitor-view__stat"><div class="monitor-view__stat-value">902</div><div class="monitor-view__stat-label">Minimum</div></div>
-                    <div class="monitor-view__stat"><div class="monitor-view__stat-value">951</div><div class="monitor-view__stat-label">Maximum</div></div>
-                </div>
                 <div class="monitor-screen__panel">
                     <div class="monitor-view__panel-title monitor-screen__panel-title">
                         <h5 class="mb-0"><i class="bi bi-speedometer2 me-2"></i><span>Speedtest</span></h5>
                     </div>
                     <div class="monitor-screen__panel-body">
-                        <div class="monitor-screen__meta-grid">
-                            <div class="monitor-screen__meta-card"><div class="monitor-screen__meta-label">Last Measurement</div><div class="monitor-screen__meta-value">2026-03-21 09:12</div></div>
+                        <div class="row g-2 hm-cluster-metric-panel">
+                            <div class="col-md-3 col-6"><div class="text-center p-3 hm-cluster-metric-cell"><h6><i class="bi bi-clock-history me-2"></i><span>Last run</span></h6><div class="hm-speedtest-last-run text-break">2026-03-21 09:12 · 951 Mbps ↓</div></div></div>
+                            <div class="col-md-3 col-6"><div class="text-center p-3 hm-cluster-metric-cell"><h6><i class="bi bi-graph-up-arrow me-2"></i><span>Average (today)</span></h6><div class="display-6">940 Mbps</div><div class="progress mt-2 hm-progress hm-progress--cluster"><div class="progress-bar bg-success" style="width: 99%"></div></div></div></div>
+                            <div class="col-md-3 col-6"><div class="text-center p-3 hm-cluster-metric-cell"><h6><i class="bi bi-arrow-down-circle me-2"></i><span>Minimum</span></h6><div class="display-6">902 Mbps</div><div class="progress mt-2 hm-progress hm-progress--cluster"><div class="progress-bar bg-success" style="width: 96%"></div></div></div></div>
+                            <div class="col-md-3 col-6"><div class="text-center p-3 hm-cluster-metric-cell"><h6><i class="bi bi-arrow-up-circle me-2"></i><span>Maximum</span></h6><div class="display-6">951 Mbps</div><div class="progress mt-2 hm-progress hm-progress--cluster"><div class="progress-bar bg-success" style="width: 100%"></div></div></div></div>
                         </div>
-                        <div class="mt-3 small text-muted monitor-screen__meta-extra">Download 951 Mbps / Upload 511 Mbps / Ping 4 ms / Server Frankfurt / Packet loss 0%</div>
+                        <div class="mt-2 small text-muted monitor-screen__meta-extra">Ping 4 ms · server Frankfurt · Upload avg today: 511 Mbps</div>
                     </div>
                 </div>
             </div>
@@ -1530,11 +1498,6 @@ const monitorPageContent = {
         ${monitorToolbar('Speedtest')}`,
     backupRuns: `
         <div id="backupsMonitorSection" class="monitor-backups-screen monitor-screen" style="display: flex;">
-            <div class="d-flex justify-content-between align-items-center mb-3 monitor-screen__backrow">
-                <button type="button" class="btn btn-outline-secondary btn-sm">
-                    <i class="bi bi-arrow-left me-1"></i><span>Back to cluster</span>
-                </button>
-            </div>
             <div class="monitor-screen__layout">
                 <div class="monitor-screen__panel monitor-backups-main-card">
                     <div class="monitor-view__panel-title monitor-screen__panel-title d-flex flex-wrap align-items-center gap-2">

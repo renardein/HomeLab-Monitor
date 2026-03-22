@@ -25,9 +25,9 @@ async function getDb() {
     } else {
         db = new SQL.Database();
     }
-    initSchema(db);
+    const iconStylesMigrated = initSchema(db);
     migrateFromJson();
-    if (!dbExisted) saveDb();
+    if (!dbExisted || iconStylesMigrated) saveDb();
     return db;
 }
 
@@ -77,6 +77,87 @@ function initSchema(database) {
         )
     `);
     database.run(`CREATE INDEX IF NOT EXISTS idx_speedtest_run_at ON speedtest_results(run_at)`);
+
+    database.run(`
+        CREATE TABLE IF NOT EXISTS monitor_icon_styles (
+            scope TEXT NOT NULL CHECK (scope IN ('service', 'vm')),
+            entity_id INTEGER NOT NULL,
+            icon TEXT,
+            color TEXT,
+            PRIMARY KEY (scope, entity_id)
+        )
+    `);
+    database.run(`CREATE INDEX IF NOT EXISTS idx_monitor_icon_styles_scope ON monitor_icon_styles(scope)`);
+
+    return migrateIconStylesFromAppSettings(database);
+}
+
+/** Переносит JSON из app_settings в таблицу (один раз), затем удаляет старые ключи. Возвращает true, если нужен saveDb. */
+function migrateIconStylesFromAppSettings(database) {
+    const markerStmt = database.prepare('SELECT value FROM app_settings WHERE key = ?');
+    markerStmt.bind(['icon_styles_migrated_v1']);
+    let already = false;
+    if (markerStmt.step()) {
+        already = markerStmt.get()[0] === '1';
+    }
+    markerStmt.free();
+    if (already) return false;
+
+    const keys = ['monitor_service_icons', 'monitor_service_icon_colors', 'monitor_vm_icons', 'monitor_vm_icon_colors'];
+    const stmt = database.prepare(`SELECT key, value FROM app_settings WHERE key IN ('${keys.join("','")}')`);
+    const data = {};
+    while (stmt.step()) {
+        const row = stmt.get();
+        data[row[0]] = row[1];
+    }
+    stmt.free();
+
+    function parseObj(str) {
+        if (!str) return {};
+        try {
+            const p = JSON.parse(str);
+            return p && typeof p === 'object' && !Array.isArray(p) ? p : {};
+        } catch {
+            return {};
+        }
+    }
+
+    function mergeInsert(scope, iconsJson, colorsJson) {
+        const icons = parseObj(iconsJson);
+        const colors = parseObj(colorsJson);
+        const idSet = new Set([...Object.keys(icons), ...Object.keys(colors)]);
+        const ins = database.prepare(
+            'INSERT OR REPLACE INTO monitor_icon_styles (scope, entity_id, icon, color) VALUES (?, ?, ?, ?)'
+        );
+        for (const idStr of idSet) {
+            const id = parseInt(idStr, 10);
+            if (Number.isNaN(id)) continue;
+            const rawIcon = icons[idStr];
+            const rawCol = colors[idStr];
+            const iconVal = rawIcon != null && String(rawIcon).trim() ? String(rawIcon).trim() : null;
+            let colorVal = null;
+            if (rawCol != null) {
+                const c = String(rawCol).trim();
+                if (/^#[0-9a-fA-F]{6}$/.test(c)) colorVal = c.toLowerCase();
+                else if (/^#[0-9a-fA-F]{3}$/.test(c)) {
+                    const x = c.slice(1).toLowerCase();
+                    colorVal = '#' + x[0] + x[0] + x[1] + x[1] + x[2] + x[2];
+                }
+            }
+            if (!iconVal && !colorVal) continue;
+            ins.run([scope, id, iconVal, colorVal]);
+        }
+        ins.free();
+    }
+
+    mergeInsert('service', data.monitor_service_icons, data.monitor_service_icon_colors);
+    mergeInsert('vm', data.monitor_vm_icons, data.monitor_vm_icon_colors);
+
+    database.run(`INSERT OR REPLACE INTO app_settings (key, value) VALUES ('icon_styles_migrated_v1', '1')`);
+    for (const k of keys) {
+        database.run('DELETE FROM app_settings WHERE key = ?', [k]);
+    }
+    return true;
 }
 
 function saveDb() {

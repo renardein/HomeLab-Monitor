@@ -60,11 +60,6 @@
     </nav>
         
         <div id="speedtestMonitorSection" class="mb-4 monitor-screen" style="display: block;">
-            <div class="d-flex justify-content-between align-items-center mb-3 monitor-screen__backrow">
-                <a type="button" class="btn btn-outline-secondary btn-sm" href="./dashboard.html">
-                    <i class="bi bi-arrow-left me-1"></i><span>Back to dashboard</span>
-                </a>
-            </div>
             <div class="monitor-screen__layout">
                 <div class="monitor-screen__panel">
                     <div class="monitor-view__panel-title monitor-screen__panel-title">
@@ -77,13 +72,13 @@
 <div class="card">
     <div class="card-header"><h5 class="mb-0"><i class="bi bi-speedometer2 me-2"></i>Speedtest</h5></div>
     <div class="card-body">
-        <div class="row g-3 small">
-            <div class="col-md-4 col-6"><div class="text-muted">Last Run</div><div class="fs-5 fw-semibold">2026-03-21 09:12</div></div>
-            <div class="col-md-4 col-6"><div class="text-muted">Average Today</div><div class="fs-5 fw-semibold">940 / 511 Mbps</div></div>
-            <div class="col-md-2 col-6"><div class="text-muted">Minimum</div><div class="fs-6 fw-semibold">902 Mbps</div></div>
-            <div class="col-md-2 col-6"><div class="text-muted">Maximum</div><div class="fs-6 fw-semibold">951 Mbps</div></div>
+        <div class="row g-2 hm-cluster-metric-panel">
+            <div class="col-md-3 col-6"><div class="text-center p-3 hm-cluster-metric-cell"><h6><i class="bi bi-clock-history me-2"></i><span>Last run</span></h6><div class="hm-speedtest-last-run text-break">2026-03-21 09:12 · 951 Mbps ↓</div></div></div>
+            <div class="col-md-3 col-6"><div class="text-center p-3 hm-cluster-metric-cell"><h6><i class="bi bi-graph-up-arrow me-2"></i><span>Average (today)</span></h6><div class="display-6">940 Mbps</div><div class="progress mt-2 hm-progress hm-progress--cluster"><div class="progress-bar bg-success" style="width: 99%"></div></div></div></div>
+            <div class="col-md-3 col-6"><div class="text-center p-3 hm-cluster-metric-cell"><h6><i class="bi bi-arrow-down-circle me-2"></i><span>Minimum</span></h6><div class="display-6">902 Mbps</div><div class="progress mt-2 hm-progress hm-progress--cluster"><div class="progress-bar bg-success" style="width: 96%"></div></div></div></div>
+            <div class="col-md-3 col-6"><div class="text-center p-3 hm-cluster-metric-cell"><h6><i class="bi bi-arrow-up-circle me-2"></i><span>Maximum</span></h6><div class="display-6">951 Mbps</div><div class="progress mt-2 hm-progress hm-progress--cluster"><div class="progress-bar bg-success" style="width: 100%"></div></div></div></div>
         </div>
-        <div class="mt-2 small text-muted">Ping 4 ms, server Frankfurt, packet loss 0%</div>
+        <div class="mt-2 small text-muted">Ping 4 ms · server Frankfurt · Upload avg today: 511 Mbps</div>
     </div>
 </div>
                     </div>
@@ -94,7 +89,7 @@
         <footer class="d-flex flex-wrap justify-content-between align-items-center py-3 my-4 border-top">
             <div class="col-md-4 d-flex align-items-center">
                 <span class="mb-3 mb-md-0 text-body-secondary">© 2026 renardein</span>
-                <span class="text-body-secondary ms-2 small">1.0.3-release demo</span>
+                <span class="text-body-secondary ms-2 small">0.38-alpha</span>
             </div>
             <ul class="nav col-md-4 justify-content-end list-unstyled d-flex">
                 <li class="ms-3"><span class="badge bg-secondary">EN</span></li>

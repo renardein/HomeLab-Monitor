@@ -52,12 +52,43 @@ function normalizeSettings(raw) {
     };
 }
 
+function normalizeAgentPath(p) {
+    let path = safeString(p).trim() || DEFAULT_AGENT_URL_PATH;
+    if (path[0] !== '/') path = `/${path}`;
+    return path;
+}
+
+function parseLegacyFullAgentUrl(raw) {
+    const s = safeString(raw).trim();
+    if (!s || !/^https?:\/\//i.test(s)) return null;
+    try {
+        const u = new URL(s);
+        const port = u.port ? parseInt(u.port, 10) : DEFAULT_AGENT_URL_PORT;
+        let path = u.pathname || DEFAULT_AGENT_URL_PATH;
+        if (path === '/' || !path.trim()) path = DEFAULT_AGENT_URL_PATH;
+        return { port, path: normalizeAgentPath(path) };
+    } catch {
+        return null;
+    }
+}
+
 function normalizeNodeConfig(raw) {
     const cfg = raw && typeof raw === 'object' ? raw : {};
+    let agentPort = clampInt(cfg.agentPort, 1, 65535, NaN);
+    if (!Number.isFinite(agentPort)) agentPort = DEFAULT_AGENT_URL_PORT;
+    let agentPath = safeString(cfg.agentPath || cfg.agentEndpoint).trim();
+    const legacyUrl = safeString(cfg.agentUrl).trim();
+    const fromLegacy = parseLegacyFullAgentUrl(legacyUrl);
+    if (fromLegacy) {
+        agentPort = fromLegacy.port;
+        agentPath = fromLegacy.path;
+    }
+    agentPath = normalizeAgentPath(agentPath);
+
     return {
         enabled: toBool(cfg.enabled),
-        agentUrl: safeString(cfg.agentUrl).trim(),
-        agentHost: safeString(cfg.agentHost).trim(),
+        agentPort,
+        agentPath,
         cpuTempSensor: safeString(cfg.cpuTempSensor).trim(),
         linkInterface: safeString(cfg.linkInterface).trim()
     };
@@ -128,16 +159,21 @@ function resolveConnectionId(req) {
     return null;
 }
 
-function getDefaultAgentUrl(nodeName, agentHost = '') {
-    const host = safeString(agentHost).trim() || safeString(nodeName).trim();
-    return `http://${host}:${DEFAULT_AGENT_URL_PORT}${DEFAULT_AGENT_URL_PATH}`;
+function hostForHttpUrl(hostRaw) {
+    const h = safeString(hostRaw).trim();
+    if (!h) return '127.0.0.1';
+    if (h.includes(':') && !h.startsWith('[')) return `[${h}]`;
+    return h;
 }
 
-function resolveAgentUrl(nodeName, cfg) {
-    const custom = safeString(cfg && cfg.agentUrl).trim();
-    if (custom) return custom;
-    const ah = cfg && cfg.agentHost != null ? safeString(cfg.agentHost).trim() : '';
-    return getDefaultAgentUrl(nodeName, ah);
+/** Base URL for the agent: cluster/discovery IP (or node name) + configured port + path. */
+function resolveAgentUrl(nodeName, cfg, nodeIp = null) {
+    const nn = safeString(nodeName).trim();
+    const hostRaw = safeString(nodeIp).trim() || nn || '127.0.0.1';
+    const port = clampInt(cfg && cfg.agentPort, 1, 65535, DEFAULT_AGENT_URL_PORT);
+    const path = normalizeAgentPath(cfg && cfg.agentPath);
+    const host = hostForHttpUrl(hostRaw);
+    return `http://${host}:${port}${path}`;
 }
 
 function joinAgentUrl(baseUrl, suffix) {
@@ -267,12 +303,12 @@ function parseCurrentPayload(data, cfg) {
     };
 }
 
-function cacheKey(connectionId, nodeName, cfg) {
-    return `${connectionId}::${nodeName}::${safeString(cfg.agentUrl)}::${safeString(cfg.agentHost)}::${safeString(cfg.cpuTempSensor)}::${safeString(cfg.linkInterface)}`;
+function cacheKey(connectionId, nodeName, cfg, nodeIp) {
+    return `${connectionId}::${nodeName}::${resolveAgentUrl(nodeName, cfg, nodeIp)}::${safeString(cfg.cpuTempSensor)}::${safeString(cfg.linkInterface)}`;
 }
 
 async function getCachedCurrent(connectionId, nodeName, cfg, settings, nodeIp = null) {
-    const key = cacheKey(connectionId, nodeName, cfg);
+    const key = cacheKey(connectionId, nodeName, cfg, nodeIp);
     const now = Date.now();
     const existing = runtimeCache.get(key) || null;
     const freshForMs = Math.max(settings.pollIntervalSec, settings.cacheTtlSec) * 1000;
@@ -282,7 +318,7 @@ async function getCachedCurrent(connectionId, nodeName, cfg, settings, nodeIp = 
     }
 
     try {
-        const payload = await fetchNodeCurrent(nodeName, cfg, settings);
+        const payload = await fetchNodeCurrent(nodeName, cfg, settings, nodeIp);
         const merged = { ...payload, nodeIp: nodeIp || null };
         runtimeCache.set(key, { fetchedAt: now, payload: merged });
         return { ...merged, stale: false };
@@ -298,7 +334,7 @@ async function getCachedCurrent(connectionId, nodeName, cfg, settings, nodeIp = 
             node: nodeName,
             nodeIp: nodeIp || null,
             enabled: true,
-            agentUrl: resolveAgentUrl(nodeName, cfg),
+            agentUrl: resolveAgentUrl(nodeName, cfg, nodeIp),
             cpu: {
                 sensor: cfg.cpuTempSensor || null,
                 tempC: null,
@@ -320,7 +356,7 @@ async function getCachedCurrent(connectionId, nodeName, cfg, settings, nodeIp = 
 }
 
 async function fetchNodeDiscovery(nodeName, cfg, settings, nodeIp = null) {
-    const agentUrl = resolveAgentUrl(nodeName, cfg);
+    const agentUrl = resolveAgentUrl(nodeName, cfg, nodeIp);
     const data = await fetchAgentJson(agentUrl, 'discovery', settings.timeoutMs);
     const parsed = parseDiscoveryPayload(data);
     return {
@@ -335,8 +371,8 @@ async function fetchNodeDiscovery(nodeName, cfg, settings, nodeIp = null) {
     };
 }
 
-async function fetchNodeCurrent(nodeName, cfg, settings) {
-    const agentUrl = resolveAgentUrl(nodeName, cfg);
+async function fetchNodeCurrent(nodeName, cfg, settings, nodeIp = null) {
+    const agentUrl = resolveAgentUrl(nodeName, cfg, nodeIp);
     if (!cfg.cpuTempSensor) throw new Error('cpu sensor is not configured');
     if (!cfg.linkInterface) throw new Error('network interface is not configured');
     const data = await fetchAgentJson(agentUrl, 'current', settings.timeoutMs, {
@@ -504,7 +540,7 @@ router.get('/discovery', checkAuth, async (req, res) => {
                 return {
                     node: nodeName,
                     nodeIp,
-                    agentUrl: resolveAgentUrl(nodeName, cfg),
+                    agentUrl: resolveAgentUrl(nodeName, cfg, nodeIp),
                     config: cfg,
                     cpuSensors: [],
                     interfaces: [],
@@ -581,7 +617,18 @@ async function fetchHostMetricsForNotify(connectionId, nodeName) {
     const all = loadConfigs();
     const cfg = normalizeNodeConfig(all[cid]?.nodes?.[nn]);
     if (!cfg.enabled) return null;
-    return getCachedCurrent(cid, nn, cfg, settings);
+    let nodeIp = null;
+    try {
+        const conn = connectionStore.getConnectionById(cid);
+        if (conn && conn.type === 'proxmox' && conn.secret && conn.url) {
+            const clusterStatus = await proxmox.getClusterStatus(conn.secret, conn.url);
+            const nodeIpMap = proxmox.extractNodeIpMap(clusterStatus);
+            nodeIp = nodeIpMap[nn] || null;
+        }
+    } catch (e) {
+        log('warn', `[HostMetrics] fetchHostMetricsForNotify nodeIp: ${e.message}`);
+    }
+    return getCachedCurrent(cid, nn, cfg, settings, nodeIp);
 }
 
 module.exports = router;

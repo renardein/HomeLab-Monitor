@@ -1,0 +1,93 @@
+﻿                    <datalist id="vmIconSuggestions">
+                        <option value="simple-icons:ubuntu" label="Ubuntu"></option>
+                        <option value="simple-icons:debian" label="Debian"></option>
+                        <option value="simple-icons:archlinux" label="Arch Linux"></option>
+                        <option value="simple-icons:fedora" label="Fedora"></option>
+                        <option value="simple-icons:alpinelinux" label="Alpine Linux"></option>
+                        <option value="simple-icons:centos" label="CentOS"></option>
+                        <option value="simple-icons:redhat" label="Red Hat"></option>
+                        <option value="simple-icons:opensuse" label="openSUSE"></option>
+                        <option value="simple-icons:linux" label="Linux"></option>
+                        <option value="simple-icons:windows" label="Windows"></option>
+                        <option value="simple-icons:apple" label="Apple"></option>
+                        <option value="simple-icons:docker" label="Docker"></option>
+                        <option value="simple-icons:kubernetes" label="Kubernetes"></option>
+                        <option value="simple-icons:portainer" label="Portainer"></option>
+                        <option value="simple-icons:proxmox" label="Proxmox"></option>
+                        <option value="simple-icons:openmediavault" label="OpenMediaVault"></option>
+                        <option value="simple-icons:truenas" label="TrueNAS"></option>
+                        <option value="simple-icons:nginx" label="NGINX"></option>
+                        <option value="simple-icons:apache" label="Apache"></option>
+                        <option value="simple-icons:traefikproxy" label="Traefik"></option>
+                        <option value="simple-icons:caddy" label="Caddy"></option>
+                        <option value="simple-icons:cloudflare" label="Cloudflare"></option>
+                        <option value="simple-icons:wireguard" label="WireGuard"></option>
+                        <option value="simple-icons:openvpn" label="OpenVPN"></option>
+                        <option value="simple-icons:tailscale" label="Tailscale"></option>
+                        <option value="simple-icons:postgresql" label="PostgreSQL"></option>
+                        <option value="simple-icons:mysql" label="MySQL"></option>
+                        <option value="simple-icons:mariadb" label="MariaDB"></option>
+                        <option value="simple-icons:redis" label="Redis"></option>
+                        <option value="simple-icons:mongodb" label="MongoDB"></option>
+                        <option value="simple-icons:elasticsearch" label="Elasticsearch"></option>
+                        <option value="simple-icons:influxdb" label="InfluxDB"></option>
+                        <option value="simple-icons:prometheus" label="Prometheus"></option>
+                        <option value="simple-icons:grafana" label="Grafana"></option>
+                        <option value="simple-icons:loki" label="Loki"></option>
+                        <option value="simple-icons:clickhouse" label="ClickHouse"></option>
+                        <option value="simple-icons:rabbitmq" label="RabbitMQ"></option>
+                        <option value="simple-icons:apachekafka" label="Kafka"></option>
+                        <option value="simple-icons:gitlab" label="GitLab"></option>
+                        <option value="simple-icons:github" label="GitHub"></option>
+                        <option value="simple-icons:gitea" label="Gitea"></option>
+                        <option value="simple-icons:jenkins" label="Jenkins"></option>
+                        <option value="simple-icons:ansible" label="Ansible"></option>
+                        <option value="simple-icons:terraform" label="Terraform"></option>
+                        <option value="simple-icons:node-dot-js" label="Node.js"></option>
+                        <option value="simple-icons:python" label="Python"></option>
+                        <option value="simple-icons:java" label="Java"></option>
+                        <option value="simple-icons:dotnet" label=".NET"></option>
+                        <option value="simple-icons:php" label="PHP"></option>
+                        <option value="simple-icons:go" label="Go"></option>
+                        <option value="simple-icons:rust" label="Rust"></option>
+                        <option value="simple-icons:react" label="React"></option>
+                        <option value="simple-icons:vuedotjs" label="Vue"></option>
+                        <option value="simple-icons:angular" label="Angular"></option>
+                        <option value="simple-icons:nextdotjs" label="Next.js"></option>
+                        <option value="simple-icons:homeassistant" label="Home Assistant"></option>
+                        <option value="simple-icons:plex" label="Plex"></option>
+                        <option value="simple-icons:jellyfin" label="Jellyfin"></option>
+                        <option value="simple-icons:adguard" label="AdGuard"></option>
+                        <option value="simple-icons:pihole" label="Pi-hole"></option>
+                        <option value="simple-icons:vaultwarden" label="Vaultwarden"></option>
+                        <option value="simple-icons:bitwarden" label="Bitwarden"></option>
+                        <option value="simple-icons:paperlessngx" label="Paperless-ngx"></option>
+                        <option value="simple-icons:immich" label="Immich"></option>
+                        <option value="mdi:virtual-machine" label="Virtual machine"></option>
+                        <option value="mdi:nas" label="NAS"></option>
+                        <option value="carbon:container-software" label="Container"></option>
+                    </datalist>
+                    <div class="modal fade" id="iconPickerModal" tabindex="-1" aria-hidden="true">
+                        <div class="modal-dialog modal-dialog-centered modal-lg">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title" id="iconPickerModalTitle">Выбор иконки</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                </div>
+                                <div class="modal-body">
+                                    <div class="row g-2 mb-3">
+                                        <div class="col-md-8">
+                                            <input type="text" class="form-control" id="iconPickerSearchInput" placeholder="Поиск по названию или icon name" oninput="renderIconPickerGrid()">
+                                        </div>
+                                        <div class="col-md-4 d-flex gap-2">
+                                            <button type="button" class="btn btn-outline-secondary flex-fill" onclick="clearActiveIconPickerSelection()" id="iconPickerClearBtn">Сбросить</button>
+                                        </div>
+                                    </div>
+                                    <div class="small text-muted mb-3" id="iconPickerHelpText">Можно выбрать из каталога ниже или использовать любое имя иконки Iconify.</div>
+                                    <div id="iconPickerGrid" class="icon-picker-grid"></div>
+                                    <div id="iconPickerEmpty" class="text-muted small d-none">Ничего не найдено</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+

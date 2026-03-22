@@ -1,7 +1,78 @@
+        /* Единая шкала типографики и отступов (обычный режим + монитор) */
+        :root {
+            --hm-font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+            --hm-text-xs: 0.75rem;
+            --hm-text-sm: 0.8125rem;
+            --hm-text-label: 0.875rem;
+            --hm-text-base: 1rem;
+            --hm-text-lg: 1.125rem;
+            --hm-text-xl: 1.25rem;
+            --hm-text-stat: 2rem;
+            --hm-text-metric: 2.5rem;
+            --hm-line-tight: 1.2;
+            --hm-line-snug: 1.35;
+            --hm-space-1: 0.25rem;
+            --hm-space-2: 0.5rem;
+            --hm-space-3: 0.75rem;
+            --hm-space-4: 1rem;
+            --hm-space-5: 1.25rem;
+            --hm-space-6: 1.5rem;
+            --hm-radius: 10px;
+            --hm-radius-lg: 12px;
+            --hm-radius-card: 15px;
+            --hm-shadow-card: 0 3px 10px rgba(0, 0, 0, 0.05);
+            --hm-shadow-card-soft: 0 2px 8px rgba(0, 0, 0, 0.06);
+            --hm-app-padding: 1.25rem;
+            --hm-card-header-py: 0.875rem;
+            --hm-card-header-px: 1.25rem;
+            --hm-card-body-pad: 1.25rem;
+            --hm-stat-pad: 1.25rem;
+            --hm-node-pad: 1rem;
+            --hm-label-tracking: 0.04em;
+            --hm-progress-h: 10px;
+            --hm-progress-h-monitor: 8px;
+        }
+
+        /* KPI-блоки (Speedtest и др.): одна шкала подпись / значение */
+        .hm-kpi-label {
+            font-size: var(--hm-text-label);
+            font-weight: 600;
+            letter-spacing: var(--hm-label-tracking);
+            margin-bottom: var(--hm-space-1);
+        }
+        .hm-kpi-value {
+            font-size: var(--hm-text-base);
+            font-weight: 600;
+            line-height: var(--hm-line-snug);
+        }
+        .hm-speedtest-last-run {
+            max-height: 7.5rem;
+            overflow: auto;
+            word-break: break-word;
+            overflow-wrap: anywhere;
+            font-family: ui-monospace, 'Cascadia Code', 'Segoe UI Mono', monospace;
+            font-size: var(--hm-text-sm);
+            font-weight: 500;
+        }
+        .hm-cluster-metric-panel .hm-cluster-metric-cell .hm-speedtest-last-run {
+            font-family: var(--hm-font-sans);
+            font-weight: 200;
+            font-size: clamp(0.8125rem, 1.25vw, 1rem);
+            max-height: 5rem;
+            line-height: 1.35;
+        }
+        body.monitor-mode .monitor-screen__meta-value.hm-speedtest-last-run {
+            font-size: var(--hm-text-sm);
+            font-weight: 500;
+            line-height: 1.35;
+        }
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-family: var(--hm-font-sans);
+            font-size: var(--hm-text-base);
+            line-height: var(--hm-line-snug);
             background: #f5f5f5;
-            padding: 20px;
+            padding: var(--hm-app-padding);
             transition: background-color 0.3s, color 0.3s;
         }
         body.dark-mode {
@@ -123,6 +194,11 @@
             font-weight: 600;
             letter-spacing: -0.02em;
             color: #1e293b;
+            cursor: pointer;
+            text-decoration: none;
+        }
+        .app-topbar-brand:hover {
+            color: #334155;
         }
         .app-topbar-brand-icon {
             display: inline-flex;
@@ -171,12 +247,20 @@
             border-color: transparent !important;
             background: #fff !important;
             box-shadow: none !important;
+            font-weight: 400 !important;
+            color: #334155 !important;
         }
         .app-topbar-btn.dropdown-toggle::after {
             margin-left: 0.15rem;
         }
-        .app-topbar-btn:hover {
+        .app-topbar-btn:hover,
+        .app-topbar-btn:focus,
+        .app-topbar-btn:focus-visible,
+        .app-topbar-btn:active,
+        .app-topbar-actions .dropdown-toggle.show {
             background: #f8fafc !important;
+            font-weight: 400 !important;
+            color: #1e293b !important;
         }
         .app-topbar-status {
             display: flex;
@@ -233,6 +317,9 @@
         body.dark-mode .app-topbar-brand {
             color: #f1f5f9 !important;
         }
+        body.dark-mode .app-topbar-brand:hover {
+            color: #fff !important;
+        }
         body.dark-mode .app-topbar-actions {
             background: rgba(255, 255, 255, 0.06);
             border-color: rgba(255, 255, 255, 0.12);
@@ -240,10 +327,16 @@
         body.dark-mode .app-topbar-btn {
             background: rgba(15, 52, 96, 0.65) !important;
             color: #e2e8f0 !important;
+            font-weight: 400 !important;
         }
-        body.dark-mode .app-topbar-btn:hover {
+        body.dark-mode .app-topbar-btn:hover,
+        body.dark-mode .app-topbar-btn:focus,
+        body.dark-mode .app-topbar-btn:focus-visible,
+        body.dark-mode .app-topbar-btn:active,
+        body.dark-mode .app-topbar-actions .dropdown-toggle.show {
             background: rgba(15, 52, 96, 0.95) !important;
             color: #fff !important;
+            font-weight: 400 !important;
         }
         body.dark-mode .app-topbar-pill {
             background: rgba(15, 52, 96, 0.5);
@@ -270,10 +363,10 @@
             color: #bfdbfe;
         }
         .card {
-            border-radius: 15px;
+            border-radius: var(--hm-radius-card);
             box-shadow: 0 5px 15px rgba(0,0,0,0.08);
             border: none;
-            margin-bottom: 20px;
+            margin-bottom: var(--hm-space-5);
         }
         body.dark-mode .card-body {
             color: #eee;
@@ -284,39 +377,85 @@
         .card-header {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
-            border-radius: 15px 15px 0 0 !important;
-            padding: 15px 20px;
+            border-radius: var(--hm-radius-card) var(--hm-radius-card) 0 0 !important;
+            padding: var(--hm-card-header-py) var(--hm-card-header-px);
+        }
+        .card-header h5,
+        .card-header h6 {
+            font-size: var(--hm-text-lg);
+            font-weight: 600;
+            line-height: var(--hm-line-tight);
+        }
+        .card-body {
+            padding: var(--hm-card-body-pad);
         }
         .stat-card {
             background: white;
-            border-radius: 10px;
-            padding: 20px;
+            border-radius: var(--hm-radius);
+            padding: var(--hm-stat-pad);
             text-align: center;
-            box-shadow: 0 3px 10px rgba(0,0,0,0.05);
+            box-shadow: var(--hm-shadow-card);
         }
         .stat-value {
-            font-size: 2rem;
-            font-weight: bold;
+            font-size: var(--hm-text-stat);
+            font-weight: 700;
+            line-height: var(--hm-line-tight);
             color: #333;
         }
         .stat-label {
             color: #666;
-            font-size: 0.9rem;
+            font-size: var(--hm-text-label);
             text-transform: uppercase;
+            letter-spacing: var(--hm-label-tracking);
+            line-height: var(--hm-line-tight);
         }
         .stat-card-meta {
-            margin-top: 0.45rem;
+            margin-top: var(--hm-space-2);
             color: #666;
-            font-size: 0.8rem;
-            line-height: 1.35;
+            font-size: var(--hm-text-sm);
+            line-height: var(--hm-line-snug);
         }
         .stat-card-meta:empty {
             display: none;
         }
+        /* Крупные числа в блоке «Ресурсы кластера» и плитках UPS/Speedtest — очень лёгкое начертание */
+        #dashboardContent .card .display-6,
+        .card .hm-cluster-metric-cell .display-6,
+        .hm-cluster-metric-panel .hm-cluster-metric-cell .display-6 {
+            font-size: var(--hm-text-metric) !important;
+            font-weight: 200 !important;
+            line-height: var(--hm-line-tight) !important;
+        }
+        #dashboardContent .card .text-center.p-3 h6,
+        .card .hm-cluster-metric-cell h6,
+        .hm-cluster-metric-panel .hm-cluster-metric-cell h6 {
+            font-size: var(--hm-text-label);
+            font-weight: 500;
+            margin-bottom: var(--hm-space-2);
+        }
+        #dashboardContent .card .text-center.p-3,
+        .card .hm-cluster-metric-cell,
+        .hm-cluster-metric-panel .hm-cluster-metric-cell {
+            padding: var(--hm-space-4) !important;
+        }
+        #dashboardContent .card .text-center.p-3 .progress {
+            border-radius: 6px;
+        }
+        .hm-cluster-metric-panel .hm-cluster-metric-cell .progress {
+            border-radius: 0;
+            background-color: #e2e8f0;
+        }
+        body.dark-mode .hm-cluster-metric-panel .hm-cluster-metric-cell .progress {
+            background-color: rgba(255, 255, 255, 0.12);
+        }
+        .hm-cluster-metric-panel .hm-cluster-metric-cell .progress .progress-bar.bg-success {
+            background-color: #15803d !important;
+        }
+
         .cluster-scroll-row {
             display: flex;
             flex-wrap: nowrap;
-            gap: 0.75rem;
+            gap: var(--hm-space-3);
             overflow-x: auto;
             overflow-y: hidden;
             padding-bottom: 0.35rem;
@@ -330,6 +469,11 @@
         }
         .cluster-scroll-item > .node-card {
             margin-bottom: 0;
+        }
+        .cluster-scroll-item .node-card h5 {
+            font-size: var(--hm-text-lg);
+            font-weight: 600;
+            line-height: var(--hm-line-tight);
         }
         @media (max-width: 1199.98px) {
             .cluster-scroll-item {
@@ -345,10 +489,10 @@
         }
         .node-card {
             background: white;
-            border-radius: 10px;
-            padding: 15px;
-            margin-bottom: 15px;
-            box-shadow: 0 3px 10px rgba(0,0,0,0.05);
+            border-radius: var(--hm-radius);
+            padding: var(--hm-node-pad);
+            margin-bottom: var(--hm-space-4);
+            box-shadow: var(--hm-shadow-card);
             transition: all 0.3s ease;
         }
         .node-card:hover {
@@ -360,12 +504,13 @@
         body:not(.monitor-mode) #vmsMonitorSection #vmsMonitorCards .node-card {
             border: 1px solid rgba(102, 126, 234, 0.25);
             box-shadow: 0 10px 24px rgba(0, 0, 0, 0.08);
-            padding: 18px;
+            padding: var(--hm-space-5);
         }
 
         body:not(.monitor-mode) #vmsMonitorSection #vmsMonitorCards .node-card h6 {
-            font-size: 1rem;
+            font-size: var(--hm-text-base);
             font-weight: 700;
+            line-height: var(--hm-line-tight);
         }
 
         body:not(.monitor-mode) #vmsMonitorSection #vmsMonitorCards .node-card .badge {
@@ -439,11 +584,12 @@
         }
 
         .vm-card-layout__icon {
-            flex: 0 0 auto;
+            flex: 0 0 3rem;
+            width: 3rem;
+            min-width: 3rem;
             display: flex;
             align-items: center;
             justify-content: center;
-            min-width: 3rem;
         }
 
         .vm-card-layout__info {
@@ -515,6 +661,16 @@
             justify-content: center;
             min-width: 2rem;
             min-height: 2rem;
+        }
+
+        /* Превью в настройках: фон = выбранный тинт, глиф контрастный (Iconify + Bootstrap Icons). */
+        .icon-picker-trigger--tinted {
+            border: none !important;
+            border-radius: 0.4rem;
+            box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.12);
+        }
+        body.dark-mode .icon-picker-trigger--tinted {
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
         }
 
         .icon-picker-grid {
@@ -611,7 +767,7 @@
             border: 1px solid rgba(102, 126, 234, 0.22);
             box-shadow: 0 10px 24px rgba(0, 0, 0, 0.08);
             background: #fff;
-            padding: 18px;
+            padding: var(--hm-node-pad);
         }
 
         body.dark-mode:not(.monitor-mode) #servicesMonitorSection #servicesCards .node-card {
@@ -622,7 +778,7 @@
         }
 
         body:not(.monitor-mode) #servicesMonitorSection #servicesCards .node-card h6 {
-            font-size: 1rem;
+            font-size: var(--hm-text-base);
             font-weight: 700;
         }
 
@@ -633,6 +789,10 @@
         .progress {
             height: 8px;
             margin-top: 5px;
+        }
+        .progress.hm-progress--cluster {
+            height: var(--hm-progress-h);
+            border-radius: 6px;
         }
         .toast-container {
             position: fixed;
@@ -656,9 +816,15 @@
         body.dark-mode .spinner-border.text-primary {
             border-color: #667eea !important;
         }
+        .nav-tabs {
+            margin-bottom: var(--hm-space-6) !important;
+        }
         .nav-tabs .nav-link {
             color: #495057;
             font-weight: 500;
+            font-size: var(--hm-text-base);
+            padding: var(--hm-space-2) var(--hm-space-4);
+            border-radius: var(--hm-radius) var(--hm-radius) 0 0;
         }
         .nav-tabs .nav-link.active {
             color: #667eea;
@@ -668,25 +834,27 @@
         /* UPS settings should match the rest of settings design (no special “monitor” pills) */
         #upsSettingsCardWrap > .card {
             border: 1px solid #dee2e6;
-            border-radius: 10px;
+            border-radius: var(--hm-radius);
             box-shadow: none;
             background: #fff;
-            margin-bottom: 20px;
+            margin-bottom: var(--hm-space-5);
         }
 
         #upsSettingsCardWrap > .card .card-header {
             background: transparent !important;
             color: inherit;
-            border-radius: 10px 10px 0 0 !important;
-            padding: 16px 20px 0 20px;
+            border-radius: var(--hm-radius) var(--hm-radius) 0 0 !important;
+            padding: var(--hm-space-4) var(--hm-card-header-px) 0 var(--hm-card-header-px);
         }
 
         #upsSettingsCardWrap > .card .card-body {
-            padding: 16px 20px 20px 20px;
+            padding: var(--hm-space-4) var(--hm-card-header-px) var(--hm-space-5) var(--hm-card-header-px);
         }
 
         #upsSettingsCardWrap > .card .card-header h5 {
-            margin-bottom: 12px;
+            margin-bottom: var(--hm-space-3);
+            font-size: var(--hm-text-lg);
+            font-weight: 600;
         }
 
         body.dark-mode #upsSettingsCardWrap > .card {
@@ -777,10 +945,16 @@
         }
         .settings-section {
             border: 1px solid #dee2e6;
-            border-radius: 10px;
-            padding: 20px;
-            margin-bottom: 20px;
+            border-radius: var(--hm-radius);
+            padding: var(--hm-stat-pad);
+            margin-bottom: var(--hm-space-5);
             background: #fff;
+        }
+        .settings-section h5,
+        .settings-section h6 {
+            font-size: var(--hm-text-lg);
+            font-weight: 600;
+            line-height: var(--hm-line-tight);
         }
         /* Единые отступы: последняя панель во вкладке не дублирует нижний зазор */
         #settingsTabContent .tab-pane > .settings-section:last-child,
@@ -1162,7 +1336,7 @@
         }
 
         body.monitor-mode #dashboardContent {
-            padding: 16px 20px 24px;
+            padding: var(--hm-space-4) var(--hm-space-5) var(--hm-space-6);
             height: 100%;
             display: flex;
             flex-direction: column;
@@ -1195,36 +1369,35 @@
 
         /* Крупные блоки дашборда в режиме монитора */
         body.monitor-mode .stat-card {
-            padding: 20px;
-            border-radius: 10px;
+            padding: var(--hm-stat-pad);
+            border-radius: var(--hm-radius);
         }
         body.monitor-mode .stat-value {
-            font-size: 2rem;
-            font-weight: bold;
-            line-height: 1.2;
+            font-size: var(--hm-text-stat);
+            font-weight: 700;
+            line-height: var(--hm-line-tight);
         }
         body.monitor-mode .stat-label {
-            font-size: 0.9rem;
+            font-size: var(--hm-text-label);
             text-transform: uppercase;
+            letter-spacing: var(--hm-label-tracking);
             margin-top: 0;
+            line-height: var(--hm-line-tight);
         }
         body.monitor-mode .card {
-            border-radius: 15px;
-            margin-bottom: 20px;
+            border-radius: var(--hm-radius-card);
+            margin-bottom: var(--hm-space-5);
         }
         body.monitor-mode .card-header {
             font-size: inherit;
-            padding: 15px 20px;
+            padding: var(--hm-card-header-py) var(--hm-card-header-px);
         }
         body.monitor-mode .card-body {
-            padding: 1rem;
+            padding: var(--hm-card-body-pad);
         }
         body.monitor-mode .node-card {
-            padding: 15px;
-            border-radius: 10px;
-        }
-        body.monitor-mode .display-6 {
-            /* font-size: inherit; */
+            padding: var(--hm-node-pad);
+            border-radius: var(--hm-radius);
         }
         body.monitor-mode .table {
             font-size: inherit;
@@ -1237,12 +1410,15 @@
             padding: inherit;
         }
         body.monitor-mode .progress {
-            height: 8px;
+            height: var(--hm-progress-h-monitor);
             border-radius: 6px;
         }
+        body.monitor-mode #dashboardContent .card .text-center.p-3 .progress {
+            height: var(--hm-progress-h-monitor);
+        }
         body.monitor-mode .nav-tabs .nav-link {
-            padding: 10px 20px;
-            font-size: 1rem;
+            padding: var(--hm-space-2) var(--hm-space-4);
+            font-size: var(--hm-text-base);
         }
 
         /* Тёмная тема режима монитора (выбор в панели) */
@@ -1465,7 +1641,8 @@
             table-layout: fixed;
             width: 100%;
             border-collapse: collapse;
-            font-size: clamp(0.62rem, 0.9vw, 0.8rem);
+            font-size: var(--hm-text-xs);
+            line-height: 1.35;
         }
         .monitor-backup-node-table thead th {
             position: sticky;
@@ -1473,7 +1650,7 @@
             z-index: 1;
             padding: 6px 8px 5px !important;
             font-weight: 700;
-            font-size: 0.62rem;
+            font-size: var(--hm-text-xs);
             text-transform: uppercase;
             letter-spacing: 0.04em;
             line-height: 1.2;
@@ -1490,15 +1667,17 @@
             width: 20%;
             text-align: right !important;
             font-variant-numeric: tabular-nums;
-            font-weight: 700;
+            font-weight: 600;
             padding: 6px 8px 6px 10px !important;
             vertical-align: middle;
         }
         .monitor-backup-col-time {
             width: 50%;
             text-align: left !important;
-            font-family: ui-monospace, "Cascadia Mono", "Segoe UI Mono", monospace;
+            font-family: ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', monospace;
             font-variant-numeric: tabular-nums;
+            font-weight: 500;
+            font-size: inherit;
             padding: 6px 6px !important;
             white-space: nowrap;
             overflow: hidden;
@@ -1527,8 +1706,9 @@
         body.monitor-mode.monitor-theme-dark .monitor-backup-tr--run { background: rgba(13, 110, 253, 0.12); }
         body.monitor-mode.monitor-theme-dark .monitor-backup-tr--warn { background: rgba(255, 193, 7, 0.08); }
         .monitor-backups-nodes-row .badge {
-            font-size: clamp(0.58rem, 0.8vw, 0.72rem);
-            padding: 0.15em 0.4em;
+            font-size: var(--hm-text-xs);
+            padding: 0.2em 0.45em;
+            font-weight: 600;
         }
         .monitor-backup-node-empty {
             flex: 1;
@@ -1550,7 +1730,7 @@
             bottom: var(--monitor-dock-h);
             z-index: 1020;
             margin: 0 !important;
-            padding: 0.75rem 1rem 1rem;
+            padding: var(--hm-space-3) var(--hm-space-4) var(--hm-space-4);
             overflow: hidden;
         }
 
@@ -1563,7 +1743,7 @@
             min-height: 0;
             display: flex;
             flex-direction: column;
-            gap: 0.75rem;
+            gap: var(--hm-space-3);
         }
 
         body.monitor-mode .monitor-screen__panel {
@@ -1584,7 +1764,7 @@
             overflow: hidden;
             display: flex;
             flex-direction: column;
-            gap: 0.75rem;
+            gap: var(--hm-space-3);
         }
 
         body.monitor-mode .monitor-screen__stats {
@@ -1594,37 +1774,38 @@
         body.monitor-mode .monitor-screen__meta-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-            gap: 0.75rem;
+            gap: var(--hm-space-3);
         }
 
         body.monitor-mode .monitor-screen__meta-card {
             background: rgba(255, 255, 255, 0.95);
-            border-radius: 10px;
+            border-radius: var(--hm-radius);
             border: 1px solid rgba(226, 232, 240, 1);
-            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05);
-            padding: 0.85rem 1rem;
+            box-shadow: var(--hm-shadow-card);
+            padding: var(--hm-space-3) var(--hm-space-4);
         }
 
         body.monitor-mode .monitor-screen__meta-label {
-            font-size: 0.8rem;
+            font-size: var(--hm-text-label);
             text-transform: uppercase;
-            letter-spacing: 0.04em;
+            letter-spacing: var(--hm-label-tracking);
             opacity: 0.8;
-            margin-bottom: 0.3rem;
+            margin-bottom: var(--hm-space-1);
+            line-height: var(--hm-line-tight);
         }
 
         body.monitor-mode .monitor-screen__meta-value {
-            font-size: 1.1rem;
+            font-size: var(--hm-text-lg);
             font-weight: 700;
-            line-height: 1.35;
+            line-height: var(--hm-line-snug);
         }
 
         body.monitor-mode .monitor-screen__meta-extra {
             background: rgba(255, 255, 255, 0.95);
-            border-radius: 10px;
+            border-radius: var(--hm-radius);
             border: 1px solid rgba(226, 232, 240, 1);
-            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05);
-            padding: 0.75rem 1rem;
+            box-shadow: var(--hm-shadow-card);
+            padding: var(--hm-space-3) var(--hm-space-4);
         }
 
         body.monitor-mode .monitor-screen__header-action {
@@ -1660,12 +1841,15 @@
         }
 
         .ups-node-card__metric-value {
-            font-size: 1.05rem;
-            line-height: 1.2;
+            font-size: var(--hm-text-base);
+            line-height: var(--hm-line-tight);
         }
 
         .ups-node-card .progress {
             margin-top: 0.35rem;
+        }
+        .ups-node-card .progress.hm-progress--cluster {
+            height: var(--hm-progress-h);
         }
 
         .ups-node-card--single {
@@ -1676,7 +1860,7 @@
         /* Режим монитора: один экран без скролла, под 1920×1200 */
         .monitor-view {
             margin: 0;
-            padding: 0.75rem 1rem 1rem;
+            padding: var(--hm-space-3) var(--hm-space-4) var(--hm-space-4);
             border-radius: 0;
             background: transparent;
             color: inherit;
@@ -1694,8 +1878,8 @@
         .monitor-view__stats {
             flex: 0 0 auto;
             display: flex;
-            gap: 1rem;
-            margin-bottom: 0.75rem;
+            gap: var(--hm-space-4);
+            margin-bottom: var(--hm-space-3);
             flex-wrap: wrap;
         }
 
@@ -1703,11 +1887,11 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            padding: 0.55rem 0.9rem;
-            border-radius: 10px;
+            padding: var(--hm-space-3) var(--hm-space-4);
+            border-radius: var(--hm-radius);
             background: rgba(255, 255, 255, 0.95);
             border: 1px solid rgba(226, 232, 240, 1);
-            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05);
+            box-shadow: var(--hm-shadow-card);
             min-width: 100px;
         }
 
@@ -1718,32 +1902,37 @@
             box-shadow: none;
         }
 
-        .monitor-view__stat-value { font-size: 1.5rem; font-weight: 700; line-height: 1.2; }
+        .monitor-view__stat-value {
+            font-size: var(--hm-text-stat);
+            font-weight: 700;
+            line-height: var(--hm-line-tight);
+        }
         .monitor-view__stat-label {
-            font-size: 0.8rem;
+            font-size: var(--hm-text-label);
             opacity: 0.9;
-            margin-top: 0.15rem;
+            margin-top: var(--hm-space-1);
             text-transform: uppercase;
-            letter-spacing: 0.04em;
+            letter-spacing: var(--hm-label-tracking);
+            line-height: var(--hm-line-tight);
         }
 
         .monitor-view__resources {
             flex: 0 0 auto;
             display: flex;
-            gap: 1rem;
-            margin-bottom: 0.75rem;
+            gap: var(--hm-space-4);
+            margin-bottom: var(--hm-space-3);
             flex-wrap: wrap;
         }
 
         .monitor-view__res {
             display: flex;
             align-items: center;
-            gap: 0.5rem;
-            padding: 0.4rem 0.75rem;
-            border-radius: 10px;
+            gap: var(--hm-space-2);
+            padding: var(--hm-space-3) var(--hm-space-4);
+            border-radius: var(--hm-radius);
             background: rgba(255, 255, 255, 0.95);
             border: 1px solid rgba(226, 232, 240, 1);
-            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05);
+            box-shadow: var(--hm-shadow-card);
             min-width: 120px;
         }
 
@@ -1755,14 +1944,25 @@
         }
 
         .monitor-view__res-label {
-            font-size: 0.8rem;
+            font-size: var(--hm-text-label);
             flex-shrink: 0;
             text-transform: uppercase;
-            letter-spacing: 0.03em;
+            letter-spacing: var(--hm-label-tracking);
+            line-height: var(--hm-line-tight);
         }
-        /* Сделать цифры CPU/RAM такими же “крупными”, как в обычном режиме */
-        .monitor-view__res-value { font-weight: 700; font-size: 1.6rem; line-height: 1.1; }
-        .monitor-view__res-bar { flex: 1; min-width: 40px; height: 8px; background: rgba(0,0,0,0.15); border-radius: 4px; overflow: hidden; }
+        .monitor-view__res-value {
+            font-weight: 700;
+            font-size: var(--hm-text-stat);
+            line-height: var(--hm-line-tight);
+        }
+        .monitor-view__res-bar {
+            flex: 1;
+            min-width: 40px;
+            height: var(--hm-progress-h-monitor);
+            background: rgba(0,0,0,0.15);
+            border-radius: 4px;
+            overflow: hidden;
+        }
         body.monitor-mode.monitor-theme-dark .monitor-view__res-bar { background: rgba(255,255,255,0.2); }
         .monitor-view__res-fill {
             height: 100%;
@@ -1777,25 +1977,25 @@
             flex-direction: column;
             align-items: stretch;
             align-self: flex-start;
-            gap: 0.2rem;
+            gap: var(--hm-space-1);
             min-width: 118px;
-            padding: 0.45rem 0.8rem;
+            padding: var(--hm-space-3) var(--hm-space-4);
         }
         .monitor-view__res-guest-title {
-            font-size: 0.72rem;
+            font-size: var(--hm-text-xs);
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.06em;
             opacity: 0.85;
-            margin-bottom: 0.15rem;
+            margin-bottom: var(--hm-space-1);
         }
         .monitor-view__res-guest-line {
             display: flex;
             justify-content: space-between;
             align-items: baseline;
-            gap: 0.75rem;
-            font-size: 1.05rem;
-            line-height: 1.35;
+            gap: var(--hm-space-3);
+            font-size: var(--hm-text-base);
+            line-height: var(--hm-line-snug);
         }
         .monitor-view__res-guest-lbl { opacity: 0.75; flex-shrink: 0; }
         .monitor-view__res-guest-val { font-weight: 700; font-variant-numeric: tabular-nums; }
@@ -1803,11 +2003,12 @@
         body.monitor-mode.monitor-theme-dark .monitor-view__res-guest-val--run { color: #4ade80; }
 
         .monitor-view__empty {
-            padding: 1rem;
+            padding: var(--hm-space-4);
             text-align: center;
             color: inherit;
             opacity: 0.8;
-            font-size: 0.9rem;
+            font-size: var(--hm-text-label);
+            line-height: var(--hm-line-snug);
         }
 
         .monitor-view__body {
@@ -1829,21 +2030,23 @@
 
         .monitor-view__panel-title {
             flex: 0 0 auto;
-            font-size: 1.0rem;
+            font-size: var(--hm-text-lg);
+            font-weight: 600;
             color: #fff;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: 10px;
-            padding: 0.45rem 0.75rem;
-            margin-bottom: 0.6rem;
+            border-radius: var(--hm-radius);
+            padding: var(--hm-space-2) var(--hm-space-3);
+            margin-bottom: var(--hm-space-3);
+            line-height: var(--hm-line-tight);
         }
 
         .monitor-view__list {
             flex: 1 1 auto;
             min-height: 0;
             overflow: hidden;
-            padding-right: 4px;
+            padding-right: var(--hm-space-1);
             display: grid;
-            gap: 0.5rem;
+            gap: var(--hm-space-2);
             align-content: start;
             grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
         }
@@ -1856,18 +2059,20 @@
         /* Экран кластера: только список узлов (одна колонка) */
         .monitor-view__nodes .monitor-view__list {
             grid-template-columns: 1fr;
-            gap: 0.35rem;
+            gap: var(--hm-space-2);
         }
 
         .monitor-view__node-row {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 0.5rem 0.75rem;
-            border-radius: 10px;
+            padding: var(--hm-space-2) var(--hm-space-3);
+            border-radius: var(--hm-radius);
             background: rgba(255, 255, 255, 0.95);
             border: 1px solid rgba(226, 232, 240, 1);
-            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05);
+            box-shadow: var(--hm-shadow-card);
+            font-size: var(--hm-text-base);
+            line-height: var(--hm-line-snug);
         }
 
         body.monitor-mode.monitor-theme-dark .monitor-view__node-row {
@@ -1876,18 +2081,20 @@
             box-shadow: none;
         }
 
-        .monitor-view__node-name { font-weight: 500; }
+        .monitor-view__node-name { font-weight: 600; font-size: var(--hm-text-base); }
         .monitor-view__node-status { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
         .monitor-view__node-status.online { background: #22c55e; }
         .monitor-view__node-status.offline { background: #ef4444; }
 
         .monitor-view__card {
             background: rgba(255, 255, 255, 0.95);
-            border-radius: 10px;
-            padding: 0.45rem 0.6rem;
+            border-radius: var(--hm-radius);
+            padding: var(--hm-space-2) var(--hm-space-3);
             border: 1px solid rgba(226, 232, 240, 1);
-            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05);
+            box-shadow: var(--hm-shadow-card);
             margin-bottom: 0;
+            font-size: var(--hm-text-sm);
+            line-height: var(--hm-line-snug);
         }
 
         /* Кнопки навигации режимов монитора теперь в тулбаре, а не в отдельной панели */
@@ -1969,6 +2176,10 @@
 
         body.monitor-mode {
             overflow: hidden;
+            /* Единый размер кнопок панели монитора */
+            --monitor-toolbar-btn-h: 38px;
+            --monitor-toolbar-icon-w: 38px;
+            --monitor-toolbar-text-btn-w: 10rem;
         }
         body.monitor-mode .cluster-scroll-row {
             scrollbar-width: none;
@@ -2082,6 +2293,17 @@
             text-overflow: ellipsis;
             max-width: min(40vw, 280px);
         }
+        .monitor-toolbar-title--home {
+            cursor: pointer;
+        }
+        .monitor-toolbar-title--home:hover {
+            opacity: 0.88;
+        }
+        .monitor-toolbar-title--home:focus-visible {
+            outline: 2px solid rgba(102, 126, 234, 0.7);
+            outline-offset: 2px;
+            border-radius: 4px;
+        }
         .monitor-toolbar-update {
             white-space: nowrap;
             flex-shrink: 0;
@@ -2094,6 +2316,11 @@
             gap: 6px;
             flex: 0 0 auto;
             margin-left: auto;
+        }
+        .monitor-toolbar-nav-group {
+            display: inline-flex;
+            align-items: center;
+            gap: 2px;
         }
         .monitor-toolbar-theme-btn {
             padding: 6px 10px;
@@ -2126,6 +2353,43 @@
             display: flex;
             align-items: center;
             gap: 0.5rem;
+        }
+
+        /* Одинаковая высота; иконки — квадрат, «Настройки»/«Выход» — общая ширина */
+        body.monitor-mode .monitor-toolbar .monitor-toolbar-nav-btn,
+        body.monitor-mode .monitor-toolbar .monitor-toolbar-theme-btn,
+        body.monitor-mode .monitor-toolbar .monitor-toolbar-hide-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: var(--monitor-toolbar-icon-w);
+            min-width: var(--monitor-toolbar-icon-w);
+            height: var(--monitor-toolbar-btn-h);
+            min-height: var(--monitor-toolbar-btn-h);
+            padding: 0;
+            box-sizing: border-box;
+            flex-shrink: 0;
+        }
+        body.monitor-mode .monitor-toolbar .monitor-toolbar-settings,
+        body.monitor-mode .monitor-toolbar .monitor-toolbar-exit {
+            width: var(--monitor-toolbar-text-btn-w);
+            min-width: var(--monitor-toolbar-text-btn-w);
+            height: var(--monitor-toolbar-btn-h);
+            min-height: var(--monitor-toolbar-btn-h);
+            padding: 0 0.5rem;
+            box-sizing: border-box;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.25rem;
+            flex-shrink: 0;
+        }
+        body.monitor-mode .monitor-toolbar .monitor-toolbar-settings span,
+        body.monitor-mode .monitor-toolbar .monitor-toolbar-exit span {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 100%;
         }
 
         body.monitor-mode.monitor-theme-dark .monitor-toolbar-title,
@@ -2339,16 +2603,14 @@
             .monitor-view {
                 height: calc(100vh - var(--monitor-toolbar-top) - var(--monitor-dock-h));
                 max-height: calc(100vh - var(--monitor-toolbar-top) - var(--monitor-dock-h));
-                padding: 1rem 1.25rem 1.25rem;
+                padding: var(--hm-space-4) var(--hm-space-5) var(--hm-space-5);
             }
-            .monitor-view__stat-value { font-size: 2rem; }
-            .monitor-view__stat-label { font-size: 0.9rem; }
             .monitor-view__list {
                 grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-                gap: 0.6rem;
+                gap: var(--hm-space-3);
             }
             .monitor-view__card {
-                padding: 0.6rem 0.85rem;
+                padding: var(--hm-space-3) var(--hm-space-4);
             }
         }
 

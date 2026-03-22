@@ -13,11 +13,6 @@
         
         
         <div id="vmsMonitorSection" class="mb-4 monitor-screen" style="display: block;">
-            <div class="d-flex justify-content-between align-items-center mb-3 monitor-screen__backrow">
-                <button type="button" class="btn btn-outline-secondary btn-sm">
-                    <i class="bi bi-arrow-left me-1"></i><span>Back to dashboard</span>
-                </button>
-            </div>
             <div class="monitor-screen__layout">
                 <div class="monitor-screen__panel">
                     <div class="monitor-view__panel-title monitor-screen__panel-title">
@@ -72,8 +67,11 @@
                 </div>
             </div>
             <div class="monitor-toolbar-theme">
-                <button type="button" class="btn btn-sm monitor-toolbar-nav-btn" title="Prev"><i class="bi bi-chevron-left"></i></button>
-                <button type="button" class="btn btn-sm monitor-toolbar-nav-btn" title="Next"><i class="bi bi-chevron-right"></i></button>
+                <div class="monitor-toolbar-nav-group" role="group" aria-label="Screens">
+                    <button type="button" class="btn btn-sm monitor-toolbar-nav-btn" title="Prev"><i class="bi bi-chevron-left"></i></button>
+                    <button type="button" class="btn btn-sm monitor-toolbar-nav-btn" title="Home"><i class="bi bi-house-door"></i></button>
+                    <button type="button" class="btn btn-sm monitor-toolbar-nav-btn" title="Next"><i class="bi bi-chevron-right"></i></button>
+                </div>
                 <button type="button" class="btn btn-sm monitor-toolbar-theme-btn" title="Refresh"><i class="bi bi-arrow-repeat"></i></button>
                 <button type="button" class="btn btn-sm monitor-toolbar-theme-btn active" title="Light theme"><i class="bi bi-sun-fill"></i></button>
                 <button type="button" class="btn btn-sm monitor-toolbar-theme-btn" title="Dark theme"><i class="bi bi-moon-stars-fill"></i></button>

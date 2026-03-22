@@ -108,7 +108,7 @@
         <!-- Top navigation -->
         <nav class="navbar app-topbar navbar-expand-lg mb-4">
             <div class="container-fluid app-topbar-inner">
-                <a class="navbar-brand app-topbar-brand mb-0" href="#">
+                <a class="navbar-brand app-topbar-brand mb-0" href="#" role="button" onclick="event.preventDefault(); goToAppHome();">
                     <span class="app-topbar-brand-icon"><i class="bi bi-diagram-3"></i></span>
                     <span id="appName">HomeLab Monitor</span>
                 </a>
@@ -126,9 +126,9 @@
                                     <i class="bi bi-server"></i><span id="serverMenuTitle">Proxmox</span>
                                 </a>
                                 <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="serverMenuDropdown">
-                                    <li><button class="dropdown-item" type="button" onclick="setServerType('proxmox')"><i class="bi bi-diagram-3 me-2"></i>Proxmox</button></li>
-                                    <li><button class="dropdown-item" type="button" onclick="setServerType('truenas')"><i class="bi bi-hdd-stack me-2"></i>TrueNAS</button></li>
-                                    <li><hr class="dropdown-divider"></li>
+                                    <li class="server-menu-backend-choice"><button class="dropdown-item" type="button" onclick="setServerType('proxmox')"><i class="bi bi-diagram-3 me-2"></i>Proxmox</button></li>
+                                    <li class="server-menu-backend-choice"><button class="dropdown-item" type="button" onclick="setServerType('truenas')"><i class="bi bi-hdd-stack me-2"></i>TrueNAS</button></li>
+                                    <li class="server-menu-backend-choice"><hr class="dropdown-divider"></li>
                                     <li>
                                         <button class="dropdown-item" type="button" onclick="openServicesMonitorFromMenu()">
                                             <i class="bi bi-activity me-2"></i><span id="menuServicesMonitorText">Service monitoring</span>
@@ -147,6 +147,11 @@
                                     <li>
                                         <button class="dropdown-item" type="button" onclick="openSpeedtestMonitorFromMenu()">
                                             <i class="bi bi-wifi me-2"></i><span id="menuSpeedtestMonitorText">Speedtest</span>
+                                        </button>
+                                    </li>
+                                    <li>
+                                        <button class="dropdown-item" type="button" onclick="openUpsMonitorFromMenu()">
+                                            <i class="bi bi-lightning-charge me-2"></i><span id="menuUpsMonitorText">UPS</span>
                                         </button>
                                     </li>
                                 </ul>

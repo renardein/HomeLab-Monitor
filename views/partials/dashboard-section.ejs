@@ -50,7 +50,7 @@
                                         <h6><i class="bi bi-cpu me-2"></i><span id="cpuLabel">CPU</span></h6>
                                         <div class="display-6" id="clusterCpu">0</div>
                                         <small class="text-muted" id="clusterCpuDetail">0/0 cores</small>
-                                        <div class="progress mt-2" style="height: 10px;">
+                                        <div class="progress mt-2 hm-progress hm-progress--cluster">
                                             <div class="progress-bar bg-success" id="clusterCpuBar" style="width: 0%">
                                             </div>
                                         </div>
@@ -61,7 +61,7 @@
                                         <h6><i class="bi bi-memory me-2"></i><span id="memoryLabel">Memory</span></h6>
                                         <div class="display-6" id="clusterMemory">0</div>
                                         <small class="text-muted" id="clusterMemoryDetail">0/0</small>
-                                        <div class="progress mt-2" style="height: 10px;">
+                                        <div class="progress mt-2 hm-progress hm-progress--cluster">
                                             <div class="progress-bar bg-success" id="clusterMemoryBar"
                                                 style="width: 0%"></div>
                                         </div>
@@ -72,7 +72,7 @@
                                         <h6><i class="bi bi-pc-display me-2"></i><span id="dashboardClusterVmTitle">VM</span></h6>
                                         <div class="display-6" id="clusterVmTotal">0</div>
                                         <small class="text-muted d-block" id="dashboardClusterVmSub"><span id="dashboardClusterVmRunningLbl">Running</span>: <span class="text-success fw-semibold" id="clusterVmRunning">0</span></small>
-                                        <div class="progress mt-2" style="height: 10px;">
+                                        <div class="progress mt-2 hm-progress hm-progress--cluster">
                                             <div class="progress-bar bg-success" id="clusterVmRunningBar" style="width: 0%" title=""></div>
                                         </div>
                                     </div>
@@ -82,7 +82,7 @@
                                         <h6><i class="bi bi-box-seam me-2"></i><span id="dashboardClusterCtTitle">CT</span></h6>
                                         <div class="display-6" id="clusterCtTotal">0</div>
                                         <small class="text-muted d-block" id="dashboardClusterCtSub"><span id="dashboardClusterCtRunningLbl">Running</span>: <span class="text-success fw-semibold" id="clusterCtRunning">0</span></small>
-                                        <div class="progress mt-2" style="height: 10px;">
+                                        <div class="progress mt-2 hm-progress hm-progress--cluster">
                                             <div class="progress-bar bg-success" id="clusterCtRunningBar" style="width: 0%" title=""></div>
                                         </div>
                                     </div>
@@ -153,7 +153,7 @@
             <!-- Tab panes -->
             <div class="tab-content" id="myTabContent">
                 <div class="tab-pane fade show active" id="nodes" role="tabpanel">
-                    <div class="row" id="nodesContainer"></div>
+                    <div class="cluster-scroll-row" id="nodesContainer"></div>
                 </div>
 
                 <div class="tab-pane fade" id="storage" role="tabpanel">
@@ -307,17 +307,12 @@
 
         <!-- Services monitor section -->
         <div id="servicesMonitorSection" class="mb-4 monitor-screen" style="display: none;">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="closeServicesMonitor()">
-                    <i class="bi bi-arrow-left me-1"></i><span id="backToDashboardText">Back to dashboard</span>
-                </button>
-                <button class="btn btn-sm btn-outline-success" onclick="checkAllServices()" id="pingAllBtn">
-                    <i class="bi bi-arrow-repeat me-1"></i><span id="pingAllText">Check all</span>
-                </button>
-            </div>
             <div class="card">
-                <div class="card-header">
+                <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
                     <h5 class="mb-0"><i class="bi bi-activity me-2"></i><span id="servicesMonitorTitle">Service monitoring</span></h5>
+                    <button type="button" class="btn btn-sm btn-outline-success" onclick="checkAllServices()" id="pingAllBtn">
+                        <i class="bi bi-arrow-repeat me-1"></i><span id="pingAllText">Check all</span>
+                    </button>
                 </div>
                 <div class="card-body">
                     <p class="text-muted small mb-3" id="servicesMonitorHint"></p>
@@ -328,11 +323,6 @@
 
         <!-- VM/CT monitor section -->
         <div id="vmsMonitorSection" class="mb-4 monitor-screen" style="display: none;">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="closeVmsMonitor()">
-                    <i class="bi bi-arrow-left me-1"></i><span id="backToDashboardTextVms">Back to dashboard</span>
-                </button>
-            </div>
             <div class="card">
                 <div class="card-header">
                     <h5 class="mb-0"><i class="bi bi-hdd-network me-2"></i><span id="vmsMonitorTitle">VM / CT status</span></h5>
@@ -346,33 +336,23 @@
 
         <!-- Monitor: UPS screen -->
         <div id="upsMonitorSection" class="mb-4 monitor-screen" style="display: none;">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="applyMonitorView('cluster')">
-                    <i class="bi bi-arrow-left me-1"></i><span id="upsMonitorBackText">Back to cluster</span>
-                </button>
-            </div>
             <div class="card">
-                <div class="card-header py-2 px-3">
+                <div class="card-header">
                     <h5 class="mb-0"><i class="bi bi-lightning me-2"></i><span id="upsTitle">UPS</span></h5>
                 </div>
                 <div class="card-body">
                     <div class="d-flex align-items-center mb-3">
                         <span class="small text-muted" id="upsUpdatedAt"> </span>
                     </div>
-                    <div class="row g-2 small" id="upsMonitorCards"></div>
+                    <div class="row g-2" id="upsMonitorCards"></div>
                 </div>
             </div>
         </div>
 
         <!-- Monitor: SNMP screen -->
         <div id="netdevMonitorSection" class="mb-4 monitor-screen" style="display: none;">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="closeNetdevMonitor()">
-                    <i class="bi bi-arrow-left me-1"></i><span id="netdevMonitorBackText">Back to cluster</span>
-                </button>
-            </div>
             <div class="card">
-                <div class="card-header py-2 px-3">
+                <div class="card-header">
                     <h5 class="mb-0"><i class="bi bi-diagram-3 me-2"></i><span id="netdevTitle">Network devices (SNMP)</span></h5>
                 </div>
                 <div class="card-body">
@@ -386,32 +366,44 @@
 
         <!-- Monitor: Speedtest -->
         <div id="speedtestMonitorSection" class="mb-4 monitor-screen" style="display: none;">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="closeSpeedtestMonitor()">
-                    <i class="bi bi-arrow-left me-1"></i><span id="speedtestMonitorBackText">Back to cluster</span>
-                </button>
-            </div>
             <div class="card">
-                <div class="card-header py-2 px-3">
+                <div class="card-header">
                     <h5 class="mb-0"><i class="bi bi-speedometer2 me-2"></i><span id="speedtestMonitorTitle">Speedtest</span></h5>
                 </div>
                 <div class="card-body">
-                    <div class="row g-3 small">
-                        <div class="col-md-4 col-6">
-                            <div class="text-muted" id="speedtestMonitorLastRunLabel">Last run</div>
-                            <div class="fs-5 fw-semibold" id="speedtestMonitorLastRun">—</div>
+                    <div class="row g-2 hm-cluster-metric-panel">
+                        <div class="col-md-3 col-6">
+                            <div class="text-center p-3 hm-cluster-metric-cell">
+                                <h6><i class="bi bi-clock-history me-2"></i><span id="speedtestMonitorLastRunLabel">Last run</span></h6>
+                                <div class="hm-speedtest-last-run text-break" id="speedtestMonitorLastRun">—</div>
+                            </div>
                         </div>
-                        <div class="col-md-4 col-6">
-                            <div class="text-muted" id="speedtestMonitorAvgLabel">Average speed (today)</div>
-                            <div class="fs-5 fw-semibold" id="speedtestMonitorAvg">—</div>
+                        <div class="col-md-3 col-6">
+                            <div class="text-center p-3 hm-cluster-metric-cell">
+                                <h6><i class="bi bi-graph-up-arrow me-2"></i><span id="speedtestMonitorAvgLabel">Average speed (today)</span></h6>
+                                <div class="display-6" id="speedtestMonitorAvg">—</div>
+                                <div class="progress mt-2 hm-progress hm-progress--cluster">
+                                    <div class="progress-bar bg-success" id="speedtestMonitorAvgBar" style="width: 0%"></div>
+                                </div>
+                            </div>
                         </div>
-                        <div class="col-md-2 col-6">
-                            <div class="text-muted" id="speedtestMonitorMinLabel">Minimum</div>
-                            <div class="fs-6 fw-semibold" id="speedtestMonitorMin">—</div>
+                        <div class="col-md-3 col-6">
+                            <div class="text-center p-3 hm-cluster-metric-cell">
+                                <h6><i class="bi bi-arrow-down-circle me-2"></i><span id="speedtestMonitorMinLabel">Minimum</span></h6>
+                                <div class="display-6" id="speedtestMonitorMin">—</div>
+                                <div class="progress mt-2 hm-progress hm-progress--cluster">
+                                    <div class="progress-bar bg-success" id="speedtestMonitorMinBar" style="width: 0%"></div>
+                                </div>
+                            </div>
                         </div>
-                        <div class="col-md-2 col-6">
-                            <div class="text-muted" id="speedtestMonitorMaxLabel">Maximum</div>
-                            <div class="fs-6 fw-semibold" id="speedtestMonitorMax">—</div>
+                        <div class="col-md-3 col-6">
+                            <div class="text-center p-3 hm-cluster-metric-cell">
+                                <h6><i class="bi bi-arrow-up-circle me-2"></i><span id="speedtestMonitorMaxLabel">Maximum</span></h6>
+                                <div class="display-6" id="speedtestMonitorMax">—</div>
+                                <div class="progress mt-2 hm-progress hm-progress--cluster">
+                                    <div class="progress-bar bg-success" id="speedtestMonitorMaxBar" style="width: 0%"></div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                     <div class="mt-2 small text-muted" id="speedtestMonitorExtra"></div>
@@ -422,11 +414,8 @@
         <!-- Monitor: backups screen -->
         <div id="backupsMonitorSection" class="monitor-backups-screen monitor-screen" style="display: none;">
             <div class="card monitor-backups-main-card border-0 shadow-sm">
-                <div class="card-header py-2 px-3 d-flex flex-wrap align-items-center gap-2">
-                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="applyMonitorView('cluster')">
-                        <i class="bi bi-arrow-left me-1"></i><span id="monitorBackupBackText">Back to cluster</span>
-                    </button>
-                    <h5 class="mb-0 flex-grow-1 text-center text-md-start"><i class="bi bi-cloud-arrow-down me-2"></i><span id="backupsMonitorTitle">Execution status</span></h5>
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-cloud-arrow-down me-2"></i><span id="backupsMonitorTitle">Execution status</span></h5>
                 </div>
                 <div class="card-body d-flex flex-column py-2 px-2 pt-1 monitor-backups-body">
                     <div class="monitor-backups-nodes-row flex-grow-1 min-h-0" id="backupsMonitorCardsRow"></div>

@@ -154,7 +154,7 @@ let lastClusterData = null;   // for monitor view (Proxmox)
 let lastTrueNASData = null;   // { system, pools } for monitor view (TrueNAS)
 let lastHostMetricsData = null; // { configured, items } for Proxmox host metrics
 let hostMetricsSettings = { pollIntervalSec: 10, timeoutMs: 3000, cacheTtlSec: 8, criticalTempC: 85, criticalLinkSpeedMbps: 1000 };
-let hostMetricsConfigs = {}; // connectionId -> { nodes: { [node]: { enabled, agentUrl, cpuTempSensor, linkInterface } } }
+let hostMetricsConfigs = {}; // connectionId -> { nodes: { [node]: { enabled, agentPort, agentPath, cpuTempSensor, linkInterface } } }
 let hostMetricsDiscoveryItems = [];
 let hostMetricsAgentInstallPlanCache = null;
 let lastHostMetricsAgentModalNodeName = '';
@@ -795,9 +795,68 @@ function normalizeMonitorServiceIconsMap(value) {
     return out;
 }
 
+/** Дефолтный акцент для иконок монитора (как значение color input в настройках). */
+const DEFAULT_MONITOR_ICON_TINT = '#667eea';
+
 function normalizeHexColor(value) {
     const color = String(value || '').trim();
-    return /^#[0-9a-fA-F]{6}$/.test(color) ? color.toLowerCase() : '';
+    if (/^#[0-9a-fA-F]{6}$/.test(color)) return color.toLowerCase();
+    if (/^#[0-9a-fA-F]{3}$/.test(color)) {
+        const c = color.slice(1).toLowerCase();
+        return '#' + c[0] + c[0] + c[1] + c[1] + c[2] + c[2];
+    }
+    return '';
+}
+
+/** Цвет глифа на фоне bgHex: чёрный или белый для читаемости. */
+function getContrastForegroundForBg(hexBg) {
+    const hex = normalizeHexColor(hexBg) || DEFAULT_MONITOR_ICON_TINT;
+    const c = hex.slice(1);
+    const r = parseInt(c.slice(0, 2), 16);
+    const g = parseInt(c.slice(2, 4), 16);
+    const b = parseInt(c.slice(4, 6), 16);
+    const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+    return luminance > 0.55 ? '#000000' : '#ffffff';
+}
+
+/** Случайный насыщенный цвет #rrggbb для тинта иконки (HSL → RGB). */
+function randomMonitorIconHexColor() {
+    const h = Math.random() * 360;
+    const s = 0.5 + Math.random() * 0.45;
+    const l = 0.4 + Math.random() * 0.22;
+    const c = (1 - Math.abs(2 * l - 1)) * s;
+    const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+    const m = l - c / 2;
+    let r = 0;
+    let g = 0;
+    let b = 0;
+    if (h < 60) {
+        r = c; g = x; b = 0;
+    } else if (h < 120) {
+        r = x; g = c; b = 0;
+    } else if (h < 180) {
+        r = 0; g = c; b = x;
+    } else if (h < 240) {
+        r = 0; g = x; b = c;
+    } else if (h < 300) {
+        r = x; g = 0; b = c;
+    } else {
+        r = c; g = 0; b = x;
+    }
+    const R = Math.round((r + m) * 255);
+    const G = Math.round((g + m) * 255);
+    const B = Math.round((b + m) * 255);
+    const hex = (n) => ('0' + n.toString(16)).slice(-2);
+    return '#' + hex(R) + hex(G) + hex(B);
+}
+
+function applyRandomIconColor(kind, id) {
+    const hex = randomMonitorIconHexColor();
+    if (kind === 'service') {
+        saveServiceIconColorSetting(id, hex);
+    } else {
+        saveVmIconColorSetting(id, hex);
+    }
 }
 
 function normalizeMonitorServiceIconColorsMap(value) {
@@ -824,7 +883,9 @@ function normalizeMonitorVmIconColorsMap(value) {
 
 function renderNamedIconHtml(iconName, fallbackClass, baseClass, extraClass = '', color = '') {
     const className = [baseClass, extraClass].filter(Boolean).join(' ');
-    const styleAttr = color ? ` style="color:${escapeHtml(color)}"` : '';
+    const styleAttr = color
+        ? ` style="color:${escapeHtml(color)};--iconify-icon-color:${escapeHtml(color)}"`
+        : '';
     if (iconName) {
         return `<iconify-icon icon="${escapeHtml(iconName)}" class="${escapeHtml(className)}" aria-hidden="true"${styleAttr}></iconify-icon>`;
     }
@@ -848,9 +909,15 @@ function getVmIconColor(vm) {
     return normalizeHexColor(monitorVmIconColors[String(id)] || monitorVmIconColors[id] || '');
 }
 
-function renderVmIconHtml(vm, extraClass = '') {
+/** Сохранённый цвет тинта или дефолт (для отображения и color input). */
+function getVmIconTintOrDefault(vm) {
+    return getVmIconColor(vm) || DEFAULT_MONITOR_ICON_TINT;
+}
+
+function renderVmIconHtml(vm, extraClass = '', colorOverride = null) {
     const iconName = getVmIconName(vm);
-    return renderNamedIconHtml(iconName, getVmFallbackIconClass(vm), 'vm-icon', extraClass, getVmIconColor(vm));
+    const color = colorOverride != null ? colorOverride : getVmIconTintOrDefault(vm);
+    return renderNamedIconHtml(iconName, getVmFallbackIconClass(vm), 'vm-icon', extraClass, color);
 }
 
 function getServiceIconName(service) {
@@ -865,6 +932,10 @@ function getServiceIconColor(service) {
     return normalizeHexColor(monitorServiceIconColors[String(id)] || monitorServiceIconColors[id] || '');
 }
 
+function getServiceIconTintOrDefault(service) {
+    return getServiceIconColor(service) || DEFAULT_MONITOR_ICON_TINT;
+}
+
 function getServiceFallbackIconClass(service) {
     const type = String(service && service.type || 'tcp').toLowerCase();
     if (type === 'http' || type === 'https') return 'bi-globe2';
@@ -874,9 +945,10 @@ function getServiceFallbackIconClass(service) {
     return 'bi-hdd-network';
 }
 
-function renderServiceIconHtml(service, extraClass = '') {
+function renderServiceIconHtml(service, extraClass = '', colorOverride = null) {
     const iconName = getServiceIconName(service);
-    return renderNamedIconHtml(iconName, getServiceFallbackIconClass(service), 'service-icon', extraClass, getServiceIconColor(service));
+    const color = colorOverride != null ? colorOverride : getServiceIconTintOrDefault(service);
+    return renderNamedIconHtml(iconName, getServiceFallbackIconClass(service), 'service-icon', extraClass, color);
 }
 
 function getIconPickerModalInstance() {
@@ -931,7 +1003,11 @@ function openIconPicker(kind, targetId) {
     if (clearBtn) clearBtn.textContent = t('clear') || 'Сбросить';
     renderIconPickerGrid();
     const modal = getIconPickerModalInstance();
-    if (modal) modal.show();
+    if (modal) {
+        modal.show();
+    } else if (typeof showToast === 'function') {
+        showToast(t('iconPickerOpenFailed') || 'Could not open the icon picker.', 'error');
+    }
 }
 
 function selectIconFromPicker(iconName) {
@@ -1235,6 +1311,38 @@ function closeSpeedtestMonitor() {
     updateSpeedtestDashboard().catch(() => {});
 }
 
+function openUpsMonitorFromMenu() {
+    const dashboardSection = document.getElementById('dashboardSection');
+    const servicesSection = document.getElementById('servicesMonitorSection');
+    const vmsSection = document.getElementById('vmsMonitorSection');
+    const speedtestSection = document.getElementById('speedtestMonitorSection');
+    const netdevSection = document.getElementById('netdevMonitorSection');
+    const upsMonSection = document.getElementById('upsMonitorSection');
+    const backupsMon = document.getElementById('backupsMonitorSection');
+    const configSection = document.getElementById('configSection');
+
+    if (dashboardSection) dashboardSection.style.display = 'none';
+    if (configSection) configSection.style.display = 'none';
+    if (servicesSection) servicesSection.style.display = 'none';
+    if (vmsSection) vmsSection.style.display = 'none';
+    if (netdevSection) netdevSection.style.display = 'none';
+    if (speedtestSection) speedtestSection.style.display = 'none';
+    if (backupsMon) backupsMon.style.display = 'none';
+    if (upsMonSection) upsMonSection.style.display = 'block';
+
+    updateUPSDashboard().catch(() => {});
+}
+
+function closeUpsMonitor() {
+    const dashboardSection = document.getElementById('dashboardSection');
+    const upsMonSection = document.getElementById('upsMonitorSection');
+    const backupsMon = document.getElementById('backupsMonitorSection');
+    if (upsMonSection) upsMonSection.style.display = 'none';
+    if (backupsMon) backupsMon.style.display = 'none';
+    if (dashboardSection) dashboardSection.style.display = '';
+    updateUPSDashboard().catch(() => {});
+}
+
 // Language switch function
 function setLanguage(lang) {
     currentLanguage = lang;
@@ -1423,6 +1531,9 @@ function updateUILanguage() {
         menuVmsMonitorText: 'menuVmsMonitorText',
         menuNetdevMonitorText: 'monitorScreenNetdev',
         menuSpeedtestMonitorText: 'monitorScreenSpeedtest',
+        menuUpsMonitorText: 'monitorScreenUps',
+        resetBackendProxmoxText: 'settingsResetBackendProxmox',
+        resetBackendTrueNASText: 'settingsResetBackendTrueNAS',
         settingsNavUps: 'settingsNavUps',
         settingsNavVms: 'settingsNavVms',
         settingsNavNetdevices: 'settingsNavNetdevices',
@@ -1486,6 +1597,12 @@ function updateUILanguage() {
     if (monitorToolbarHideBtn) monitorToolbarHideBtn.title = t('monitorToolbarHideTitle');
     const monitorToolbarReveal = document.getElementById('monitorToolbarReveal');
     if (monitorToolbarReveal) monitorToolbarReveal.title = t('monitorToolbarShowTitle');
+    const monitorHomeBtn = document.getElementById('monitorHomeBtn');
+    if (monitorHomeBtn) {
+        const homeTitle = t('monitorToolbarHomeTitle');
+        monitorHomeBtn.title = homeTitle;
+        monitorHomeBtn.setAttribute('aria-label', homeTitle);
+    }
     const monitorRefreshBtn = document.getElementById('monitorRefreshBtn');
     if (monitorRefreshBtn) monitorRefreshBtn.title = t('monitorRefreshTitle');
     const monitorThemeLight = document.getElementById('monitorThemeLight');
@@ -1498,7 +1615,6 @@ function updateUILanguage() {
         setText('monitorQuorumLabel', t('quorum'));
         setText('monitorNodesTitle', currentServerType === 'truenas' ? t('tabServers') : t('tabNodes'));
         setText('monitorServicesTitle', t('tabServicesMonitor'));
-        setText('monitorBackupBackText', t('monitorBackupBackText'));
         setText('backupsMonitorTitle', t('backupSectionExecTitle'));
         updateMonitorToolbarTitleForView();
     }
@@ -1520,7 +1636,6 @@ function updateUILanguage() {
     setText('upsLabelFrequency', t('upsLabelFrequency') || 'Частота');
     setText('upsLabelCharge', t('upsLabelCharge') || 'Заряд');
     setText('upsLabelRuntime', t('upsLabelRuntime') || 'Время на батарее');
-    setText('upsMonitorBackText', t('backToDashboardText') || 'К дашборду');
     setText('settingsServicesTitle', t('settingsServicesTitle'));
     setText('settingsServicesHint', t('settingsServicesHint'));
     setText('servicesMonitorHint', t('servicesMonitorHint'));
@@ -1727,7 +1842,8 @@ function updateUILanguage() {
     setText('hostMetricsNodeHeader', t('tabNodes') || 'Узел');
     setText('hostMetricsAgentIpHostHeader', t('hostMetricsAgentIpHostHeader'));
     setText('hostMetricsEnabledHeader', t('hostMetricsEnabledHeader'));
-    setText('hostMetricsAgentUrlHeader', t('hostMetricsAgentUrlHeader'));
+    setText('hostMetricsAgentPortHeader', t('hostMetricsAgentPortHeader'));
+    setText('hostMetricsAgentEndpointHeader', t('hostMetricsAgentEndpointHeader'));
     setText('hostMetricsCpuSensorHeader', t('hostMetricsCpuSensorHeader'));
     setText('hostMetricsInterfaceHeader', t('hostMetricsInterfaceHeader'));
     setText('hostMetricsDiscoveryHeader', t('hostMetricsDiscoveryHeader'));
@@ -1761,8 +1877,6 @@ function updateUILanguage() {
     setText('speedtestMonitorAvgLabel', t('speedtestAvgLabel'));
     setText('speedtestMonitorMinLabel', t('speedtestMinLabel'));
     setText('speedtestMonitorMaxLabel', t('speedtestMaxLabel'));
-    setText('speedtestMonitorBackText', t('speedtestMonitorBackText'));
-
     setPlaceholder('settingsServiceNameInput', t('settingsServicePlaceholderName'));
     setPlaceholder('settingsServiceHostInput', t('settingsServicePlaceholderHost'));
     setPlaceholder('upsHostInput', t('upsHostPlaceholder'));
@@ -2298,7 +2412,20 @@ function migrateLegacyTelegramRoutesToRulesClient(routes) {
 
 function normalizeTelegramNotificationRules(raw) {
     if (!Array.isArray(raw)) return [];
-    return raw.filter((x) => x && typeof x === 'object' && x.type);
+    return raw
+        .filter((x) => x && typeof x === 'object' && x.type)
+        .map((r) => ({
+            ...r,
+            id: r.id != null && String(r.id).trim() !== '' ? String(r.id) : newTelegramRuleId()
+        }));
+}
+
+function telegramRuleIdEquals(a, b) {
+    return String(a) === String(b);
+}
+
+function findTelegramRuleById(ruleId) {
+    return (telegramNotificationRules || []).find((r) => telegramRuleIdEquals(r.id, ruleId)) || null;
 }
 
 function newTelegramRuleId() {
@@ -2338,7 +2465,7 @@ function syncTelegramRuleMessageFromModalIfOpen() {
     if (!rid) return;
     const ta = document.getElementById('telegramRuleMessageModalTextarea');
     if (!ta) return;
-    const rule = (telegramNotificationRules || []).find((r) => r.id === rid);
+    const rule = findTelegramRuleById(rid);
     if (!rule) return;
     const mt = String(ta.value || '').trim();
     if (mt) rule.messageTemplate = mt;
@@ -2374,12 +2501,12 @@ function localizeTelegramMessageModal() {
 
 function openTelegramRuleMessageModal(ruleId) {
     syncTelegramRulesFromDom();
-    const rule = (telegramNotificationRules || []).find((r) => r.id === ruleId);
+    const rule = findTelegramRuleById(ruleId);
     if (!rule) return;
     const modalEl = document.getElementById('telegramRuleMessageModal');
     const ta = document.getElementById('telegramRuleMessageModalTextarea');
     if (!modalEl || !ta) return;
-    modalEl.dataset.editingRuleId = ruleId;
+    modalEl.dataset.editingRuleId = String(ruleId);
     ta.value = rule.messageTemplate || '';
     const typeLine = document.getElementById('telegramRuleMessageModalTypeLine');
     if (typeLine) typeLine.textContent = getTelegramRuleTypeLabel(rule.type || 'service_updown');
@@ -2395,7 +2522,7 @@ function saveTelegramRuleMessageModal() {
     const rid = modalEl && modalEl.dataset.editingRuleId;
     if (!rid) return;
     const ta = document.getElementById('telegramRuleMessageModalTextarea');
-    const rule = (telegramNotificationRules || []).find((r) => r.id === rid);
+    const rule = findTelegramRuleById(rid);
     if (!rule) return;
     const mt = ta ? String(ta.value || '').trim() : '';
     if (mt) rule.messageTemplate = mt;
@@ -2548,7 +2675,7 @@ function isTelegramBotTokenFormatClient(s) {
 async function testTelegramNotificationRule(ruleId) {
     syncTelegramRuleMessageFromModalIfOpen();
     syncTelegramRulesFromDom();
-    const rule = (telegramNotificationRules || []).find((r) => r.id === ruleId);
+    const rule = findTelegramRuleById(ruleId);
     if (!rule) return;
     if (!String(rule.chatId || '').trim()) {
         showToast(t('telegramTestRuleNeedChat') || 'Укажите chat_id', 'warning');
@@ -2588,12 +2715,12 @@ function onTelegramRuleTypeChange(ev) {
     if (!rid) return;
     syncTelegramRuleMessageFromModalIfOpen();
     const modalEl = document.getElementById('telegramRuleMessageModal');
-    if (modalEl && modalEl.dataset.editingRuleId === rid) {
+    if (modalEl && telegramRuleIdEquals(modalEl.dataset.editingRuleId, rid)) {
         const inst = bootstrap.Modal.getInstance(modalEl);
         if (inst) inst.hide();
         delete modalEl.dataset.editingRuleId;
     }
-    const rule = (telegramNotificationRules || []).find((r) => r.id === rid);
+    const rule = findTelegramRuleById(rid);
     if (!rule) return;
     rule.type = String(el.value || 'service_updown');
     delete rule.serviceId;
@@ -2626,7 +2753,7 @@ function syncTelegramRulesFromDom() {
     syncTelegramRuleMessageFromModalIfOpen();
     const body = document.getElementById('telegramRulesTableBody');
     if (!body) return;
-    const map = new Map((telegramNotificationRules || []).map((r) => [r.id, { ...r }]));
+    const map = new Map((telegramNotificationRules || []).map((r) => [String(r.id), { ...r }]));
     body.querySelectorAll('tr[data-rule-row]').forEach((tr) => {
         const rid = tr.getAttribute('data-rule-row');
         const rule = map.get(rid) || { id: rid };
@@ -2674,12 +2801,12 @@ function addTelegramNotificationRule() {
 function removeTelegramNotificationRule(ruleId) {
     syncTelegramRulesFromDom();
     const modalEl = document.getElementById('telegramRuleMessageModal');
-    if (modalEl && modalEl.dataset.editingRuleId === ruleId) {
+    if (modalEl && telegramRuleIdEquals(modalEl.dataset.editingRuleId, ruleId)) {
         const inst = bootstrap.Modal.getInstance(modalEl);
         if (inst) inst.hide();
         delete modalEl.dataset.editingRuleId;
     }
-    telegramNotificationRules = (telegramNotificationRules || []).filter((r) => r.id !== ruleId);
+    telegramNotificationRules = (telegramNotificationRules || []).filter((r) => !telegramRuleIdEquals(r.id, ruleId));
     renderTelegramRulesTable();
 }
 
@@ -4174,8 +4301,8 @@ function createDefaultHostMetricsSettings() {
 function createDefaultHostMetricsNodeConfig() {
     return {
         enabled: false,
-        agentUrl: '',
-        agentHost: '',
+        agentPort: 9105,
+        agentPath: '/host-metrics',
         cpuTempSensor: '',
         linkInterface: ''
     };
@@ -4201,27 +4328,44 @@ function normalizeHostMetricsSettingsClient(raw) {
 function normalizeHostMetricsNodeConfigClient(raw, nodeName = '') {
     const src = raw && typeof raw === 'object' ? raw : {};
     const base = createDefaultHostMetricsNodeConfig();
+    let agentPort = parseInt(src.agentPort, 10);
+    if (!Number.isFinite(agentPort)) agentPort = base.agentPort;
+    agentPort = Math.min(65535, Math.max(1, agentPort));
+    let agentPath = String(src.agentPath != null ? src.agentPath : src.agentEndpoint != null ? src.agentEndpoint : base.agentPath).trim();
+    if (!agentPath) agentPath = base.agentPath;
+    if (agentPath[0] !== '/') agentPath = `/${agentPath}`;
+    const legacyUrl = String(src.agentUrl || '').trim();
+    if (legacyUrl && /^https?:\/\//i.test(legacyUrl)) {
+        try {
+            const u = new URL(legacyUrl);
+            if (u.port) agentPort = Math.min(65535, Math.max(1, parseInt(u.port, 10) || agentPort));
+            if (u.pathname && u.pathname !== '/') agentPath = u.pathname;
+        } catch {
+            /* ignore */
+        }
+    }
     return {
         enabled: src.enabled === true || src.enabled === '1' || src.enabled === 1 || src.enabled === 'true',
-        agentUrl: String(src.agentUrl != null ? src.agentUrl : base.agentUrl).trim(),
-        agentHost: String(src.agentHost != null ? src.agentHost : base.agentHost).trim(),
+        agentPort,
+        agentPath,
         cpuTempSensor: String(src.cpuTempSensor || '').trim(),
         linkInterface: String(src.linkInterface || '').trim()
     };
 }
 
-function hostMetricsResolvedAgentHostForUrl(nodeName, cfg, item) {
-    const ah = (cfg.agentHost || '').trim();
-    if (ah) return ah;
-    const nip = item && item.nodeIp ? String(item.nodeIp).trim() : '';
-    if (nip) return nip;
-    return String(nodeName || '').trim() || 'localhost';
+function hostMetricsPreviewAgentUrl(nodeName, cfg, item) {
+    const host = (item && item.nodeIp ? String(item.nodeIp).trim() : '') || String(nodeName || '').trim() || '—';
+    const port = Number.isFinite(Number(cfg.agentPort)) ? Number(cfg.agentPort) : 9105;
+    let path = String(cfg.agentPath || '/host-metrics').trim() || '/host-metrics';
+    if (path[0] !== '/') path = `/${path}`;
+    return `http://${host}:${port}${path}`;
 }
 
 function getHostMetricsSshHostForNode(nodeName) {
     const item = hostMetricsDiscoveryItems.find((i) => i.node === nodeName);
-    const cfg = getHostMetricsNodeConfigForRow(nodeName, item);
-    return hostMetricsResolvedAgentHostForUrl(nodeName, cfg, item);
+    const nip = item && item.nodeIp ? String(item.nodeIp).trim() : '';
+    if (nip) return nip;
+    return String(nodeName || '').trim() || '';
 }
 
 function hostMetricsDomIdPart(s) {
@@ -4544,8 +4688,8 @@ function renderHostMetricsRows(items, state = null) {
         const ifaceListId = 'hostMetricsInterfaces_' + hostMetricsDomIdPart(nodeName);
         const cpuSensors = Array.isArray(item.cpuSensors) ? item.cpuSensors : [];
         const interfaces = Array.isArray(item.interfaces) ? item.interfaces : [];
-        const resolvedHost = hostMetricsResolvedAgentHostForUrl(nodeName, cfg, item);
         const clusterIp = item.nodeIp ? String(item.nodeIp).trim() : '';
+        const previewUrl = hostMetricsPreviewAgentUrl(nodeName, cfg, item);
         return `
             <tr data-host-metrics-node="${escapeHtml(nodeName)}">
                 <td>
@@ -4553,11 +4697,9 @@ function renderHostMetricsRows(items, state = null) {
                     <div class="small text-muted">${escapeHtml(t('hostMetricsAgentHintShort') || 'Локальный HTTP endpoint на узле')}</div>
                 </td>
                 <td>
-                    <div class="small text-muted mb-1" title="${escapeHtml(t('hostMetricsAgentIpClusterHint') || '')}">${clusterIp
+                    <div class="small text-muted" title="${escapeHtml(t('hostMetricsAgentIpClusterHint') || '')}">${clusterIp
             ? `${escapeHtml(t('hostMetricsAgentIpClusterLabel') || 'IP')} ${escapeHtml(clusterIp)}`
             : escapeHtml(t('hostMetricsAgentIpClusterDash') || '—')}</div>
-                    <input type="text" class="form-control form-control-sm host-metrics-agent-host" autocomplete="off"
-                        value="${escapeHtml(cfg.agentHost || '')}" placeholder="${escapeHtml(t('hostMetricsAgentHostPlaceholder') || '10.0.0.5')}">
                 </td>
                 <td>
                     <select class="form-select form-select-sm host-metrics-enabled">
@@ -4566,8 +4708,13 @@ function renderHostMetricsRows(items, state = null) {
                     </select>
                 </td>
                 <td>
-                    <input type="text" class="form-control form-control-sm host-metrics-agent-url"
-                        value="${escapeHtml(cfg.agentUrl || '')}" placeholder="http://${escapeHtml(resolvedHost)}:9105/host-metrics">
+                    <input type="number" class="form-control form-control-sm host-metrics-agent-port" min="1" max="65535"
+                        value="${escapeHtml(String(cfg.agentPort != null ? cfg.agentPort : 9105))}" placeholder="9105">
+                </td>
+                <td>
+                    <input type="text" class="form-control form-control-sm host-metrics-agent-path"
+                        value="${escapeHtml(cfg.agentPath || '/host-metrics')}" placeholder="/host-metrics">
+                    <div class="small text-muted text-truncate mt-1" title="${escapeHtml(previewUrl)}">${escapeHtml(t('hostMetricsAgentUrlPreviewLabel') || '')} ${escapeHtml(previewUrl)}</div>
                 </td>
                 <td>
                     <input type="text" class="form-control form-control-sm host-metrics-sensor" list="${cpuListId}"
@@ -4675,14 +4822,18 @@ async function saveHostMetricsSettings() {
     rows.forEach((row) => {
         const nodeName = row.getAttribute('data-host-metrics-node') || '';
         const enabled = row.querySelector('.host-metrics-enabled')?.value === '1';
-        const agentUrl = (row.querySelector('.host-metrics-agent-url')?.value || '').trim();
-        const agentHost = (row.querySelector('.host-metrics-agent-host')?.value || '').trim();
+        const portRaw = row.querySelector('.host-metrics-agent-port')?.value;
+        let agentPort = parseInt(portRaw, 10);
+        if (!Number.isFinite(agentPort)) agentPort = 9105;
+        agentPort = Math.min(65535, Math.max(1, agentPort));
+        let agentPath = (row.querySelector('.host-metrics-agent-path')?.value || '').trim() || '/host-metrics';
+        if (agentPath[0] !== '/') agentPath = `/${agentPath}`;
         const cpuTempSensor = (row.querySelector('.host-metrics-sensor')?.value || '').trim();
         const linkInterface = (row.querySelector('.host-metrics-interface')?.value || '').trim();
         nodes[nodeName] = {
             enabled,
-            agentUrl,
-            agentHost,
+            agentPort,
+            agentPath,
             cpuTempSensor,
             linkInterface
         };
@@ -5104,6 +5255,18 @@ function formatSpeedtestMbps(v) {
     return `${n} Mbps`;
 }
 
+function setSpeedtestDownloadBarPercent(barId, mbpsValue, scaleMax) {
+    const bar = document.getElementById(barId);
+    if (!bar) return;
+    const v = Number(mbpsValue);
+    if (!Number.isFinite(v) || v < 0) {
+        bar.style.width = '0%';
+        return;
+    }
+    const cap = Math.max(Number(scaleMax) || 0, 1e-6);
+    bar.style.width = `${Math.min(100, (v / cap) * 100)}%`;
+}
+
 function isSpeedtestSettingsTabActive() {
     const pane = document.getElementById('settings-tab-speedtest');
     return !!(pane && pane.classList.contains('show'));
@@ -5142,6 +5305,9 @@ async function updateSpeedtestDashboard() {
             setEl('speedtestMonitorMin', '—');
             setEl('speedtestMonitorMax', '—');
             setEl('speedtestMonitorExtra', t('backupNoData') || 'Нет данных');
+            setSpeedtestDownloadBarPercent('speedtestMonitorAvgBar', null, 1);
+            setSpeedtestDownloadBarPercent('speedtestMonitorMinBar', null, 1);
+            setSpeedtestDownloadBarPercent('speedtestMonitorMaxBar', null, 1);
             return;
         }
 
@@ -5172,10 +5338,23 @@ async function updateSpeedtestDashboard() {
         }
 
         setEl('speedtestMonitorLastRun', lastMain);
-        setEl('speedtestMonitorAvg', formatSpeedtestMbps(dl.avg));
-        setEl('speedtestMonitorMin', formatSpeedtestMbps(dl.min));
-        setEl('speedtestMonitorMax', formatSpeedtestMbps(dl.max));
+        setEl('speedtestMonitorAvg', dl.avg != null ? formatSpeedtestMbps(dl.avg) : '—');
+        setEl('speedtestMonitorMin', dl.min != null ? formatSpeedtestMbps(dl.min) : '—');
+        setEl('speedtestMonitorMax', dl.max != null ? formatSpeedtestMbps(dl.max) : '—');
         setEl('speedtestMonitorExtra', extra);
+
+        const dlAvg = dl.avg != null ? Number(dl.avg) : NaN;
+        const dlMin = dl.min != null ? Number(dl.min) : NaN;
+        const dlMax = dl.max != null ? Number(dl.max) : NaN;
+        const scaleMax = Math.max(
+            Number.isFinite(dlAvg) ? dlAvg : 0,
+            Number.isFinite(dlMin) ? dlMin : 0,
+            Number.isFinite(dlMax) ? dlMax : 0,
+            1
+        );
+        setSpeedtestDownloadBarPercent('speedtestMonitorAvgBar', dl.avg, scaleMax);
+        setSpeedtestDownloadBarPercent('speedtestMonitorMinBar', dl.min, scaleMax);
+        setSpeedtestDownloadBarPercent('speedtestMonitorMaxBar', dl.max, scaleMax);
 
         const cliEl = document.getElementById('speedtestCliStatus');
         if (cliEl) {
@@ -5192,6 +5371,9 @@ async function updateSpeedtestDashboard() {
         const fallback = t('backupNoData') || 'Нет данных';
         const msg = (e && e.message) ? String(e.message) : null;
         setEl('speedtestMonitorExtra', msg ? `${fallback}: ${msg}` : fallback);
+        setSpeedtestDownloadBarPercent('speedtestMonitorAvgBar', null, 1);
+        setSpeedtestDownloadBarPercent('speedtestMonitorMinBar', null, 1);
+        setSpeedtestDownloadBarPercent('speedtestMonitorMaxBar', null, 1);
     }
 }
 
@@ -5204,7 +5386,7 @@ function clusterTileSourceNumericId(tile, prefix) {
 
 function buildClusterDashboardMetricCell(label, value, progressPct, barClass, colClass = 'col-6') {
     const bar = typeof progressPct === 'number' && Number.isFinite(progressPct)
-        ? `<div class="progress mt-2" style="height: 8px;"><div class="progress-bar ${barClass || 'bg-primary'}" style="width: ${Math.min(100, Math.max(0, progressPct))}%"></div></div>`
+        ? `<div class="progress mt-2 hm-progress"><div class="progress-bar ${barClass || 'bg-primary'}" style="width: ${Math.min(100, Math.max(0, progressPct))}%"></div></div>`
         : '';
     return `
         <div class="${colClass}">
@@ -5221,7 +5403,7 @@ function buildClusterDashboardTileShell(titleHtml, badgeHtml, bodyHtml, footerHt
     return `
         <div class="cluster-scroll-item">
             <div class="node-card ups-node-card h-100">
-                <div class="d-flex justify-content-between align-items-center mb-3 gap-2">
+                <div class="d-flex justify-content-between align-items-center mb-2 gap-2">
                     <h5 class="mb-0 text-truncate d-inline-flex align-items-center gap-2">${titleHtml}</h5>
                     ${badgeHtml}
                 </div>
@@ -5294,10 +5476,10 @@ function buildClusterVmTileHtml(tile) {
     const note = vm.node ? `${vm.node}${vm.vmid != null ? ` / ${vm.vmid}` : ''}` : (vm.note || '');
     const iconHtml = renderVmIconHtml(vm, 'vm-monitor-icon');
     const bodyHtml = [
-        buildClusterDashboardMetricCell(t('settingsVmTypeLabel') || 'Type', typeLabel, null, null, 'col-6'),
-        buildClusterDashboardMetricCell(t('nodeHeader') || 'Node', vm.node || '—', null, null, 'col-6'),
+        buildClusterDashboardMetricCell(t('monVmTypeCol') || 'Type', typeLabel, null, null, 'col-6'),
+        buildClusterDashboardMetricCell(t('monVmNodeCol') || 'Node', vm.node || '—', null, null, 'col-6'),
         buildClusterDashboardMetricCell('ID', vm.vmid != null ? String(vm.vmid) : String(vm.id || '—'), null, null, 'col-6 mt-2'),
-        buildClusterDashboardMetricCell(t('vmStatus_unknown') || 'Status', statusLabel, null, null, 'col-6 mt-2')
+        buildClusterDashboardMetricCell(t('monVmStatusCol') || 'Status', statusLabel, null, null, 'col-6 mt-2')
     ].join('');
     return buildClusterDashboardTileShell(
         `${iconHtml}<span class="text-truncate">${escapeHtml(vm.name || `VM/CT ${id}`)}</span>`,
@@ -5408,7 +5590,7 @@ function buildClusterSpeedtestTileHtml(summary) {
     ].join('');
     const footer = last.serverName ? escapeHtml(String(last.serverName)) : '';
     return buildClusterDashboardTileShell(
-        escapeHtml(t('dashboardSpeedtestTitle') || 'Speedtest'),
+        `<i class="bi bi-speedometer2 text-primary me-2 flex-shrink-0" aria-hidden="true"></i><span class="text-truncate">${escapeHtml(t('dashboardSpeedtestTitle') || 'Speedtest')}</span>`,
         `<span class="badge ${badgeClass}">${escapeHtml(badgeText)}</span>`,
         bodyHtml,
         footer
@@ -6881,6 +7063,11 @@ function initMonitorKeyboardNavigation() {
         if (e.key === 'ArrowRight') {
             e.preventDefault();
             goMonitorView('next');
+            return;
+        }
+        if (e.key === 'Home') {
+            e.preventDefault();
+            applyMonitorView('cluster');
         }
     });
 
@@ -6921,6 +7108,22 @@ function initMonitorSwipes() {
     document.body.addEventListener('touchend', onEnd, { passive: true });
     document.body.addEventListener('mousedown', mouseStart);
     monitorSwipeHandlersAttached = true;
+}
+
+/** Главная: закрыть настройки; в режиме монитора — экран кластера без выхода из fullscreen; иначе обычный дашборд. */
+function goToAppHome() {
+    const configSection = document.getElementById('configSection');
+    if (configSection) configSection.style.display = 'none';
+    if (monitorMode) {
+        applyMonitorView('cluster');
+        renderMonitorScreenDots();
+        if (apiToken) {
+            refreshData();
+            startAutoRefresh();
+        }
+        return;
+    }
+    showDashboard();
 }
 
 // Show dashboard
@@ -7264,16 +7467,16 @@ async function refreshData(options = {}) {
 function upsMetricCompactTile(iconBi, label, valueStr, progressPct, barClass, colClass) {
     const bar =
         typeof progressPct === 'number' && Number.isFinite(progressPct)
-            ? `<div class="progress mt-2" style="height: 8px;">
-                    <div class="progress-bar ${barClass || 'bg-primary'}" style="width: ${Math.min(100, Math.max(0, progressPct))}%"></div>
+            ? `<div class="progress mt-2 hm-progress hm-progress--cluster">
+                    <div class="progress-bar ${barClass || 'bg-success'}" style="width: ${Math.min(100, Math.max(0, progressPct))}%"></div>
                </div>`
             : '';
 
     return `
-        <div class="${colClass || 'col-6'}">
-            <div class="p-2 h-100">
-                <small class="text-muted ups-node-card__metric-label">${escapeHtml(label)}</small>
-                <div class="fw-bold ups-node-card__metric-value text-break">${escapeHtml(valueStr)}</div>
+        <div class="${colClass || 'col-md-3 col-6'}">
+            <div class="text-center p-3 hm-cluster-metric-cell h-100">
+                <h6><i class="bi ${iconBi} me-2"></i><span>${escapeHtml(label)}</span></h6>
+                <div class="display-6 text-break">${escapeHtml(valueStr)}</div>
                 ${bar}
             </div>
         </div>`;
@@ -7283,7 +7486,7 @@ function buildUpsCardsHtml(data, options = {}) {
     const singleUpsColClass = options.singleUpsColClass || 'col-12';
     const multiUpsColClass = options.multiUpsColClass || 'col-md-6';
     const singleRowClass = options.singleRowClass || 'row g-2';
-    const multiRowClass = options.multiRowClass || 'row row-cols-1 row-cols-sm-2 g-2 small';
+    const multiRowClass = options.multiRowClass || 'row row-cols-1 row-cols-sm-2 g-2';
     const singleUpsVariant = options.singleUpsVariant || 'panel';
 
     const upsColClass = data.items.length === 1 ? singleUpsColClass : multiUpsColClass;
@@ -7356,10 +7559,10 @@ function buildUpsCardsHtml(data, options = {}) {
 
         const hasVal = (v) => v != null && String(v).trim() !== '' && String(v) !== '—';
         const tilesHtml = [
-            hasVal(inVText) ? upsMetricCompactTile('bi-plug', labels.inV, inVText, null, null, 'col-6') : null,
-            hasVal(loadText) ? upsMetricCompactTile('bi-speedometer2', labels.load, loadText, loadPctNum, 'bg-warning', 'col-6') : null,
-            hasVal(chargeText) ? upsMetricCompactTile('bi-battery-half', labels.charge, chargeText, chargeBarNum, 'bg-success', 'col-6 mt-2') : null,
-            hasVal(runtimeText) ? upsMetricCompactTile('bi-clock-history', labels.runtime, runtimeText, null, null, 'col-6 mt-2') : null
+            hasVal(inVText) ? upsMetricCompactTile('bi-plug', labels.inV, inVText, null, null, 'col-6 col-md-3') : null,
+            hasVal(loadText) ? upsMetricCompactTile('bi-speedometer2', labels.load, loadText, loadPctNum, 'bg-success', 'col-6 col-md-3') : null,
+            hasVal(chargeText) ? upsMetricCompactTile('bi-battery-half', labels.charge, chargeText, chargeBarNum, 'bg-success', 'col-6 col-md-3') : null,
+            hasVal(runtimeText) ? upsMetricCompactTile('bi-clock-history', labels.runtime, runtimeText, null, null, 'col-6 col-md-3') : null
         ].filter(Boolean).join('');
         const staleHtml = isStale(item.updatedAt || data.updatedAt)
             ? `<div class="col-12 mt-2"><small class="text-warning">${escapeHtml(staleLabel)}</small></div>`
@@ -7369,11 +7572,11 @@ function buildUpsCardsHtml(data, options = {}) {
             ? `
                 <div class="${upsColClass}">
                     <div class="node-card ups-node-card h-100">
-                        <div class="d-flex justify-content-between align-items-center mb-3 gap-2">
+                        <div class="d-flex justify-content-between align-items-center mb-2 gap-2">
                             <h5 class="mb-0 text-truncate" title="${escapeHtml(name)}">${escapeHtml(name)}</h5>
                             <span class="badge ${badgeClass}">${escapeHtml(statusLabel)}</span>
                         </div>
-                        <div class="row g-2">
+                        <div class="row g-2 hm-cluster-metric-panel">
                             ${tilesHtml}
                             ${staleHtml}
                         </div>
@@ -7383,11 +7586,11 @@ function buildUpsCardsHtml(data, options = {}) {
             : `
                 <div class="${upsColClass}">
                     <div class="node-card ups-node-card ups-node-card--single h-100">
-                        <div class="d-flex justify-content-between align-items-center mb-3 gap-2">
+                        <div class="d-flex justify-content-between align-items-center mb-2 gap-2">
                             <h5 class="mb-0 text-truncate" title="${escapeHtml(name)}">${escapeHtml(name)}</h5>
                             <span class="badge ${badgeClass}">${escapeHtml(statusLabel)}</span>
                         </div>
-                        <div class="row g-2">
+                        <div class="row g-2 hm-cluster-metric-panel">
                             ${tilesHtml}
                             ${staleHtml}
                         </div>
@@ -7435,10 +7638,10 @@ function buildUpsCardsHtml(data, options = {}) {
 
         const hasVal = (v) => v != null && String(v).trim() !== '' && String(v) !== '—';
         const tilesHtml = [
-            hasVal(inVText) ? upsMetricCompactTile('bi-plug', labels.inV, inVText, null, null, 'col-6') : null,
-            hasVal(loadText) ? upsMetricCompactTile('bi-speedometer2', labels.load, loadText, loadPctNum, 'bg-warning', 'col-6') : null,
-            hasVal(chargeText) ? upsMetricCompactTile('bi-battery-half', labels.charge, chargeText, chargeBarNum, 'bg-success', 'col-6 mt-2') : null,
-            hasVal(runtimeText) ? upsMetricCompactTile('bi-clock-history', labels.runtime, runtimeText, null, null, 'col-6 mt-2') : null
+            hasVal(inVText) ? upsMetricCompactTile('bi-plug', labels.inV, inVText, null, null, 'col-6 col-md-3') : null,
+            hasVal(loadText) ? upsMetricCompactTile('bi-speedometer2', labels.load, loadText, loadPctNum, 'bg-success', 'col-6 col-md-3') : null,
+            hasVal(chargeText) ? upsMetricCompactTile('bi-battery-half', labels.charge, chargeText, chargeBarNum, 'bg-success', 'col-6 col-md-3') : null,
+            hasVal(runtimeText) ? upsMetricCompactTile('bi-clock-history', labels.runtime, runtimeText, null, null, 'col-6 col-md-3') : null
         ].filter(Boolean).join('');
         const staleHtml = isStale(item.updatedAt || data.updatedAt)
             ? `<div class="col-12 mt-2"><small class="text-warning">${escapeHtml(staleLabel)}</small></div>`
@@ -7448,7 +7651,7 @@ function buildUpsCardsHtml(data, options = {}) {
             return `
                     <div class="${upsColClass}">
                         <div class="node-card ups-node-card h-100">
-                            <div class="d-flex justify-content-between align-items-center mb-3 gap-2">
+                            <div class="d-flex justify-content-between align-items-center mb-2 gap-2">
                                 <h5 class="mb-0 text-truncate" title="${escapeHtml(name)}">${escapeHtml(name)}</h5>
                                 <span class="badge bg-secondary">${escapeHtml(t('upsError') || 'Ошибка UPS')}</span>
                             </div>
@@ -7461,11 +7664,11 @@ function buildUpsCardsHtml(data, options = {}) {
         return `
                 <div class="${upsColClass}">
                     <div class="node-card ups-node-card h-100">
-                        <div class="d-flex justify-content-between align-items-center mb-3 gap-2">
+                        <div class="d-flex justify-content-between align-items-center mb-2 gap-2">
                             <h5 class="mb-0 text-truncate" title="${escapeHtml(name)}">${escapeHtml(name)}</h5>
                             <span class="badge ${badgeClass}">${escapeHtml(statusLabel)}</span>
                         </div>
-                        <div class="row g-2">
+                        <div class="row g-2 hm-cluster-metric-panel">
                             ${tilesHtml}
                             ${staleHtml}
                         </div>
@@ -7483,7 +7686,7 @@ function paintUpsMount(cardsEl, updatedAtEl, data, options) {
     if (!cardsEl) return;
 
     cardsEl.innerHTML = '';
-    cardsEl.className = 'row g-2 small';
+    cardsEl.className = 'row g-2';
     if (updatedAtEl) updatedAtEl.textContent = '';
 
     if (!data || !data.configured || !Array.isArray(data.items) || data.items.length === 0) {
@@ -7510,7 +7713,7 @@ async function updateUPSDashboard() {
     const resetRow = (el) => {
         if (!el) return;
         el.innerHTML = '';
-        el.className = 'row g-2 small';
+        el.className = 'row g-2';
     };
     resetRow(monitorCards);
     const upsUpdatedAt = document.getElementById('upsUpdatedAt');
@@ -8452,10 +8655,12 @@ function renderSettingsMonitoredServices() {
         const id = s.id != null ? s.id : 0;
         const showInMonitor = !monitorHiddenServiceIds.includes(Number(id));
         const iconName = getServiceIconName(s);
-        const iconColor = getServiceIconColor(s) || '#667eea';
+        const tintBg = getServiceIconTintOrDefault(s);
+        const tintFg = getContrastForegroundForBg(tintBg);
         const pickerTitle = t('iconPickerChoose') || 'Выбрать иконку';
         const clearTitle = t('clear') || 'Сбросить';
         const colorTitle = t('settingsServiceIconColorLabel') || 'Цвет иконки';
+        const randomColorTitle = t('iconColorRandom') || 'Случайный цвет';
         return `
             <tr>
                 <td>
@@ -8466,15 +8671,18 @@ function renderSettingsMonitoredServices() {
                 </td>
                 <td><span class="badge bg-secondary">${escapeHtml(typeLabel)}</span></td>
                 <td><code>${escapeHtml(target)}</code></td>
-                <td style="min-width: 230px;">
+                <td style="min-width: 260px;">
                     <div class="icon-setting-control">
-                        <button type="button" class="btn btn-sm btn-outline-secondary icon-picker-trigger" onclick="openIconPicker('service', ${id})" title="${escapeHtml(pickerTitle)}">
-                            ${renderServiceIconHtml(s, 'service-settings-icon')}
+                        <button type="button" class="btn btn-sm icon-picker-trigger icon-picker-trigger--tinted" style="background-color:${escapeHtml(tintBg)};color:${escapeHtml(tintFg)};" onclick="openIconPicker('service', ${id})" title="${escapeHtml(pickerTitle)}">
+                            ${renderServiceIconHtml(s, 'service-settings-icon', tintFg)}
                         </button>
                         <div class="icon-setting-control__meta">
                             <div class="small text-truncate">${iconName ? escapeHtml(iconName) : (t('iconPickerNotSelected') || 'Не выбрано')}</div>
                         </div>
-                        <input type="color" class="form-control form-control-color icon-color-input" value="${escapeHtml(iconColor)}" title="${escapeHtml(colorTitle)}" onchange="saveServiceIconColorSetting(${id}, this.value)">
+                        <input type="color" class="form-control form-control-color icon-color-input" value="${escapeHtml(tintBg)}" title="${escapeHtml(colorTitle)}" onchange="saveServiceIconColorSetting(${id}, this.value)">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="applyRandomIconColor('service', ${id})" title="${escapeHtml(randomColorTitle)}">
+                            <i class="bi bi-shuffle"></i>
+                        </button>
                         <button type="button" class="btn btn-sm btn-outline-secondary" onclick="saveServiceIconSetting(${id}, '')" title="${escapeHtml(clearTitle)}">
                             <i class="bi bi-x-lg"></i>
                         </button>
@@ -8637,10 +8845,12 @@ function renderSettingsMonitoredVms() {
         const statusClass = getVmStatusBadgeClass(status);
         const showInMonitorTitle = t('settingsVmShowInMonitor') || 'Показывать в режиме монитора';
         const iconValue = getVmIconName(vm);
-        const iconColor = getVmIconColor(vm) || '#667eea';
+        const tintBg = getVmIconTintOrDefault(vm);
+        const tintFg = getContrastForegroundForBg(tintBg);
         const pickerTitle = t('iconPickerChoose') || 'Выбрать иконку';
         const clearTitle = t('clear') || 'Сбросить';
         const colorTitle = t('settingsVmIconColorLabel') || 'Цвет иконки';
+        const randomColorTitle = t('iconColorRandom') || 'Случайный цвет';
         return `
             <tr>
                 <td>
@@ -8652,15 +8862,18 @@ function renderSettingsMonitoredVms() {
                 <td><span class="badge bg-secondary">${escapeHtml(typeLabel)}</span></td>
                 <td><span class="badge ${statusClass}">${escapeHtml(getVmStatusLabel(status))}</span></td>
                 <td>${note ? `<span class="text-muted small">${escapeHtml(note)}</span>` : '&mdash;'}</td>
-                <td style="min-width: 230px;">
+                <td style="min-width: 260px;">
                     <div class="icon-setting-control">
-                        <button type="button" class="btn btn-sm btn-outline-secondary icon-picker-trigger" onclick="openIconPicker('vm', ${id})" title="${escapeHtml(pickerTitle)}">
-                            ${renderVmIconHtml(vm, 'vm-settings-icon')}
+                        <button type="button" class="btn btn-sm icon-picker-trigger icon-picker-trigger--tinted" style="background-color:${escapeHtml(tintBg)};color:${escapeHtml(tintFg)};" onclick="openIconPicker('vm', ${id})" title="${escapeHtml(pickerTitle)}">
+                            ${renderVmIconHtml(vm, 'vm-settings-icon', tintFg)}
                         </button>
                         <div class="icon-setting-control__meta">
                             <div class="small text-truncate">${iconValue ? escapeHtml(iconValue) : (t('iconPickerNotSelected') || 'Не выбрано')}</div>
                         </div>
-                        <input type="color" class="form-control form-control-color icon-color-input" value="${escapeHtml(iconColor)}" title="${escapeHtml(colorTitle)}" onchange="saveVmIconColorSetting(${id}, this.value)">
+                        <input type="color" class="form-control form-control-color icon-color-input" value="${escapeHtml(tintBg)}" title="${escapeHtml(colorTitle)}" onchange="saveVmIconColorSetting(${id}, this.value)">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="applyRandomIconColor('vm', ${id})" title="${escapeHtml(randomColorTitle)}">
+                            <i class="bi bi-shuffle"></i>
+                        </button>
                         <button type="button" class="btn btn-sm btn-outline-secondary" onclick="saveVmIconSetting(${id}, '')" title="${escapeHtml(clearTitle)}">
                             <i class="bi bi-x-lg"></i>
                         </button>
@@ -9279,8 +9492,16 @@ async function loadSettings() {
         if (ry) ry.value = String(thresholds.ramYellow);
         if (rr) rr.value = String(thresholds.ramRed);
     }
-    if (Array.isArray(data.proxmox_servers) && data.proxmox_servers.length) proxmoxServers = data.proxmox_servers.map(u => normalizeUrlClient(u));
-    if (Array.isArray(data.truenas_servers) && data.truenas_servers.length) truenasServers = data.truenas_servers.map(u => normalizeUrlClient(u));
+    if (Object.prototype.hasOwnProperty.call(data, 'proxmox_servers')) {
+        proxmoxServers = Array.isArray(data.proxmox_servers)
+            ? data.proxmox_servers.map((u) => normalizeUrlClient(u))
+            : [];
+    }
+    if (Object.prototype.hasOwnProperty.call(data, 'truenas_servers')) {
+        truenasServers = Array.isArray(data.truenas_servers)
+            ? data.truenas_servers.map((u) => normalizeUrlClient(u))
+            : [];
+    }
     if (data.connection_id_map && typeof data.connection_id_map === 'object') {
         connectionIdMap = {};
         for (const [k, id] of Object.entries(data.connection_id_map)) {
@@ -9638,12 +9859,66 @@ function enforceMonitorServerTypeForAvailableBackends() {
     }
 }
 
-function updateMonitorToolbarServerSelectVisibility() {
+/** Показать выбор Proxmox/TrueNAS только если настроены оба типа (шапка + тулбар монитора). */
+function updateServerTypeBackendChoiceUI() {
     enforceMonitorServerTypeForAvailableBackends();
-    const wrap = document.getElementById('monitorServerTypeSelectWrap');
-    if (!wrap) return;
     const show = hasProxmoxBackendConfigured() && hasTrueNASBackendConfigured();
-    wrap.classList.toggle('d-none', !show);
+    const wrap = document.getElementById('monitorServerTypeSelectWrap');
+    if (wrap) wrap.classList.toggle('d-none', !show);
+    const monSel = document.getElementById('monitorServerTypeSelect');
+    if (monSel) {
+        const optP = monSel.querySelector('option[value="proxmox"]');
+        const optT = monSel.querySelector('option[value="truenas"]');
+        if (optP) optP.hidden = !hasProxmoxBackendConfigured();
+        if (optT) optT.hidden = !hasTrueNASBackendConfigured();
+    }
+    document.querySelectorAll('.server-menu-backend-choice').forEach((el) => {
+        el.classList.toggle('d-none', !show);
+    });
+}
+
+/** Сброс URL, привязок и токенов в БД только для Proxmox или TrueNAS. */
+async function resetBackendSettings(type) {
+    const t = String(type || '').toLowerCase();
+    if (t !== 'proxmox' && t !== 'truenas') return;
+    const confirmKey = t === 'proxmox' ? 'settingsResetBackendConfirmProxmox' : 'settingsResetBackendConfirmTrueNAS';
+    if (!confirm(t(confirmKey))) return;
+    try {
+        const resp = await fetch('/api/settings/reset-backend', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: t })
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok || data.success === false) {
+            showToast(data.error || t('errorUpdate'), 'error');
+            return;
+        }
+        await loadSettings();
+        if (t === 'proxmox') {
+            apiToken = null;
+            const idEl = document.getElementById('apiTokenId');
+            const secretEl = document.getElementById('apiTokenSecret');
+            if (idEl) idEl.value = '';
+            if (secretEl) secretEl.value = '';
+            syncProxmoxApiTokenFromParts();
+        }
+        const tn = document.getElementById('apiTokenTrueNAS');
+        if (t === 'truenas' && tn) tn.value = '';
+        setServerType(currentServerType);
+        const monitorSel = document.getElementById('monitorServerTypeSelect');
+        if (monitorSel) monitorSel.value = currentServerType;
+        updateConnectionStatus(false, 'proxmox');
+        updateConnectionStatus(false, 'truenas');
+        const lp = document.getElementById('logoutContainerProxmox');
+        const lt = document.getElementById('logoutContainerTrueNAS');
+        if (lp) lp.style.display = 'none';
+        if (lt) lt.style.display = 'none';
+        updateCurrentServerBadge();
+        showToast(t('dataUpdated'), 'success');
+    } catch (e) {
+        showToast((t('connectError') || '') + ': ' + e.message, 'error');
+    }
 }
 
 // Render one server list into a container
@@ -9678,7 +9953,7 @@ function renderOneServerList(containerId, servers, currentIdx, type) {
 function renderServerList() {
     renderOneServerList('serverListProxmox', proxmoxServers, currentServerIndex, 'proxmox');
     renderOneServerList('serverListTrueNAS', truenasServers, currentTrueNASServerIndex, 'truenas');
-    updateMonitorToolbarServerSelectVisibility();
+    updateServerTypeBackendChoiceUI();
 }
 
 // Add new server by type

@@ -1,6 +1,125 @@
 const crypto = require('crypto');
 const { getDbSync, saveDb } = require('./db');
 
+function normalizeIconMapInput(obj) {
+    if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return {};
+    const out = {};
+    for (const [key, raw] of Object.entries(obj)) {
+        const id = Number(key);
+        const icon = raw != null ? String(raw).trim() : '';
+        if (!Number.isNaN(id) && icon) out[String(id)] = icon;
+    }
+    return out;
+}
+
+function normalizeColorMapInput(obj) {
+    if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return {};
+    const out = {};
+    for (const [key, raw] of Object.entries(obj)) {
+        const id = Number(key);
+        if (Number.isNaN(id)) continue;
+        const c = raw != null ? String(raw).trim() : '';
+        if (/^#[0-9a-fA-F]{6}$/.test(c)) out[String(id)] = c.toLowerCase();
+        else if (/^#[0-9a-fA-F]{3}$/.test(c)) {
+            const x = c.slice(1).toLowerCase();
+            out[String(id)] = '#' + x[0] + x[0] + x[1] + x[1] + x[2] + x[2];
+        }
+    }
+    return out;
+}
+
+/** Иконки и цвета VM/сервисов — таблица monitor_icon_styles (не JSON в app_settings). */
+function getMonitorIconMapsFromDb() {
+    const db = getDbSync();
+    const out = {
+        monitor_service_icons: {},
+        monitor_service_icon_colors: {},
+        monitor_vm_icons: {},
+        monitor_vm_icon_colors: {}
+    };
+    const stmt = db.prepare('SELECT scope, entity_id, icon, color FROM monitor_icon_styles');
+    while (stmt.step()) {
+        const row = stmt.get();
+        const scope = row[0];
+        const entityId = row[1];
+        const icon = row[2];
+        const color = row[3];
+        const idStr = String(entityId);
+        if (scope === 'service') {
+            if (icon) out.monitor_service_icons[idStr] = icon;
+            if (color) out.monitor_service_icon_colors[idStr] = color;
+        } else if (scope === 'vm') {
+            if (icon) out.monitor_vm_icons[idStr] = icon;
+            if (color) out.monitor_vm_icon_colors[idStr] = color;
+        }
+    }
+    stmt.free();
+    return out;
+}
+
+/**
+ * Полная замена строк scope по объединённым картам (с учётом частичных обновлений).
+ * @param {'service'|'vm'} scope
+ */
+function replaceMonitorIconScope(scope, iconsMap, colorsMap) {
+    if (scope !== 'service' && scope !== 'vm') return;
+    const cur = getMonitorIconMapsFromDb();
+    const iconsKey = scope === 'service' ? 'monitor_service_icons' : 'monitor_vm_icons';
+    const colorsKey = scope === 'service' ? 'monitor_service_icon_colors' : 'monitor_vm_icon_colors';
+    const icons = iconsMap !== undefined ? normalizeIconMapInput(iconsMap) : { ...cur[iconsKey] };
+    const colors = colorsMap !== undefined ? normalizeColorMapInput(colorsMap) : { ...cur[colorsKey] };
+    const db = getDbSync();
+    db.run('DELETE FROM monitor_icon_styles WHERE scope = ?', [scope]);
+    const idSet = new Set([
+        ...Object.keys(icons).map((k) => parseInt(k, 10)),
+        ...Object.keys(colors).map((k) => parseInt(k, 10))
+    ]);
+    const ins = db.prepare('INSERT INTO monitor_icon_styles (scope, entity_id, icon, color) VALUES (?, ?, ?, ?)');
+    for (const id of idSet) {
+        if (Number.isNaN(id)) continue;
+        const idStr = String(id);
+        const iconVal = icons[idStr] || null;
+        const colorVal = colors[idStr] || null;
+        if (!iconVal && !colorVal) continue;
+        ins.run([scope, id, iconVal || null, colorVal || null]);
+    }
+    ins.free();
+    saveDb();
+}
+
+function deleteMonitorIconStyle(scope, entityId) {
+    const id = parseInt(entityId, 10);
+    if (Number.isNaN(id)) return;
+    const db = getDbSync();
+    db.run('DELETE FROM monitor_icon_styles WHERE scope = ? AND entity_id = ?', [scope, id]);
+    saveDb();
+}
+
+function applyIconMapsFromImportedSettings(settings) {
+    if (!settings || typeof settings !== 'object') return;
+    const parse = (k) => {
+        if (!Object.prototype.hasOwnProperty.call(settings, k)) return undefined;
+        const raw = settings[k];
+        if (raw == null || raw === '') return undefined;
+        if (typeof raw === 'object' && !Array.isArray(raw)) {
+            return k.includes('color') ? normalizeColorMapInput(raw) : normalizeIconMapInput(raw);
+        }
+        try {
+            const p = JSON.parse(String(raw));
+            if (typeof p !== 'object' || !p || Array.isArray(p)) return undefined;
+            return k.includes('color') ? normalizeColorMapInput(p) : normalizeIconMapInput(p);
+        } catch {
+            return undefined;
+        }
+    };
+    if (settings.monitor_service_icons !== undefined || settings.monitor_service_icon_colors !== undefined) {
+        replaceMonitorIconScope('service', parse('monitor_service_icons'), parse('monitor_service_icon_colors'));
+    }
+    if (settings.monitor_vm_icons !== undefined || settings.monitor_vm_icon_colors !== undefined) {
+        replaceMonitorIconScope('vm', parse('monitor_vm_icons'), parse('monitor_vm_icon_colors'));
+    }
+}
+
 const PASSWORD_KEY = 'password';
 const SALT_LENGTH = 32;
 const PBKDF2_ITERATIONS = 100000;
@@ -69,12 +188,14 @@ function resetAllSettingsPreservingPassword() {
     const db = getDbSync();
     // Preserve settings password itself; clear everything else.
     db.run('DELETE FROM app_settings WHERE key != ?', [PASSWORD_KEY]);
+    db.run('DELETE FROM monitor_icon_styles');
     saveDb();
 }
 
 function clearMonitoredServices() {
     const db = getDbSync();
     db.run('DELETE FROM monitored_services');
+    db.run("DELETE FROM monitor_icon_styles WHERE scope = 'service'");
     saveDb();
 }
 
@@ -122,7 +243,7 @@ function removeMonitoredService(id) {
     const stmt = db.prepare('DELETE FROM monitored_services WHERE id = ?');
     stmt.run([parseInt(id, 10)]);
     stmt.free();
-    saveDb();
+    deleteMonitorIconStyle('service', id);
     return true;
 }
 
@@ -144,9 +265,21 @@ function exportSettingsAndServices() {
         settings[key] = value;
     }
     stmt.free();
+    const iconMaps = getMonitorIconMapsFromDb();
+    settings.monitor_service_icons = JSON.stringify(iconMaps.monitor_service_icons);
+    settings.monitor_service_icon_colors = JSON.stringify(iconMaps.monitor_service_icon_colors);
+    settings.monitor_vm_icons = JSON.stringify(iconMaps.monitor_vm_icons);
+    settings.monitor_vm_icon_colors = JSON.stringify(iconMaps.monitor_vm_icon_colors);
     const services = listMonitoredServices();
     return { settings, services };
 }
+
+const ICON_MAP_SETTING_KEYS = new Set([
+    'monitor_service_icons',
+    'monitor_service_icon_colors',
+    'monitor_vm_icons',
+    'monitor_vm_icon_colors'
+]);
 
 function importSettingsAndServices(payload) {
     const db = getDbSync();
@@ -154,11 +287,13 @@ function importSettingsAndServices(payload) {
     const hasServices = Array.isArray(payload && payload.services);
     const services = hasServices ? payload.services : [];
 
-    // apply settings (without touching password)
+    // apply settings (without touching password); иконки — только в таблице monitor_icon_styles
     for (const [key, value] of Object.entries(settings)) {
         if (!key || key === PASSWORD_KEY) continue;
+        if (ICON_MAP_SETTING_KEYS.has(key)) continue;
         setSetting(key, value);
     }
+    applyIconMapsFromImportedSettings(settings);
 
     // replace monitored services only if services were provided
     if (hasServices) {
@@ -242,10 +377,11 @@ function parseColorMapFromStored(raw) {
 }
 
 function getMonitoredServicesExport() {
+    const maps = getMonitorIconMapsFromDb();
     return {
         services: listMonitoredServices(),
-        monitor_service_icons: parseIconMapFromStored(getSetting('monitor_service_icons')),
-        monitor_service_icon_colors: parseColorMapFromStored(getSetting('monitor_service_icon_colors'))
+        monitor_service_icons: maps.monitor_service_icons,
+        monitor_service_icon_colors: maps.monitor_service_icon_colors
     };
 }
 
@@ -254,20 +390,25 @@ function importMonitoredServicesConfig(payload) {
     if (Array.isArray(payload.services)) {
         importSettingsAndServices({ services: payload.services });
     }
-    if (payload.monitor_service_icons && typeof payload.monitor_service_icons === 'object' && !Array.isArray(payload.monitor_service_icons)) {
-        setSetting('monitor_service_icons', JSON.stringify(parseIconMapFromStored(JSON.stringify(payload.monitor_service_icons))));
-    }
-    if (payload.monitor_service_icon_colors && typeof payload.monitor_service_icon_colors === 'object' && !Array.isArray(payload.monitor_service_icon_colors)) {
-        setSetting('monitor_service_icon_colors', JSON.stringify(parseColorMapFromStored(JSON.stringify(payload.monitor_service_icon_colors))));
+    if (
+        (payload.monitor_service_icons && typeof payload.monitor_service_icons === 'object' && !Array.isArray(payload.monitor_service_icons)) ||
+        (payload.monitor_service_icon_colors && typeof payload.monitor_service_icon_colors === 'object' && !Array.isArray(payload.monitor_service_icon_colors))
+    ) {
+        replaceMonitorIconScope(
+            'service',
+            payload.monitor_service_icons,
+            payload.monitor_service_icon_colors
+        );
     }
 }
 
 function getMonitoredVmsExport() {
+    const maps = getMonitorIconMapsFromDb();
     return {
         monitor_vms: parseMonitorVmsFromStored(getSetting('monitor_vms')),
         monitor_hidden_vm_ids: parseHiddenVmIdsFromStored(getSetting('monitor_hidden_vm_ids')),
-        monitor_vm_icons: parseIconMapFromStored(getSetting('monitor_vm_icons')),
-        monitor_vm_icon_colors: parseColorMapFromStored(getSetting('monitor_vm_icon_colors'))
+        monitor_vm_icons: maps.monitor_vm_icons,
+        monitor_vm_icon_colors: maps.monitor_vm_icon_colors
     };
 }
 
@@ -286,17 +427,11 @@ function importMonitoredVmsConfig(payload) {
             JSON.stringify(payload.monitor_hidden_vm_ids.map(Number).filter(n => !Number.isNaN(n)))
         );
     }
-    if (payload.monitor_vm_icons && typeof payload.monitor_vm_icons === 'object' && !Array.isArray(payload.monitor_vm_icons)) {
-        const out = {};
-        for (const [key, value] of Object.entries(payload.monitor_vm_icons)) {
-            const id = Number(key);
-            const icon = value != null ? String(value).trim() : '';
-            if (!Number.isNaN(id) && icon) out[String(id)] = icon;
-        }
-        setSetting('monitor_vm_icons', JSON.stringify(out));
-    }
-    if (payload.monitor_vm_icon_colors && typeof payload.monitor_vm_icon_colors === 'object' && !Array.isArray(payload.monitor_vm_icon_colors)) {
-        setSetting('monitor_vm_icon_colors', JSON.stringify(parseColorMapFromStored(JSON.stringify(payload.monitor_vm_icon_colors))));
+    if (
+        (payload.monitor_vm_icons && typeof payload.monitor_vm_icons === 'object' && !Array.isArray(payload.monitor_vm_icons)) ||
+        (payload.monitor_vm_icon_colors && typeof payload.monitor_vm_icon_colors === 'object' && !Array.isArray(payload.monitor_vm_icon_colors))
+    ) {
+        replaceMonitorIconScope('vm', payload.monitor_vm_icons, payload.monitor_vm_icon_colors);
     }
 }
 
@@ -318,5 +453,7 @@ module.exports = {
     getMonitoredServicesExport,
     importMonitoredServicesConfig,
     getMonitoredVmsExport,
-    importMonitoredVmsConfig
+    importMonitoredVmsConfig,
+    getMonitorIconMapsFromDb,
+    replaceMonitorIconScope
 };

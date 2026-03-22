@@ -95,6 +95,11 @@
                                                 <i class="bi bi-plus-lg me-1"></i><span id="addServer">Добавить сервер</span>
                                             </button>
                                             <div class="form-text" id="proxmoxServersHint">По одному URL в каждом поле. Сервер с галочкой — основной, остальные — резервные.</div>
+                                            <div class="mt-2">
+                                                <button type="button" class="btn btn-outline-danger btn-sm" onclick="resetBackendSettings('proxmox')" id="resetBackendProxmoxBtn">
+                                                    <i class="bi bi-arrow-counterclockwise me-1"></i><span id="resetBackendProxmoxText">Сбросить настройки Proxmox</span>
+                                                </button>
+                                            </div>
                                         </div>
                                         <div class="mb-3 text-end" id="logoutContainerProxmox" style="display: none;">
                                             <button class="btn btn-outline-danger btn-sm" onclick="logoutAs('proxmox')"><i class="bi bi-box-arrow-right me-1"></i><span id="logoutText">Выйти</span></button>
@@ -126,6 +131,11 @@
                                                 <i class="bi bi-plus-lg me-1"></i><span id="addServerTrueNAS">Добавить сервер</span>
                                             </button>
                                             <div class="form-text" id="truenasServersHint">Список URL серверов TrueNAS.</div>
+                                            <div class="mt-2">
+                                                <button type="button" class="btn btn-outline-danger btn-sm" onclick="resetBackendSettings('truenas')" id="resetBackendTrueNASBtn">
+                                                    <i class="bi bi-arrow-counterclockwise me-1"></i><span id="resetBackendTrueNASText">Сбросить настройки TrueNAS</span>
+                                                </button>
+                                            </div>
                                         </div>
                                         <div class="mb-3 text-end" id="logoutContainerTrueNAS" style="display: none;">
                                             <button class="btn btn-outline-danger btn-sm" onclick="logoutAs('truenas')"><i class="bi bi-box-arrow-right me-1"></i><span id="logoutTextTrueNAS">Выйти</span></button>
@@ -754,7 +764,7 @@
                     <div id="hostMetricsSettingsWrap" style="display: none;">
                         <div class="settings-section mb-4">
                             <h5 class="mb-3"><i class="bi bi-thermometer-half me-2"></i><span id="hostMetricsSettingsTitle">Метрики хостов Proxmox</span></h5>
-                            <p class="text-muted small mb-3" id="hostMetricsSettingsHint">Для каждого узла можно выбрать endpoint агента, датчик температуры CPU и сетевой интерфейс для скорости линка.</p>
+                            <p class="text-muted small mb-3" id="hostMetricsSettingsHint">Адрес агента строится по IP узла из cluster status Proxmox. Укажите порт и путь HTTP; выберите датчик CPU и интерфейс для скорости линка.</p>
                             <div class="row g-3 align-items-end mb-3">
                                 <div class="col-md-6 col-lg-3">
                                     <label class="form-label fw-bold" for="hostMetricsPollIntervalInput" id="hostMetricsPollIntervalLabel">Частота опроса, сек</label>
@@ -792,9 +802,10 @@
                                     <thead>
                                         <tr>
                                             <th id="hostMetricsNodeHeader">Узел</th>
-                                            <th id="hostMetricsAgentIpHostHeader" class="text-nowrap">IP / хост агента</th>
+                                            <th id="hostMetricsAgentIpHostHeader" class="text-nowrap">IP узла (кластер)</th>
                                             <th id="hostMetricsEnabledHeader">Включить</th>
-                                            <th id="hostMetricsAgentUrlHeader">URL агента</th>
+                                            <th id="hostMetricsAgentPortHeader" class="text-nowrap">Порт агента</th>
+                                            <th id="hostMetricsAgentEndpointHeader" class="text-nowrap">Эндпоинт</th>
                                             <th id="hostMetricsCpuSensorHeader">Датчик CPU</th>
                                             <th id="hostMetricsInterfaceHeader">Интерфейс</th>
                                             <th id="hostMetricsDiscoveryHeader">Discovery</th>

@@ -93,12 +93,8 @@ const SETTING_KEYS = [
     'snmp_oid_power', 'snmp_oid_load', 'snmp_oid_frequency',
     // monitor-mode specific
     'monitor_hidden_service_ids',
-    'monitor_service_icons',
-    'monitor_service_icon_colors',
     'monitor_vms',
     'monitor_hidden_vm_ids',
-    'monitor_vm_icons',
-    'monitor_vm_icon_colors',
     'monitor_screens_order',
     'cluster_dashboard_tiles',
     'dashboard_weather_city',
@@ -138,12 +134,8 @@ router.get('/', (req, res) => {
                     key === 'custom_theme_css' ||
                     key === 'custom_theme_style_settings' ||
                     key === 'monitor_hidden_service_ids' ||
-                    key === 'monitor_service_icons' ||
-                    key === 'monitor_service_icon_colors' ||
                     key === 'monitor_vms' ||
                     key === 'monitor_hidden_vm_ids' ||
-                    key === 'monitor_vm_icons' ||
-                    key === 'monitor_vm_icon_colors' ||
                     key === 'monitor_screens_order' ||
                     key === 'cluster_dashboard_tiles' ||
                     key === 'telegram_routes' ||
@@ -193,6 +185,14 @@ router.get('/', (req, res) => {
         if (!Array.isArray(payload.telegram_notification_rules)) {
             payload.telegram_notification_rules = [];
         }
+        // Всегда отдаём списки URL — иначе клиент оставляет дефолтные placeholder-URL и считает бэкенд «настроенным».
+        if (!Array.isArray(payload.proxmox_servers)) payload.proxmox_servers = [];
+        if (!Array.isArray(payload.truenas_servers)) payload.truenas_servers = [];
+        const iconMaps = store.getMonitorIconMapsFromDb();
+        payload.monitor_service_icons = iconMaps.monitor_service_icons;
+        payload.monitor_service_icon_colors = iconMaps.monitor_service_icon_colors;
+        payload.monitor_vm_icons = iconMaps.monitor_vm_icons;
+        payload.monitor_vm_icon_colors = iconMaps.monitor_vm_icon_colors;
         res.json(payload);
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -291,12 +291,22 @@ router.post('/', (req, res) => {
         if (clearTg) {
             store.setSetting('telegram_bot_token', '');
             map._telegram_cleared = true;
-        } else if (newTgTok !== undefined && newTgTok !== null && String(newTgTok).trim() !== '') {
+        } else         if (newTgTok !== undefined && newTgTok !== null && String(newTgTok).trim() !== '') {
             const t = String(newTgTok).trim();
             if (isValidTelegramBotTokenFormat(t)) {
                 store.setSetting('telegram_bot_token', t);
                 map._telegram_token_set = true;
             }
+        }
+        if (map.monitor_service_icons !== undefined || map.monitor_service_icon_colors !== undefined) {
+            store.replaceMonitorIconScope('service', map.monitor_service_icons, map.monitor_service_icon_colors);
+            delete map.monitor_service_icons;
+            delete map.monitor_service_icon_colors;
+        }
+        if (map.monitor_vm_icons !== undefined || map.monitor_vm_icon_colors !== undefined) {
+            store.replaceMonitorIconScope('vm', map.monitor_vm_icons, map.monitor_vm_icon_colors);
+            delete map.monitor_vm_icons;
+            delete map.monitor_vm_icon_colors;
         }
         const savedKeys = [];
         for (const [key, value] of Object.entries(map)) {
@@ -356,6 +366,64 @@ router.post('/password', (req, res) => {
     }
     store.setSettingsPassword(String(newPassword));
     res.json({ success: true });
+});
+
+// POST /api/settings/reset-backend — очистить серверы, токены и привязки только для одного типа (proxmox | truenas)
+router.post('/reset-backend', (req, res) => {
+    try {
+        const raw = (req.body && (req.body.type || req.body.backend)) || '';
+        const type = String(raw).toLowerCase();
+        if (type !== 'proxmox' && type !== 'truenas') {
+            return res.status(400).json({ success: false, error: 'invalid type' });
+        }
+        const connectionsStore = require('../connection-store');
+        connectionsStore.deleteConnectionsByType(type);
+
+        if (type === 'proxmox') {
+            store.setSetting('proxmox_servers', '[]');
+            store.setSetting('current_server_index', '0');
+        } else {
+            store.setSetting('truenas_servers', '[]');
+            store.setSetting('current_truenas_index', '0');
+        }
+
+        let map = {};
+        try {
+            map = JSON.parse(store.getSetting('connection_id_map') || '{}');
+        } catch (_) {}
+        const prefix = `${type}|`;
+        const next = {};
+        for (const [k, v] of Object.entries(map)) {
+            if (String(k).startsWith(prefix)) continue;
+            next[k] = v;
+        }
+        store.setSetting('connection_id_map', JSON.stringify(next));
+
+        const parseArr = (key) => {
+            try {
+                const parsed = JSON.parse(store.getSetting(key) || '[]');
+                return Array.isArray(parsed) ? parsed : [];
+            } catch (_) {
+                return [];
+            }
+        };
+        const ps = parseArr('proxmox_servers');
+        const ts = parseArr('truenas_servers');
+        const hasP = ps.length > 0;
+        const hasT = ts.length > 0;
+        const curSt = String(store.getSetting('server_type') || 'proxmox').toLowerCase();
+        if (curSt === 'proxmox' && !hasP && hasT) {
+            store.setSetting('server_type', 'truenas');
+        } else if (curSt === 'truenas' && !hasT && hasP) {
+            store.setSetting('server_type', 'proxmox');
+        }
+
+        log('info', `[Settings] reset-backend ${type}`);
+        res.json({ success: true });
+    } catch (e) {
+        log('error', '[Settings] reset-backend failed', { error: e.message });
+        res.status(500).json({ success: false, error: e.message });
+    }
 });
 
 // POST /api/settings/reset — сброс всех настроек (без пароля настроек), плюс мониторы сервисов и подключений
