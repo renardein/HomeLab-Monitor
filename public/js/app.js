@@ -49,6 +49,9 @@ let monitoredVmIds = []; // VMids that are in the "monitored" list (shown in set
 let monitorHiddenVmIds = []; // Of those, VMids to hide in monitor mode (checkbox unchecked)
 let monitorVmIcons = {}; // vmid -> Iconify icon name
 let monitorVmIconColors = {}; // vmid -> CSS hex color
+/** @type {Array<object>} */
+let telegramNotificationRules = [];
+let telegramBotTokenSet = false;
 let clusterDashboardTiles = []; // [{ type: 'ups'|'service'|'vmct'|'netdev'|'speedtest', sourceId: 'type:id' }]
 let clusterDashboardTilesDirty = false;
 let clusterDashboardTilesSettingPresent = false;
@@ -927,6 +930,12 @@ async function saveSettingsToServer(payload) {
     if (payload.speedtestEnabled !== undefined) body.speedtestEnabled = !!payload.speedtestEnabled;
     if (payload.speedtestServer !== undefined) body.speedtestServer = payload.speedtestServer;
     if (payload.speedtestPerDay !== undefined) body.speedtestPerDay = payload.speedtestPerDay;
+    if (payload.telegramNotifyEnabled !== undefined) body.telegramNotifyEnabled = !!payload.telegramNotifyEnabled;
+    if (payload.telegramNotifyIntervalSec !== undefined) body.telegramNotifyIntervalSec = payload.telegramNotifyIntervalSec;
+    if (payload.telegramRoutes !== undefined) body.telegramRoutes = payload.telegramRoutes;
+    if (payload.telegramNotificationRules !== undefined) body.telegramNotificationRules = payload.telegramNotificationRules;
+    if (payload.telegramBotToken !== undefined) body.telegramBotToken = payload.telegramBotToken;
+    if (payload.telegramClearBotToken === true) body.telegramClearBotToken = true;
     try {
         await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     } catch (e) {
@@ -1165,6 +1174,9 @@ function setLanguage(lang) {
         backupsExecTable = null;
     }
     renderDashboardTimeWeatherCard();
+    try {
+        if (document.getElementById('telegramRulesTableBody')) renderTelegramRulesTable();
+    } catch (_) {}
 }
 
 // Render language switcher buttons dynamically
@@ -1313,9 +1325,31 @@ function updateUILanguage() {
         menuNetdevMonitorText: 'monitorScreenNetdev',
         menuSpeedtestMonitorText: 'monitorScreenSpeedtest',
         settingsNavUps: 'settingsNavUps',
+        settingsNavVms: 'settingsNavVms',
         settingsNavNetdevices: 'settingsNavNetdevices',
         settingsNavHostMetrics: 'settingsNavHostMetrics',
-        settingsNavSpeedtest: 'settingsNavSpeedtest'
+        settingsNavSpeedtest: 'settingsNavSpeedtest',
+        settingsNavTelegramIntegration: 'settingsNavTelegramIntegration',
+        settingsTelegramTitle: 'settingsTelegramTitle',
+        settingsTelegramHint: 'settingsTelegramHint',
+        settingsTelegramBotTokenLabel: 'settingsTelegramBotTokenLabel',
+        settingsTelegramBotTokenHelp: 'settingsTelegramBotTokenHelp',
+        settingsTelegramNotifyEnabledLabel: 'settingsTelegramNotifyEnabledLabel',
+        settingsTelegramIntervalLabel: 'settingsTelegramIntervalLabel',
+        settingsTelegramSaveText: 'settingsTelegramSaveText',
+        settingsTelegramClearTokenText: 'settingsTelegramClearTokenText',
+        settingsTelegramRulesTitle: 'settingsTelegramRulesTitle',
+        settingsTelegramAddRuleText: 'settingsTelegramAddRuleText',
+        settingsTelegramRulesHint: 'settingsTelegramRulesHint',
+        settingsTelegramRuleTypeHeader: 'settingsTelegramRuleTypeHeader',
+        settingsTelegramRuleTargetHeader: 'settingsTelegramRuleTargetHeader',
+        settingsTelegramRuleExtraHeader: 'settingsTelegramRuleExtraHeader',
+        settingsTelegramRuleChatHeader: 'settingsTelegramRuleChatHeader',
+        settingsTelegramRuleThreadHeader: 'settingsTelegramRuleThreadHeader',
+        settingsTelegramNotifyOpt0: 'settingsTelegramNotifyOptionOff',
+        settingsTelegramNotifyOpt1: 'settingsTelegramNotifyOptionOn',
+        settingsServiceIconHeader: 'settingsServiceIconHeader',
+        settingsVmIconHeader: 'settingsVmIconHeader'
     };
     
     for (const [id, key] of Object.entries(elements)) {
@@ -1704,6 +1738,16 @@ document.addEventListener('DOMContentLoaded', async function() {
         vmIdOrNameInput.addEventListener('change', addVmToMonitorByIdOrName);
         vmIdOrNameInput.addEventListener('keydown', function(e) { if (e.key === 'Enter') { e.preventDefault(); addVmToMonitorByIdOrName(); } });
     }
+    const telegramNav = document.getElementById('settings-nav-telegram');
+    if (telegramNav) {
+        telegramNav.addEventListener('shown.bs.tab', () => renderTelegramRulesTable());
+    }
+    const hostMetricsNav = document.getElementById('settings-nav-hostmetrics');
+    if (hostMetricsNav) {
+        hostMetricsNav.addEventListener('shown.bs.tab', () => {
+            loadHostMetricsSettings().catch(() => {});
+        });
+    }
     const debugNav = document.getElementById('settings-nav-debug');
     if (debugNav) {
         debugNav.addEventListener('shown.bs.tab', () => refreshDebugMetrics());
@@ -1783,6 +1827,346 @@ function normalizeUrlClient(u) {
 
 function connectionKey(type, url) {
     return `${type}|${normalizeUrlClient(url)}`;
+}
+
+function normalizeTelegramRoutes(raw) {
+    const o = raw && typeof raw === 'object' ? raw : {};
+    return {
+        service: typeof o.service === 'object' && o.service ? { ...o.service } : {},
+        vm: typeof o.vm === 'object' && o.vm ? { ...o.vm } : {},
+        node: typeof o.node === 'object' && o.node ? { ...o.node } : {},
+        netdev: typeof o.netdev === 'object' && o.netdev ? { ...o.netdev } : {}
+    };
+}
+
+function migrateLegacyTelegramRoutesToRulesClient(routes) {
+    const out = [];
+    let n = 0;
+    const id = () => `legacy_${Date.now()}_${++n}`;
+    const svc = routes.service || {};
+    for (const [sid, r] of Object.entries(svc)) {
+        const chatId = String(r && r.chatId || '').trim();
+        if (!chatId) continue;
+        const serviceId = parseInt(sid, 10);
+        if (!Number.isFinite(serviceId)) continue;
+        out.push({ id: id(), enabled: true, type: 'service_updown', serviceId, chatId, threadId: String(r.threadId || '').trim() || undefined });
+    }
+    const vm = routes.vm || {};
+    for (const [vid, r] of Object.entries(vm)) {
+        const chatId = String(r && r.chatId || '').trim();
+        if (!chatId) continue;
+        const vmid = parseInt(vid, 10);
+        if (!Number.isFinite(vmid)) continue;
+        out.push({ id: id(), enabled: true, type: 'vm_state', vmid, chatId, threadId: String(r.threadId || '').trim() || undefined });
+    }
+    const node = routes.node || {};
+    for (const [name, r] of Object.entries(node)) {
+        const chatId = String(r && r.chatId || '').trim();
+        if (!chatId) continue;
+        const nodeName = String(name || '').trim();
+        if (!nodeName) continue;
+        out.push({ id: id(), enabled: true, type: 'node_online', nodeName, chatId, threadId: String(r.threadId || '').trim() || undefined });
+    }
+    const nd = routes.netdev || {};
+    for (const [slot, r] of Object.entries(nd)) {
+        const chatId = String(r && r.chatId || '').trim();
+        if (!chatId) continue;
+        const netdevSlot = parseInt(slot, 10);
+        if (!Number.isFinite(netdevSlot)) continue;
+        out.push({ id: id(), enabled: true, type: 'netdev_updown', netdevSlot, chatId, threadId: String(r.threadId || '').trim() || undefined });
+    }
+    return out;
+}
+
+function normalizeTelegramNotificationRules(raw) {
+    if (!Array.isArray(raw)) return [];
+    return raw.filter((x) => x && typeof x === 'object' && x.type);
+}
+
+function newTelegramRuleId() {
+    return `r_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function getDefaultTelegramRule() {
+    const list = Array.isArray(monitoredServices) ? monitoredServices : [];
+    const firstSvc = list[0];
+    if (firstSvc && firstSvc.id != null) {
+        return { id: newTelegramRuleId(), enabled: true, type: 'service_updown', serviceId: firstSvc.id, chatId: '', threadId: '' };
+    }
+    return { id: newTelegramRuleId(), enabled: true, type: 'node_online', nodeName: getClusterNodeNamesForTelegramRules()[0] || 'pve', chatId: '', threadId: '' };
+}
+
+function getClusterNodeNamesForTelegramRules() {
+    const nodes = lastClusterData && Array.isArray(lastClusterData.nodes) ? lastClusterData.nodes : [];
+    return nodes.map((n) => n.name || n.node).filter(Boolean);
+}
+
+function getTelegramRuleTypeLabel(type) {
+    const m = {
+        service_updown: 'telegramRuleTypeService',
+        vm_state: 'telegramRuleTypeVm',
+        node_online: 'telegramRuleTypeNode',
+        netdev_updown: 'telegramRuleTypeNetdev',
+        host_temp: 'telegramRuleTypeHostTemp',
+        host_link_speed: 'telegramRuleTypeHostLink'
+    };
+    return t(m[type] || type);
+}
+
+function buildTelegramRuleTargetSelectHtml(rule) {
+    const typ = String(rule.type || 'service_updown');
+    if (typ === 'service_updown') {
+        const list = Array.isArray(monitoredServices) ? monitoredServices : [];
+        const opts = list.map((s) => {
+            const id = s.id != null ? s.id : 0;
+            const sel = Number(rule.serviceId) === Number(id) ? ' selected' : '';
+            const lab = escapeHtml(s.name || getServiceTargetDisplay(s) || String(id));
+            return `<option value="${id}"${sel}>${lab}</option>`;
+        }).join('');
+        return `<select class="form-select form-select-sm" data-tr-field="target" data-rule-id="${escapeHtml(rule.id)}">${opts || '<option value="">—</option>'}</select>`;
+    }
+    if (typ === 'vm_state') {
+        const vms = getClusterVms();
+        const ids = new Set((Array.isArray(monitoredVmIds) ? monitoredVmIds : []).map(Number));
+        vms.forEach((vm) => { const id = Number(vm.vmid != null ? vm.vmid : vm.id); if (!Number.isNaN(id)) ids.add(id); });
+        const idList = Array.from(ids).sort((a, b) => a - b);
+        const opts = idList.map((id) => {
+            const sel = Number(rule.vmid) === id ? ' selected' : '';
+            const vm = vms.find((v) => Number(v.vmid || v.id) === id);
+            const lab = vm ? `${escapeHtml(vm.name || '')} [${id}]` : String(id);
+            return `<option value="${id}"${sel}>${lab}</option>`;
+        }).join('');
+        return `<select class="form-select form-select-sm" data-tr-field="target" data-rule-id="${escapeHtml(rule.id)}">${opts || '<option value="">—</option>'}</select>`;
+    }
+    if (typ === 'node_online' || typ === 'host_temp' || typ === 'host_link_speed') {
+        const names = getClusterNodeNamesForTelegramRules();
+        const fallback = rule.nodeName ? [String(rule.nodeName)] : ['pve'];
+        const uniq = names.length ? names : fallback;
+        const opts = uniq.map((name) => {
+            const sel = String(rule.nodeName) === String(name) ? ' selected' : '';
+            return `<option value="${escapeHtml(name)}"${sel}>${escapeHtml(name)}</option>`;
+        }).join('');
+        return `<select class="form-select form-select-sm" data-tr-field="target" data-rule-id="${escapeHtml(rule.id)}">${opts}</select>`;
+    }
+    if (typ === 'netdev_updown') {
+        const opts = Array.from({ length: 10 }, (_, i) => i + 1).map((slot) => {
+            const sel = Number(rule.netdevSlot) === slot ? ' selected' : '';
+            return `<option value="${slot}"${sel}>${slot}</option>`;
+        }).join('');
+        return `<select class="form-select form-select-sm" data-tr-field="target" data-rule-id="${escapeHtml(rule.id)}">${opts}</select>`;
+    }
+    return '—';
+}
+
+function buildTelegramRuleExtraHtml(rule) {
+    const typ = String(rule.type || '');
+    if (typ === 'host_temp') {
+        const v = rule.tempThresholdC != null && rule.tempThresholdC !== '' ? String(rule.tempThresholdC) : '85';
+        return `<input type="number" class="form-control form-control-sm" min="0" max="120" step="1" value="${escapeHtml(v)}" data-tr-field="extraTemp" data-rule-id="${escapeHtml(rule.id)}" title="${escapeHtml(t('telegramRuleTempHint') || '°C')}">`;
+    }
+    return `<span class="text-muted small">—</span>`;
+}
+
+function renderTelegramRulesTable() {
+    const body = document.getElementById('telegramRulesTableBody');
+    if (!body) return;
+    const rules = Array.isArray(telegramNotificationRules) ? telegramNotificationRules : [];
+    if (!rules.length) {
+        body.innerHTML = `<tr><td colspan="7" class="text-muted small">${escapeHtml(t('telegramRulesEmpty') || 'Нет правил — добавьте или сохраните настройки после миграции со старого формата.')}</td></tr>`;
+        return;
+    }
+    body.innerHTML = rules.map((rule) => {
+        const typeOpts = ['service_updown', 'vm_state', 'node_online', 'netdev_updown', 'host_temp', 'host_link_speed'].map((tp) => {
+            const sel = String(rule.type) === tp ? ' selected' : '';
+            return `<option value="${tp}"${sel}>${escapeHtml(getTelegramRuleTypeLabel(tp))}</option>`;
+        }).join('');
+        return `
+            <tr data-rule-row="${escapeHtml(rule.id)}">
+                <td class="text-center align-middle">
+                    <input type="checkbox" class="form-check-input" data-tr-field="enabled" data-rule-id="${escapeHtml(rule.id)}" ${rule.enabled !== false ? 'checked' : ''}>
+                </td>
+                <td>
+                    <select class="form-select form-select-sm" data-tr-field="type" data-rule-id="${escapeHtml(rule.id)}">${typeOpts}</select>
+                </td>
+                <td class="telegram-rule-target">${buildTelegramRuleTargetSelectHtml(rule)}</td>
+                <td class="telegram-rule-extra">${buildTelegramRuleExtraHtml(rule)}</td>
+                <td><input type="text" class="form-control form-control-sm" data-tr-field="chatId" data-rule-id="${escapeHtml(rule.id)}" value="${escapeHtml(rule.chatId || '')}" placeholder="${escapeHtml(t('settingsTelegramChatIdPlaceholder') || 'chat_id')}" autocomplete="off"></td>
+                <td><input type="text" class="form-control form-control-sm" data-tr-field="threadId" data-rule-id="${escapeHtml(rule.id)}" value="${escapeHtml(rule.threadId || '')}" placeholder="${escapeHtml(t('settingsTelegramThreadPlaceholder') || 'thread')}" autocomplete="off"></td>
+                <td class="text-nowrap">
+                    <button type="button" class="btn btn-sm btn-outline-secondary me-1" data-tr-test="${escapeHtml(rule.id)}" title="${escapeHtml(t('telegramTestRuleButton') || 'Test')}"><i class="bi bi-send"></i></button>
+                    <button type="button" class="btn btn-sm btn-outline-danger" data-tr-remove="${escapeHtml(rule.id)}" title="${escapeHtml(t('remove') || 'Удалить')}"><i class="bi bi-trash"></i></button>
+                </td>
+            </tr>`;
+    }).join('');
+
+    body.querySelectorAll('[data-tr-field]').forEach((el) => {
+        const field = el.getAttribute('data-tr-field');
+        if (field === 'type') el.addEventListener('change', onTelegramRuleTypeChange);
+        else {
+            el.addEventListener('change', onTelegramRuleFieldChange);
+            el.addEventListener('input', onTelegramRuleFieldChange);
+        }
+    });
+    body.querySelectorAll('[data-tr-remove]').forEach((btn) => {
+        btn.addEventListener('click', () => removeTelegramNotificationRule(btn.getAttribute('data-tr-remove')));
+    });
+    body.querySelectorAll('[data-tr-test]').forEach((btn) => {
+        btn.addEventListener('click', () => testTelegramNotificationRule(btn.getAttribute('data-tr-test')));
+    });
+}
+
+function telegramTestRuleApiErrorMessage(errText) {
+    const s = String(errText || '').toLowerCase();
+    if (s.includes('chat_id')) return t('telegramTestRuleNeedChat');
+    if (s.includes('bot_token')) return t('telegramTestRuleNeedToken');
+    return String(errText || 'error');
+}
+
+async function testTelegramNotificationRule(ruleId) {
+    syncTelegramRulesFromDom();
+    const rule = (telegramNotificationRules || []).find((r) => r.id === ruleId);
+    if (!rule) return;
+    if (!String(rule.chatId || '').trim()) {
+        showToast(t('telegramTestRuleNeedChat') || 'Укажите chat_id', 'warning');
+        return;
+    }
+    const tokEl = document.getElementById('settingsTelegramBotTokenInput');
+    const hasNewToken = tokEl && String(tokEl.value).trim();
+    if (!hasNewToken && !telegramBotTokenSet) {
+        showToast(t('telegramTestRuleNeedToken') || 'Нужен токен бота', 'warning');
+        return;
+    }
+    const payload = { rule: { ...rule } };
+    if (hasNewToken) payload.telegramBotToken = String(tokEl.value).trim();
+    try {
+        const res = await fetch('/api/settings/telegram-test-rule', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.success) {
+            const errRaw = data.error || res.statusText || 'error';
+            throw new Error(telegramTestRuleApiErrorMessage(errRaw));
+        }
+        showToast(t('telegramTestRuleSuccess') || 'Отправлено', 'success');
+    } catch (e) {
+        showToast((t('telegramTestRuleError') || 'Ошибка') + ': ' + (e.message || String(e)), 'error');
+    }
+}
+
+function onTelegramRuleTypeChange(ev) {
+    const el = ev && ev.target;
+    const rid = el && el.getAttribute('data-rule-id');
+    if (!rid) return;
+    const rule = (telegramNotificationRules || []).find((r) => r.id === rid);
+    if (!rule) return;
+    rule.type = String(el.value || 'service_updown');
+    delete rule.serviceId;
+    delete rule.vmid;
+    delete rule.nodeName;
+    delete rule.netdevSlot;
+    delete rule.tempThresholdC;
+    const nn = getClusterNodeNamesForTelegramRules()[0] || 'pve';
+    if (rule.type === 'service_updown') {
+        const list = Array.isArray(monitoredServices) ? monitoredServices : [];
+        rule.serviceId = list[0] && list[0].id != null ? list[0].id : 0;
+    } else if (rule.type === 'vm_state') {
+        const vms = getClusterVms();
+        const id0 = vms[0] ? Number(vms[0].vmid != null ? vms[0].vmid : vms[0].id) : (Array.isArray(monitoredVmIds) && monitoredVmIds[0] != null ? monitoredVmIds[0] : 0);
+        rule.vmid = Number.isFinite(id0) ? id0 : 0;
+    } else if (rule.type === 'netdev_updown') rule.netdevSlot = 1;
+    else if (rule.type === 'host_temp') {
+        rule.nodeName = nn;
+        rule.tempThresholdC = 85;
+    } else if (rule.type === 'host_link_speed') rule.nodeName = nn;
+    else if (rule.type === 'node_online') rule.nodeName = nn;
+    renderTelegramRulesTable();
+}
+
+function onTelegramRuleFieldChange() {
+    syncTelegramRulesFromDom();
+}
+
+function syncTelegramRulesFromDom() {
+    const body = document.getElementById('telegramRulesTableBody');
+    if (!body) return;
+    const map = new Map((telegramNotificationRules || []).map((r) => [r.id, { ...r }]));
+    body.querySelectorAll('tr[data-rule-row]').forEach((tr) => {
+        const rid = tr.getAttribute('data-rule-row');
+        const rule = map.get(rid) || { id: rid };
+        const en = tr.querySelector('[data-tr-field="enabled"]');
+        if (en) rule.enabled = !!en.checked;
+        const typEl = tr.querySelector('[data-tr-field="type"]');
+        if (typEl) rule.type = String(typEl.value || 'service_updown');
+        const chatEl = tr.querySelector('[data-tr-field="chatId"]');
+        if (chatEl) rule.chatId = String(chatEl.value || '').trim();
+        const thEl = tr.querySelector('[data-tr-field="threadId"]');
+        if (thEl) {
+            const t0 = String(thEl.value || '').trim();
+            rule.threadId = t0 || undefined;
+        }
+        const tgt = tr.querySelector('[data-tr-field="target"]');
+        if (tgt) {
+            const typ = String(rule.type);
+            const v = String(tgt.value || '').trim();
+            delete rule.serviceId;
+            delete rule.vmid;
+            delete rule.nodeName;
+            delete rule.netdevSlot;
+            delete rule.tempThresholdC;
+            if (typ === 'service_updown') rule.serviceId = parseInt(v, 10);
+            else if (typ === 'vm_state') rule.vmid = parseInt(v, 10);
+            else if (typ === 'node_online' || typ === 'host_temp' || typ === 'host_link_speed') rule.nodeName = v;
+            else if (typ === 'netdev_updown') rule.netdevSlot = parseInt(v, 10);
+        }
+        const ex = tr.querySelector('[data-tr-field="extraTemp"]');
+        if (ex && String(rule.type) === 'host_temp') {
+            const n = parseFloat(ex.value);
+            rule.tempThresholdC = Number.isFinite(n) ? n : 85;
+        }
+        map.set(rid, rule);
+    });
+    telegramNotificationRules = Array.from(map.values());
+}
+
+function addTelegramNotificationRule() {
+    syncTelegramRulesFromDom();
+    telegramNotificationRules = [...(telegramNotificationRules || []), getDefaultTelegramRule()];
+    renderTelegramRulesTable();
+}
+
+function removeTelegramNotificationRule(ruleId) {
+    syncTelegramRulesFromDom();
+    telegramNotificationRules = (telegramNotificationRules || []).filter((r) => r.id !== ruleId);
+    renderTelegramRulesTable();
+}
+
+async function saveTelegramSettings() {
+    syncTelegramRulesFromDom();
+    const en = document.getElementById('settingsTelegramNotifyEnabled');
+    const intervalEl = document.getElementById('settingsTelegramIntervalSec');
+    const tokEl = document.getElementById('settingsTelegramBotTokenInput');
+    const enabled = en && String(en.value) === '1';
+    let interval = intervalEl ? parseInt(intervalEl.value, 10) : 60;
+    if (!Number.isFinite(interval) || interval < 15) interval = 15;
+    if (interval > 3600) interval = 3600;
+    const payload = {
+        telegramNotifyEnabled: enabled,
+        telegramNotifyIntervalSec: interval,
+        telegramNotificationRules: [...telegramNotificationRules]
+    };
+    if (tokEl && String(tokEl.value).trim()) payload.telegramBotToken = String(tokEl.value).trim();
+    await saveSettingsToServer(payload);
+    if (tokEl) tokEl.value = '';
+    showToast(t('dataUpdated') || 'Сохранено', 'success');
+}
+
+async function clearTelegramBotToken() {
+    if (!confirm(t('settingsTelegramClearTokenConfirm') || 'Удалить токен бота?')) return;
+    await saveSettingsToServer({ telegramClearBotToken: true });
+    telegramBotTokenSet = false;
+    showToast(t('dataUpdated') || 'Готово', 'success');
 }
 
 function getCurrentConnectionId() {
@@ -2122,6 +2506,7 @@ async function loadSettingsPanelData() {
         renderSettingsMonitoredVms();
     }
     renderSettingsMonitoredServices();
+    renderTelegramRulesTable();
     await loadUpsSettings();
     await ensureUpsDisplaySlotsLoaded();
     await loadNetdevSettings();
@@ -3064,22 +3449,22 @@ async function loadNetdevSettings() {
     const portInput = document.getElementById('netdevPortInput');
     const communityInput = document.getElementById('netdevCommunityInput');
     const nameInput = document.getElementById('netdevNameInput');
-    const nameOidInput = document.getElementById('netdevNameOidInput');
-    if (!enabledSelect || !hostInput || !portInput || !communityInput || !nameInput || !nameOidInput) return;
+        const nameOidInput = document.getElementById('netdevNameOidInput');
+        if (!enabledSelect || !hostInput || !portInput || !communityInput || !nameInput || !nameOidInput) return;
 
-    const applySlotToForm = (slotIdx) => {
-        const cfg = (Array.isArray(netdevConfigs) && netdevConfigs[slotIdx]) ? netdevConfigs[slotIdx] : createDefaultNetdevConfig();
+        const applySlotToForm = (slotIdx) => {
+            const cfg = (Array.isArray(netdevConfigs) && netdevConfigs[slotIdx]) ? netdevConfigs[slotIdx] : createDefaultNetdevConfig();
 
-        enabledSelect.value = cfg.enabled ? '1' : '0';
-        if (hostInput) hostInput.value = cfg.host || '';
-        if (portInput) portInput.value = cfg.port != null ? String(cfg.port) : '';
-        if (communityInput) communityInput.value = cfg.community || '';
-        if (nameInput) nameInput.value = cfg.name || '';
-        if (nameOidInput) nameOidInput.value = cfg.nameOid || '';
+            enabledSelect.value = cfg.enabled ? '1' : '0';
+            if (hostInput) hostInput.value = cfg.host || '';
+            if (portInput) portInput.value = cfg.port != null ? String(cfg.port) : '';
+            if (communityInput) communityInput.value = cfg.community || '';
+            if (nameInput) nameInput.value = cfg.name || '';
+            if (nameOidInput) nameOidInput.value = cfg.nameOid || '';
 
-        const fields = Array.isArray(cfg.fields) ? cfg.fields : [];
-        renderNetdevFieldsEditors(fields);
-    };
+            const fields = Array.isArray(cfg.fields) ? cfg.fields : [];
+            renderNetdevFieldsEditors(fields);
+        };
 
     try {
         const res = await fetch('/api/netdevices/settings');
@@ -4525,40 +4910,39 @@ async function toggleSettings() {
 function onSettingsNavSectionChange(section) {
     // Мы держим все настройки UPS/Netdev внутри settings-tab-services по разметке,
     // но по клику слева показываем "только нужный блок", чтобы экраны не выглядели одинаково.
-    // section: 'services' | 'ups' | 'netdev' | 'hostMetrics'
+    // section: 'services' | 'vms' | 'ups' | 'netdev' | 'hostMetrics'
     const servicesHosts = document.getElementById('servicesHostsSettingsWrap');
     const upsWrap = document.getElementById('upsSettingsCardWrap');
     const netdevWrap = document.getElementById('netdevSettingsCardWrap');
     const hostMetricsWrap = document.getElementById('hostMetricsSettingsWrap');
     const vmsWrap = document.getElementById('vmsForMonitoringSettingsWrap');
 
-    if (!servicesHosts || !upsWrap || !netdevWrap || !hostMetricsWrap || !vmsWrap) return;
+    if (!servicesHosts || !upsWrap || !netdevWrap || !vmsWrap) return;
+
+    const hide = (el) => {
+        if (el) el.style.display = 'none';
+    };
+    const show = (el) => {
+        if (el) el.style.display = '';
+    };
+
+    hide(servicesHosts);
+    hide(upsWrap);
+    hide(netdevWrap);
+    hide(vmsWrap);
+    if (hostMetricsWrap) hide(hostMetricsWrap);
 
     if (section === 'ups') {
-        servicesHosts.style.display = 'none';
-        upsWrap.style.display = '';
-        netdevWrap.style.display = 'none';
-        hostMetricsWrap.style.display = 'none';
-        vmsWrap.style.display = 'none';
+        show(upsWrap);
     } else if (section === 'netdev') {
-        servicesHosts.style.display = 'none';
-        upsWrap.style.display = 'none';
-        netdevWrap.style.display = '';
-        hostMetricsWrap.style.display = 'none';
-        vmsWrap.style.display = 'none';
+        show(netdevWrap);
     } else if (section === 'hostMetrics') {
-        servicesHosts.style.display = 'none';
-        upsWrap.style.display = 'none';
-        netdevWrap.style.display = 'none';
-        hostMetricsWrap.style.display = '';
-        vmsWrap.style.display = 'none';
+        show(hostMetricsWrap);
+    } else if (section === 'vms') {
+        show(vmsWrap);
     } else {
-        // Service monitoring: только Hosts + VM/CT, без UPS/Netdev.
-        servicesHosts.style.display = '';
-        upsWrap.style.display = 'none';
-        netdevWrap.style.display = 'none';
-        hostMetricsWrap.style.display = 'none';
-        vmsWrap.style.display = '';
+        // Мониторинг сервисов: только таблица хостов (без VM/CT, UPS, SNMP, метрик).
+        show(servicesHosts);
     }
 }
 
@@ -7984,6 +8368,21 @@ async function loadSettings() {
         if (n > 48) n = 48;
         spDay.value = String(n);
     }
+    telegramNotificationRules = normalizeTelegramNotificationRules(data.telegram_notification_rules);
+    if (!telegramNotificationRules.length && data.telegram_routes) {
+        telegramNotificationRules = migrateLegacyTelegramRoutesToRulesClient(normalizeTelegramRoutes(data.telegram_routes));
+    }
+    telegramBotTokenSet = !!data.telegram_bot_token_set;
+    const tgEn = document.getElementById('settingsTelegramNotifyEnabled');
+    if (tgEn) tgEn.value = (data.telegram_notify_enabled === true || data.telegram_notify_enabled === '1') ? '1' : '0';
+    const tgInt = document.getElementById('settingsTelegramIntervalSec');
+    if (tgInt) {
+        let n = parseInt(data.telegram_notify_interval_sec, 10);
+        if (!Number.isFinite(n) || n < 15) n = 60;
+        if (n > 3600) n = 3600;
+        tgInt.value = String(n);
+    }
+    renderTelegramRulesTable();
     await ensureClusterDashboardTilesMigratedFromLegacy();
     renderSettingsMonitorScreensOrderList();
     renderClusterDashboardTilesSettings();

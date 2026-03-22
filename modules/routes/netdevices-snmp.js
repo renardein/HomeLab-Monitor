@@ -342,6 +342,176 @@ function saveNetdevConfigsToStore(configs) {
     return normalized;
 }
 
+async function pollNetdevSlot(cfg, slotIdx, nowIso) {
+    const snmpPort = cfg.port || 161;
+    const community = cfg.community;
+    if (!community) {
+        return {
+            type: 'snmp',
+            host: cfg.host,
+            slot: slotIdx + 1,
+            name: cfg.name || `NetDev ${slotIdx + 1}`,
+            up: false,
+            fields: cfg.fields.map(f => ({
+                ...f,
+                format: normalizeFieldFormat(f.format),
+                enabled: f.enabled !== false,
+                value: null,
+                displayValue: null,
+                statusDisplay: null,
+                ok: false
+            })),
+            error: 'community required',
+            updatedAt: nowIso
+        };
+    }
+
+    const wantNameFromSnmp = !safeString(cfg.name).trim() && safeString(cfg.nameOid).trim();
+    const oidList = [];
+    const meta = [];
+
+    if (wantNameFromSnmp) {
+        oidList.push(cfg.nameOid);
+        meta.push({ kind: 'name' });
+    }
+
+    for (let i = 0; i < cfg.fields.length; i++) {
+        const fld = cfg.fields[i];
+        if (!fld || fld.enabled === false) continue;
+        const oid = safeString(fld.oid).trim();
+        if (!oid) continue;
+        oidList.push(oid);
+        meta.push({ kind: 'field', fieldIdx: i });
+    }
+
+    if (!oidList.length) {
+        const name = firstNonEmptyString(cfg.name, cfg.host, `NetDev ${slotIdx + 1}`) || `NetDev ${slotIdx + 1}`;
+        return {
+            type: 'snmp',
+            host: cfg.host,
+            slot: slotIdx + 1,
+            name,
+            up: false,
+            fields: cfg.fields.map(f => ({
+                ...f,
+                format: normalizeFieldFormat(f.format),
+                enabled: f.enabled !== false,
+                value: null,
+                displayValue: null,
+                statusDisplay: null,
+                ok: false
+            })),
+            updatedAt: nowIso
+        };
+    }
+
+    const snmpRes = await snmpGetOids(cfg.host, snmpPort, community, oidList);
+    if (!snmpRes.ok) {
+        const name = firstNonEmptyString(cfg.name, cfg.host, `NetDev ${slotIdx + 1}`) || `NetDev ${slotIdx + 1}`;
+        log('warn', `[NetDev] SNMP ${cfg.host}:${snmpPort}: ${snmpRes.error}`);
+        return {
+            type: 'snmp',
+            host: cfg.host,
+            slot: slotIdx + 1,
+            name,
+            up: false,
+            fields: cfg.fields.map(f => ({
+                ...f,
+                format: normalizeFieldFormat(f.format),
+                enabled: f.enabled !== false,
+                value: null,
+                displayValue: null,
+                statusDisplay: null,
+                ok: false
+            })),
+            error: snmpRes.error,
+            updatedAt: nowIso
+        };
+    }
+
+    let resolvedName = firstNonEmptyString(cfg.name, cfg.host, `NetDev ${slotIdx + 1}`) || `NetDev ${slotIdx + 1}`;
+    let nameOk = false;
+
+    const fieldValues = new Array(cfg.fields.length).fill(null).map(() => ({ value: null, ok: false }));
+
+    for (let i = 0; i < snmpRes.results.length; i++) {
+        const r = snmpRes.results[i];
+        const m = meta[i];
+        if (!m) continue;
+
+        if (m.kind === 'name') {
+            if (r.ok && safeString(r.value).trim()) {
+                resolvedName = String(r.value).trim();
+                nameOk = true;
+            }
+            continue;
+        }
+
+        if (m.kind === 'field') {
+            const idx = m.fieldIdx;
+            if (idx == null || idx < 0 || idx >= fieldValues.length) continue;
+            if (r.ok && safeString(r.value).trim()) {
+                fieldValues[idx] = { value: String(r.value).trim(), ok: true };
+            }
+        }
+    }
+
+    const fieldOkCount = fieldValues.reduce((acc, fv) => acc + (fv && fv.ok ? 1 : 0), 0);
+    const up = fieldOkCount > 0 || nameOk;
+
+    const fieldsOut = cfg.fields.map((f, i) => {
+        const oid = safeString(f.oid).trim();
+        const label = safeString(f.label).trim();
+        const format = normalizeFieldFormat(f.format);
+        const fieldOn = f.enabled !== false;
+        const effectiveLabel = label || (oid ? lastOidPart(oid) : `Field ${i + 1}`);
+        const ok = fieldOn ? (fieldValues[i] ? fieldValues[i].ok : false) : false;
+        const rawVal = ok && fieldValues[i].value != null ? String(fieldValues[i].value) : null;
+        let displayValue = null;
+        let statusDisplay = null;
+        if (ok && rawVal != null) {
+            const st = classifyNetdevStatusDisplay(rawVal, format, f);
+            if (st) {
+                statusDisplay = st;
+            } else {
+                displayValue = formatNetdevFieldDisplay(rawVal, format);
+            }
+        }
+        return {
+            label: effectiveLabel,
+            oid,
+            format,
+            enabled: fieldOn,
+            statusUpValues: f.statusUpValues,
+            statusDownValues: f.statusDownValues,
+            value: rawVal,
+            displayValue,
+            statusDisplay,
+            ok
+        };
+    });
+
+    return {
+        type: 'snmp',
+        host: cfg.host,
+        slot: slotIdx + 1,
+        name: resolvedName,
+        up,
+        fields: fieldsOut,
+        updatedAt: nowIso
+    };
+}
+
+async function pollNetdevMonitoringItems() {
+    const configs = loadNetdevConfigsFromStore();
+    const enabledConfigs = configs
+        .map((cfg, idx) => ({ cfg, idx }))
+        .filter(x => x.cfg && x.cfg.enabled && x.cfg.host);
+    if (!enabledConfigs.length) return [];
+    const nowIso = new Date().toISOString();
+    return Promise.all(enabledConfigs.map(({ cfg, idx }) => pollNetdevSlot(cfg, idx, nowIso)));
+}
+
 router.get('/settings', (req, res) => {
     try {
         const configs = loadNetdevConfigsFromStore();
@@ -393,184 +563,14 @@ router.post('/display', (req, res) => {
 
 router.get('/current', async (req, res) => {
     try {
-        const configs = loadNetdevConfigsFromStore();
-        const enabledConfigs = configs
-            .map((cfg, idx) => ({ cfg, idx }))
-            .filter(x => x.cfg && x.cfg.enabled && x.cfg.host);
-
-        if (!enabledConfigs.length) {
+        const results = await pollNetdevMonitoringItems();
+        if (!results.length) {
             return res.json({
                 configured: false,
                 updatedAt: new Date().toISOString()
             });
         }
-
-        const nowIso = new Date().toISOString();
-
-        const pollOne = async (cfg, slotIdx) => {
-            const snmpPort = cfg.port || 161;
-            const community = cfg.community;
-            if (!community) {
-                return {
-                    type: 'snmp',
-                    host: cfg.host,
-                    slot: slotIdx + 1,
-                    name: cfg.name || `NetDev ${slotIdx + 1}`,
-                    up: false,
-                    fields: cfg.fields.map(f => ({
-                        ...f,
-                        format: normalizeFieldFormat(f.format),
-                        enabled: f.enabled !== false,
-                        value: null,
-                        displayValue: null,
-                        statusDisplay: null,
-                        ok: false
-                    })),
-                    error: 'community required',
-                    updatedAt: nowIso
-                };
-            }
-
-            const wantNameFromSnmp = !safeString(cfg.name).trim() && safeString(cfg.nameOid).trim();
-            const oidList = [];
-            const meta = [];
-
-            if (wantNameFromSnmp) {
-                oidList.push(cfg.nameOid);
-                meta.push({ kind: 'name' });
-            }
-
-            for (let i = 0; i < cfg.fields.length; i++) {
-                const fld = cfg.fields[i];
-                if (!fld || fld.enabled === false) continue;
-                const oid = safeString(fld.oid).trim();
-                if (!oid) continue;
-                oidList.push(oid);
-                meta.push({ kind: 'field', fieldIdx: i });
-            }
-
-            // If nothing to poll besides optional name and it's not requested -> just return config name/host.
-            if (!oidList.length) {
-                const name = firstNonEmptyString(cfg.name, cfg.host, `NetDev ${slotIdx + 1}`) || `NetDev ${slotIdx + 1}`;
-                return {
-                    type: 'snmp',
-                    host: cfg.host,
-                    slot: slotIdx + 1,
-                    name,
-                    up: false,
-                    fields: cfg.fields.map(f => ({
-                        ...f,
-                        format: normalizeFieldFormat(f.format),
-                        enabled: f.enabled !== false,
-                        value: null,
-                        displayValue: null,
-                        statusDisplay: null,
-                        ok: false
-                    })),
-                    updatedAt: nowIso
-                };
-            }
-
-            const snmpRes = await snmpGetOids(cfg.host, snmpPort, community, oidList);
-            if (!snmpRes.ok) {
-                const name = firstNonEmptyString(cfg.name, cfg.host, `NetDev ${slotIdx + 1}`) || `NetDev ${slotIdx + 1}`;
-                log('warn', `[NetDev] SNMP ${cfg.host}:${snmpPort}: ${snmpRes.error}`);
-                return {
-                    type: 'snmp',
-                    host: cfg.host,
-                    slot: slotIdx + 1,
-                    name,
-                    up: false,
-                    fields: cfg.fields.map(f => ({
-                        ...f,
-                        format: normalizeFieldFormat(f.format),
-                        enabled: f.enabled !== false,
-                        value: null,
-                        displayValue: null,
-                        statusDisplay: null,
-                        ok: false
-                    })),
-                    error: snmpRes.error,
-                    updatedAt: nowIso
-                };
-            }
-
-            let resolvedName = firstNonEmptyString(cfg.name, cfg.host, `NetDev ${slotIdx + 1}`) || `NetDev ${slotIdx + 1}`;
-            let nameOk = false;
-
-            const fieldValues = new Array(cfg.fields.length).fill(null).map(() => ({ value: null, ok: false }));
-
-            for (let i = 0; i < snmpRes.results.length; i++) {
-                const r = snmpRes.results[i];
-                const m = meta[i];
-                if (!m) continue;
-
-                if (m.kind === 'name') {
-                    if (r.ok && safeString(r.value).trim()) {
-                        resolvedName = String(r.value).trim();
-                        nameOk = true;
-                    }
-                    continue;
-                }
-
-                if (m.kind === 'field') {
-                    const idx = m.fieldIdx;
-                    if (idx == null || idx < 0 || idx >= fieldValues.length) continue;
-                    if (r.ok && safeString(r.value).trim()) {
-                        fieldValues[idx] = { value: String(r.value).trim(), ok: true };
-                    }
-                }
-            }
-
-            const fieldOkCount = fieldValues.reduce((acc, fv) => acc + (fv && fv.ok ? 1 : 0), 0);
-            const up = fieldOkCount > 0 || nameOk;
-
-            const fieldsOut = cfg.fields.map((f, i) => {
-                const oid = safeString(f.oid).trim();
-                const label = safeString(f.label).trim();
-                const format = normalizeFieldFormat(f.format);
-                const fieldOn = f.enabled !== false;
-                const effectiveLabel = label || (oid ? lastOidPart(oid) : `Field ${i + 1}`);
-                const ok = fieldOn ? (fieldValues[i] ? fieldValues[i].ok : false) : false;
-                const rawVal = ok && fieldValues[i].value != null ? String(fieldValues[i].value) : null;
-                let displayValue = null;
-                let statusDisplay = null;
-                if (ok && rawVal != null) {
-                    const st = classifyNetdevStatusDisplay(rawVal, format, f);
-                    if (st) {
-                        statusDisplay = st;
-                    } else {
-                        displayValue = formatNetdevFieldDisplay(rawVal, format);
-                    }
-                }
-                return {
-                    label: effectiveLabel,
-                    oid,
-                    format,
-                    enabled: fieldOn,
-                    statusUpValues: f.statusUpValues,
-                    statusDownValues: f.statusDownValues,
-                    value: rawVal,
-                    displayValue,
-                    statusDisplay,
-                    ok
-                };
-            });
-
-            return {
-                type: 'snmp',
-                host: cfg.host,
-                slot: slotIdx + 1,
-                name: resolvedName,
-                up,
-                fields: fieldsOut,
-                updatedAt: nowIso
-            };
-        };
-
-        const results = await Promise.all(enabledConfigs.map(async ({ cfg, idx }) => {
-            return pollOne(cfg, idx);
-        }));
+        const nowIso = results[0].updatedAt || new Date().toISOString();
 
         res.json({
             configured: true,
@@ -584,4 +584,5 @@ router.get('/current', async (req, res) => {
 });
 
 module.exports = router;
+module.exports.pollNetdevMonitoringItems = pollNetdevMonitoringItems;
 

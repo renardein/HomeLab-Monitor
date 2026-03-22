@@ -473,4 +473,16 @@ router.get('/current', checkAuth, async (req, res) => {
     }
 });
 
+async function fetchHostMetricsForNotify(connectionId, nodeName) {
+    const cid = safeString(connectionId).trim();
+    const nn = safeString(nodeName).trim();
+    if (!cid || !nn) return null;
+    const settings = loadSettings();
+    const all = loadConfigs();
+    const cfg = normalizeNodeConfig(all[cid]?.nodes?.[nn]);
+    if (!cfg.enabled) return null;
+    return getCachedCurrent(cid, nn, cfg, settings);
+}
+
 module.exports = router;
+module.exports.fetchHostMetricsForNotify = fetchHostMetricsForNotify;

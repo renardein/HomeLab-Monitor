@@ -37,8 +37,13 @@ app.use((req, res, next) => {
     next();
 });
 
-// Статические файлы
-app.use(express.static(path.join(__dirname, 'public')));
+// Старый `public/index.html` без EJS-шаблонов; иначе GET / отдаёт его вместо `views/index.ejs`
+app.get('/index.html', (req, res) => {
+    res.redirect(301, '/');
+});
+
+// Статические файлы (index: false — не подставлять index.html для GET /)
+app.use(express.static(path.join(__dirname, 'public'), { index: false }));
 
 // Подключаем маршруты
 app.use('/api/status', require('./modules/routes/status'));
@@ -236,6 +241,11 @@ getDb()
             require('./modules/speedtest').startScheduler();
         } catch (e) {
             log('warn', `Speedtest scheduler: ${e.message}`);
+        }
+        try {
+            require('./modules/monitor-notify').startMonitorNotifyScheduler();
+        } catch (e) {
+            log('warn', `Monitor notify scheduler: ${e.message}`);
         }
         app.listen(config.port, '0.0.0.0', () => {
             log('info', '[Server] started', {

@@ -280,3 +280,4 @@ router.post('/check', async (req, res) => {
 });
 
 module.exports = router;
+module.exports.checkOne = checkOne;
