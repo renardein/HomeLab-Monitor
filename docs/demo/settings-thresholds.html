@@ -119,21 +119,23 @@
 <div class="tab-pane fade show active" role="tabpanel">
     <div class="settings-section">
         <h5 class="mb-3"><i class="bi bi-speedometer2 me-2"></i><span>Thresholds</span></h5>
-        <div class="mb-4">
-            <div class="threshold-label d-flex justify-content-between"><span>CPU Green Up To</span><span>70%</span></div>
-            <input type="range" class="form-range threshold-slider" min="0" max="100" value="70">
+        <div class="mb-3">
+            <div class="threshold-label"><span>CPU Green Up To</span><input type="number" class="form-control form-control-sm threshold-input" min="0" max="100" step="1" value="70"></div>
+        </div>
+        <div class="mb-3">
+            <div class="threshold-label"><span>CPU Yellow Up To</span><input type="number" class="form-control form-control-sm threshold-input" min="0" max="100" step="1" value="90"></div>
+        </div>
+        <div class="mb-3">
+            <div class="threshold-label"><span>CPU Red Up To</span><input type="number" class="form-control form-control-sm threshold-input" min="0" max="100" step="1" value="100"></div>
+        </div>
+        <div class="mb-3">
+            <div class="threshold-label"><span>RAM Green Up To</span><input type="number" class="form-control form-control-sm threshold-input" min="0" max="100" step="1" value="70"></div>
+        </div>
+        <div class="mb-3">
+            <div class="threshold-label"><span>RAM Yellow Up To</span><input type="number" class="form-control form-control-sm threshold-input" min="0" max="100" step="1" value="90"></div>
         </div>
         <div class="mb-4">
-            <div class="threshold-label d-flex justify-content-between"><span>CPU Yellow Up To</span><span>90%</span></div>
-            <input type="range" class="form-range threshold-slider" min="0" max="100" value="90">
-        </div>
-        <div class="mb-4">
-            <div class="threshold-label d-flex justify-content-between"><span>RAM Green Up To</span><span>70%</span></div>
-            <input type="range" class="form-range threshold-slider" min="0" max="100" value="70">
-        </div>
-        <div class="mb-4">
-            <div class="threshold-label d-flex justify-content-between"><span>RAM Yellow Up To</span><span>90%</span></div>
-            <input type="range" class="form-range threshold-slider" min="0" max="100" value="90">
+            <div class="threshold-label"><span>RAM Red Up To</span><input type="number" class="form-control form-control-sm threshold-input" min="0" max="100" step="1" value="100"></div>
         </div>
         <div class="text-end">
             <button class="btn btn-outline-secondary btn-sm" type="button"><i class="bi bi-arrow-counterclockwise me-1"></i>Reset Thresholds</button>

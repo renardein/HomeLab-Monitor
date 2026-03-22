@@ -3,6 +3,44 @@ const router = express.Router();
 const { log } = require('../utils');
 const store = require('../settings-store');
 
+const DEFAULT_THRESHOLDS = {
+    cpuGreen: 70, cpuYellow: 90, cpuRed: 100,
+    ramGreen: 70, ramYellow: 90, ramRed: 100
+};
+
+function normalizeThresholdsObject(raw) {
+    if (!raw || typeof raw !== 'object') return { ...DEFAULT_THRESHOLDS };
+    const clamp = (v) => {
+        const n = parseInt(v, 10);
+        if (!Number.isFinite(n)) return null;
+        return Math.max(0, Math.min(100, n));
+    };
+    let cpuG = clamp(raw.cpuGreen) ?? DEFAULT_THRESHOLDS.cpuGreen;
+    let cpuY = clamp(raw.cpuYellow) ?? DEFAULT_THRESHOLDS.cpuYellow;
+    let cpuR = clamp(raw.cpuRed) ?? DEFAULT_THRESHOLDS.cpuRed;
+    let ramG = clamp(raw.ramGreen) ?? DEFAULT_THRESHOLDS.ramGreen;
+    let ramY = clamp(raw.ramYellow) ?? DEFAULT_THRESHOLDS.ramYellow;
+    let ramR = clamp(raw.ramRed) ?? DEFAULT_THRESHOLDS.ramRed;
+    if (cpuG === 0 && cpuY === 0) {
+        cpuG = DEFAULT_THRESHOLDS.cpuGreen;
+        cpuY = DEFAULT_THRESHOLDS.cpuYellow;
+        cpuR = DEFAULT_THRESHOLDS.cpuRed;
+    }
+    if (ramG === 0 && ramY === 0) {
+        ramG = DEFAULT_THRESHOLDS.ramGreen;
+        ramY = DEFAULT_THRESHOLDS.ramYellow;
+        ramR = DEFAULT_THRESHOLDS.ramRed;
+    }
+    if (cpuG > cpuY) cpuY = cpuG;
+    if (cpuY > cpuR) cpuR = cpuY;
+    if (ramG > ramY) ramY = ramG;
+    if (ramY > ramR) ramR = ramY;
+    return {
+        cpuGreen: cpuG, cpuYellow: cpuY, cpuRed: cpuR,
+        ramGreen: ramG, ramYellow: ramY, ramRed: ramR
+    };
+}
+
 /**
  * Первый запуск / сброс: setup_completed отсутствует или '0' → показать мастер.
  * Обновление с существующими серверами/подключениями: миграция в '1' без мастера.
@@ -112,6 +150,9 @@ router.get('/', (req, res) => {
                     } catch {
                         payload[key] = value;
                     }
+                    if (key === 'thresholds' && payload.thresholds && typeof payload.thresholds === 'object') {
+                        payload.thresholds = normalizeThresholdsObject(payload.thresholds);
+                    }
                 } else if (key === 'speedtest_per_day') {
                     const n = parseInt(value, 10);
                     payload[key] = Number.isFinite(n) ? n : 4;
@@ -151,7 +192,11 @@ router.post('/', (req, res) => {
             theme: body.theme,
             refresh_interval: body.refresh_interval ?? body.refreshInterval,
             units: body.units,
-            thresholds: body.thresholds,
+            thresholds: (() => {
+                const v = body.thresholds;
+                if (v === undefined) return undefined;
+                return normalizeThresholdsObject(v);
+            })(),
             monitor_theme: body.monitor_theme ?? body.monitorTheme,
             monitor_mode: body.monitor_mode ?? body.monitorMode,
             server_type: body.server_type ?? body.serverType,

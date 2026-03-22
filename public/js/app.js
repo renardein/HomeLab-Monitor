@@ -28,12 +28,48 @@ const SETTINGS_UNLOCK_EXPIRY_KEY = 'settings_unlock_expiry';
 /** Время последнего успешного обновления данных (для раздела отладки) */
 let lastRefreshTime = null;
 let currentServerType = 'proxmox'; // 'proxmox' | 'truenas'
-let thresholds = {
-    cpuGreen: 70,
-    cpuYellow: 90,
-    ramGreen: 70,
-    ramYellow: 90
+const THRESHOLD_DEFAULTS = {
+    cpuGreen: 70, cpuYellow: 90, cpuRed: 100,
+    ramGreen: 70, ramYellow: 90, ramRed: 100
 };
+let thresholds = { ...THRESHOLD_DEFAULTS };
+
+/**
+ * Пороги из API/формы: числа 0–100, зелёный ≤ жёлтый ≤ красный; пара 0/0 считается битой записью → дефолты.
+ */
+function normalizeThresholds(raw) {
+    const d = { ...THRESHOLD_DEFAULTS };
+    if (!raw || typeof raw !== 'object') return d;
+    const clamp = (v) => {
+        const n = parseInt(v, 10);
+        if (!Number.isFinite(n)) return null;
+        return Math.max(0, Math.min(100, n));
+    };
+    let cpuG = clamp(raw.cpuGreen) ?? d.cpuGreen;
+    let cpuY = clamp(raw.cpuYellow) ?? d.cpuYellow;
+    let cpuR = clamp(raw.cpuRed) ?? d.cpuRed;
+    let ramG = clamp(raw.ramGreen) ?? d.ramGreen;
+    let ramY = clamp(raw.ramYellow) ?? d.ramYellow;
+    let ramR = clamp(raw.ramRed) ?? d.ramRed;
+    if (cpuG === 0 && cpuY === 0) {
+        cpuG = d.cpuGreen;
+        cpuY = d.cpuYellow;
+        cpuR = d.cpuRed;
+    }
+    if (ramG === 0 && ramY === 0) {
+        ramG = d.ramGreen;
+        ramY = d.ramYellow;
+        ramR = d.ramRed;
+    }
+    if (cpuG > cpuY) cpuY = cpuG;
+    if (cpuY > cpuR) cpuR = cpuY;
+    if (ramG > ramY) ramY = ramG;
+    if (ramY > ramR) ramR = ramY;
+    return {
+        cpuGreen: cpuG, cpuYellow: cpuY, cpuRed: cpuR,
+        ramGreen: ramG, ramYellow: ramY, ramRed: ramR
+    };
+}
 let proxmoxServers = ['https://192.168.1.1:8006']; // List of Proxmox servers
 let currentServerIndex = 0; // Current server index
 let truenasServers = ['https://192.168.1.2']; // List of TrueNAS servers
@@ -1257,8 +1293,10 @@ function updateUILanguage() {
         thresholdSettings: 'thresholdSettings',
         cpuGreenLabel: 'cpuGreenLabel',
         cpuYellowLabel: 'cpuYellowLabel',
+        cpuRedLabel: 'cpuRedLabel',
         ramGreenLabel: 'ramGreenLabel',
         ramYellowLabel: 'ramYellowLabel',
+        ramRedLabel: 'ramRedLabel',
         resetThresholds: 'resetThresholds',
         storageNodeHeader: 'storageNode',
         storageNameHeader: 'storageName',
@@ -7383,12 +7421,18 @@ function updateTrueNASDashboard(systemData, poolsData) {
         setText('clusterCpu', cpuPercent + '%');
         setText('clusterCpuDetail', t('truenasSystem'));
         const cpuBar = document.getElementById('clusterCpuBar');
-        if (cpuBar) cpuBar.style.width = cpuPercent + '%';
+        if (cpuBar) {
+            cpuBar.style.width = cpuPercent + '%';
+            setProgressBarThresholdClass(cpuBar, cpuPercent, 'cpu');
+        }
     } else {
         setText('clusterCpu', '—');
         setText('clusterCpuDetail', t('truenasSystem'));
         const cpuBar = document.getElementById('clusterCpuBar');
-        if (cpuBar) cpuBar.style.width = '0%';
+        if (cpuBar) {
+            cpuBar.style.width = '0%';
+            setProgressBarThresholdClass(cpuBar, 0, 'cpu');
+        }
     }
 
     // Memory card
@@ -7397,12 +7441,18 @@ function updateTrueNASDashboard(systemData, poolsData) {
         setText('clusterMemory', memPercent + '%');
         setText('clusterMemoryDetail', `${formatSize(memUsed)} / ${formatSize(memTotal)}`);
         const memBar = document.getElementById('clusterMemoryBar');
-        if (memBar) memBar.style.width = memPercent + '%';
+        if (memBar) {
+            memBar.style.width = memPercent + '%';
+            setProgressBarThresholdClass(memBar, memPercent, 'ram');
+        }
     } else {
         setText('clusterMemory', '—');
         setText('clusterMemoryDetail', version ? `${hostname} • ${version}` : hostname);
         const memBar = document.getElementById('clusterMemoryBar');
-        if (memBar) memBar.style.width = '0%';
+        if (memBar) {
+            memBar.style.width = '0%';
+            setProgressBarThresholdClass(memBar, 0, 'ram');
+        }
     }
 
     setText('clusterVmTotal', '—');
@@ -7491,9 +7541,15 @@ function updateMonitorView(clusterData) {
     setText('monitorCtTotal', String(summary.totalContainers || 0));
     setText('monitorCtRunning', String(summary.runningContainers != null ? summary.runningContainers : 0));
     const cpuBar = el('monitorCpuBar');
-    if (cpuBar) cpuBar.style.width = Math.min(100, cpuPct) + '%';
+    if (cpuBar) {
+        cpuBar.style.width = Math.min(100, cpuPct) + '%';
+        setMonitorResFillThresholdClass(cpuBar, cpuPct, 'cpu');
+    }
     const memBar = el('monitorMemoryBar');
-    if (memBar) memBar.style.width = Math.min(100, memPct) + '%';
+    if (memBar) {
+        memBar.style.width = Math.min(100, memPct) + '%';
+        setMonitorResFillThresholdClass(memBar, memPct, 'ram');
+    }
     setText('monitorNodesTitle', t('tabNodes'));
     const listEl = el('monitorNodesList');
     if (listEl) {
@@ -7534,9 +7590,15 @@ function updateMonitorViewTrueNAS(systemData, poolsData) {
     setText('monitorCtTotal', '—');
     setText('monitorCtRunning', '—');
     const cpuBar = el('monitorCpuBar');
-    if (cpuBar) cpuBar.style.width = cpuPct + '%';
+    if (cpuBar) {
+        cpuBar.style.width = cpuPct + '%';
+        setMonitorResFillThresholdClass(cpuBar, cpuPct, 'cpu');
+    }
     const memBar = el('monitorMemoryBar');
-    if (memBar) memBar.style.width = memPct + '%';
+    if (memBar) {
+        memBar.style.width = memPct + '%';
+        setMonitorResFillThresholdClass(memBar, memPct, 'ram');
+    }
     const hostname = sys.hostname || sys.system_hostname || sys.host || 'TrueNAS';
     setText('monitorNodesTitle', t('tabServers'));
     const listEl = el('monitorNodesList');
@@ -7716,13 +7778,19 @@ function updateDashboard(clusterData, storageData, backupsData, hostMetricsData 
     setText('clusterCpu', summary.cpuUsagePercent + '%');
     setText('clusterCpuDetail', `${Math.round(summary.usedCPU)}/${summary.totalCPU} ${t('cores')}`);
     const cpuBar = el('clusterCpuBar');
-    if (cpuBar) cpuBar.style.width = summary.cpuUsagePercent + '%';
-    
+    if (cpuBar) {
+        cpuBar.style.width = summary.cpuUsagePercent + '%';
+        setProgressBarThresholdClass(cpuBar, summary.cpuUsagePercent, 'cpu');
+    }
+
     setText('clusterMemory', summary.memoryUsagePercent + '%');
     setText('clusterMemoryDetail', `${summary.usedMemory}/${summary.totalMemory}`);
     const memBar = el('clusterMemoryBar');
-    if (memBar) memBar.style.width = summary.memoryUsagePercent + '%';
-    
+    if (memBar) {
+        memBar.style.width = summary.memoryUsagePercent + '%';
+        setProgressBarThresholdClass(memBar, summary.memoryUsagePercent, 'ram');
+    }
+
     const vmT = summary.totalVMs || 0;
     const vmR = summary.runningVMs != null ? summary.runningVMs : 0;
     const ctT = summary.totalContainers || 0;
@@ -7731,10 +7799,18 @@ function updateDashboard(clusterData, storageData, backupsData, hostMetricsData 
     setText('clusterVmRunning', String(vmR));
     setText('clusterCtTotal', String(ctT));
     setText('clusterCtRunning', String(ctR));
+    const vmPct = vmT > 0 ? Math.min(100, Math.round((vmR / vmT) * 100)) : 0;
+    const ctPct = ctT > 0 ? Math.min(100, Math.round((ctR / ctT) * 100)) : 0;
     const vmBar = el('clusterVmRunningBar');
-    if (vmBar) vmBar.style.width = vmT > 0 ? Math.min(100, Math.round((vmR / vmT) * 100)) + '%' : '0%';
+    if (vmBar) {
+        vmBar.style.width = vmPct + '%';
+        vmBar.className = 'progress-bar bg-success';
+    }
     const ctBar = el('clusterCtRunningBar');
-    if (ctBar) ctBar.style.width = ctT > 0 ? Math.min(100, Math.round((ctR / ctT) * 100)) + '%' : '0%';
+    if (ctBar) {
+        ctBar.style.width = ctPct + '%';
+        ctBar.className = 'progress-bar bg-success';
+    }
 
     const nodesContainer = el('nodesContainer');
     if (nodesContainer) {
@@ -7764,12 +7840,12 @@ function updateDashboard(clusterData, storageData, backupsData, hostMetricsData 
                         <div class="col-6">
                             <small class="text-muted">${t('nodeCpu')}</small>
                             <div class="fw-bold">${node.cpu}%</div>
-                            <div class="progress"><div class="progress-bar bg-primary" style="width: ${node.cpu}%"></div></div>
+                            <div class="progress"><div class="progress-bar ${getColorClass(node.cpu, 'cpu')}" style="width: ${node.cpu}%"></div></div>
                         </div>
                         <div class="col-6">
                             <small class="text-muted">${t('nodeRam')}</small>
                             <div class="fw-bold">${node.memory}%</div>
-                            <div class="progress"><div class="progress-bar bg-success" style="width: ${node.memory}%"></div></div>
+                            <div class="progress"><div class="progress-bar ${getColorClass(node.memory, 'ram')}" style="width: ${node.memory}%"></div></div>
                         </div>
                         <div class="col-6 mt-2">
                             <small class="text-muted">${t('nodeUptime')}</small>
@@ -9036,16 +9112,19 @@ async function loadSettings() {
         updateUnitsButtons();
     }
     if (data.thresholds && typeof data.thresholds === 'object') {
-        thresholds = { ...thresholds, ...data.thresholds };
+        thresholds = normalizeThresholds(data.thresholds);
         const g = document.getElementById('cpuGreenThreshold');
         const y = document.getElementById('cpuYellowThreshold');
+        const cr = document.getElementById('cpuRedThreshold');
         const rg = document.getElementById('ramGreenThreshold');
         const ry = document.getElementById('ramYellowThreshold');
-        if (g) g.value = thresholds.cpuGreen;
-        if (y) y.value = thresholds.cpuYellow;
-        if (rg) rg.value = thresholds.ramGreen;
-        if (ry) ry.value = thresholds.ramYellow;
-        updateThresholdLabels();
+        const rr = document.getElementById('ramRedThreshold');
+        if (g) g.value = String(thresholds.cpuGreen);
+        if (y) y.value = String(thresholds.cpuYellow);
+        if (cr) cr.value = String(thresholds.cpuRed);
+        if (rg) rg.value = String(thresholds.ramGreen);
+        if (ry) ry.value = String(thresholds.ramYellow);
+        if (rr) rr.value = String(thresholds.ramRed);
     }
     if (Array.isArray(data.proxmox_servers) && data.proxmox_servers.length) proxmoxServers = data.proxmox_servers.map(u => normalizeUrlClient(u));
     if (Array.isArray(data.truenas_servers) && data.truenas_servers.length) truenasServers = data.truenas_servers.map(u => normalizeUrlClient(u));
@@ -9236,28 +9315,41 @@ function updateUnitsButtons() {
 
 // Update thresholds
 function updateThreshold(type, value) {
-    thresholds[type] = parseInt(value, 10);
+    const n = parseInt(value, 10);
+    if (!Number.isFinite(n)) return;
+    thresholds[type] = n;
+    thresholds = normalizeThresholds(thresholds);
+    const g = document.getElementById('cpuGreenThreshold');
+    const y = document.getElementById('cpuYellowThreshold');
+    const cr = document.getElementById('cpuRedThreshold');
+    const rg = document.getElementById('ramGreenThreshold');
+    const ry = document.getElementById('ramYellowThreshold');
+    const rr = document.getElementById('ramRedThreshold');
+    if (g) g.value = String(thresholds.cpuGreen);
+    if (y) y.value = String(thresholds.cpuYellow);
+    if (cr) cr.value = String(thresholds.cpuRed);
+    if (rg) rg.value = String(thresholds.ramGreen);
+    if (ry) ry.value = String(thresholds.ramYellow);
+    if (rr) rr.value = String(thresholds.ramRed);
     saveSettingsToServer({ thresholds: { ...thresholds } });
-    updateThresholdLabels();
-}
-
-// Update threshold labels
-function updateThresholdLabels() {
-    document.getElementById('cpuGreenValue').textContent = thresholds.cpuGreen + '%';
-    document.getElementById('cpuYellowValue').textContent = thresholds.cpuYellow + '%';
-    document.getElementById('ramGreenValue').textContent = thresholds.ramGreen + '%';
-    document.getElementById('ramYellowValue').textContent = thresholds.ramYellow + '%';
 }
 
 // Reset thresholds
 function resetThresholds() {
-    thresholds = { cpuGreen: 70, cpuYellow: 90, ramGreen: 70, ramYellow: 90 };
+    thresholds = { ...THRESHOLD_DEFAULTS };
     saveSettingsToServer({ thresholds: { ...thresholds } });
-    document.getElementById('cpuGreenThreshold').value = 70;
-    document.getElementById('cpuYellowThreshold').value = 90;
-    document.getElementById('ramGreenThreshold').value = 70;
-    document.getElementById('ramYellowThreshold').value = 90;
-    updateThresholdLabels();
+    const g = document.getElementById('cpuGreenThreshold');
+    const y = document.getElementById('cpuYellowThreshold');
+    const cr = document.getElementById('cpuRedThreshold');
+    const rg = document.getElementById('ramGreenThreshold');
+    const ry = document.getElementById('ramYellowThreshold');
+    const rr = document.getElementById('ramRedThreshold');
+    if (g) g.value = String(thresholds.cpuGreen);
+    if (y) y.value = String(thresholds.cpuYellow);
+    if (cr) cr.value = String(thresholds.cpuRed);
+    if (rg) rg.value = String(thresholds.ramGreen);
+    if (ry) ry.value = String(thresholds.ramYellow);
+    if (rr) rr.value = String(thresholds.ramRed);
     showToast(t('dataUpdated'), 'success');
 }
 
@@ -9284,23 +9376,47 @@ function formatSize(bytes) {
 
 // Get color class for percentage based on thresholds
 function getColorClass(percent, type) {
-    let greenThreshold, yellowThreshold;
-    
+    const t = normalizeThresholds(thresholds);
+    let greenThreshold;
+    let yellowThreshold;
+    let redThreshold;
     if (type === 'cpu') {
-        greenThreshold = thresholds.cpuGreen;
-        yellowThreshold = thresholds.cpuYellow;
+        greenThreshold = t.cpuGreen;
+        yellowThreshold = t.cpuYellow;
+        redThreshold = t.cpuRed;
     } else {
-        greenThreshold = thresholds.ramGreen;
-        yellowThreshold = thresholds.ramYellow;
+        greenThreshold = t.ramGreen;
+        yellowThreshold = t.ramYellow;
+        redThreshold = t.ramRed;
     }
-    
-    if (percent <= greenThreshold) {
+    const p = Number(percent);
+    const x = Number.isFinite(p) ? p : 0;
+    if (x <= greenThreshold) {
         return 'bg-success';
-    } else if (percent <= yellowThreshold) {
+    }
+    if (x <= yellowThreshold) {
         return 'bg-warning';
-    } else {
+    }
+    if (x <= redThreshold) {
         return 'bg-danger';
     }
+    return 'bg-danger';
+}
+
+/** Bootstrap progress-bar: цвет по порогам (настройки «Пороговые значения»). */
+function setProgressBarThresholdClass(el, percent, type) {
+    if (!el) return;
+    el.className = 'progress-bar ' + getColorClass(percent, type);
+}
+
+/** Полоса CPU/RAM в компактном режиме монитора (кастомные div, не .progress-bar). */
+function setMonitorResFillThresholdClass(el, percent, type) {
+    if (!el) return;
+    const g = getColorClass(percent, type);
+    const tier = g === 'bg-warning'
+        ? 'monitor-view__res-fill--tier-warning'
+        : (g === 'bg-danger' ? 'monitor-view__res-fill--tier-danger' : 'monitor-view__res-fill--tier-success');
+    el.className = 'monitor-view__res-fill ' + tier;
 }
 
 // ==================== PROXMOX SERVERS MANAGEMENT ====================

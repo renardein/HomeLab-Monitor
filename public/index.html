@@ -468,44 +468,52 @@
                                     <h5 class="mb-3"><i class="bi bi-speedometer2 me-2"></i><span id="thresholdSettings">Пороги
                             индикации</span></h5>
 
-                    <div class="mb-4">
+                    <div class="mb-3">
                         <div class="threshold-label">
                             <span><span class="color-indicator color-green"></span><span id="cpuGreenLabel">CPU: Зелёный
                                     до</span></span>
-                            <span id="cpuGreenValue">70%</span>
+                            <input type="number" class="form-control form-control-sm threshold-input" id="cpuGreenThreshold" min="0" max="100" step="1" value="70" inputmode="numeric" oninput="updateThreshold('cpuGreen', this.value)">
                         </div>
-                        <input type="range" class="form-range threshold-slider" id="cpuGreenThreshold" min="0" max="100"
-                            value="70" oninput="updateThreshold('cpuGreen', this.value)">
                     </div>
 
-                    <div class="mb-4">
+                    <div class="mb-3">
                         <div class="threshold-label">
                             <span><span class="color-indicator color-yellow"></span><span id="cpuYellowLabel">CPU:
                                     Жёлтый до</span></span>
-                            <span id="cpuYellowValue">90%</span>
+                            <input type="number" class="form-control form-control-sm threshold-input" id="cpuYellowThreshold" min="0" max="100" step="1" value="90" inputmode="numeric" oninput="updateThreshold('cpuYellow', this.value)">
                         </div>
-                        <input type="range" class="form-range threshold-slider" id="cpuYellowThreshold" min="0"
-                            max="100" value="90" oninput="updateThreshold('cpuYellow', this.value)">
                     </div>
 
-                    <div class="mb-4">
+                    <div class="mb-3">
+                        <div class="threshold-label">
+                            <span><span class="color-indicator color-red"></span><span id="cpuRedLabel">CPU:
+                                    Красный до</span></span>
+                            <input type="number" class="form-control form-control-sm threshold-input" id="cpuRedThreshold" min="0" max="100" step="1" value="100" inputmode="numeric" oninput="updateThreshold('cpuRed', this.value)">
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
                         <div class="threshold-label">
                             <span><span class="color-indicator color-green"></span><span id="ramGreenLabel">RAM: Зелёный
                                     до</span></span>
-                            <span id="ramGreenValue">70%</span>
+                            <input type="number" class="form-control form-control-sm threshold-input" id="ramGreenThreshold" min="0" max="100" step="1" value="70" inputmode="numeric" oninput="updateThreshold('ramGreen', this.value)">
                         </div>
-                        <input type="range" class="form-range threshold-slider" id="ramGreenThreshold" min="0" max="100"
-                            value="70" oninput="updateThreshold('ramGreen', this.value)">
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="threshold-label">
+                            <span><span class="color-indicator color-yellow"></span><span id="ramYellowLabel">RAM:
+                                    Жёлтый до</span></span>
+                            <input type="number" class="form-control form-control-sm threshold-input" id="ramYellowThreshold" min="0" max="100" step="1" value="90" inputmode="numeric" oninput="updateThreshold('ramYellow', this.value)">
+                        </div>
                     </div>
 
                     <div class="mb-4">
                         <div class="threshold-label">
-                            <span><span class="color-indicator color-yellow"></span><span id="ramYellowLabel">RAM:
-                                    Жёлтый до</span></span>
-                            <span id="ramYellowValue">90%</span>
+                            <span><span class="color-indicator color-red"></span><span id="ramRedLabel">RAM:
+                                    Красный до</span></span>
+                            <input type="number" class="form-control form-control-sm threshold-input" id="ramRedThreshold" min="0" max="100" step="1" value="100" inputmode="numeric" oninput="updateThreshold('ramRed', this.value)">
                         </div>
-                        <input type="range" class="form-range threshold-slider" id="ramYellowThreshold" min="0"
-                            max="100" value="90" oninput="updateThreshold('ramYellow', this.value)">
                     </div>
 
                     <div class="text-end">
@@ -1297,7 +1305,7 @@
                                         <div class="display-6" id="clusterCpu">0</div>
                                         <small class="text-muted" id="clusterCpuDetail">0/0 ядер</small>
                                         <div class="progress mt-2" style="height: 10px;">
-                                            <div class="progress-bar bg-primary" id="clusterCpuBar" style="width: 0%">
+                                            <div class="progress-bar bg-success" id="clusterCpuBar" style="width: 0%">
                                             </div>
                                         </div>
                                     </div>
@@ -1545,8 +1553,8 @@
                     <div class="monitor-view__stat"><span class="monitor-view__stat-value" id="monitorQuorum">—</span><span class="monitor-view__stat-label" id="monitorQuorumLabel">Кворум</span></div>
                 </div>
                 <div class="monitor-view__resources">
-                    <div class="monitor-view__res"><span class="monitor-view__res-label">CPU</span><span class="monitor-view__res-value" id="monitorCpu">0%</span><div class="monitor-view__res-bar"><div class="monitor-view__res-fill" id="monitorCpuBar"></div></div></div>
-                    <div class="monitor-view__res"><span class="monitor-view__res-label">RAM</span><span class="monitor-view__res-value" id="monitorMemory">0%</span><div class="monitor-view__res-bar"><div class="monitor-view__res-fill monitor-view__res-fill--mem" id="monitorMemoryBar"></div></div></div>
+                    <div class="monitor-view__res"><span class="monitor-view__res-label">CPU</span><span class="monitor-view__res-value" id="monitorCpu">0%</span><div class="monitor-view__res-bar"><div class="monitor-view__res-fill monitor-view__res-fill--tier-success" id="monitorCpuBar"></div></div></div>
+                    <div class="monitor-view__res"><span class="monitor-view__res-label">RAM</span><span class="monitor-view__res-value" id="monitorMemory">0%</span><div class="monitor-view__res-bar"><div class="monitor-view__res-fill monitor-view__res-fill--tier-success" id="monitorMemoryBar"></div></div></div>
                     <div class="monitor-view__res monitor-view__res--guest" aria-label="VM">
                         <div class="monitor-view__res-guest-title" id="monitorBlockVmTitle">VM</div>
                         <div class="monitor-view__res-guest-line"><span class="monitor-view__res-guest-lbl" id="monitorVmTotalLbl">Всего</span><span class="monitor-view__res-guest-val" id="monitorVmTotal">0</span></div>

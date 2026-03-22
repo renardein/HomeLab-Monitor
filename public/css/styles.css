@@ -1097,13 +1097,17 @@
         body.dark-mode .card .table {
             background-color: #16213e;
         }
-        .threshold-slider {
-            width: 100%;
+        .threshold-input {
+            width: 5.5rem;
+            max-width: 100%;
+            flex-shrink: 0;
         }
         .threshold-label {
             display: flex;
             justify-content: space-between;
-            margin-bottom: 5px;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 0;
         }
         .color-indicator {
             width: 20px;
@@ -1760,8 +1764,14 @@
         .monitor-view__res-value { font-weight: 700; font-size: 1.6rem; line-height: 1.1; }
         .monitor-view__res-bar { flex: 1; min-width: 40px; height: 8px; background: rgba(0,0,0,0.15); border-radius: 4px; overflow: hidden; }
         body.monitor-mode.monitor-theme-dark .monitor-view__res-bar { background: rgba(255,255,255,0.2); }
-        .monitor-view__res-fill { height: 100%; background: #3b82f6; border-radius: 4px; transition: width 0.2s; }
-        .monitor-view__res-fill--mem { background: #22c55e; }
+        .monitor-view__res-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.2s, background-color 0.2s;
+        }
+        .monitor-view__res-fill--tier-success { background-color: var(--bs-success); }
+        .monitor-view__res-fill--tier-warning { background-color: var(--bs-warning); }
+        .monitor-view__res-fill--tier-danger { background-color: var(--bs-danger); }
 
         .monitor-view__res--guest {
             flex-direction: column;
