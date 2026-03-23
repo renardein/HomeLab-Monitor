@@ -7,14 +7,16 @@ const { log } = require('../utils');
 
 const RELEASES_CACHE_KEY = 'github_releases_latest_check';
 const RELEASES_CACHE_TTL_SEC = 60 * 60;
-const VERSION_RE = /^(\d+)\.(\d+)\.(\d+)-(release|dev)$/i;
+const VERSION_RE = /^v?(\d+)\.(\d+)\.(\d+)-(alpha|beta|dev|release|hotfix)$/i;
 
 function parseVersion(version) {
     if (typeof version !== 'string') return null;
     const match = version.trim().match(VERSION_RE);
     if (!match) return null;
+    const raw = version.trim();
+    const normalizedRaw = raw.startsWith('v') || raw.startsWith('V') ? raw.slice(1) : raw;
     return {
-        raw: version.trim(),
+        raw: normalizedRaw,
         major: parseInt(match[1], 10),
         minor: parseInt(match[2], 10),
         patch: parseInt(match[3], 10),
@@ -31,7 +33,13 @@ function compareVersions(a, b) {
     if (parsedA.minor !== parsedB.minor) return parsedA.minor - parsedB.minor;
     if (parsedA.patch !== parsedB.patch) return parsedA.patch - parsedB.patch;
 
-    const channelRank = { dev: 0, release: 1 };
+    const channelRank = {
+        alpha: 0,
+        beta: 1,
+        dev: 2,
+        release: 3,
+        hotfix: 4
+    };
     return (channelRank[parsedA.channel] || 0) - (channelRank[parsedB.channel] || 0);
 }
 
