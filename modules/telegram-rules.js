@@ -6,11 +6,28 @@ const RULE_TYPES = new Set([
     'node_online',
     'netdev_updown',
     'host_temp',
-    'host_link_speed'
+    'host_link_speed',
+    'ups_load_high',
+    'ups_on_battery',
+    'ups_back_to_mains',
+    'ups_charge_low',
+    'ups_charge_full'
 ]);
 
 function safeStr(v) {
     return v == null ? '' : String(v).trim();
+}
+
+function normalizeStringList(raw) {
+    if (!Array.isArray(raw)) return [];
+    return raw.map((x) => safeStr(x)).filter(Boolean);
+}
+
+function normalizeNumberList(raw) {
+    if (!Array.isArray(raw)) return [];
+    return raw
+        .map((x) => parseInt(x, 10))
+        .filter((n) => Number.isFinite(n));
 }
 
 function migrateLegacyTelegramRoutesToRules(routes) {
@@ -105,19 +122,25 @@ function normalizeRule(raw) {
     };
 
     if (type === 'service_updown') {
-        const serviceId = parseInt(raw.serviceId, 10);
-        if (!Number.isFinite(serviceId)) return null;
-        return { ...base, serviceId };
+        const serviceIds = normalizeNumberList(raw.serviceIds);
+        const fallback = parseInt(raw.serviceId, 10);
+        if (!serviceIds.length && !Number.isFinite(fallback)) return null;
+        const uniq = serviceIds.length ? Array.from(new Set(serviceIds)) : [fallback];
+        return { ...base, serviceId: uniq[0], serviceIds: uniq };
     }
     if (type === 'vm_state') {
-        const vmid = parseInt(raw.vmid, 10);
-        if (!Number.isFinite(vmid)) return null;
-        return { ...base, vmid };
+        const vmids = normalizeNumberList(raw.vmids);
+        const fallback = parseInt(raw.vmid, 10);
+        if (!vmids.length && !Number.isFinite(fallback)) return null;
+        const uniq = vmids.length ? Array.from(new Set(vmids)) : [fallback];
+        return { ...base, vmid: uniq[0], vmids: uniq };
     }
     if (type === 'node_online') {
-        const nodeName = safeStr(raw.nodeName);
-        if (!nodeName) return null;
-        return { ...base, nodeName };
+        const nodeNames = normalizeStringList(raw.nodeNames);
+        const fallback = safeStr(raw.nodeName);
+        if (!nodeNames.length && !fallback) return null;
+        const uniq = nodeNames.length ? Array.from(new Set(nodeNames)) : [fallback];
+        return { ...base, nodeName: uniq[0], nodeNames: uniq };
     }
     if (type === 'netdev_updown') {
         const netdevSlot = parseInt(raw.netdevSlot, 10);
@@ -125,18 +148,58 @@ function normalizeRule(raw) {
         return { ...base, netdevSlot };
     }
     if (type === 'host_temp') {
-        const nodeName = safeStr(raw.nodeName);
-        if (!nodeName) return null;
+        const nodeNames = normalizeStringList(raw.nodeNames);
+        const fallback = safeStr(raw.nodeName);
+        if (!nodeNames.length && !fallback) return null;
+        const uniq = nodeNames.length ? Array.from(new Set(nodeNames)) : [fallback];
         let t = parseFloat(raw.tempThresholdC);
         if (!Number.isFinite(t)) t = 85;
         if (t < 0) t = 0;
         if (t > 120) t = 120;
-        return { ...base, nodeName, tempThresholdC: t };
+        return { ...base, nodeName: uniq[0], nodeNames: uniq, tempThresholdC: t };
     }
     if (type === 'host_link_speed') {
-        const nodeName = safeStr(raw.nodeName);
-        if (!nodeName) return null;
-        return { ...base, nodeName };
+        const nodeNames = normalizeStringList(raw.nodeNames);
+        const fallback = safeStr(raw.nodeName);
+        if (!nodeNames.length && !fallback) return null;
+        const uniq = nodeNames.length ? Array.from(new Set(nodeNames)) : [fallback];
+        return { ...base, nodeName: uniq[0], nodeNames: uniq };
+    }
+    if (type === 'ups_load_high') {
+        const upsSlots = normalizeNumberList(raw.upsSlots);
+        const fallback = parseInt(raw.upsSlot, 10);
+        if (!upsSlots.length && !Number.isFinite(fallback)) return null;
+        const uniq = upsSlots.length ? Array.from(new Set(upsSlots)) : [fallback];
+        let t = parseFloat(raw.loadThresholdPct);
+        if (!Number.isFinite(t)) t = 80;
+        if (t < 0) t = 0;
+        if (t > 100) t = 100;
+        return { ...base, upsSlot: uniq[0], upsSlots: uniq, loadThresholdPct: t };
+    }
+    if (type === 'ups_on_battery' || type === 'ups_back_to_mains') {
+        const upsSlots = normalizeNumberList(raw.upsSlots);
+        const fallback = parseInt(raw.upsSlot, 10);
+        if (!upsSlots.length && !Number.isFinite(fallback)) return null;
+        const uniq = upsSlots.length ? Array.from(new Set(upsSlots)) : [fallback];
+        return { ...base, upsSlot: uniq[0], upsSlots: uniq };
+    }
+    if (type === 'ups_charge_low') {
+        const upsSlots = normalizeNumberList(raw.upsSlots);
+        const fallback = parseInt(raw.upsSlot, 10);
+        if (!upsSlots.length && !Number.isFinite(fallback)) return null;
+        const uniq = upsSlots.length ? Array.from(new Set(upsSlots)) : [fallback];
+        let t = parseFloat(raw.chargeThresholdPct);
+        if (!Number.isFinite(t)) t = 20;
+        if (t < 0) t = 0;
+        if (t > 100) t = 100;
+        return { ...base, upsSlot: uniq[0], upsSlots: uniq, chargeThresholdPct: t };
+    }
+    if (type === 'ups_charge_full') {
+        const upsSlots = normalizeNumberList(raw.upsSlots);
+        const fallback = parseInt(raw.upsSlot, 10);
+        if (!upsSlots.length && !Number.isFinite(fallback)) return null;
+        const uniq = upsSlots.length ? Array.from(new Set(upsSlots)) : [fallback];
+        return { ...base, upsSlot: uniq[0], upsSlots: uniq };
     }
     return null;
 }

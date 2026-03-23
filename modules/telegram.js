@@ -93,25 +93,37 @@ function formatTelegramNotifyMessage(rule, vars, defaultText) {
 function buildSampleVarsForTelegramRule(rule) {
     const r = rule && typeof rule === 'object' ? rule : {};
     const type = String(r.type || '');
+    const firstServiceId = Array.isArray(r.serviceIds) && r.serviceIds.length
+        ? Number(r.serviceIds[0])
+        : Number(r.serviceId != null ? r.serviceId : 1);
+    const firstVmid = Array.isArray(r.vmids) && r.vmids.length
+        ? Number(r.vmids[0])
+        : Number(r.vmid != null ? r.vmid : 100);
+    const firstUpsSlot = Array.isArray(r.upsSlots) && r.upsSlots.length
+        ? Number(r.upsSlots[0])
+        : Number(r.upsSlot != null ? r.upsSlot : 1);
+    const firstNodeName = Array.isArray(r.nodeNames) && r.nodeNames.length
+        ? String(r.nodeNames[0])
+        : String(r.nodeName || 'pve');
     switch (type) {
         case 'service_updown':
             return {
                 name: 'My Service',
-                serviceId: String(r.serviceId != null ? r.serviceId : 1),
+                serviceId: String(Number.isFinite(firstServiceId) ? firstServiceId : 1),
                 state: 'up',
                 stateRu: 'Онлайн'
             };
         case 'vm_state':
             return {
                 name: 'vm-example',
-                vmid: String(r.vmid != null ? r.vmid : 100),
+                vmid: String(Number.isFinite(firstVmid) ? firstVmid : 100),
                 kind: 'VM',
                 state: 'running',
                 stateRu: 'Запущен'
             };
         case 'node_online':
             return {
-                nodeName: String(r.nodeName || 'pve'),
+                nodeName: firstNodeName,
                 state: 'online',
                 stateRu: 'Онлайн'
             };
@@ -125,15 +137,49 @@ function buildSampleVarsForTelegramRule(rule) {
             };
         case 'host_temp':
             return {
-                nodeName: String(r.nodeName || 'pve'),
+                nodeName: firstNodeName,
                 tempC: '72.5',
                 thr: String(r.tempThresholdC != null ? r.tempThresholdC : 85)
             };
         case 'host_link_speed':
             return {
-                nodeName: String(r.nodeName || 'pve'),
+                nodeName: firstNodeName,
                 prev: '1000',
                 mbps: '100'
+            };
+        case 'ups_load_high':
+            return {
+                upsName: `UPS ${Number.isFinite(firstUpsSlot) ? firstUpsSlot : 1}`,
+                slot: String(Number.isFinite(firstUpsSlot) ? firstUpsSlot : 1),
+                loadPct: '72.5',
+                thr: String(r.loadThresholdPct != null ? r.loadThresholdPct : 80),
+                state: 'high',
+                stateRu: 'Превышение'
+            };
+        case 'ups_on_battery':
+        case 'ups_back_to_mains':
+            return {
+                upsName: `UPS ${Number.isFinite(firstUpsSlot) ? firstUpsSlot : 1}`,
+                slot: String(Number.isFinite(firstUpsSlot) ? firstUpsSlot : 1),
+                state: type === 'ups_on_battery' ? 'battery' : 'mains',
+                stateRu: type === 'ups_on_battery' ? 'От батареи' : 'От сети'
+            };
+        case 'ups_charge_low':
+            return {
+                upsName: `UPS ${Number.isFinite(firstUpsSlot) ? firstUpsSlot : 1}`,
+                slot: String(Number.isFinite(firstUpsSlot) ? firstUpsSlot : 1),
+                chargePct: '18.5',
+                thr: String(r.chargeThresholdPct != null ? r.chargeThresholdPct : 20),
+                state: 'low',
+                stateRu: 'Разряжен'
+            };
+        case 'ups_charge_full':
+            return {
+                upsName: `UPS ${Number.isFinite(firstUpsSlot) ? firstUpsSlot : 1}`,
+                slot: String(Number.isFinite(firstUpsSlot) ? firstUpsSlot : 1),
+                chargePct: '100.0',
+                state: 'full',
+                stateRu: 'Полный'
             };
         default:
             return {};
@@ -234,6 +280,26 @@ function buildTelegramTestRuleMessage(rule) {
             break;
         case 'netdev_updown':
             lines.push(escapeMarkdownV2(`Target: SNMP slot ${r.netdevSlot != null ? r.netdevSlot : '—'}`));
+            break;
+        case 'ups_load_high':
+            lines.push(escapeMarkdownV2(`Target: UPS slot ${r.upsSlot != null ? r.upsSlot : '—'}`));
+            lines.push(escapeMarkdownV2(`Threshold: ${r.loadThresholdPct != null ? r.loadThresholdPct : '—'} %`));
+            break;
+        case 'ups_on_battery':
+            lines.push(escapeMarkdownV2(`Target: UPS slot ${r.upsSlot != null ? r.upsSlot : '—'}`));
+            lines.push(escapeMarkdownV2('Event: switched to battery mode'));
+            break;
+        case 'ups_back_to_mains':
+            lines.push(escapeMarkdownV2(`Target: UPS slot ${r.upsSlot != null ? r.upsSlot : '—'}`));
+            lines.push(escapeMarkdownV2('Event: returned to mains power'));
+            break;
+        case 'ups_charge_low':
+            lines.push(escapeMarkdownV2(`Target: UPS slot ${r.upsSlot != null ? r.upsSlot : '—'}`));
+            lines.push(escapeMarkdownV2(`Threshold: ${r.chargeThresholdPct != null ? r.chargeThresholdPct : '—'} %`));
+            break;
+        case 'ups_charge_full':
+            lines.push(escapeMarkdownV2(`Target: UPS slot ${r.upsSlot != null ? r.upsSlot : '—'}`));
+            lines.push(escapeMarkdownV2('Event: battery fully charged'));
             break;
         default:
             lines.push(escapeMarkdownV2('Target: —'));

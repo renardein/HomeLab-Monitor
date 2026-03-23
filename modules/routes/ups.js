@@ -466,174 +466,179 @@ router.post('/display', (req, res) => {
     }
 });
 
-router.get('/current', async (req, res) => {
-    try {
-        const configs = loadUpsConfigsFromStore();
-        const enabledConfigs = configs
-            .map((cfg, idx) => ({ cfg, idx }))
-            .filter(x => x.cfg && x.cfg.enabled && x.cfg.host);
+async function fetchUpsCurrentForNotify() {
+    const configs = loadUpsConfigsFromStore();
+    const enabledConfigs = configs
+        .map((cfg, idx) => ({ cfg, idx }))
+        .filter(x => x.cfg && x.cfg.enabled && x.cfg.host);
 
-        if (!enabledConfigs.length) {
-            return res.json({
-                configured: false,
-                updatedAt: new Date().toISOString()
+    if (!enabledConfigs.length) {
+        return {
+            configured: false,
+            updatedAt: new Date().toISOString()
+        };
+    }
+
+    const nowIso = new Date().toISOString();
+
+    const pollOneNut = async (cfg) => {
+        const upsName = cfg.name;
+        const nutPort = cfg.port || 3493;
+        if (!upsName) {
+            return { type: 'nut', host: cfg.host, upsName: null, error: 'ups_name missing' };
+        }
+
+        const varNames = [
+            cfg.nutVarStatus,
+            cfg.nutVarCharge,
+            cfg.nutVarRuntime,
+            cfg.nutVarInputVoltage,
+            cfg.nutVarOutputVoltage,
+            cfg.nutVarPower,
+            cfg.nutVarLoad,
+            cfg.nutVarFrequency
+        ];
+        const batch = await nutGetVarsBatch(cfg.host, nutPort, upsName, varNames);
+        const [
+            st, ch, rt,
+            inV, outV, pwr, loadRes, freqRes
+        ] = batch;
+
+        const statusRaw = st.ok ? st.value : null;
+        const mapped = mapNutStatus(statusRaw);
+        const chargeRaw = ch.ok ? ch.value : null;
+        const runtimeRaw = rt.ok ? rt.value : null;
+
+        if (!st.ok) {
+            log('warn', `[UPS] NUT ${cfg.host}:${nutPort} "${upsName}": статус (${cfg.nutVarStatus}) недоступен`, {
+                error: st.error || 'fail'
             });
         }
 
-        const nowIso = new Date().toISOString();
-
-        const pollOneNut = async (cfg) => {
-            const upsName = cfg.name;
-            const nutPort = cfg.port || 3493;
-            if (!upsName) {
-                return { type: 'nut', host: cfg.host, upsName: null, error: 'ups_name missing' };
-            }
-
-            const varNames = [
-                cfg.nutVarStatus,
-                cfg.nutVarCharge,
-                cfg.nutVarRuntime,
-                cfg.nutVarInputVoltage,
-                cfg.nutVarOutputVoltage,
-                cfg.nutVarPower,
-                cfg.nutVarLoad,
-                cfg.nutVarFrequency
-            ];
-            const batch = await nutGetVarsBatch(cfg.host, nutPort, upsName, varNames);
-            const [
-                st, ch, rt,
-                inV, outV, pwr, loadRes, freqRes
-            ] = batch;
-
-            const statusRaw = st.ok ? st.value : null;
-            const mapped = mapNutStatus(statusRaw);
-            const chargeRaw = ch.ok ? ch.value : null;
-            const runtimeRaw = rt.ok ? rt.value : null;
-
-            if (!st.ok) {
-                log('warn', `[UPS] NUT ${cfg.host}:${nutPort} "${upsName}": статус (${cfg.nutVarStatus}) недоступен`, {
-                    error: st.error || 'fail'
-                });
-            }
-
-            return {
-                type: 'nut',
-                host: cfg.host,
-                upsName,
-                status: {
-                    raw: statusRaw,
-                    label: mapped.label,
-                    up: mapped.up
-                },
-                battery: {
-                    chargeRaw,
-                    chargePct: firstNumberFromString(chargeRaw),
-                    runtimeRaw,
-                    runtimeFormatted: runtimeRaw != null ? formatRuntimeSeconds(runtimeRaw) : null
-                },
-                electrical: {
-                    inputVoltage: metricFromRaw(inV.ok ? inV.value : null),
-                    outputVoltage: metricFromRaw(outV.ok ? outV.value : null),
-                    powerW: metricFromRaw(pwr.ok ? pwr.value : null),
-                    loadPercent: metricFromRaw(loadRes.ok ? loadRes.value : null),
-                    frequencyHz: metricFromRaw(freqRes.ok ? freqRes.value : null)
-                },
-                updatedAt: nowIso
-            };
-        };
-
-        const pollOneSnmp = async (cfg) => {
-            const snmpPort = cfg.port || 161;
-            const community = cfg.snmpCommunity;
-            const oidStatus = cfg.snmpOidStatus;
-            if (!community || !oidStatus) {
-                return { type: 'snmp', host: cfg.host, error: 'community or status oid missing' };
-            }
-
-            const [
-                st, ch, rt,
-                inV, outV, pwr, loadRes, freqRes
-            ] = await Promise.all([
-                snmpGetOid(cfg.host, snmpPort, community, oidStatus),
-                cfg.snmpOidCharge ? snmpGetOid(cfg.host, snmpPort, community, cfg.snmpOidCharge) : Promise.resolve({ ok: false }),
-                cfg.snmpOidRuntime ? snmpGetOid(cfg.host, snmpPort, community, cfg.snmpOidRuntime) : Promise.resolve({ ok: false }),
-                cfg.snmpOidInputVoltage ? snmpGetOid(cfg.host, snmpPort, community, cfg.snmpOidInputVoltage) : Promise.resolve({ ok: false }),
-                cfg.snmpOidOutputVoltage ? snmpGetOid(cfg.host, snmpPort, community, cfg.snmpOidOutputVoltage) : Promise.resolve({ ok: false }),
-                cfg.snmpOidPower ? snmpGetOid(cfg.host, snmpPort, community, cfg.snmpOidPower) : Promise.resolve({ ok: false }),
-                cfg.snmpOidLoad ? snmpGetOid(cfg.host, snmpPort, community, cfg.snmpOidLoad) : Promise.resolve({ ok: false }),
-                cfg.snmpOidFrequency ? snmpGetOid(cfg.host, snmpPort, community, cfg.snmpOidFrequency) : Promise.resolve({ ok: false })
-            ]);
-
-            const statusRaw = st.ok ? st.value : null;
-            const chargeRaw = ch.ok ? ch.value : null;
-            const runtimeRaw = rt.ok ? rt.value : null;
-
-            const snmpReads = [['status', st]];
-            if (cfg.snmpOidCharge) snmpReads.push(['charge', ch]);
-            if (cfg.snmpOidRuntime) snmpReads.push(['runtime', rt]);
-            if (cfg.snmpOidInputVoltage) snmpReads.push(['inputVoltage', inV]);
-            if (cfg.snmpOidOutputVoltage) snmpReads.push(['outputVoltage', outV]);
-            if (cfg.snmpOidPower) snmpReads.push(['power', pwr]);
-            if (cfg.snmpOidLoad) snmpReads.push(['load', loadRes]);
-            if (cfg.snmpOidFrequency) snmpReads.push(['frequency', freqRes]);
-            const snmpFailed = snmpReads.filter(([, r]) => !r.ok);
-            if (snmpFailed.length) {
-                log('warn', `[UPS] SNMP ${cfg.host}:${snmpPort}: не прочитаны OID (${snmpFailed.length}/${snmpReads.length})`, {
-                    errors: snmpFailed.map(([name, r]) => `${name}=${r.error || 'fail'}`).join('; ')
-                });
-            }
-
-            return {
-                type: 'snmp',
-                host: cfg.host,
-                status: {
-                    raw: statusRaw,
-                    label: statusRaw != null ? String(statusRaw) : 'unknown',
-                    up: null
-                },
-                battery: {
-                    chargeRaw,
-                    chargePct: firstNumberFromString(chargeRaw),
-                    runtimeRaw,
-                    runtimeFormatted: runtimeRaw != null ? formatRuntimeSeconds(runtimeRaw) : null
-                },
-                electrical: {
-                    inputVoltage: metricFromRaw(inV.ok ? inV.value : null),
-                    outputVoltage: metricFromRaw(outV.ok ? outV.value : null),
-                    powerW: metricFromRaw(pwr.ok ? pwr.value : null),
-                    loadPercent: metricFromRaw(loadRes.ok ? loadRes.value : null),
-                    frequencyHz: metricFromRaw(freqRes.ok ? freqRes.value : null)
-                },
-                updatedAt: nowIso
-            };
-        };
-
-        const results = await Promise.all(enabledConfigs.map(async ({ cfg, idx }) => {
-            const slot = idx + 1;
-            const displayName = cfg.name || `UPS ${slot}`;
-            if (cfg.type === 'nut') {
-                const data = await pollOneNut(cfg);
-                if (data.error) {
-                    log('warn', `[UPS] Слот ${slot} (${displayName}, NUT): ${data.error}`);
-                }
-                return { slot, name: displayName, ...data };
-            }
-            if (cfg.type === 'snmp') {
-                const data = await pollOneSnmp(cfg);
-                if (data.error) {
-                    log('warn', `[UPS] Слот ${slot} (${displayName}, SNMP): ${data.error}`);
-                }
-                return { slot, name: displayName, ...data };
-            }
-            log('warn', `[UPS] Слот ${slot}: неизвестный тип ${cfg.type}`);
-            return { slot, name: displayName, error: `unknown ups_type: ${cfg.type}` };
-        }));
-
-        return res.json({
-            configured: true,
-            items: results,
+        return {
+            type: 'nut',
+            host: cfg.host,
+            upsName,
+            status: {
+                raw: statusRaw,
+                label: mapped.label,
+                up: mapped.up
+            },
+            battery: {
+                chargeRaw,
+                chargePct: firstNumberFromString(chargeRaw),
+                runtimeRaw,
+                runtimeFormatted: runtimeRaw != null ? formatRuntimeSeconds(runtimeRaw) : null
+            },
+            electrical: {
+                inputVoltage: metricFromRaw(inV.ok ? inV.value : null),
+                outputVoltage: metricFromRaw(outV.ok ? outV.value : null),
+                powerW: metricFromRaw(pwr.ok ? pwr.value : null),
+                loadPercent: metricFromRaw(loadRes.ok ? loadRes.value : null),
+                frequencyHz: metricFromRaw(freqRes.ok ? freqRes.value : null)
+            },
             updatedAt: nowIso
-        });
+        };
+    };
+
+    const pollOneSnmp = async (cfg) => {
+        const snmpPort = cfg.port || 161;
+        const community = cfg.snmpCommunity;
+        const oidStatus = cfg.snmpOidStatus;
+        if (!community || !oidStatus) {
+            return { type: 'snmp', host: cfg.host, error: 'community or status oid missing' };
+        }
+
+        const [
+            st, ch, rt,
+            inV, outV, pwr, loadRes, freqRes
+        ] = await Promise.all([
+            snmpGetOid(cfg.host, snmpPort, community, oidStatus),
+            cfg.snmpOidCharge ? snmpGetOid(cfg.host, snmpPort, community, cfg.snmpOidCharge) : Promise.resolve({ ok: false }),
+            cfg.snmpOidRuntime ? snmpGetOid(cfg.host, snmpPort, community, cfg.snmpOidRuntime) : Promise.resolve({ ok: false }),
+            cfg.snmpOidInputVoltage ? snmpGetOid(cfg.host, snmpPort, community, cfg.snmpOidInputVoltage) : Promise.resolve({ ok: false }),
+            cfg.snmpOidOutputVoltage ? snmpGetOid(cfg.host, snmpPort, community, cfg.snmpOidOutputVoltage) : Promise.resolve({ ok: false }),
+            cfg.snmpOidPower ? snmpGetOid(cfg.host, snmpPort, community, cfg.snmpOidPower) : Promise.resolve({ ok: false }),
+            cfg.snmpOidLoad ? snmpGetOid(cfg.host, snmpPort, community, cfg.snmpOidLoad) : Promise.resolve({ ok: false }),
+            cfg.snmpOidFrequency ? snmpGetOid(cfg.host, snmpPort, community, cfg.snmpOidFrequency) : Promise.resolve({ ok: false })
+        ]);
+
+        const statusRaw = st.ok ? st.value : null;
+        const chargeRaw = ch.ok ? ch.value : null;
+        const runtimeRaw = rt.ok ? rt.value : null;
+
+        const snmpReads = [['status', st]];
+        if (cfg.snmpOidCharge) snmpReads.push(['charge', ch]);
+        if (cfg.snmpOidRuntime) snmpReads.push(['runtime', rt]);
+        if (cfg.snmpOidInputVoltage) snmpReads.push(['inputVoltage', inV]);
+        if (cfg.snmpOidOutputVoltage) snmpReads.push(['outputVoltage', outV]);
+        if (cfg.snmpOidPower) snmpReads.push(['power', pwr]);
+        if (cfg.snmpOidLoad) snmpReads.push(['load', loadRes]);
+        if (cfg.snmpOidFrequency) snmpReads.push(['frequency', freqRes]);
+        const snmpFailed = snmpReads.filter(([, r]) => !r.ok);
+        if (snmpFailed.length) {
+            log('warn', `[UPS] SNMP ${cfg.host}:${snmpPort}: не прочитаны OID (${snmpFailed.length}/${snmpReads.length})`, {
+                errors: snmpFailed.map(([name, r]) => `${name}=${r.error || 'fail'}`).join('; ')
+            });
+        }
+
+        return {
+            type: 'snmp',
+            host: cfg.host,
+            status: {
+                raw: statusRaw,
+                label: statusRaw != null ? String(statusRaw) : 'unknown',
+                up: null
+            },
+            battery: {
+                chargeRaw,
+                chargePct: firstNumberFromString(chargeRaw),
+                runtimeRaw,
+                runtimeFormatted: runtimeRaw != null ? formatRuntimeSeconds(runtimeRaw) : null
+            },
+            electrical: {
+                inputVoltage: metricFromRaw(inV.ok ? inV.value : null),
+                outputVoltage: metricFromRaw(outV.ok ? outV.value : null),
+                powerW: metricFromRaw(pwr.ok ? pwr.value : null),
+                loadPercent: metricFromRaw(loadRes.ok ? loadRes.value : null),
+                frequencyHz: metricFromRaw(freqRes.ok ? freqRes.value : null)
+            },
+            updatedAt: nowIso
+        };
+    };
+
+    const results = await Promise.all(enabledConfigs.map(async ({ cfg, idx }) => {
+        const slot = idx + 1;
+        const displayName = cfg.name || `UPS ${slot}`;
+        if (cfg.type === 'nut') {
+            const data = await pollOneNut(cfg);
+            if (data.error) {
+                log('warn', `[UPS] Слот ${slot} (${displayName}, NUT): ${data.error}`);
+            }
+            return { slot, name: displayName, ...data };
+        }
+        if (cfg.type === 'snmp') {
+            const data = await pollOneSnmp(cfg);
+            if (data.error) {
+                log('warn', `[UPS] Слот ${slot} (${displayName}, SNMP): ${data.error}`);
+            }
+            return { slot, name: displayName, ...data };
+        }
+        log('warn', `[UPS] Слот ${slot}: неизвестный тип ${cfg.type}`);
+        return { slot, name: displayName, error: `unknown ups_type: ${cfg.type}` };
+    }));
+
+    return {
+        configured: true,
+        items: results,
+        updatedAt: nowIso
+    };
+}
+
+router.get('/current', async (req, res) => {
+    try {
+        const data = await fetchUpsCurrentForNotify();
+        return res.json(data);
     } catch (e) {
         log('error', `[UPS] GET /current: ${e.message}`, e.stack ? { stack: e.stack } : null);
         res.status(500).json({ configured: false, error: e.message, updatedAt: new Date().toISOString() });
@@ -641,4 +646,5 @@ router.get('/current', async (req, res) => {
 });
 
 module.exports = router;
+module.exports.fetchUpsCurrentForNotify = fetchUpsCurrentForNotify;
 

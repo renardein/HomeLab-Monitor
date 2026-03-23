@@ -2420,10 +2420,49 @@ function normalizeTelegramNotificationRules(raw) {
     if (!Array.isArray(raw)) return [];
     return raw
         .filter((x) => x && typeof x === 'object' && x.type)
-        .map((r) => ({
-            ...r,
-            id: r.id != null && String(r.id).trim() !== '' ? String(r.id) : newTelegramRuleId()
-        }));
+        .map((r) => {
+            const serviceIds = Array.isArray(r.serviceIds)
+                ? Array.from(new Set(r.serviceIds.map((x) => Number(x)).filter((n) => Number.isFinite(n))))
+                : [];
+            const vmids = Array.isArray(r.vmids)
+                ? Array.from(new Set(r.vmids.map((x) => Number(x)).filter((n) => Number.isFinite(n))))
+                : [];
+            const upsSlots = Array.isArray(r.upsSlots)
+                ? Array.from(new Set(r.upsSlots.map((x) => Number(x)).filter((n) => Number.isFinite(n))))
+                : [];
+            const nodeNames = Array.isArray(r.nodeNames)
+                ? Array.from(new Set(r.nodeNames.map((x) => String(x || '').trim()).filter(Boolean)))
+                : [];
+            const fallbackServiceId = Number(r.serviceId);
+            const fallbackVmid = Number(r.vmid);
+            const fallbackUpsSlot = Number(r.upsSlot);
+            const fallbackNode = String(r.nodeName || '').trim();
+            const normalizedNodeNames = nodeNames.length ? nodeNames : (fallbackNode ? [fallbackNode] : []);
+            const out = {
+                ...r,
+                id: r.id != null && String(r.id).trim() !== '' ? String(r.id) : newTelegramRuleId()
+            };
+            if (serviceIds.length || Number.isFinite(fallbackServiceId)) {
+                const vals = serviceIds.length ? serviceIds : [fallbackServiceId];
+                out.serviceIds = vals;
+                out.serviceId = vals[0];
+            }
+            if (vmids.length || Number.isFinite(fallbackVmid)) {
+                const vals = vmids.length ? vmids : [fallbackVmid];
+                out.vmids = vals;
+                out.vmid = vals[0];
+            }
+            if (upsSlots.length || Number.isFinite(fallbackUpsSlot)) {
+                const vals = upsSlots.length ? upsSlots : [fallbackUpsSlot];
+                out.upsSlots = vals;
+                out.upsSlot = vals[0];
+            }
+            if (normalizedNodeNames.length) {
+                out.nodeNames = normalizedNodeNames;
+                out.nodeName = normalizedNodeNames[0];
+            }
+            return out;
+        });
 }
 
 function telegramRuleIdEquals(a, b) {
@@ -2452,6 +2491,41 @@ function getClusterNodeNamesForTelegramRules() {
     return nodes.map((n) => n.name || n.node).filter(Boolean);
 }
 
+function getRuleNodeNamesClient(rule) {
+    const arr = Array.isArray(rule && rule.nodeNames) ? rule.nodeNames : [];
+    const out = arr.map((x) => String(x || '').trim()).filter(Boolean);
+    if (out.length) return Array.from(new Set(out));
+    const one = String(rule && rule.nodeName || '').trim();
+    return one ? [one] : [];
+}
+
+function getRuleNumberTargetsClient(rule, pluralKey, singleKey) {
+    const arr = Array.isArray(rule && rule[pluralKey]) ? rule[pluralKey] : [];
+    const nums = arr.map((x) => Number(x)).filter((n) => Number.isFinite(n));
+    if (nums.length) return Array.from(new Set(nums));
+    const one = Number(rule && rule[singleKey]);
+    return Number.isFinite(one) ? [one] : [];
+}
+
+function getUpsRuleTargetOptions(rule) {
+    const active = (Array.isArray(upsConfigs) ? upsConfigs : [])
+        .map((cfg, idx) => ({ cfg, slot: idx + 1 }))
+        .filter(({ cfg }) => cfg && cfg.enabled && String(cfg.host || '').trim() !== '')
+        .map(({ cfg, slot }) => ({
+            slot,
+            label: `UPS ${slot}: ${cfg.name || cfg.host || ('#' + slot)}`
+        }));
+    if (active.length) return active;
+    const selected = getRuleNumberTargetsClient(rule, 'upsSlots', 'upsSlot');
+    const fallbackSlot = selected.length ? selected[0] : Number(rule && rule.upsSlot);
+    const slots = [1, 2, 3, 4];
+    selected.forEach((s) => {
+        if (Number.isFinite(s) && !slots.includes(s)) slots.unshift(s);
+    });
+    if (Number.isFinite(fallbackSlot) && !slots.includes(fallbackSlot)) slots.unshift(fallbackSlot);
+    return slots.map((slot) => ({ slot, label: `UPS ${slot}` }));
+}
+
 function getTelegramRuleTypeLabel(type) {
     const m = {
         service_updown: 'telegramRuleTypeService',
@@ -2459,7 +2533,12 @@ function getTelegramRuleTypeLabel(type) {
         node_online: 'telegramRuleTypeNode',
         netdev_updown: 'telegramRuleTypeNetdev',
         host_temp: 'telegramRuleTypeHostTemp',
-        host_link_speed: 'telegramRuleTypeHostLink'
+        host_link_speed: 'telegramRuleTypeHostLink',
+        ups_load_high: 'telegramRuleTypeUpsLoad',
+        ups_on_battery: 'telegramRuleTypeUpsBattery',
+        ups_back_to_mains: 'telegramRuleTypeUpsMains',
+        ups_charge_low: 'telegramRuleTypeUpsChargeLow',
+        ups_charge_full: 'telegramRuleTypeUpsChargeFull'
     };
     return t(m[type] || type);
 }
@@ -2556,36 +2635,39 @@ function buildTelegramRuleTargetSelectHtml(rule) {
     const typ = String(rule.type || 'service_updown');
     if (typ === 'service_updown') {
         const list = Array.isArray(monitoredServices) ? monitoredServices : [];
+        const selected = new Set(getRuleNumberTargetsClient(rule, 'serviceIds', 'serviceId').map((x) => Number(x)));
         const opts = list.map((s) => {
             const id = s.id != null ? s.id : 0;
-            const sel = Number(rule.serviceId) === Number(id) ? ' selected' : '';
+            const sel = selected.has(Number(id)) ? ' selected' : '';
             const lab = escapeHtml(s.name || getServiceTargetDisplay(s) || String(id));
             return `<option value="${id}"${sel}>${lab}</option>`;
         }).join('');
-        return `<select class="form-select form-select-sm" data-tr-field="target" data-rule-id="${escapeHtml(rule.id)}">${opts || '<option value="">—</option>'}</select>`;
+        return `<select class="form-select form-select-sm" data-tr-field="targetServices" data-rule-id="${escapeHtml(rule.id)}" multiple size="4">${opts || '<option value="">—</option>'}</select>`;
     }
     if (typ === 'vm_state') {
         const vms = getClusterVms();
-        const ids = new Set((Array.isArray(monitoredVmIds) ? monitoredVmIds : []).map(Number));
-        vms.forEach((vm) => { const id = Number(vm.vmid != null ? vm.vmid : vm.id); if (!Number.isNaN(id)) ids.add(id); });
-        const idList = Array.from(ids).sort((a, b) => a - b);
+        const idList = Array.from(new Set((Array.isArray(monitoredVmIds) ? monitoredVmIds : []).map(Number)))
+            .filter((id) => Number.isFinite(id))
+            .sort((a, b) => a - b);
+        const selected = new Set(getRuleNumberTargetsClient(rule, 'vmids', 'vmid').map((x) => Number(x)));
         const opts = idList.map((id) => {
-            const sel = Number(rule.vmid) === id ? ' selected' : '';
+            const sel = selected.has(id) ? ' selected' : '';
             const vm = vms.find((v) => Number(v.vmid || v.id) === id);
             const lab = vm ? `${escapeHtml(vm.name || '')} [${id}]` : String(id);
             return `<option value="${id}"${sel}>${lab}</option>`;
         }).join('');
-        return `<select class="form-select form-select-sm" data-tr-field="target" data-rule-id="${escapeHtml(rule.id)}">${opts || '<option value="">—</option>'}</select>`;
+        return `<select class="form-select form-select-sm" data-tr-field="targetVmids" data-rule-id="${escapeHtml(rule.id)}" multiple size="4">${opts || '<option value="">—</option>'}</select>`;
     }
     if (typ === 'node_online' || typ === 'host_temp' || typ === 'host_link_speed') {
         const names = getClusterNodeNamesForTelegramRules();
-        const fallback = rule.nodeName ? [String(rule.nodeName)] : ['pve'];
-        const uniq = names.length ? names : fallback;
+        const selectedNodes = new Set(getRuleNodeNamesClient(rule));
+        const fallback = selectedNodes.size ? Array.from(selectedNodes) : ['pve'];
+        const uniq = Array.from(new Set((names.length ? names : []).concat(fallback)));
         const opts = uniq.map((name) => {
-            const sel = String(rule.nodeName) === String(name) ? ' selected' : '';
+            const sel = selectedNodes.has(String(name)) ? ' selected' : '';
             return `<option value="${escapeHtml(name)}"${sel}>${escapeHtml(name)}</option>`;
         }).join('');
-        return `<select class="form-select form-select-sm" data-tr-field="target" data-rule-id="${escapeHtml(rule.id)}">${opts}</select>`;
+        return `<select class="form-select form-select-sm" data-tr-field="targetNodes" data-rule-id="${escapeHtml(rule.id)}" multiple size="4">${opts}</select>`;
     }
     if (typ === 'netdev_updown') {
         const opts = Array.from({ length: 10 }, (_, i) => i + 1).map((slot) => {
@@ -2593,6 +2675,14 @@ function buildTelegramRuleTargetSelectHtml(rule) {
             return `<option value="${slot}"${sel}>${slot}</option>`;
         }).join('');
         return `<select class="form-select form-select-sm" data-tr-field="target" data-rule-id="${escapeHtml(rule.id)}">${opts}</select>`;
+    }
+    if (typ === 'ups_load_high' || typ === 'ups_on_battery' || typ === 'ups_back_to_mains' || typ === 'ups_charge_low' || typ === 'ups_charge_full') {
+        const selected = new Set(getRuleNumberTargetsClient(rule, 'upsSlots', 'upsSlot').map((x) => Number(x)));
+        const opts = getUpsRuleTargetOptions(rule).map((it) => {
+            const sel = selected.has(Number(it.slot)) ? ' selected' : '';
+            return `<option value="${escapeHtml(String(it.slot))}"${sel}>${escapeHtml(it.label)}</option>`;
+        }).join('');
+        return `<select class="form-select form-select-sm" data-tr-field="targetUpsSlots" data-rule-id="${escapeHtml(rule.id)}" multiple size="4">${opts || '<option value="1">UPS 1</option>'}</select>`;
     }
     return '—';
 }
@@ -2602,6 +2692,14 @@ function buildTelegramRuleExtraHtml(rule) {
     if (typ === 'host_temp') {
         const v = rule.tempThresholdC != null && rule.tempThresholdC !== '' ? String(rule.tempThresholdC) : '85';
         return `<input type="number" class="form-control form-control-sm" min="0" max="120" step="1" value="${escapeHtml(v)}" data-tr-field="extraTemp" data-rule-id="${escapeHtml(rule.id)}" title="${escapeHtml(t('telegramRuleTempHint') || '°C')}">`;
+    }
+    if (typ === 'ups_load_high') {
+        const v = rule.loadThresholdPct != null && rule.loadThresholdPct !== '' ? String(rule.loadThresholdPct) : '80';
+        return `<input type="number" class="form-control form-control-sm" min="0" max="100" step="1" value="${escapeHtml(v)}" data-tr-field="extraUpsLoad" data-rule-id="${escapeHtml(rule.id)}" title="${escapeHtml(t('telegramRuleUpsLoadHint') || '%')}">`;
+    }
+    if (typ === 'ups_charge_low') {
+        const v = rule.chargeThresholdPct != null && rule.chargeThresholdPct !== '' ? String(rule.chargeThresholdPct) : '20';
+        return `<input type="number" class="form-control form-control-sm" min="0" max="100" step="1" value="${escapeHtml(v)}" data-tr-field="extraUpsChargeLow" data-rule-id="${escapeHtml(rule.id)}" title="${escapeHtml(t('telegramRuleUpsChargeLowHint') || '%')}">`;
     }
     return `<span class="text-muted small">—</span>`;
 }
@@ -2616,7 +2714,7 @@ function renderTelegramRulesTable() {
         return;
     }
     body.innerHTML = rules.map((rule) => {
-        const typeOpts = ['service_updown', 'vm_state', 'node_online', 'netdev_updown', 'host_temp', 'host_link_speed'].map((tp) => {
+        const typeOpts = ['service_updown', 'vm_state', 'node_online', 'netdev_updown', 'host_temp', 'host_link_speed', 'ups_load_high', 'ups_on_battery', 'ups_back_to_mains', 'ups_charge_low', 'ups_charge_full'].map((tp) => {
             const sel = String(rule.type) === tp ? ' selected' : '';
             return `<option value="${tp}"${sel}>${escapeHtml(getTelegramRuleTypeLabel(tp))}</option>`;
         }).join('');
@@ -2730,24 +2828,51 @@ function onTelegramRuleTypeChange(ev) {
     if (!rule) return;
     rule.type = String(el.value || 'service_updown');
     delete rule.serviceId;
+    delete rule.serviceIds;
     delete rule.vmid;
+    delete rule.vmids;
     delete rule.nodeName;
+    delete rule.nodeNames;
     delete rule.netdevSlot;
     delete rule.tempThresholdC;
+    delete rule.upsSlot;
+    delete rule.upsSlots;
+    delete rule.loadThresholdPct;
+    delete rule.chargeThresholdPct;
     const nn = getClusterNodeNamesForTelegramRules()[0] || 'pve';
     if (rule.type === 'service_updown') {
         const list = Array.isArray(monitoredServices) ? monitoredServices : [];
-        rule.serviceId = list[0] && list[0].id != null ? list[0].id : 0;
+        const sid = list[0] && list[0].id != null ? Number(list[0].id) : 0;
+        rule.serviceId = sid;
+        rule.serviceIds = [sid];
     } else if (rule.type === 'vm_state') {
-        const vms = getClusterVms();
-        const id0 = vms[0] ? Number(vms[0].vmid != null ? vms[0].vmid : vms[0].id) : (Array.isArray(monitoredVmIds) && monitoredVmIds[0] != null ? monitoredVmIds[0] : 0);
-        rule.vmid = Number.isFinite(id0) ? id0 : 0;
+        const id0 = Array.isArray(monitoredVmIds) && monitoredVmIds[0] != null ? Number(monitoredVmIds[0]) : 0;
+        const vmid = Number.isFinite(id0) ? id0 : 0;
+        rule.vmid = vmid;
+        rule.vmids = [vmid];
     } else if (rule.type === 'netdev_updown') rule.netdevSlot = 1;
-    else if (rule.type === 'host_temp') {
+    else if (rule.type === 'node_online') {
         rule.nodeName = nn;
+        rule.nodeNames = [nn];
+    } else if (rule.type === 'host_temp') {
+        rule.nodeName = nn;
+        rule.nodeNames = [nn];
         rule.tempThresholdC = 85;
-    } else if (rule.type === 'host_link_speed') rule.nodeName = nn;
-    else if (rule.type === 'node_online') rule.nodeName = nn;
+    } else if (rule.type === 'host_link_speed') {
+        rule.nodeName = nn;
+        rule.nodeNames = [nn];
+    } else if (rule.type === 'ups_load_high') {
+        rule.upsSlot = 1;
+        rule.upsSlots = [1];
+        rule.loadThresholdPct = 80;
+    } else if (rule.type === 'ups_on_battery' || rule.type === 'ups_back_to_mains' || rule.type === 'ups_charge_full') {
+        rule.upsSlot = 1;
+        rule.upsSlots = [1];
+    } else if (rule.type === 'ups_charge_low') {
+        rule.upsSlot = 1;
+        rule.upsSlots = [1];
+        rule.chargeThresholdPct = 20;
+    }
     renderTelegramRulesTable();
 }
 
@@ -2779,19 +2904,87 @@ function syncTelegramRulesFromDom() {
             const typ = String(rule.type);
             const v = String(tgt.value || '').trim();
             delete rule.serviceId;
+            delete rule.serviceIds;
             delete rule.vmid;
+            delete rule.vmids;
             delete rule.nodeName;
+            delete rule.nodeNames;
             delete rule.netdevSlot;
             delete rule.tempThresholdC;
+            delete rule.upsSlot;
+            delete rule.upsSlots;
+            delete rule.loadThresholdPct;
+            delete rule.chargeThresholdPct;
             if (typ === 'service_updown') rule.serviceId = parseInt(v, 10);
             else if (typ === 'vm_state') rule.vmid = parseInt(v, 10);
-            else if (typ === 'node_online' || typ === 'host_temp' || typ === 'host_link_speed') rule.nodeName = v;
+            else if (typ === 'node_online' || typ === 'host_temp' || typ === 'host_link_speed') {
+                rule.nodeName = v;
+                rule.nodeNames = [v];
+            }
             else if (typ === 'netdev_updown') rule.netdevSlot = parseInt(v, 10);
+            else if (typ === 'ups_load_high' || typ === 'ups_on_battery' || typ === 'ups_back_to_mains' || typ === 'ups_charge_low' || typ === 'ups_charge_full') rule.upsSlot = parseInt(v, 10);
+        }
+        const tgtServices = tr.querySelector('[data-tr-field="targetServices"]');
+        if (tgtServices && String(rule.type) === 'service_updown') {
+            const vals = Array.from(tgtServices.selectedOptions || [])
+                .map((o) => parseInt(String(o.value || '').trim(), 10))
+                .filter((n) => Number.isFinite(n));
+            const uniq = Array.from(new Set(vals));
+            if (uniq.length) {
+                rule.serviceIds = uniq;
+                rule.serviceId = uniq[0];
+            }
+        }
+        const tgtVmids = tr.querySelector('[data-tr-field="targetVmids"]');
+        if (tgtVmids && String(rule.type) === 'vm_state') {
+            const vals = Array.from(tgtVmids.selectedOptions || [])
+                .map((o) => parseInt(String(o.value || '').trim(), 10))
+                .filter((n) => Number.isFinite(n));
+            const uniq = Array.from(new Set(vals));
+            if (uniq.length) {
+                rule.vmids = uniq;
+                rule.vmid = uniq[0];
+            }
+        }
+        const tgtNodes = tr.querySelector('[data-tr-field="targetNodes"]');
+        if (tgtNodes) {
+            const typ = String(rule.type);
+            if (typ === 'node_online' || typ === 'host_temp' || typ === 'host_link_speed') {
+                const vals = Array.from(tgtNodes.selectedOptions || [])
+                    .map((o) => String(o.value || '').trim())
+                    .filter(Boolean);
+                const uniq = Array.from(new Set(vals));
+                if (uniq.length) {
+                    rule.nodeNames = uniq;
+                    rule.nodeName = uniq[0];
+                }
+            }
+        }
+        const tgtUps = tr.querySelector('[data-tr-field="targetUpsSlots"]');
+        if (tgtUps && (String(rule.type) === 'ups_load_high' || String(rule.type) === 'ups_on_battery' || String(rule.type) === 'ups_back_to_mains' || String(rule.type) === 'ups_charge_low' || String(rule.type) === 'ups_charge_full')) {
+            const vals = Array.from(tgtUps.selectedOptions || [])
+                .map((o) => parseInt(String(o.value || '').trim(), 10))
+                .filter((n) => Number.isFinite(n));
+            const uniq = Array.from(new Set(vals));
+            if (uniq.length) {
+                rule.upsSlots = uniq;
+                rule.upsSlot = uniq[0];
+            }
         }
         const ex = tr.querySelector('[data-tr-field="extraTemp"]');
         if (ex && String(rule.type) === 'host_temp') {
             const n = parseFloat(ex.value);
             rule.tempThresholdC = Number.isFinite(n) ? n : 85;
+        }
+        const exUpsLoad = tr.querySelector('[data-tr-field="extraUpsLoad"]');
+        if (exUpsLoad && String(rule.type) === 'ups_load_high') {
+            const n = parseFloat(exUpsLoad.value);
+            rule.loadThresholdPct = Number.isFinite(n) ? n : 80;
+        }
+        const exUpsChargeLow = tr.querySelector('[data-tr-field="extraUpsChargeLow"]');
+        if (exUpsChargeLow && String(rule.type) === 'ups_charge_low') {
+            const n = parseFloat(exUpsChargeLow.value);
+            rule.chargeThresholdPct = Number.isFinite(n) ? n : 20;
         }
         map.set(rid, rule);
     });
