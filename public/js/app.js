@@ -5167,6 +5167,35 @@ function getHostMetricsAlerts(metric, settings = null) {
     return alerts;
 }
 
+function getHostMetricProblemMessages(metric, settings = null) {
+    if (!metric) return [];
+    const alerts = getHostMetricsAlerts(metric, settings);
+    if (alerts.length) return alerts.map((item) => String(item.message || '').trim()).filter(Boolean);
+    if (metric.stale) return [t('hostMetricsStale') || 'Stale data'];
+    if (metric.error) return [String(metric.error)];
+    return [];
+}
+
+function initHostMetricProblemPopovers() {
+    if (typeof bootstrap === 'undefined' || !bootstrap || !bootstrap.Popover) return;
+    document.querySelectorAll('.host-problem-trigger').forEach((el) => {
+        const existing = bootstrap.Popover.getInstance(el);
+        if (existing) existing.dispose();
+        const raw = String(el.getAttribute('data-problem-lines') || '').trim();
+        if (!raw) return;
+        const lines = raw.split('\n').map((x) => x.trim()).filter(Boolean);
+        if (!lines.length) return;
+        const content = `<ul class="mb-0 ps-3">${lines.map((line) => `<li>${escapeHtml(line)}</li>`).join('')}</ul>`;
+        bootstrap.Popover.getOrCreateInstance(el, {
+            trigger: 'click focus',
+            placement: 'bottom',
+            html: true,
+            sanitize: true,
+            content
+        });
+    });
+}
+
 function formatHostMetricsNodeExtras(metric) {
     if (!metric) return '';
     const settings = normalizeHostMetricsSettingsClient((lastHostMetricsData && lastHostMetricsData.settings) || hostMetricsSettings);
@@ -5178,14 +5207,6 @@ function formatHostMetricsNodeExtras(metric) {
     const alerts = getHostMetricsAlerts(metric, settings);
     const hasCpuCritical = alerts.some((item) => item.kind === 'cpu');
     const hasLinkCritical = alerts.some((item) => item.kind === 'link');
-    let extraStatus = '';
-    if (alerts.length) {
-        extraStatus = alerts.map((item) => `<div class="col-12 mt-2"><small class="text-danger fw-semibold"><i class="bi bi-exclamation-triangle-fill me-1"></i>${escapeHtml(item.message)}</small></div>`).join('');
-    } else if (metric.stale) {
-        extraStatus = `<div class="col-12 mt-2"><small class="text-warning">${escapeHtml(t('hostMetricsStale') || 'Данные устарели')}</small></div>`;
-    } else if (metric.error) {
-        extraStatus = `<div class="col-12 mt-2"><small class="text-danger">${escapeHtml(metric.error)}</small></div>`;
-    }
     return `
         <div class="col-6 mt-2">
             <small class="text-muted">${escapeHtml(t('hostMetricsCpuTempLabel') || 'CPU temp')}</small>
@@ -5196,7 +5217,6 @@ function formatHostMetricsNodeExtras(metric) {
             <div class="fw-bold${hasLinkCritical ? ' text-danger' : ''}">${escapeHtml(linkText)}</div>
             ${stateText}
         </div>
-        ${extraStatus}
     `;
 }
 
@@ -8409,9 +8429,9 @@ function updateDashboard(clusterData, storageData, backupsData, hostMetricsData 
     if (nodesContainer) {
         const nodesHtml = clusterData.nodes.map(node => {
         const hostMetric = hostMetricsMap.get(node.name) || null;
-        const hostMetricAlerts = getHostMetricsAlerts(hostMetric, hostMetricsRenderSettings);
-        const hostMetricWarning = hostMetricAlerts.length
-            ? `<span class="badge bg-warning text-dark ms-2" title="${escapeHtml(hostMetricAlerts.map((item) => item.message).join(' | ') || (t('hostMetricsCriticalNodeTitle') || 'Есть предупреждение по метрикам узла'))}"><i class="bi bi-exclamation-triangle-fill"></i></span>`
+        const hostMetricProblems = getHostMetricProblemMessages(hostMetric, hostMetricsRenderSettings);
+        const hostMetricWarning = hostMetricProblems.length
+            ? `<span class="badge bg-warning text-dark ms-2 host-problem-trigger" role="button" tabindex="0" data-problem-lines="${escapeHtml(hostMetricProblems.join('\n'))}" title="${escapeHtml(t('toastWarning') || 'Warning')}"><i class="bi bi-exclamation-triangle-fill"></i></span>`
             : '';
         const nodeIpDisplay = node.ip || (hostMetric && hostMetric.nodeIp) || '';
         const nodeIpLine = nodeIpDisplay
@@ -8455,6 +8475,7 @@ function updateDashboard(clusterData, storageData, backupsData, hostMetricsData 
         `;
         }).join('');
         setHTMLIfChanged('nodesContainer', nodesHtml);
+        initHostMetricProblemPopovers();
     }
 
     if (monitorMode) {

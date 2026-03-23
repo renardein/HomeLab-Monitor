@@ -45,6 +45,10 @@
             font-weight: 600;
             line-height: var(--hm-line-snug);
         }
+
+        .host-problem-trigger {
+            cursor: pointer;
+        }
         .hm-speedtest-last-run {
             max-height: 7.5rem;
             overflow: auto;
@@ -395,6 +399,10 @@
             padding: var(--hm-stat-pad);
             text-align: center;
             box-shadow: var(--hm-shadow-card);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            min-height: 116px;
         }
         .stat-value {
             font-size: var(--hm-text-stat);
@@ -461,19 +469,44 @@
             padding-bottom: 0.35rem;
             scrollbar-width: thin;
             scroll-snap-type: x proximity;
+            align-items: stretch;
         }
         .cluster-scroll-item {
             flex: 0 0 calc((100% - 2.25rem) / 4);
             min-width: 280px;
             scroll-snap-align: start;
+            display: flex;
         }
         .cluster-scroll-item > .node-card {
             margin-bottom: 0;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
         }
         .cluster-scroll-item .node-card h5 {
             font-size: var(--hm-text-lg);
             font-weight: 600;
             line-height: var(--hm-line-tight);
+        }
+        .cluster-scroll-item .node-card {
+            font-size: calc(var(--hm-text-sm) * 1.2);
+        }
+        .cluster-scroll-item .node-card .small {
+            font-size: calc(var(--hm-text-sm) * 1.14);
+        }
+        .cluster-scroll-item .node-card .fw-bold {
+            font-size: calc(var(--hm-text-base) * 1.18);
+        }
+        .cluster-scroll-item .node-card code {
+            font-size: calc(var(--hm-text-sm) * 1.14);
+        }
+        /* Keep top KPI cards aligned to one baseline. */
+        body.monitor-mode #dashboardContent > .row.g-4.mb-4 > [class*="col-"] {
+            display: flex;
+        }
+        body.monitor-mode #dashboardContent > .row.g-4.mb-4 .stat-card {
+            width: 100%;
+            align-items: center;
         }
         @media (max-width: 1199.98px) {
             .cluster-scroll-item {
@@ -1371,6 +1404,7 @@
         body.monitor-mode .stat-card {
             padding: var(--hm-stat-pad);
             border-radius: var(--hm-radius);
+            min-height: 126px;
         }
         body.monitor-mode .stat-value {
             font-size: var(--hm-text-stat);
@@ -2585,13 +2619,6 @@
         body.monitor-mode.monitor-theme-dark .stat-value {
             color: #fff;
         }
-
-        body.monitor-mode.monitor-theme-dark #dashboardClusterTilesTitle {
-            color: #fff;
-        }
-
-
-        
 
         /* Режим монитора: подгонка под 1920×1200, без скролла */
         @media (min-width: 1920px) and (min-height: 1200px) {
