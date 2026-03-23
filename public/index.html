@@ -1334,6 +1334,44 @@
                 </div>
             </div>
 
+            <div class="row mb-4" id="nocOverviewSection" style="display: none;">
+                <div class="col-12">
+                    <div class="card noc-panel">
+                        <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+                            <h5 class="mb-0"><i class="bi bi-broadcast-pin me-2"></i><span id="nocOverviewTitle">NOC Overview</span></h5>
+                            <div class="btn-group btn-group-sm" role="group" aria-label="NOC filter">
+                                <button type="button" class="btn btn-outline-primary active" id="nocFilterAllBtn" onclick="setNocFilter('all')">All</button>
+                                <button type="button" class="btn btn-outline-danger" id="nocFilterCriticalBtn" onclick="setNocFilter('critical')">Critical</button>
+                                <button type="button" class="btn btn-outline-warning" id="nocFilterWarningBtn" onclick="setNocFilter('warning')">Warning</button>
+                                <button type="button" class="btn btn-outline-info" id="nocFilterChangedBtn" onclick="setNocFilter('changed')">Changed</button>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-2 mb-3" id="nocAlarmStrip">
+                                <div class="col-6 col-lg-3"><div class="noc-kpi"><div class="noc-kpi__value" id="nocCriticalNow">0</div><div class="noc-kpi__label">Critical</div></div></div>
+                                <div class="col-6 col-lg-3"><div class="noc-kpi"><div class="noc-kpi__value" id="nocWarningNow">0</div><div class="noc-kpi__label">Warning</div></div></div>
+                                <div class="col-6 col-lg-3"><div class="noc-kpi"><div class="noc-kpi__value" id="nocChangedNow">0</div><div class="noc-kpi__label">Changed</div></div></div>
+                                <div class="col-6 col-lg-3"><div class="noc-kpi"><div class="noc-kpi__value" id="nocTotalOpen">0</div><div class="noc-kpi__label">Open</div></div></div>
+                            </div>
+                            <div class="row g-3">
+                                <div class="col-xl-8">
+                                    <div class="noc-list-wrap">
+                                        <div class="noc-list-title" id="nocIncidentListTitle">Incident queue</div>
+                                        <div id="nocIncidentList" class="noc-incident-list"></div>
+                                    </div>
+                                </div>
+                                <div class="col-xl-4">
+                                    <div class="noc-list-wrap">
+                                        <div class="noc-list-title" id="nocDomainHealthTitle">Domain health</div>
+                                        <div id="nocDomainGrid" class="row g-2"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Сводка ресурсов кластера -->
             <div class="row mb-4">
                 <div class="col-12">
@@ -1714,6 +1752,20 @@
                             </div>
                         </div>
                         <div class="mt-2 small text-muted monitor-screen__meta-extra" id="speedtestMonitorExtra"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Режим монитора: кастомные Tiles -->
+        <div id="tilesMonitorSection" class="mb-4 monitor-screen" style="display: none;">
+            <div class="monitor-screen__layout">
+                <div class="monitor-screen__panel">
+                    <div class="monitor-view__panel-title monitor-screen__panel-title">
+                        <h5 class="mb-0"><i class="bi bi-grid-3x3-gap me-2"></i>Tiles</h5>
+                    </div>
+                    <div class="monitor-screen__panel-body">
+                        <div class="row g-3" id="tilesMonitorGrid"></div>
                     </div>
                 </div>
             </div>

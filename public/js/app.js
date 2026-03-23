@@ -95,10 +95,10 @@ let setupWizardServerType = 'proxmox';
 let setupWizardListenersBound = false;
 let telegramRuleMessageModalBound = false;
 let setupWizardFinishMode = 'success';
-let clusterDashboardTiles = []; // [{ type: 'service'|'vmct'|'netdev'|'ups'|'speedtest', sourceId: 'type:id' }]
+let clusterDashboardTiles = []; // [{ type: 'service'|'vmct'|'netdev'|'ups'|'speedtest'|'truenas_server'|'truenas_pool'|'truenas_disk'|'truenas_service'|'truenas_app', sourceId: 'type:id' }]
 let clusterDashboardTilesDirty = false;
 let clusterDashboardTilesSettingPresent = false;
-const CLUSTER_DASHBOARD_TILE_TYPES = ['service', 'vmct', 'netdev', 'ups', 'speedtest'];
+const CLUSTER_DASHBOARD_TILE_TYPES = ['service', 'vmct', 'netdev', 'ups', 'speedtest', 'truenas_server', 'truenas_pool', 'truenas_disk', 'truenas_service', 'truenas_app'];
 const MAX_CLUSTER_DASHBOARD_TILES = 12;
 const DEFAULT_DASHBOARD_TIMEZONE = (() => {
     try {
@@ -153,6 +153,7 @@ let latestUpdateInfo = null;
 let lastClusterData = null;   // for monitor view (Proxmox)
 let lastTrueNASData = null;   // { system, pools } for monitor view (TrueNAS)
 let lastHostMetricsData = null; // { configured, items } for Proxmox host metrics
+let lastTrueNASOverviewData = null;
 let hostMetricsSettings = { pollIntervalSec: 10, timeoutMs: 3000, cacheTtlSec: 8, criticalTempC: 85, criticalLinkSpeedMbps: 1000 };
 let hostMetricsConfigs = {}; // connectionId -> { nodes: { [node]: { enabled, agentPort, agentPath, cpuTempSensor, linkInterface } } }
 let hostMetricsDiscoveryItems = [];
@@ -1062,6 +1063,52 @@ function syncProxmoxApiTokenFromParts() {
     hiddenEl.value = full;
 }
 
+function updateHomeLabFontScale() {
+    try {
+        if (monitorMode && monitorCurrentView !== 'cluster') {
+            document.documentElement.style.setProperty('--homelab-font-scale', '1');
+            document.documentElement.style.setProperty('--homelab-content-scale', '1');
+            return;
+        }
+        const dashboardSection = document.getElementById('dashboardSection');
+        const dashboardContent = document.getElementById('dashboardContent');
+        if (!dashboardSection || !dashboardContent || dashboardSection.style.display === 'none') {
+            document.documentElement.style.setProperty('--homelab-font-scale', '1');
+            document.documentElement.style.setProperty('--homelab-content-scale', '1');
+            return;
+        }
+        document.documentElement.style.setProperty('--homelab-content-scale', '1');
+        const contentRect = dashboardContent.getBoundingClientRect();
+        const importantBlocks = dashboardContent.querySelectorAll('.stat-card, .card, .cluster-scroll-item, .node-card');
+        let measuredBottomPx = 0;
+        importantBlocks.forEach((el) => {
+            if (!(el instanceof HTMLElement)) return;
+            if (el.offsetParent === null) return;
+            const r = el.getBoundingClientRect();
+            if (r.height <= 0 || r.width <= 0) return;
+            measuredBottomPx = Math.max(measuredBottomPx, r.bottom - contentRect.top);
+        });
+        const available = Math.max(0, dashboardContent.clientHeight || 0);
+        const occupied = Math.max(
+            0,
+            Math.ceil(measuredBottomPx || 0),
+            Math.ceil((dashboardContent.scrollHeight || 0) * 0.45)
+        );
+        if (!available || !occupied) {
+            document.documentElement.style.setProperty('--homelab-font-scale', '1');
+            document.documentElement.style.setProperty('--homelab-content-scale', '1');
+            return;
+        }
+        const contentScale = Math.max(1, Math.min(1.8, available / occupied));
+        const fontScale = Math.max(1, Math.min(1.6, 1 + ((contentScale - 1) * 0.9)));
+        document.documentElement.style.setProperty('--homelab-content-scale', contentScale.toFixed(3));
+        document.documentElement.style.setProperty('--homelab-font-scale', fontScale.toFixed(3));
+    } catch (_) {
+        document.documentElement.style.setProperty('--homelab-font-scale', '1');
+        document.documentElement.style.setProperty('--homelab-content-scale', '1');
+    }
+}
+
 function isSettingsPasswordEnabled() {
     return !!settingsPasswordRequired;
 }
@@ -1091,6 +1138,7 @@ async function saveSettingsToServer(payload) {
     if (payload.monitorVmIcons !== undefined) body.monitorVmIcons = payload.monitorVmIcons;
     if (payload.monitorVmIconColors !== undefined) body.monitorVmIconColors = payload.monitorVmIconColors;
     if (payload.monitorScreensOrder !== undefined) body.monitorScreensOrder = payload.monitorScreensOrder;
+    if (payload.monitorScreensEnabled !== undefined) body.monitorScreensEnabled = payload.monitorScreensEnabled;
     if (payload.clusterDashboardTiles !== undefined) body.clusterDashboardTiles = payload.clusterDashboardTiles;
     if (payload.dashboardWeatherCity !== undefined) body.dashboardWeatherCity = payload.dashboardWeatherCity;
     if (payload.dashboardTimezone !== undefined) body.dashboardTimezone = payload.dashboardTimezone;
@@ -1165,14 +1213,15 @@ function tParams(key, vars) {
 }
 
 function setServerType(type) {
-    currentServerType = (type === 'truenas') ? 'truenas' : 'proxmox';
+    // UI now works in HomeLab mode; keep TrueNAS data only as tiles data source.
+    currentServerType = 'proxmox';
     saveSettingsToServer({ serverType: currentServerType });
 
     const monitorSelect = document.getElementById('monitorServerTypeSelect');
     if (monitorSelect) monitorSelect.value = currentServerType;
     const serverMenuTitle = document.getElementById('serverMenuTitle');
     if (serverMenuTitle) {
-        serverMenuTitle.textContent = currentServerType === 'truenas' ? 'TrueNAS' : 'Proxmox';
+        serverMenuTitle.textContent = currentServerType === 'truenas' ? 'TrueNAS' : 'HomeLab';
     }
 
     renderServerList();
@@ -1183,16 +1232,30 @@ function setServerType(type) {
     const backupsTab = document.getElementById('backups-tab')?.closest('li');
     const quorumTab = document.getElementById('quorum-tab')?.closest('li');
     const nodesTab = document.getElementById('nodes-tab')?.closest('li');
+    const storageTab = document.getElementById('storage-tab')?.closest('li');
     const serversTab = document.getElementById('servers-tab')?.closest('li');
+    const tilesTab = document.getElementById('tiles-tab')?.closest('li');
+    const myTab = document.getElementById('myTab');
+    const tabNodesLabel = document.getElementById('tabNodes');
+    const tabStorageLabel = document.getElementById('tabStorage');
+    const tabServersLabel = document.getElementById('tabServers');
     if (backupsTab) backupsTab.style.display = isTrueNAS ? 'none' : '';
     if (quorumTab) quorumTab.style.display = isTrueNAS ? 'none' : '';
-    if (nodesTab) nodesTab.style.display = isTrueNAS ? 'none' : '';
-    if (serversTab) serversTab.style.display = isTrueNAS ? '' : 'none';
+    if (nodesTab) nodesTab.style.display = '';
+    if (storageTab) storageTab.style.display = '';
+    if (serversTab) serversTab.style.display = '';
+    if (tilesTab) tilesTab.style.display = '';
+    if (tabNodesLabel) tabNodesLabel.textContent = t('tabNodes');
+    if (tabStorageLabel) tabStorageLabel.textContent = t('tabStorage');
+    if (tabServersLabel) tabServersLabel.textContent = t('tabServers');
+    if (myTab) myTab.style.display = isTrueNAS ? 'none' : '';
 
     // Переключаем активную вкладку при смене типа
-    const defaultTabId = isTrueNAS ? 'servers-tab' : 'nodes-tab';
-    const btn = document.getElementById(defaultTabId);
-    if (btn) btn.click();
+    if (!isTrueNAS) {
+        const defaultTabId = 'nodes-tab';
+        const btn = document.getElementById(defaultTabId);
+        if (btn) btn.click();
+    }
 
     if (monitorMode && isTrueNAS && monitorCurrentView === 'backupRuns') {
         applyMonitorView('cluster');
@@ -1444,6 +1507,7 @@ function updateUILanguage() {
         tabServers: 'tabServers',
         tabBackups: 'tabBackups',
         tabQuorum: 'tabQuorum',
+        tabTiles: 'tabTiles',
         displaySettings: 'displaySettings',
         refreshIntervalLabel: 'refreshIntervalLabel',
         themeLabel: 'themeLabel',
@@ -2267,6 +2331,15 @@ document.addEventListener('DOMContentLoaded', async function() {
     if (speedtestNav) {
         speedtestNav.addEventListener('shown.bs.tab', () => updateSpeedtestDashboard().catch(() => {}));
     }
+    const homeTabs = document.getElementById('myTab');
+    if (homeTabs) {
+        homeTabs.addEventListener('shown.bs.tab', () => {
+            requestAnimationFrame(() => updateHomeLabFontScale());
+        });
+    }
+    window.addEventListener('resize', () => {
+        requestAnimationFrame(() => updateHomeLabFontScale());
+    });
     const reloadBtn = document.getElementById('settingsDebugReloadBtn');
     if (reloadBtn) {
         reloadBtn.addEventListener('click', function (e) {
@@ -2433,10 +2506,22 @@ function normalizeTelegramNotificationRules(raw) {
             const nodeNames = Array.isArray(r.nodeNames)
                 ? Array.from(new Set(r.nodeNames.map((x) => String(x || '').trim()).filter(Boolean)))
                 : [];
+            const diskIds = Array.isArray(r.diskIds)
+                ? Array.from(new Set(r.diskIds.map((x) => String(x || '').trim()).filter(Boolean)))
+                : [];
+            const poolIds = Array.isArray(r.poolIds)
+                ? Array.from(new Set(r.poolIds.map((x) => String(x || '').trim()).filter(Boolean)))
+                : [];
+            const truenasServiceIds = Array.isArray(r.truenasServiceIds)
+                ? Array.from(new Set(r.truenasServiceIds.map((x) => String(x || '').trim()).filter(Boolean)))
+                : [];
             const fallbackServiceId = Number(r.serviceId);
             const fallbackVmid = Number(r.vmid);
             const fallbackUpsSlot = Number(r.upsSlot);
             const fallbackNode = String(r.nodeName || '').trim();
+            const fallbackDiskId = String(r.diskId || '').trim();
+            const fallbackPoolId = String(r.poolId || '').trim();
+            const fallbackTrueNASServiceId = String(r.truenasServiceId || '').trim();
             const normalizedNodeNames = nodeNames.length ? nodeNames : (fallbackNode ? [fallbackNode] : []);
             const out = {
                 ...r,
@@ -2460,6 +2545,21 @@ function normalizeTelegramNotificationRules(raw) {
             if (normalizedNodeNames.length) {
                 out.nodeNames = normalizedNodeNames;
                 out.nodeName = normalizedNodeNames[0];
+            }
+            const normalizedDiskIds = diskIds.length ? diskIds : (fallbackDiskId ? [fallbackDiskId] : []);
+            if (normalizedDiskIds.length) {
+                out.diskIds = normalizedDiskIds;
+                out.diskId = normalizedDiskIds[0];
+            }
+            const normalizedPoolIds = poolIds.length ? poolIds : (fallbackPoolId ? [fallbackPoolId] : []);
+            if (normalizedPoolIds.length) {
+                out.poolIds = normalizedPoolIds;
+                out.poolId = normalizedPoolIds[0];
+            }
+            const normalizedTrueNASServiceIds = truenasServiceIds.length ? truenasServiceIds : (fallbackTrueNASServiceId ? [fallbackTrueNASServiceId] : []);
+            if (normalizedTrueNASServiceIds.length) {
+                out.truenasServiceIds = normalizedTrueNASServiceIds;
+                out.truenasServiceId = normalizedTrueNASServiceIds[0];
             }
             return out;
         });
@@ -2534,6 +2634,10 @@ function getTelegramRuleTypeLabel(type) {
         netdev_updown: 'telegramRuleTypeNetdev',
         host_temp: 'telegramRuleTypeHostTemp',
         host_link_speed: 'telegramRuleTypeHostLink',
+        truenas_disk_state: 'telegramRuleTypeTrueNASDisk',
+        truenas_pool_usage: 'telegramRuleTypeTrueNASPoolUsage',
+        truenas_service_state: 'telegramRuleTypeTrueNASService',
+        truenas_pool_state: 'telegramRuleTypeTrueNASPoolState',
         ups_load_high: 'telegramRuleTypeUpsLoad',
         ups_on_battery: 'telegramRuleTypeUpsBattery',
         ups_back_to_mains: 'telegramRuleTypeUpsMains',
@@ -2684,6 +2788,36 @@ function buildTelegramRuleTargetSelectHtml(rule) {
         }).join('');
         return `<select class="form-select form-select-sm" data-tr-field="targetUpsSlots" data-rule-id="${escapeHtml(rule.id)}" multiple size="4">${opts || '<option value="1">UPS 1</option>'}</select>`;
     }
+    if (typ === 'truenas_disk_state') {
+        const selected = new Set((Array.isArray(rule.diskIds) ? rule.diskIds : [rule.diskId]).map((x) => String(x || '').trim()).filter(Boolean));
+        const disks = Array.isArray(lastTrueNASOverviewData?.disks) ? lastTrueNASOverviewData.disks : [];
+        const opts = disks.map((d, i) => {
+            const id = String(d?.entityId || d?.id || d?.name || (i + 1));
+            const sel = selected.has(id) ? ' selected' : '';
+            return `<option value="${escapeHtml(id)}"${sel}>${escapeHtml(d?.name || ('Disk ' + (i + 1)))}</option>`;
+        }).join('');
+        return `<select class="form-select form-select-sm" data-tr-field="targetTrueNASDisks" data-rule-id="${escapeHtml(rule.id)}" multiple size="4">${opts || '<option value="">—</option>'}</select>`;
+    }
+    if (typ === 'truenas_service_state') {
+        const selected = new Set((Array.isArray(rule.truenasServiceIds) ? rule.truenasServiceIds : [rule.truenasServiceId]).map((x) => String(x || '').trim()).filter(Boolean));
+        const services = Array.isArray(lastTrueNASOverviewData?.services) ? lastTrueNASOverviewData.services : [];
+        const opts = services.map((s, i) => {
+            const id = String(s?.entityId || s?.id || s?.name || (i + 1));
+            const sel = selected.has(id) ? ' selected' : '';
+            return `<option value="${escapeHtml(id)}"${sel}>${escapeHtml(s?.name || ('Service ' + (i + 1)))}</option>`;
+        }).join('');
+        return `<select class="form-select form-select-sm" data-tr-field="targetTrueNASServices" data-rule-id="${escapeHtml(rule.id)}" multiple size="4">${opts || '<option value="">—</option>'}</select>`;
+    }
+    if (typ === 'truenas_pool_state' || typ === 'truenas_pool_usage') {
+        const selected = new Set((Array.isArray(rule.poolIds) ? rule.poolIds : [rule.poolId]).map((x) => String(x || '').trim()).filter(Boolean));
+        const pools = Array.isArray(lastTrueNASOverviewData?.pools) ? lastTrueNASOverviewData.pools : [];
+        const opts = pools.map((p, i) => {
+            const id = String(p?.id || p?.name || (i + 1));
+            const sel = selected.has(id) ? ' selected' : '';
+            return `<option value="${escapeHtml(id)}"${sel}>${escapeHtml(p?.name || ('Pool ' + (i + 1)))}</option>`;
+        }).join('');
+        return `<select class="form-select form-select-sm" data-tr-field="targetTrueNASPools" data-rule-id="${escapeHtml(rule.id)}" multiple size="4">${opts || '<option value="">—</option>'}</select>`;
+    }
     return '—';
 }
 
@@ -2701,6 +2835,10 @@ function buildTelegramRuleExtraHtml(rule) {
         const v = rule.chargeThresholdPct != null && rule.chargeThresholdPct !== '' ? String(rule.chargeThresholdPct) : '20';
         return `<input type="number" class="form-control form-control-sm" min="0" max="100" step="1" value="${escapeHtml(v)}" data-tr-field="extraUpsChargeLow" data-rule-id="${escapeHtml(rule.id)}" title="${escapeHtml(t('telegramRuleUpsChargeLowHint') || '%')}">`;
     }
+    if (typ === 'truenas_pool_usage') {
+        const v = rule.poolUsageThresholdPct != null && rule.poolUsageThresholdPct !== '' ? String(rule.poolUsageThresholdPct) : '85';
+        return `<input type="number" class="form-control form-control-sm" min="0" max="100" step="1" value="${escapeHtml(v)}" data-tr-field="extraTrueNASPoolUsage" data-rule-id="${escapeHtml(rule.id)}" title="${escapeHtml(t('telegramRuleTrueNASPoolUsageHint') || '%')}">`;
+    }
     return `<span class="text-muted small">—</span>`;
 }
 
@@ -2714,7 +2852,7 @@ function renderTelegramRulesTable() {
         return;
     }
     body.innerHTML = rules.map((rule) => {
-        const typeOpts = ['service_updown', 'vm_state', 'node_online', 'netdev_updown', 'host_temp', 'host_link_speed', 'ups_load_high', 'ups_on_battery', 'ups_back_to_mains', 'ups_charge_low', 'ups_charge_full'].map((tp) => {
+        const typeOpts = ['service_updown', 'vm_state', 'node_online', 'netdev_updown', 'host_temp', 'host_link_speed', 'truenas_disk_state', 'truenas_pool_usage', 'truenas_service_state', 'truenas_pool_state', 'ups_load_high', 'ups_on_battery', 'ups_back_to_mains', 'ups_charge_low', 'ups_charge_full'].map((tp) => {
             const sel = String(rule.type) === tp ? ' selected' : '';
             return `<option value="${tp}"${sel}>${escapeHtml(getTelegramRuleTypeLabel(tp))}</option>`;
         }).join('');
@@ -2835,6 +2973,13 @@ function onTelegramRuleTypeChange(ev) {
     delete rule.nodeNames;
     delete rule.netdevSlot;
     delete rule.tempThresholdC;
+    delete rule.diskId;
+    delete rule.diskIds;
+    delete rule.poolId;
+    delete rule.poolIds;
+    delete rule.poolUsageThresholdPct;
+    delete rule.truenasServiceId;
+    delete rule.truenasServiceIds;
     delete rule.upsSlot;
     delete rule.upsSlots;
     delete rule.loadThresholdPct;
@@ -2861,6 +3006,27 @@ function onTelegramRuleTypeChange(ev) {
     } else if (rule.type === 'host_link_speed') {
         rule.nodeName = nn;
         rule.nodeNames = [nn];
+    } else if (rule.type === 'truenas_disk_state') {
+        const d = Array.isArray(lastTrueNASOverviewData?.disks) ? lastTrueNASOverviewData.disks[0] : null;
+        const id = String(d?.entityId || d?.id || d?.name || 'disk');
+        rule.diskId = id;
+        rule.diskIds = [id];
+    } else if (rule.type === 'truenas_pool_state') {
+        const p = Array.isArray(lastTrueNASOverviewData?.pools) ? lastTrueNASOverviewData.pools[0] : null;
+        const id = String(p?.id || p?.name || 'pool');
+        rule.poolId = id;
+        rule.poolIds = [id];
+    } else if (rule.type === 'truenas_pool_usage') {
+        const p = Array.isArray(lastTrueNASOverviewData?.pools) ? lastTrueNASOverviewData.pools[0] : null;
+        const id = String(p?.id || p?.name || 'pool');
+        rule.poolId = id;
+        rule.poolIds = [id];
+        rule.poolUsageThresholdPct = 85;
+    } else if (rule.type === 'truenas_service_state') {
+        const s = Array.isArray(lastTrueNASOverviewData?.services) ? lastTrueNASOverviewData.services[0] : null;
+        const id = String(s?.entityId || s?.id || s?.name || 'service');
+        rule.truenasServiceId = id;
+        rule.truenasServiceIds = [id];
     } else if (rule.type === 'ups_load_high') {
         rule.upsSlot = 1;
         rule.upsSlots = [1];
@@ -2911,6 +3077,13 @@ function syncTelegramRulesFromDom() {
             delete rule.nodeNames;
             delete rule.netdevSlot;
             delete rule.tempThresholdC;
+            delete rule.diskId;
+            delete rule.diskIds;
+            delete rule.poolId;
+            delete rule.poolIds;
+            delete rule.poolUsageThresholdPct;
+            delete rule.truenasServiceId;
+            delete rule.truenasServiceIds;
             delete rule.upsSlot;
             delete rule.upsSlots;
             delete rule.loadThresholdPct;
@@ -2971,6 +3144,33 @@ function syncTelegramRulesFromDom() {
                 rule.upsSlot = uniq[0];
             }
         }
+        const tgtTnDisks = tr.querySelector('[data-tr-field="targetTrueNASDisks"]');
+        if (tgtTnDisks && String(rule.type) === 'truenas_disk_state') {
+            const vals = Array.from(tgtTnDisks.selectedOptions || []).map((o) => String(o.value || '').trim()).filter(Boolean);
+            const uniq = Array.from(new Set(vals));
+            if (uniq.length) {
+                rule.diskIds = uniq;
+                rule.diskId = uniq[0];
+            }
+        }
+        const tgtTnPools = tr.querySelector('[data-tr-field="targetTrueNASPools"]');
+        if (tgtTnPools && (String(rule.type) === 'truenas_pool_state' || String(rule.type) === 'truenas_pool_usage')) {
+            const vals = Array.from(tgtTnPools.selectedOptions || []).map((o) => String(o.value || '').trim()).filter(Boolean);
+            const uniq = Array.from(new Set(vals));
+            if (uniq.length) {
+                rule.poolIds = uniq;
+                rule.poolId = uniq[0];
+            }
+        }
+        const tgtTnServices = tr.querySelector('[data-tr-field="targetTrueNASServices"]');
+        if (tgtTnServices && String(rule.type) === 'truenas_service_state') {
+            const vals = Array.from(tgtTnServices.selectedOptions || []).map((o) => String(o.value || '').trim()).filter(Boolean);
+            const uniq = Array.from(new Set(vals));
+            if (uniq.length) {
+                rule.truenasServiceIds = uniq;
+                rule.truenasServiceId = uniq[0];
+            }
+        }
         const ex = tr.querySelector('[data-tr-field="extraTemp"]');
         if (ex && String(rule.type) === 'host_temp') {
             const n = parseFloat(ex.value);
@@ -2985,6 +3185,11 @@ function syncTelegramRulesFromDom() {
         if (exUpsChargeLow && String(rule.type) === 'ups_charge_low') {
             const n = parseFloat(exUpsChargeLow.value);
             rule.chargeThresholdPct = Number.isFinite(n) ? n : 20;
+        }
+        const exTnPoolUsage = tr.querySelector('[data-tr-field="extraTrueNASPoolUsage"]');
+        if (exTnPoolUsage && String(rule.type) === 'truenas_pool_usage') {
+            const n = parseFloat(exTnPoolUsage.value);
+            rule.poolUsageThresholdPct = Number.isFinite(n) ? n : 85;
         }
         map.set(rid, rule);
     });
@@ -3041,17 +3246,21 @@ async function clearTelegramBotToken() {
     showToast(t('dataUpdated') || 'Готово', 'success');
 }
 
-function getCurrentConnectionId() {
-    const url = getCurrentServerUrl();
-    const direct = connectionIdMap[connectionKey(currentServerType, url)] || null;
+function getConnectionIdForType(type) {
+    const backendType = type === 'truenas' ? 'truenas' : 'proxmox';
+    const servers = backendType === 'truenas' ? truenasServers : proxmoxServers;
+    const idx = backendType === 'truenas' ? currentTrueNASServerIndex : currentServerIndex;
+    const activeUrl = Array.isArray(servers) && servers.length ? String(servers[idx] || servers[0] || '') : '';
+    const direct = activeUrl ? (connectionIdMap[connectionKey(backendType, activeUrl)] || null) : null;
     if (direct) return direct;
-    // Один токен в БД часто привязан только к URL активного сервера при «Подключить» — используем его для любого адреса из списка
-    if (currentServerType === 'proxmox') {
+
+    // Fallback to any saved connection for this backend type.
+    if (backendType === 'proxmox') {
         for (const u of proxmoxServers) {
             const id = connectionIdMap[connectionKey('proxmox', u)];
             if (id) return id;
         }
-    } else if (currentServerType === 'truenas') {
+    } else {
         for (const u of truenasServers) {
             const id = connectionIdMap[connectionKey('truenas', u)];
             if (id) return id;
@@ -3060,32 +3269,47 @@ function getCurrentConnectionId() {
     return null;
 }
 
-function getCurrentProxmoxHeaders() {
-    if (currentServerType !== 'proxmox') return null;
-    const connId = getCurrentConnectionId();
-    const serverUrl = getCurrentServerUrl();
+function getCurrentConnectionId() {
+    return getConnectionIdForType(currentServerType);
+}
+
+function getServerUrlForType(type) {
+    const backendType = type === 'truenas' ? 'truenas' : 'proxmox';
+    const servers = backendType === 'truenas' ? truenasServers : proxmoxServers;
+    const idx = backendType === 'truenas' ? currentTrueNASServerIndex : currentServerIndex;
+    return Array.isArray(servers) && servers.length ? String(servers[idx] || servers[0] || '') : '';
+}
+
+function getAuthHeadersForType(type) {
+    const backendType = type === 'truenas' ? 'truenas' : 'proxmox';
+    const connId = getConnectionIdForType(backendType);
+    const serverUrl = getServerUrlForType(backendType);
+    if (!serverUrl) return null;
     if (connId) {
         return { 'X-Connection-Id': connId, 'X-Server-Url': serverUrl };
     }
-    if (!apiToken) return null;
+    // Raw token exists only for currently active backend type in UI/session.
+    if (currentServerType !== backendType || !apiToken) return null;
     return {
         'Authorization': apiToken,
         'X-Server-Url': serverUrl
     };
 }
 
+function getCurrentProxmoxHeaders() {
+    if (currentServerType !== 'proxmox') return null;
+    const headers = getAuthHeadersForType('proxmox');
+    if (headers) return headers;
+    if (!apiToken) return null;
+    return null;
+}
+
 function getCurrentTrueNASHeaders() {
     if (currentServerType !== 'truenas') return null;
-    const connId = getCurrentConnectionId();
-    const serverUrl = getCurrentServerUrl();
-    if (connId) {
-        return { 'X-Connection-Id': connId, 'X-Server-Url': serverUrl };
-    }
+    const headers = getAuthHeadersForType('truenas');
+    if (headers) return headers;
     if (!apiToken) return null;
-    return {
-        'Authorization': apiToken,
-        'X-Server-Url': serverUrl
-    };
+    return null;
 }
 
 function getAuthHeadersForCurrentServerType() {
@@ -3495,7 +3719,20 @@ function normalizeClusterDashboardTile(raw) {
         sourceId = `ups:${slot}`;
     }
     if (!sourceId) return null;
-    return { type, sourceId };
+    const hasExplicitCluster = Object.prototype.hasOwnProperty.call(tile, 'showOnCluster');
+    const hasExplicitTiles = Object.prototype.hasOwnProperty.call(tile, 'showOnTiles');
+    const isLegacyTile = !hasExplicitCluster && !hasExplicitTiles;
+    const tilesSize = ['1x1', '2x1', '3x1', '4x1'].includes(String(tile.tilesSize || '').trim())
+        ? String(tile.tilesSize).trim()
+        : '1x1';
+    return {
+        type,
+        sourceId,
+        showOnCluster: tile.showOnCluster !== false,
+        // Backward compatibility: old tiles (without flags) appear on Tiles screen too.
+        showOnTiles: tile.showOnTiles === true || isLegacyTile,
+        tilesSize
+    };
 }
 
 function normalizeClusterDashboardTiles(raw) {
@@ -3512,7 +3749,17 @@ function getClusterDashboardTileTypeLabel(type) {
     if (type === 'netdev') return t('settingsClusterTileTypeNetdev');
     if (type === 'ups') return t('settingsClusterTileTypeUps');
     if (type === 'speedtest') return t('settingsClusterTileTypeSpeedtest');
+    if (type === 'truenas_server') return 'TrueNAS Server';
+    if (type === 'truenas_pool') return 'TrueNAS Pool';
+    if (type === 'truenas_disk') return 'TrueNAS Disk';
+    if (type === 'truenas_service') return 'TrueNAS Service';
+    if (type === 'truenas_app') return 'TrueNAS App';
     return type || '—';
+}
+
+function getAvailableClusterDashboardTileTypes() {
+    // HomeLab mode may still use TrueNAS tiles as data sources.
+    return CLUSTER_DASHBOARD_TILE_TYPES;
 }
 
 function getClusterDashboardTileSourceOptions(type) {
@@ -3537,6 +3784,15 @@ function getClusterDashboardTileSourceOptions(type) {
     }
 
     if (type === 'service') {
+        if (currentServerType === 'truenas') {
+            return (Array.isArray(lastTrueNASOverviewData?.services) ? lastTrueNASOverviewData.services : []).map((svc, idx) => {
+                const sid = String(svc?.entityId || svc?.id || svc?.name || (idx + 1));
+                return {
+                    value: `service:${sid}`,
+                    label: `${svc?.name || ('Service ' + (idx + 1))}`
+                };
+            });
+        }
         return (Array.isArray(monitoredServices) ? monitoredServices : []).map((svc) => ({
             value: `service:${svc.id}`,
             label: `${svc.name || getServiceTargetDisplay(svc)}`
@@ -3544,6 +3800,15 @@ function getClusterDashboardTileSourceOptions(type) {
     }
 
     if (type === 'vmct') {
+        if (currentServerType === 'truenas') {
+            return (Array.isArray(lastTrueNASOverviewData?.apps) ? lastTrueNASOverviewData.apps : []).map((app, idx) => {
+                const aid = String(app?.entityId || app?.id || app?.name || (idx + 1));
+                return {
+                    value: `vmct:${aid}`,
+                    label: `${app?.name || ('App ' + (idx + 1))}`
+                };
+            });
+        }
         const clusterVms = getClusterVms();
         if (clusterVms.length) {
             return clusterVms.map((vm) => {
@@ -3566,6 +3831,48 @@ function getClusterDashboardTileSourceOptions(type) {
             value: 'speedtest:default',
             label: t('dashboardSpeedtestTitle') || 'Speedtest'
         }];
+    }
+
+    if (type === 'truenas_pool') {
+        return (Array.isArray(lastTrueNASOverviewData?.pools) ? lastTrueNASOverviewData.pools : []).map((pool, idx) => {
+            const pid = String(pool?.id || pool?.name || (idx + 1));
+            return {
+                value: `truenas_pool:${pid}`,
+                label: `${pool?.name || ('Pool ' + (idx + 1))}`
+            };
+        });
+    }
+
+    if (type === 'truenas_disk') {
+        return (Array.isArray(lastTrueNASOverviewData?.disks) ? lastTrueNASOverviewData.disks : []).map((disk, idx) => {
+            const did = String(disk?.entityId || disk?.id || disk?.name || (idx + 1));
+            return {
+                value: `truenas_disk:${did}`,
+                label: `${disk?.name || ('Disk ' + (idx + 1))}`
+            };
+        });
+    }
+
+    if (type === 'truenas_service') {
+        return (Array.isArray(lastTrueNASOverviewData?.services) ? lastTrueNASOverviewData.services : []).map((svc, idx) => {
+            const sid = String(svc?.entityId || svc?.id || svc?.name || (idx + 1));
+            return {
+                value: `truenas_service:${sid}`,
+                label: `${svc?.name || ('Service ' + (idx + 1))}`
+            };
+        });
+    }
+
+    if (type === 'truenas_server') return [{ value: 'truenas_server:current', label: 'Current TrueNAS server' }];
+
+    if (type === 'truenas_app') {
+        return (Array.isArray(lastTrueNASOverviewData?.apps) ? lastTrueNASOverviewData.apps : []).map((app, idx) => {
+            const aid = String(app?.entityId || app?.id || app?.name || (idx + 1));
+            return {
+                value: `truenas_app:${aid}`,
+                label: `${app?.name || ('App ' + (idx + 1))}`
+            };
+        });
     }
 
     return [];
@@ -3595,8 +3902,9 @@ function renderClusterDashboardTilesSettings() {
     if (!clusterDashboardTiles.length) {
         listEl.innerHTML = `<div class="text-muted small">${escapeHtml(emptyText)}</div>`;
     } else {
+        const availableTypes = getAvailableClusterDashboardTileTypes();
         listEl.innerHTML = clusterDashboardTiles.map((tile, index) => {
-            const typeOptions = CLUSTER_DASHBOARD_TILE_TYPES.map((type) => `
+            const typeOptions = availableTypes.map((type) => `
                 <option value="${escapeHtml(type)}" ${tile.type === type ? 'selected' : ''}>${escapeHtml(getClusterDashboardTileTypeLabel(type))}</option>
             `).join('');
 
@@ -3642,6 +3950,27 @@ function renderClusterDashboardTilesSettings() {
                                 </button>
                             </div>
                         </div>
+                        <div class="col-12 mt-2">
+                            <div class="d-flex flex-wrap align-items-center gap-3">
+                                <div class="form-check form-check-inline mb-0">
+                                    <input class="form-check-input" type="checkbox" id="tileShowCluster${index}" ${tile.showOnCluster ? 'checked' : ''} onchange="updateClusterDashboardTileFlags(${index}, { showOnCluster: this.checked })">
+                                    <label class="form-check-label small" for="tileShowCluster${index}">Отображать на экране Homelab</label>
+                                </div>
+                                <div class="form-check form-check-inline mb-0">
+                                    <input class="form-check-input" type="checkbox" id="tileShowTiles${index}" ${tile.showOnTiles ? 'checked' : ''} onchange="updateClusterDashboardTileFlags(${index}, { showOnTiles: this.checked })">
+                                    <label class="form-check-label small" for="tileShowTiles${index}">Отображать на экране Tiles</label>
+                                </div>
+                                <div class="d-inline-flex align-items-center gap-2">
+                                    <label class="small text-muted mb-0">Размер Tiles:</label>
+                                    <select class="form-select form-select-sm" style="width:auto;" onchange="updateClusterDashboardTileFlags(${index}, { tilesSize: this.value })">
+                                        <option value="1x1" ${tile.tilesSize === '1x1' ? 'selected' : ''}>1x1</option>
+                                        <option value="2x1" ${tile.tilesSize === '2x1' ? 'selected' : ''}>2x1</option>
+                                        <option value="3x1" ${tile.tilesSize === '3x1' ? 'selected' : ''}>3x1</option>
+                                        <option value="4x1" ${tile.tilesSize === '4x1' ? 'selected' : ''}>4x1</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             `;
@@ -3655,17 +3984,33 @@ function renderClusterDashboardTilesSettings() {
 
 function addClusterDashboardTile() {
     if (clusterDashboardTiles.length >= MAX_CLUSTER_DASHBOARD_TILES) return;
-    let selectedType = CLUSTER_DASHBOARD_TILE_TYPES[0];
-    for (const type of CLUSTER_DASHBOARD_TILE_TYPES) {
+    const availableTypes = getAvailableClusterDashboardTileTypes();
+    let selectedType = availableTypes[0];
+    for (const type of availableTypes) {
         if (getClusterDashboardTileSourceOptions(type).length > 0) {
             selectedType = type;
             break;
         }
     }
     const firstSource = getClusterDashboardTileSourceOptions(selectedType)[0];
+    const fallbackSourceByType = {
+        speedtest: 'speedtest:default',
+        ups: 'ups:1',
+        netdev: 'netdev:1',
+        service: 'service:default',
+        vmct: 'vmct:default',
+        truenas_server: 'truenas_server:current',
+        truenas_pool: 'truenas_pool:default',
+        truenas_disk: 'truenas_disk:default',
+        truenas_service: 'truenas_service:default',
+        truenas_app: 'truenas_app:default'
+    };
     clusterDashboardTiles = clusterDashboardTiles.concat([{
         type: selectedType,
-        sourceId: firstSource ? firstSource.value : (selectedType === 'speedtest' ? 'speedtest:default' : (selectedType === 'ups' ? 'ups:1' : ''))
+        sourceId: firstSource ? firstSource.value : (fallbackSourceByType[selectedType] || `${selectedType}:default`),
+        showOnCluster: true,
+        showOnTiles: false,
+        tilesSize: '1x1'
     }]).slice(0, MAX_CLUSTER_DASHBOARD_TILES);
     markClusterDashboardTilesDirty(true);
     renderClusterDashboardTilesSettings();
@@ -3673,11 +4018,27 @@ function addClusterDashboardTile() {
 
 function updateClusterDashboardTileType(index, nextType) {
     const type = String(nextType || '').trim().toLowerCase();
-    if (!CLUSTER_DASHBOARD_TILE_TYPES.includes(type) || !clusterDashboardTiles[index]) return;
+    if (!getAvailableClusterDashboardTileTypes().includes(type) || !clusterDashboardTiles[index]) return;
     const firstSource = getClusterDashboardTileSourceOptions(type)[0];
+    const current = clusterDashboardTiles[index];
+    const fallbackSourceByType = {
+        speedtest: 'speedtest:default',
+        ups: 'ups:1',
+        netdev: 'netdev:1',
+        service: 'service:default',
+        vmct: 'vmct:default',
+        truenas_server: 'truenas_server:current',
+        truenas_pool: 'truenas_pool:default',
+        truenas_disk: 'truenas_disk:default',
+        truenas_service: 'truenas_service:default',
+        truenas_app: 'truenas_app:default'
+    };
     clusterDashboardTiles[index] = {
         type,
-        sourceId: firstSource ? firstSource.value : (type === 'speedtest' ? 'speedtest:default' : (type === 'ups' ? 'ups:1' : ''))
+        sourceId: firstSource ? firstSource.value : (fallbackSourceByType[type] || `${type}:default`),
+        showOnCluster: current.showOnCluster !== false,
+        showOnTiles: current.showOnTiles === true,
+        tilesSize: ['1x1', '2x1', '3x1', '4x1'].includes(String(current.tilesSize || '')) ? current.tilesSize : '1x1'
     };
     clusterDashboardTiles = normalizeClusterDashboardTiles(clusterDashboardTiles);
     markClusterDashboardTilesDirty(true);
@@ -3690,6 +4051,15 @@ function updateClusterDashboardTileSource(index, sourceId) {
         ...clusterDashboardTiles[index],
         sourceId: String(sourceId || '').trim()
     };
+    clusterDashboardTiles = normalizeClusterDashboardTiles(clusterDashboardTiles);
+    markClusterDashboardTilesDirty(true);
+}
+
+function updateClusterDashboardTileFlags(index, patch) {
+    if (!clusterDashboardTiles[index]) return;
+    const next = { ...clusterDashboardTiles[index], ...(patch || {}) };
+    if (!['1x1', '2x1', '3x1', '4x1'].includes(String(next.tilesSize || ''))) next.tilesSize = '1x1';
+    clusterDashboardTiles[index] = next;
     clusterDashboardTiles = normalizeClusterDashboardTiles(clusterDashboardTiles);
     markClusterDashboardTilesDirty(true);
 }
@@ -3719,6 +4089,10 @@ async function saveClusterDashboardTilesSettings() {
     markClusterDashboardTilesDirty(false);
     renderClusterDashboardTilesSettings();
     await renderClusterDashboardTiles();
+    renderTilesMonitorScreen('tilesNormalGrid').catch(() => {});
+    if (!monitorMode || monitorCurrentView === 'tiles') {
+        renderTilesMonitorScreen().catch(() => {});
+    }
     showToast(t('settingsClusterTilesSaved') || t('dataUpdated'), 'success');
 }
 
@@ -5641,6 +6015,12 @@ function clusterTileSourceNumericId(tile, prefix) {
     return Number.isFinite(n) ? n : NaN;
 }
 
+function clusterTileSourceValue(tile, prefix) {
+    const src = String(tile && tile.sourceId || '').trim();
+    if (!src.startsWith(prefix + ':')) return '';
+    return src.slice(prefix.length + 1).trim();
+}
+
 function buildClusterDashboardMetricCell(label, value, progressPct, barClass, colClass = 'col-6') {
     const bar = typeof progressPct === 'number' && Number.isFinite(progressPct)
         ? `<div class="progress mt-2 hm-progress"><div class="progress-bar ${barClass || 'bg-primary'}" style="width: ${Math.min(100, Math.max(0, progressPct))}%"></div></div>`
@@ -5694,6 +6074,28 @@ function getClusterNetdevFieldValue(field) {
 }
 
 function buildClusterServiceTileHtml(tile) {
+    if (currentServerType === 'truenas' && Array.isArray(lastTrueNASOverviewData?.services)) {
+        const source = clusterTileSourceValue(tile, 'service');
+        const numeric = parseInt(source, 10);
+        const service = lastTrueNASOverviewData.services.find((svc, idx) =>
+            String(svc?.entityId || svc?.id || svc?.name || '') === source
+            || (Number.isFinite(numeric) && (Number(svc?.id) === numeric || (idx + 1) === numeric))
+        );
+        if (!service) return buildClusterDashboardUnavailableTile(t('menuServicesMonitorText') || 'Service', t('servicesNotConfigured') || 'Сервис не найден');
+        const statusBadge = service.running
+            ? `<span class="badge bg-success">${escapeHtml(t('connected'))}</span>`
+            : `<span class="badge bg-warning text-dark">${escapeHtml(t('serverError') || 'Error')}</span>`;
+        const bodyHtml = [
+            buildClusterDashboardMetricCell(t('serviceTypeLabel') || 'Type', 'TrueNAS', null, null, 'col-6'),
+            buildClusterDashboardMetricCell(t('monVmStatusCol') || 'Status', service.statusLabel || 'unknown', null, null, 'col-6')
+        ].join('');
+        return buildClusterDashboardTileShell(
+            `<i class="bi bi-hdd-network me-2 text-info"></i><span class="text-truncate">${escapeHtml(service.name || 'Service')}</span>`,
+            statusBadge,
+            bodyHtml,
+            ''
+        );
+    }
     const id = clusterTileSourceNumericId(tile, 'service');
     const service = (Array.isArray(monitoredServices) ? monitoredServices : []).find((svc) => Number(svc.id) === id);
     if (!service) {
@@ -5721,6 +6123,27 @@ function buildClusterServiceTileHtml(tile) {
 }
 
 function buildClusterVmTileHtml(tile) {
+    if (currentServerType === 'truenas' && Array.isArray(lastTrueNASOverviewData?.apps)) {
+        const source = clusterTileSourceValue(tile, 'vmct');
+        const numeric = parseInt(source, 10);
+        const app = lastTrueNASOverviewData.apps.find((entry, idx) =>
+            String(entry?.entityId || entry?.id || entry?.name || '') === source
+            || (Number.isFinite(numeric) && (Number(entry?.id) === numeric || (idx + 1) === numeric))
+        );
+        if (!app) return buildClusterDashboardUnavailableTile('APP', t('vmListEmpty') || 'App не найден');
+        const statusClass = app.running ? 'bg-success' : 'bg-warning text-dark';
+        const statusLabel = app.statusLabel || (app.running ? 'running' : 'stopped');
+        const bodyHtml = [
+            buildClusterDashboardMetricCell(t('monVmTypeCol') || 'Type', 'APP', null, null, 'col-6'),
+            buildClusterDashboardMetricCell(t('monVmStatusCol') || 'Status', statusLabel, null, null, 'col-6')
+        ].join('');
+        return buildClusterDashboardTileShell(
+            `<i class="bi bi-boxes me-2 text-primary"></i><span class="text-truncate">${escapeHtml(app.name || 'App')}</span>`,
+            `<span class="badge ${statusClass}">${escapeHtml(statusLabel)}</span>`,
+            bodyHtml,
+            'TrueNAS Apps'
+        );
+    }
     const id = clusterTileSourceNumericId(tile, 'vmct');
     const vm = getClusterVms().find((entry) => Number(entry.vmid != null ? entry.vmid : entry.id) === id);
     if (!vm) {
@@ -5854,12 +6277,146 @@ function buildClusterSpeedtestTileHtml(summary) {
     );
 }
 
+function buildClusterTrueNASPoolTileHtml(tile) {
+    if (!Array.isArray(lastTrueNASOverviewData?.pools)) {
+        return buildClusterDashboardUnavailableTile('TrueNAS Pool', t('backupNoData') || 'Нет данных');
+    }
+    const source = clusterTileSourceValue(tile, 'truenas_pool');
+    const numeric = parseInt(source, 10);
+    const pool = lastTrueNASOverviewData.pools.find((entry, idx) =>
+        String(entry?.id || entry?.name || '') === source
+        || (Number.isFinite(numeric) && ((idx + 1) === numeric))
+    );
+    if (!pool) return buildClusterDashboardUnavailableTile('TrueNAS Pool', t('storageNotFound') || 'Пул не найден');
+    const total = Number(pool.total || 0);
+    const used = Number(pool.used || 0);
+    const usagePercent = total > 0 ? Math.round((used / total) * 100) : 0;
+    const statusLabel = pool.status || (pool.healthy === false ? 'degraded' : 'online');
+    const badgeClass = pool.healthy === false ? 'bg-danger' : 'bg-success';
+    const bodyHtml = [
+        buildClusterDashboardMetricCell(t('storageUsedSpace') || 'Used', formatSize(used), usagePercent, usagePercent >= 85 ? 'bg-danger' : (usagePercent >= 65 ? 'bg-warning' : 'bg-success'), 'col-6'),
+        buildClusterDashboardMetricCell(t('storageTotalSpace') || 'Total', formatSize(total), null, null, 'col-6'),
+        buildClusterDashboardMetricCell(t('monVmStatusCol') || 'Status', statusLabel, null, null, 'col-12 mt-2')
+    ].join('');
+    return buildClusterDashboardTileShell(
+        `<i class="bi bi-database me-2 text-primary"></i><span class="text-truncate">${escapeHtml(pool.name || 'Pool')}</span>`,
+        `<span class="badge ${badgeClass}">${escapeHtml(statusLabel)}</span>`,
+        bodyHtml,
+        'TrueNAS Storage'
+    );
+}
+
+function buildClusterTrueNASDiskTileHtml(tile) {
+    if (!Array.isArray(lastTrueNASOverviewData?.disks)) {
+        return buildClusterDashboardUnavailableTile('TrueNAS Disk', t('backupNoData') || 'Нет данных');
+    }
+    const source = clusterTileSourceValue(tile, 'truenas_disk');
+    const numeric = parseInt(source, 10);
+    const disk = lastTrueNASOverviewData.disks.find((entry, idx) =>
+        String(entry?.entityId || entry?.id || entry?.name || '') === source
+        || (Number.isFinite(numeric) && ((idx + 1) === numeric || Number(entry?.id) === numeric))
+    );
+    if (!disk) return buildClusterDashboardUnavailableTile('TrueNAS Disk', 'Диск не найден');
+    const healthy = disk.healthy !== false;
+    const statusLabel = disk.statusLabel || (healthy ? 'healthy' : 'degraded');
+    const badgeClass = healthy ? 'bg-success' : 'bg-warning text-dark';
+    const bodyHtml = [
+        buildClusterDashboardMetricCell('Model', disk.model || '—', null, null, 'col-6'),
+        buildClusterDashboardMetricCell('SN', disk.serial || '—', null, null, 'col-6'),
+        buildClusterDashboardMetricCell('Size', Number.isFinite(Number(disk.sizeBytes)) ? formatSize(Number(disk.sizeBytes)) : '—', null, null, 'col-6 mt-2'),
+        buildClusterDashboardMetricCell('Temp', disk.temperatureC == null ? '—' : `${disk.temperatureC} C`, null, null, 'col-6 mt-2')
+    ].join('');
+    return buildClusterDashboardTileShell(
+        `<i class="bi bi-device-hdd me-2 text-primary"></i><span class="text-truncate">${escapeHtml(disk.name || 'Disk')}</span>`,
+        `<span class="badge ${badgeClass}">${escapeHtml(statusLabel)}</span>`,
+        bodyHtml,
+        escapeHtml(disk.pool || '')
+    );
+}
+
+function buildClusterTrueNASServiceTileHtml(tile) {
+    if (!Array.isArray(lastTrueNASOverviewData?.services)) {
+        return buildClusterDashboardUnavailableTile('TrueNAS Service', t('backupNoData') || 'Нет данных');
+    }
+    const source = clusterTileSourceValue(tile, 'truenas_service');
+    const numeric = parseInt(source, 10);
+    const service = lastTrueNASOverviewData.services.find((entry, idx) =>
+        String(entry?.entityId || entry?.id || entry?.name || '') === source
+        || (Number.isFinite(numeric) && ((idx + 1) === numeric || Number(entry?.id) === numeric))
+    );
+    if (!service) return buildClusterDashboardUnavailableTile('TrueNAS Service', 'Сервис не найден');
+    const running = !!service.running;
+    const statusLabel = service.statusLabel || (running ? 'running' : 'stopped');
+    const badgeClass = running ? 'bg-success' : 'bg-warning text-dark';
+    const bodyHtml = [
+        buildClusterDashboardMetricCell('Enabled', service.enabled ? 'yes' : 'no', null, null, 'col-6'),
+        buildClusterDashboardMetricCell('Status', statusLabel, null, null, 'col-6')
+    ].join('');
+    return buildClusterDashboardTileShell(
+        `<i class="bi bi-gear-wide-connected me-2 text-primary"></i><span class="text-truncate">${escapeHtml(service.name || 'Service')}</span>`,
+        `<span class="badge ${badgeClass}">${escapeHtml(statusLabel)}</span>`,
+        bodyHtml,
+        ''
+    );
+}
+
+function buildClusterTrueNASServerTileHtml(tile) {
+    if (!lastTrueNASOverviewData?.system && !Array.isArray(lastTrueNASOverviewData?.pools) && !Array.isArray(lastTrueNASOverviewData?.apps)) {
+        return buildClusterDashboardUnavailableTile('TrueNAS Server', t('backupNoData') || 'Нет данных');
+    }
+    const sys = lastTrueNASOverviewData?.system || {};
+    const pools = Array.isArray(lastTrueNASOverviewData?.pools) ? lastTrueNASOverviewData.pools : [];
+    const apps = Array.isArray(lastTrueNASOverviewData?.apps) ? lastTrueNASOverviewData.apps : [];
+    const hostname = sys.hostname || sys.system_hostname || sys.host || 'TrueNAS';
+    const version = sys.version || sys.product_version || sys.release || '—';
+    const appsRunning = apps.filter((a) => a?.running).length;
+    const total = pools.reduce((s, p) => s + Number(p?.total || 0), 0);
+    const used = pools.reduce((s, p) => s + Number(p?.used || 0), 0);
+    const usage = total > 0 ? Math.round((used / total) * 100) : 0;
+    const bodyHtml = [
+        buildClusterDashboardMetricCell('Version', version, null, null, 'col-12'),
+        buildClusterDashboardMetricCell('Apps', `${appsRunning}/${apps.length}`, null, null, 'col-6 mt-2'),
+        buildClusterDashboardMetricCell('Storage', `${formatSize(used)} / ${formatSize(total)}`, usage, usage > 85 ? 'bg-danger' : (usage > 65 ? 'bg-warning' : 'bg-success'), 'col-6 mt-2')
+    ].join('');
+    return buildClusterDashboardTileShell(
+        `<i class="bi bi-hdd-stack me-2 text-primary"></i><span class="text-truncate">${escapeHtml(hostname)}</span>`,
+        `<span class="badge bg-success">${escapeHtml(t('connected'))}</span>`,
+        bodyHtml,
+        'TrueNAS'
+    );
+}
+
+function buildClusterTrueNASAppTileHtml(tile) {
+    if (!Array.isArray(lastTrueNASOverviewData?.apps)) {
+        return buildClusterDashboardUnavailableTile('TrueNAS App', t('backupNoData') || 'Нет данных');
+    }
+    const source = clusterTileSourceValue(tile, 'truenas_app');
+    const numeric = parseInt(source, 10);
+    const app = lastTrueNASOverviewData.apps.find((entry, idx) =>
+        String(entry?.entityId || entry?.id || entry?.name || '') === source
+        || (Number.isFinite(numeric) && ((idx + 1) === numeric))
+    );
+    if (!app) return buildClusterDashboardUnavailableTile('TrueNAS App', t('vmListEmpty') || 'App не найден');
+    const statusLabel = app.statusLabel || (app.running ? 'running' : 'stopped');
+    const badgeClass = app.running ? 'bg-success' : (app.severity === 'critical' ? 'bg-danger' : 'bg-warning text-dark');
+    const bodyHtml = [
+        buildClusterDashboardMetricCell(t('monVmTypeCol') || 'Type', 'APP', null, null, 'col-6'),
+        buildClusterDashboardMetricCell(t('monVmStatusCol') || 'Status', statusLabel, null, null, 'col-6')
+    ].join('');
+    return buildClusterDashboardTileShell(
+        `<i class="bi bi-boxes me-2 text-primary"></i><span class="text-truncate">${escapeHtml(app.name || 'App')}</span>`,
+        `<span class="badge ${badgeClass}">${escapeHtml(statusLabel)}</span>`,
+        bodyHtml,
+        'TrueNAS Apps'
+    );
+}
+
 async function renderClusterDashboardTiles() {
     const sectionEl = document.getElementById('dashboardClusterTilesSection');
     const containerEl = document.getElementById('dashboardClusterTiles');
     if (!sectionEl || !containerEl) return;
 
-    const tiles = normalizeClusterDashboardTiles(clusterDashboardTiles);
+    const tiles = normalizeClusterDashboardTiles(clusterDashboardTiles).filter((tile) => tile.showOnCluster !== false);
     if (!tiles.length) {
         sectionEl.style.display = 'none';
         setHTMLIfChanged('dashboardClusterTiles', '');
@@ -5880,11 +6437,14 @@ async function renderClusterDashboardTiles() {
         }
     };
 
-    const [netdevPayload, upsPayload, speedtestSummary] = await Promise.all([
+    const needTrueNASOverview = tiles.some((tile) => ['truenas_server', 'truenas_pool', 'truenas_disk', 'truenas_service', 'truenas_app'].includes(tile.type));
+    const [netdevPayload, upsPayload, speedtestSummary, truenasOverview] = await Promise.all([
         needNetdev ? fetchJson('/api/netdevices/current') : Promise.resolve(null),
         needUps ? fetchJson('/api/ups/current') : Promise.resolve(null),
-        needSpeedtest ? fetchJson('/api/speedtest/summary') : Promise.resolve(null)
+        needSpeedtest ? fetchJson('/api/speedtest/summary') : Promise.resolve(null),
+        needTrueNASOverview ? fetchJson('/api/truenas/overview') : Promise.resolve(null)
     ]);
+    if (truenasOverview && !truenasOverview.error) lastTrueNASOverviewData = truenasOverview;
 
     const html = tiles.map((tile) => {
         if (tile.type === 'service') return buildClusterServiceTileHtml(tile);
@@ -5892,11 +6452,123 @@ async function renderClusterDashboardTiles() {
         if (tile.type === 'netdev') return buildClusterNetdevTileHtml(tile, netdevPayload);
         if (tile.type === 'ups') return buildClusterUpsTileHtml(tile, upsPayload);
         if (tile.type === 'speedtest') return buildClusterSpeedtestTileHtml(speedtestSummary);
+        if (tile.type === 'truenas_server') return buildClusterTrueNASServerTileHtml(tile);
+        if (tile.type === 'truenas_pool') return buildClusterTrueNASPoolTileHtml(tile);
+        if (tile.type === 'truenas_disk') return buildClusterTrueNASDiskTileHtml(tile);
+        if (tile.type === 'truenas_service') return buildClusterTrueNASServiceTileHtml(tile);
+        if (tile.type === 'truenas_app') return buildClusterTrueNASAppTileHtml(tile);
         return '';
     }).join('');
 
     sectionEl.style.display = html ? '' : 'none';
     setHTMLIfChanged('dashboardClusterTiles', html || '');
+}
+
+function getTilesMonitorCellClass(size) {
+    if (size === '4x1') return 'col-12';
+    if (size === '3x1') return 'col-12 col-xl-9';
+    if (size === '2x1') return 'col-12 col-md-6';
+    return 'col-12 col-md-6 col-xl-3';
+}
+
+async function renderTilesMonitorScreen(targetGridId = 'tilesMonitorGrid') {
+    const gridEl = document.getElementById(targetGridId);
+    if (!gridEl) return;
+    const normalizedTiles = normalizeClusterDashboardTiles(clusterDashboardTiles);
+    let tiles = normalizedTiles.filter((tile) => tile.showOnTiles === true);
+    // Fallback: if no tiles explicitly selected for Tiles screen,
+    // show Cluster set to avoid an empty monitor screen.
+    if (!tiles.length) {
+        tiles = normalizedTiles.filter((tile) => tile.showOnCluster !== false);
+    }
+    if (!tiles.length) {
+        setHTMLIfChanged(targetGridId, `<div class="col-12"><div class="monitor-view__empty">${escapeHtml(t('backupNoData') || 'Нет данных')}</div></div>`);
+        return;
+    }
+
+    const needNetdev = tiles.some((tile) => tile.type === 'netdev');
+    const needUps = tiles.some((tile) => tile.type === 'ups');
+    const needSpeedtest = tiles.some((tile) => tile.type === 'speedtest');
+    const needTrueNASOverview = tiles.some((tile) => ['truenas_server', 'truenas_pool', 'truenas_disk', 'truenas_service', 'truenas_app'].includes(tile.type));
+
+    const fetchJson = async (url) => {
+        try {
+            const res = await fetch(url);
+            const data = await res.json().catch(() => ({}));
+            return res.ok ? data : { error: data?.error || `HTTP ${res.status}` };
+        } catch (e) {
+            return { error: e.message || String(e) };
+        }
+    };
+
+    const [netdevPayload, upsPayload, speedtestSummary, truenasOverview] = await Promise.all([
+        needNetdev ? fetchJson('/api/netdevices/current') : Promise.resolve(null),
+        needUps ? fetchJson('/api/ups/current') : Promise.resolve(null),
+        needSpeedtest ? fetchJson('/api/speedtest/summary') : Promise.resolve(null),
+        needTrueNASOverview ? fetchJson('/api/truenas/overview') : Promise.resolve(null)
+    ]);
+    if (truenasOverview && !truenasOverview.error) lastTrueNASOverviewData = truenasOverview;
+
+    const html = tiles.map((tile) => {
+        let tileHtml = '';
+        if (tile.type === 'service') tileHtml = buildClusterServiceTileHtml(tile);
+        else if (tile.type === 'vmct') tileHtml = buildClusterVmTileHtml(tile);
+        else if (tile.type === 'netdev') tileHtml = buildClusterNetdevTileHtml(tile, netdevPayload);
+        else if (tile.type === 'ups') tileHtml = buildClusterUpsTileHtml(tile, upsPayload);
+        else if (tile.type === 'speedtest') tileHtml = buildClusterSpeedtestTileHtml(speedtestSummary);
+        else if (tile.type === 'truenas_server') tileHtml = buildClusterTrueNASServerTileHtml(tile);
+        else if (tile.type === 'truenas_pool') tileHtml = buildClusterTrueNASPoolTileHtml(tile);
+        else if (tile.type === 'truenas_disk') tileHtml = buildClusterTrueNASDiskTileHtml(tile);
+        else if (tile.type === 'truenas_service') tileHtml = buildClusterTrueNASServiceTileHtml(tile);
+        else if (tile.type === 'truenas_app') tileHtml = buildClusterTrueNASAppTileHtml(tile);
+        const cellClass = getTilesMonitorCellClass(tile.tilesSize || '1x1');
+        return `<div class="${cellClass} tiles-monitor-cell">${tileHtml}</div>`;
+    }).join('');
+    setHTMLIfChanged(targetGridId, html);
+}
+
+async function renderTrueNASMonitorScreenTiles(targetGridId, type) {
+    const gridEl = document.getElementById(targetGridId);
+    if (!gridEl) return;
+    const auth = getAuthHeadersForType('truenas');
+    if (auth) {
+        try {
+            const res = await fetch('/api/truenas/overview', { headers: auth });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok && data && typeof data === 'object') lastTrueNASOverviewData = data;
+        } catch (_) {}
+    }
+
+    let tiles = [];
+    if (type === 'truenas_pool') {
+        const pools = Array.isArray(lastTrueNASOverviewData?.pools) ? lastTrueNASOverviewData.pools : [];
+        tiles = pools.map((p, i) => ({ type, sourceId: `truenas_pool:${String(p?.id || p?.name || (i + 1))}`, tilesSize: '1x1' }));
+    } else if (type === 'truenas_disk') {
+        const disks = Array.isArray(lastTrueNASOverviewData?.disks) ? lastTrueNASOverviewData.disks : [];
+        tiles = disks.map((d, i) => ({ type, sourceId: `truenas_disk:${String(d?.entityId || d?.id || d?.name || (i + 1))}`, tilesSize: '1x1' }));
+    } else if (type === 'truenas_service') {
+        const services = Array.isArray(lastTrueNASOverviewData?.services) ? lastTrueNASOverviewData.services : [];
+        tiles = services.map((s, i) => ({ type, sourceId: `truenas_service:${String(s?.entityId || s?.id || s?.name || (i + 1))}`, tilesSize: '1x1' }));
+    } else if (type === 'truenas_app') {
+        const apps = Array.isArray(lastTrueNASOverviewData?.apps) ? lastTrueNASOverviewData.apps : [];
+        tiles = apps.map((a, i) => ({ type, sourceId: `truenas_app:${String(a?.entityId || a?.id || a?.name || (i + 1))}`, tilesSize: '1x1' }));
+    }
+
+    if (!tiles.length) {
+        setHTMLIfChanged(targetGridId, `<div class="col-12"><div class="monitor-view__empty">${escapeHtml(t('backupNoData') || 'Нет данных')}</div></div>`);
+        return;
+    }
+
+    const html = tiles.map((tile) => {
+        let tileHtml = '';
+        if (tile.type === 'truenas_pool') tileHtml = buildClusterTrueNASPoolTileHtml(tile);
+        else if (tile.type === 'truenas_disk') tileHtml = buildClusterTrueNASDiskTileHtml(tile);
+        else if (tile.type === 'truenas_service') tileHtml = buildClusterTrueNASServiceTileHtml(tile);
+        else if (tile.type === 'truenas_app') tileHtml = buildClusterTrueNASAppTileHtml(tile);
+        const cellClass = getTilesMonitorCellClass(tile.tilesSize || '1x1');
+        return `<div class="${cellClass} tiles-monitor-cell">${tileHtml}</div>`;
+    }).join('');
+    setHTMLIfChanged(targetGridId, html);
 }
 
 async function saveSpeedtestSettings() {
@@ -6379,14 +7051,15 @@ async function toggleMonitorMode() {
 
 let monitorSwipeStartX = null;
 let monitorSwipeHandlersAttached = false;
-/** Текущий экран режима монитора: 'cluster' | 'ups' | 'netdev' | 'speedtest' | 'vms' | 'services' | 'backupRuns' (только Proxmox) */
+/** Текущий экран режима монитора */
 let monitorCurrentView = 'cluster';
 /** Последние данные бэкапов для экрана монитора */
 let lastBackupsDataForMonitor = null;
 
-/** Полный порядок экранов монитора (в БД); на TrueNAS экран backupRuns пропускается при листании */
-const MONITOR_SCREEN_IDS_ALL = ['cluster', 'ups', 'netdev', 'speedtest', 'vms', 'services', 'backupRuns'];
+/** Полный порядок экранов монитора (в БД). */
+const MONITOR_SCREEN_IDS_ALL = ['cluster', 'tiles', 'truenasPools', 'truenasDisks', 'truenasServices', 'truenasApps', 'ups', 'netdev', 'speedtest', 'vms', 'services', 'backupRuns'];
 let monitorScreensOrder = MONITOR_SCREEN_IDS_ALL.slice();
+let monitorScreensEnabled = {};
 /** Speedtest включён в настройках (для скрытия экрана в режиме монитора) */
 let speedtestClientEnabled = false;
 
@@ -6453,9 +7126,22 @@ function normalizeMonitorScreensOrder(arr) {
     return out;
 }
 
+function normalizeMonitorScreensEnabled(raw) {
+    const out = {};
+    for (const id of MONITOR_SCREEN_IDS_ALL) out[id] = true;
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
+    for (const id of MONITOR_SCREEN_IDS_ALL) {
+        if (Object.prototype.hasOwnProperty.call(raw, id)) {
+            out[id] = raw[id] !== false;
+        }
+    }
+    return out;
+}
+
 function getMonitorViewsOrder() {
     const order = normalizeMonitorScreensOrder(monitorScreensOrder);
     return order.filter((id) => {
+        if (monitorScreensEnabled[id] === false) return false;
         if (id === 'backupRuns' && currentServerType !== 'proxmox') return false;
         if (id === 'speedtest' && !speedtestClientEnabled) return false;
         if (id === 'ups' && upsMonitorConfigured === false) return false;
@@ -6468,6 +7154,11 @@ function getMonitorViewsOrder() {
 function monitorScreenSettingsLabel(id) {
     const map = {
         cluster: t('monitorScreenCluster'),
+        tiles: 'Tiles',
+        truenasPools: 'TrueNAS Pools',
+        truenasDisks: 'TrueNAS Disks',
+        truenasServices: 'TrueNAS Services',
+        truenasApps: 'TrueNAS Apps',
         ups: t('monitorScreenUps'),
         netdev: t('monitorScreenNetdev'),
         speedtest: t('monitorScreenSpeedtest'),
@@ -6486,13 +7177,26 @@ function renderSettingsMonitorScreensOrderList() {
         .map(
             (id, i) => `<li class="list-group-item d-flex align-items-center justify-content-between gap-2 py-2">
       <span class="text-truncate"><i class="bi bi-display me-2 text-muted"></i>${escapeHtml(monitorScreenSettingsLabel(id))}</span>
+      <span class="d-flex align-items-center gap-2">
+        <span class="form-check form-switch m-0">
+          <input class="form-check-input" type="checkbox" ${monitorScreensEnabled[id] !== false ? 'checked' : ''} onchange="toggleMonitorScreenEnabled('${id}', this.checked)">
+        </span>
       <span class="btn-group btn-group-sm flex-shrink-0" role="group">
         <button type="button" class="btn btn-outline-secondary" ${i === 0 ? 'disabled' : ''} onclick="moveMonitorScreenOrder(${i},-1)" aria-label="Up"><i class="bi bi-arrow-up"></i></button>
         <button type="button" class="btn btn-outline-secondary" ${i === order.length - 1 ? 'disabled' : ''} onclick="moveMonitorScreenOrder(${i},1)" aria-label="Down"><i class="bi bi-arrow-down"></i></button>
       </span>
+      </span>
     </li>`
         )
         .join('');
+}
+
+function toggleMonitorScreenEnabled(id, enabled) {
+    if (!MONITOR_SCREEN_IDS_ALL.includes(id)) return;
+    monitorScreensEnabled = normalizeMonitorScreensEnabled({ ...monitorScreensEnabled, [id]: !!enabled });
+    saveSettingsToServer({ monitorScreensEnabled });
+    renderSettingsMonitorScreensOrderList();
+    renderMonitorScreenDots();
 }
 
 function moveMonitorScreenOrder(index, delta) {
@@ -6514,6 +7218,11 @@ function updateMonitorToolbarTitleForView() {
     if (!el || !monitorMode) return;
     const titles = {
         cluster: t('monitorScreenCluster'),
+        tiles: 'Tiles',
+        truenasPools: 'TrueNAS Pools',
+        truenasDisks: 'TrueNAS Disks',
+        truenasServices: 'TrueNAS Services',
+        truenasApps: 'TrueNAS Apps',
         ups: t('monitorScreenUps'),
         netdev: t('monitorScreenNetdev'),
         speedtest: t('monitorScreenSpeedtest'),
@@ -6606,6 +7315,11 @@ function applyMonitorView(view) {
     const netdevMonSection = document.getElementById('netdevMonitorSection');
     const speedtestMonSection = document.getElementById('speedtestMonitorSection');
     const backupsMon = document.getElementById('backupsMonitorSection');
+    const tilesMonSection = document.getElementById('tilesMonitorSection');
+    const truenasPoolsMonSection = document.getElementById('truenasPoolsMonitorSection');
+    const truenasDisksMonSection = document.getElementById('truenasDisksMonitorSection');
+    const truenasServicesMonSection = document.getElementById('truenasServicesMonitorSection');
+    const truenasAppsMonSection = document.getElementById('truenasAppsMonitorSection');
     const monitorView = document.getElementById('monitorView');
 
     if (!monitorMode) {
@@ -6617,6 +7331,11 @@ function applyMonitorView(view) {
         if (netdevMonSection) netdevMonSection.style.display = 'none';
         if (speedtestMonSection) speedtestMonSection.style.display = 'none';
         if (backupsMon) backupsMon.style.display = 'none';
+        if (tilesMonSection) tilesMonSection.style.display = 'none';
+        if (truenasPoolsMonSection) truenasPoolsMonSection.style.display = 'none';
+        if (truenasDisksMonSection) truenasDisksMonSection.style.display = 'none';
+        if (truenasServicesMonSection) truenasServicesMonSection.style.display = 'none';
+        if (truenasAppsMonSection) truenasAppsMonSection.style.display = 'none';
         if (monitorView) monitorView.style.display = 'none';
         renderMonitorScreenDots();
         return;
@@ -6631,6 +7350,11 @@ function applyMonitorView(view) {
     if (netdevMonSection) netdevMonSection.style.display = 'none';
     if (speedtestMonSection) speedtestMonSection.style.display = 'none';
     if (backupsMon) backupsMon.style.display = 'none';
+    if (tilesMonSection) tilesMonSection.style.display = 'none';
+    if (truenasPoolsMonSection) truenasPoolsMonSection.style.display = 'none';
+    if (truenasDisksMonSection) truenasDisksMonSection.style.display = 'none';
+    if (truenasServicesMonSection) truenasServicesMonSection.style.display = 'none';
+    if (truenasAppsMonSection) truenasAppsMonSection.style.display = 'none';
     if (monitorView) monitorView.style.display = 'none';
 
     if (view === 'backupRuns' && currentServerType !== 'proxmox') {
@@ -6666,6 +7390,21 @@ function applyMonitorView(view) {
     } else if (view === 'speedtest') {
         if (speedtestMonSection) speedtestMonSection.style.display = 'block';
         updateSpeedtestDashboard().catch(() => {});
+    } else if (view === 'tiles') {
+        if (tilesMonSection) tilesMonSection.style.display = 'block';
+        renderTilesMonitorScreen().catch(() => {});
+    } else if (view === 'truenasPools') {
+        if (truenasPoolsMonSection) truenasPoolsMonSection.style.display = 'block';
+        renderTrueNASMonitorScreenTiles('truenasPoolsMonitorGrid', 'truenas_pool').catch(() => {});
+    } else if (view === 'truenasDisks') {
+        if (truenasDisksMonSection) truenasDisksMonSection.style.display = 'block';
+        renderTrueNASMonitorScreenTiles('truenasDisksMonitorGrid', 'truenas_disk').catch(() => {});
+    } else if (view === 'truenasServices') {
+        if (truenasServicesMonSection) truenasServicesMonSection.style.display = 'block';
+        renderTrueNASMonitorScreenTiles('truenasServicesMonitorGrid', 'truenas_service').catch(() => {});
+    } else if (view === 'truenasApps') {
+        if (truenasAppsMonSection) truenasAppsMonSection.style.display = 'block';
+        renderTrueNASMonitorScreenTiles('truenasAppsMonitorGrid', 'truenas_app').catch(() => {});
     } else if (view === 'backupRuns') {
         /* flex, не block — иначе .monitor-backups-main-card не растягивается и card-body с flex:1 схлопывается в 0 */
         if (backupsMon) backupsMon.style.display = 'flex';
@@ -6673,6 +7412,7 @@ function applyMonitorView(view) {
     }
 
     updateMonitorToolbarTitleForView();
+    requestAnimationFrame(() => updateHomeLabFontScale());
 }
 
 function setMonitorTheme(theme) {
@@ -7397,6 +8137,7 @@ function showDashboard() {
     if (backupsMon) backupsMon.style.display = 'none';
     const netdevMonSection = document.getElementById('netdevMonitorSection');
     if (netdevMonSection) netdevMonSection.style.display = 'none';
+    requestAnimationFrame(() => updateHomeLabFontScale());
     // Refresh only when authenticated
     if (apiToken) {
         refreshData();
@@ -7617,8 +8358,9 @@ async function refreshData(options = {}) {
 
     if (isRefreshing) return;
     isRefreshing = true;
-    const authHeaders = getAuthHeadersForCurrentServerType();
-    if (!authHeaders) {
+    const proxmoxHeaders = getAuthHeadersForType('proxmox');
+    const truenasHeaders = getAuthHeadersForType('truenas');
+    if (!proxmoxHeaders && !truenasHeaders) {
         if (!silent) showToast(t('errorNoToken'), 'error');
         isRefreshing = false;
         return;
@@ -7630,45 +8372,24 @@ async function refreshData(options = {}) {
         const prevScrollY = window.scrollY;
         const prevActiveId = document.activeElement && document.activeElement.id ? document.activeElement.id : null;
 
-        if (currentServerType === 'truenas') {
-            lastHostMetricsData = null;
-            const [systemRes, poolsRes] = await Promise.all([
-                fetch('/api/truenas/system', { headers: authHeaders }),
-                fetch('/api/truenas/storage/pools', { headers: authHeaders })
-            ]);
-            const systemData = await systemRes.json();
-            const poolsData = await poolsRes.json();
-            if (!systemRes.ok) throw new Error(systemData?.error || `system: HTTP ${systemRes.status}`);
-            if (!poolsRes.ok) throw new Error(poolsData?.error || `pools: HTTP ${poolsRes.status}`);
-            updateTrueNASDashboard(systemData, poolsData);
-            await renderClusterDashboardTiles();
-            if (!monitorMode || monitorCurrentView === 'cluster' || monitorCurrentView === 'ups') {
-                updateUPSDashboard().catch(() => {});
-            }
-            if (!monitorMode || monitorCurrentView === 'cluster' || monitorCurrentView === 'netdev') {
-                updateNetdevDashboard().catch(() => {});
-            }
-            if (!monitorMode || monitorCurrentView === 'cluster' || monitorCurrentView === 'speedtest') {
-                updateSpeedtestDashboard().catch(() => {});
-            }
-        } else {
+        if (proxmoxHeaders) {
             const [clusterRes, storageRes, backupsRes] = await Promise.all([
-                fetch('/api/cluster/full', { headers: authHeaders }),
-                fetch('/api/storage', { headers: authHeaders }),
-                fetch('/api/backups/jobs', { headers: authHeaders })
+                fetch('/api/cluster/full', { headers: proxmoxHeaders }),
+                fetch('/api/storage', { headers: proxmoxHeaders }),
+                fetch('/api/backups/jobs', { headers: proxmoxHeaders })
             ]);
 
             const clusterData = await clusterRes.json();
             const storageData = await storageRes.json();
             const backupsData = await backupsRes.json();
             let hostMetricsData = lastHostMetricsData;
-            
+
             if (!clusterRes.ok) throw new Error(clusterData?.error || `cluster: HTTP ${clusterRes.status}`);
             if (!storageRes.ok) throw new Error(storageData?.error || `storage: HTTP ${storageRes.status}`);
             if (!backupsRes.ok) throw new Error(backupsData?.error || `backups: HTTP ${backupsRes.status}`);
 
             try {
-                const hmRes = await fetch('/api/host-metrics/current', { headers: getCurrentProxmoxHeaders() || {} });
+                const hmRes = await fetch('/api/host-metrics/current', { headers: proxmoxHeaders });
                 if (hmRes.ok) {
                     hostMetricsData = await hmRes.json();
                     lastHostMetricsData = hostMetricsData;
@@ -7676,18 +8397,60 @@ async function refreshData(options = {}) {
             } catch (hmErr) {
                 console.warn('Host metrics refresh failed:', hmErr);
             }
-            
-            updateDashboard(clusterData, storageData, backupsData, hostMetricsData);
-            await renderClusterDashboardTiles();
-            if (!monitorMode || monitorCurrentView === 'cluster' || monitorCurrentView === 'ups') {
-                updateUPSDashboard().catch(() => {});
+
+            if (currentServerType !== 'truenas') {
+                updateDashboard(clusterData, storageData, backupsData, hostMetricsData);
             }
-            if (!monitorMode || monitorCurrentView === 'cluster' || monitorCurrentView === 'netdev') {
-                updateNetdevDashboard().catch(() => {});
+        } else {
+            lastHostMetricsData = null;
+        }
+
+        if (truenasHeaders) {
+            const overviewRes = await fetch('/api/truenas/overview', { headers: truenasHeaders });
+            const overviewData = await overviewRes.json();
+            if (!overviewRes.ok) throw new Error(overviewData?.error || `overview: HTTP ${overviewRes.status}`);
+            lastTrueNASOverviewData = overviewData;
+            if (currentServerType === 'truenas') {
+                updateTrueNASDashboard(overviewData.system || {}, { all: (overviewData.pools || []).map((p) => ({
+                    node: 'truenas',
+                    name: p.name,
+                    type: 'pool',
+                    used: p.used || 0,
+                    total: p.total || 0,
+                    used_fmt: p.used || 0,
+                    total_fmt: p.total || 0,
+                    usage_percent: p.total > 0 ? Math.round(((p.used || 0) / p.total) * 100) : 0,
+                    active: p.healthy !== false,
+                    status: p.status || null
+                })), byType: { pool: { count: (overviewData.pools || []).length, total: (overviewData.pools || []).reduce((s, x) => s + (x.total || 0), 0), used: (overviewData.pools || []).reduce((s, x) => s + (x.used || 0), 0) } }, summary: { total: (overviewData.pools || []).length, active: (overviewData.pools || []).filter((p) => p.healthy !== false).length, total_space: (overviewData.pools || []).reduce((s, x) => s + (x.total || 0), 0), used_space: (overviewData.pools || []).reduce((s, x) => s + (x.used || 0), 0) } }, overviewData);
             }
-            if (!monitorMode || monitorCurrentView === 'cluster' || monitorCurrentView === 'speedtest') {
-                updateSpeedtestDashboard().catch(() => {});
-            }
+        }
+
+        await renderClusterDashboardTiles();
+        renderTilesMonitorScreen('tilesNormalGrid').catch(() => {});
+        if (!monitorMode || monitorCurrentView === 'tiles') {
+            renderTilesMonitorScreen().catch(() => {});
+        }
+        if (monitorMode && monitorCurrentView === 'truenasPools') {
+            renderTrueNASMonitorScreenTiles('truenasPoolsMonitorGrid', 'truenas_pool').catch(() => {});
+        }
+        if (monitorMode && monitorCurrentView === 'truenasDisks') {
+            renderTrueNASMonitorScreenTiles('truenasDisksMonitorGrid', 'truenas_disk').catch(() => {});
+        }
+        if (monitorMode && monitorCurrentView === 'truenasServices') {
+            renderTrueNASMonitorScreenTiles('truenasServicesMonitorGrid', 'truenas_service').catch(() => {});
+        }
+        if (monitorMode && monitorCurrentView === 'truenasApps') {
+            renderTrueNASMonitorScreenTiles('truenasAppsMonitorGrid', 'truenas_app').catch(() => {});
+        }
+        if (!monitorMode || monitorCurrentView === 'cluster' || monitorCurrentView === 'ups') {
+            updateUPSDashboard().catch(() => {});
+        }
+        if (!monitorMode || monitorCurrentView === 'cluster' || monitorCurrentView === 'netdev') {
+            updateNetdevDashboard().catch(() => {});
+        }
+        if (!monitorMode || monitorCurrentView === 'cluster' || monitorCurrentView === 'speedtest') {
+            updateSpeedtestDashboard().catch(() => {});
         }
         
         // Restore scroll/focus to avoid visible "jumps" on full re-render
@@ -7712,6 +8475,7 @@ async function refreshData(options = {}) {
             });
         }
         if (!silent) showToast(t('dataUpdated'), 'success');
+        requestAnimationFrame(() => updateHomeLabFontScale());
 
     } catch (error) {
         if (!silent) showToast(t('errorUpdate') + ': ' + error.message, 'error');
@@ -7990,7 +8754,7 @@ async function updateUPSDashboard() {
     }
 }
 
-function updateTrueNASDashboard(systemData, poolsData) {
+function updateTrueNASDashboard(systemData, poolsData, overviewData = null) {
     const sys = systemData && typeof systemData === 'object' ? systemData : {};
     const hostname = sys.hostname || sys.system_hostname || sys.host || 'TrueNAS';
     const version = sys.version || sys.product_version || sys.release || '';
@@ -8068,49 +8832,52 @@ function updateTrueNASDashboard(systemData, poolsData) {
         }
     }
 
-    setText('clusterVmTotal', '—');
-    setText('clusterVmRunning', '—');
-    setText('clusterCtTotal', '—');
-    setText('clusterCtRunning', '—');
-    ['clusterVmRunningBar', 'clusterCtRunningBar'].forEach((id) => {
-        const b = document.getElementById(id);
-        if (b) b.style.width = '0%';
-    });
-
-    const serversContainer = document.getElementById('serversContainer') || document.getElementById('nodesContainer');
-    if (serversContainer) {
-        setHTMLIfChanged(serversContainer.id, `
-            <div class="col-12">
-                <div class="node-card">
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <h5 class="mb-0">${escapeHtml(hostname)}</h5>
-                        <span class="badge bg-success">${t('connected')}</span>
-                    </div>
-                    <div class="text-muted small">
-                        ${version ? `<div><strong>${t('version')}:</strong> ${escapeHtml(version)}</div>` : ''}
-                        ${uptimeStr ? `<div><strong>${t('uptime')}:</strong> ${escapeHtml(uptimeStr)}</div>` : ''}
-                    </div>
-                </div>
-            </div>
-        `);
+    const summary = (poolsData && poolsData.summary) ? poolsData.summary : { total: 0, active: 0, total_space: 0, used_space: 0 };
+    const apps = Array.isArray(overviewData?.apps) ? overviewData.apps : [];
+    const disks = Array.isArray(overviewData?.disks) ? overviewData.disks : [];
+    const appsRunning = apps.filter((a) => a && a.running).length;
+    const degradedDisks = disks.filter((d) => d && !d.healthy).length;
+    const totalStorage = Number(summary.total_space || 0);
+    const usedStorage = Number(summary.used_space || 0);
+    const storagePercent = totalStorage > 0 ? Math.round((usedStorage / totalStorage) * 100) : 0;
+    setText('dashboardClusterVmRunningLbl', t('backupRunning') || 'Running');
+    setText('clusterVmTotal', String(apps.length));
+    setText('clusterVmRunning', String(appsRunning));
+    setText('dashboardClusterCtTotalLbl', t('storageTotalSpace') || 'Total');
+    setText('clusterCtTotal', formatSize(totalStorage));
+    setText('clusterCtRunning', formatSize(usedStorage));
+    const vmBar = document.getElementById('clusterVmRunningBar');
+    if (vmBar) vmBar.style.width = apps.length > 0 ? `${Math.round((appsRunning / apps.length) * 100)}%` : '0%';
+    const ctBar = document.getElementById('clusterCtRunningBar');
+    if (ctBar) {
+        ctBar.style.width = `${storagePercent}%`;
+        setProgressBarThresholdClass(ctBar, storagePercent, 'ram');
     }
 
+    // TrueNAS is rendered via tiles only; hide dedicated tab content.
+    const nodesContainer = document.getElementById('nodesContainer');
+    const servicesContainer = document.getElementById('serversContainer');
+    const storageStatsEl = document.getElementById('storageStats');
+    const storageTypesEl = document.getElementById('storageTypes');
+    const storageBodyEl = document.getElementById('storageBody');
+    const storageTableEl = document.getElementById('storageTable');
+    if (nodesContainer) {
+        nodesContainer.className = 'cluster-scroll-row';
+        setHTMLIfChanged('nodesContainer', '');
+    }
+    if (servicesContainer) setHTMLIfChanged('serversContainer', '');
+    if (storageStatsEl) setHTMLIfChanged('storageStats', '');
+    if (storageTypesEl) setHTMLIfChanged('storageTypes', '');
+    if (storageBodyEl) setHTMLIfChanged('storageBody', '');
+    if (storageTableEl) {
+        const wrap = storageTableEl.closest('.table-responsive');
+        if (wrap) wrap.style.display = '';
+    }
+    if (storageTable) {
+        storageTable.destroy();
+        storageTable = null;
+    }
 
-    const pools = (poolsData && Array.isArray(poolsData.all)) ? poolsData.all : [];
-    const summary = (poolsData && poolsData.summary) ? poolsData.summary : { total: 0, active: 0, total_space: 0, used_space: 0 };
-    updateStorageUI({
-        all: pools.map(p => ({
-            ...p,
-            used_fmt: formatSize(p.used),
-            total_fmt: formatSize(p.total)
-        })),
-        byType: (poolsData && poolsData.byType) ? poolsData.byType : { pool: { count: 0, total: 0, used: 0 } },
-        summary: {
-            ...summary,
-            total_space_fmt: formatSize(summary.total_space),
-            used_space_fmt: formatSize(summary.used_space)
-        }
-    });
 
     // Clear backups table if present
     if (backupsJobsTable) {
@@ -8128,6 +8895,7 @@ function updateTrueNASDashboard(systemData, poolsData) {
     if (monitorMode) {
         updateMonitorViewTrueNAS(systemData, poolsData);
         renderMonitorServicesList();
+        renderMonitorVmsList();
     }
 }
 
@@ -8198,10 +8966,15 @@ function updateMonitorViewTrueNAS(systemData, poolsData) {
     }
     setText('monitorCpu', cpuPct + '%');
     setText('monitorMemory', memPct + '%');
-    setText('monitorVmTotal', '—');
-    setText('monitorVmRunning', '—');
-    setText('monitorCtTotal', '—');
-    setText('monitorCtRunning', '—');
+    const apps = Array.isArray(lastTrueNASOverviewData?.apps) ? lastTrueNASOverviewData.apps : [];
+    const appsRunning = apps.filter((a) => a && a.running).length;
+    const pools = (poolsData && Array.isArray(poolsData.all)) ? poolsData.all : [];
+    const totalStorage = pools.reduce((sum, p) => sum + Number(p?.total || 0), 0);
+    const usedStorage = pools.reduce((sum, p) => sum + Number(p?.used || 0), 0);
+    setText('monitorVmTotal', String(apps.length));
+    setText('monitorVmRunning', String(appsRunning));
+    setText('monitorCtTotal', formatSize(totalStorage));
+    setText('monitorCtRunning', formatSize(usedStorage));
     const cpuBar = el('monitorCpuBar');
     if (cpuBar) {
         cpuBar.style.width = cpuPct + '%';
@@ -8259,6 +9032,30 @@ function renderMonitorServicesList() {
 function renderMonitorVmsList() {
     const listEl = document.getElementById('monitorVmsList');
     if (!listEl) return;
+    if (currentServerType === 'truenas') {
+        setText('monitorVmsPanelTitle', 'Apps');
+        const apps = Array.isArray(lastTrueNASOverviewData?.apps) ? lastTrueNASOverviewData.apps : [];
+        if (!apps.length) {
+            listEl.innerHTML = '<div class="monitor-view__empty">' + escapeHtml(t('backupNoData') || 'Нет данных') + '</div>';
+            return;
+        }
+        listEl.innerHTML = apps.map((app) => {
+            const statusLabel = app?.statusLabel || (app?.running ? 'running' : 'stopped');
+            const statusClass = app?.running ? 'bg-success' : (app?.severity === 'critical' ? 'bg-danger' : 'bg-warning text-dark');
+            return `
+                <div class="monitor-view__card">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="fw-semibold text-truncate d-inline-flex align-items-center gap-2" title="${escapeHtml(app?.name || '')}">
+                            <i class="bi bi-boxes text-primary"></i><span class="text-truncate">${escapeHtml(app?.name || 'App')}</span>
+                        </span>
+                        <span class="badge ${statusClass}" title="${escapeHtml(statusLabel)}">${escapeHtml(statusLabel)}</span>
+                    </div>
+                    <div class="small text-muted">${escapeHtml(app?.id != null ? String(app.id) : '—')}</div>
+                </div>
+            `;
+        }).join('');
+        return;
+    }
     setText('monitorVmsPanelTitle', t('monitoredVmsDashboardTitle'));
     const cluster = lastClusterData;
     const list = cluster && Array.isArray(cluster.vms) ? cluster.vms : [];
@@ -8427,6 +9224,7 @@ function updateDashboard(clusterData, storageData, backupsData, hostMetricsData 
 
     const nodesContainer = el('nodesContainer');
     if (nodesContainer) {
+        nodesContainer.className = 'cluster-scroll-row';
         const nodesHtml = clusterData.nodes.map(node => {
         const hostMetric = hostMetricsMap.get(node.name) || null;
         const hostMetricProblems = getHostMetricProblemMessages(hostMetric, hostMetricsRenderSettings);
@@ -8521,6 +9319,11 @@ function updateDashboard(clusterData, storageData, backupsData, hostMetricsData 
 // Update storage UI
 function updateStorageUI(data) {
     if (!data || !data.all) return;
+    const storageTableEl = document.getElementById('storageTable');
+    if (storageTableEl) {
+        const wrap = storageTableEl.closest('.table-responsive');
+        if (wrap) wrap.style.display = '';
+    }
     
     setHTMLIfChanged('storageStats', `
         <div class="col-md-3"><div class="stat-card"><div class="stat-value">${data.summary.total}</div><div class="stat-label">${t('storageTotal')}</div></div></div>
@@ -9827,6 +10630,7 @@ async function loadSettings() {
     monitorScreensOrder = Array.isArray(data.monitor_screens_order) && data.monitor_screens_order.length
         ? normalizeMonitorScreensOrder(data.monitor_screens_order)
         : MONITOR_SCREEN_IDS_ALL.slice();
+    monitorScreensEnabled = normalizeMonitorScreensEnabled(data.monitor_screens_enabled);
     speedtestClientEnabled = !!(data.speedtest_enabled === true || data.speedtest_enabled === '1'
         || data.speedtest_enabled === 1 || data.speedtest_enabled === 'true');
     const spEn = document.getElementById('speedtestEnabledSelect');

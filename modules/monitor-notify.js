@@ -4,6 +4,7 @@ const { log } = require('./utils');
 const store = require('./settings-store');
 const connectionStore = require('./connection-store');
 const proxmox = require('./proxmox-api');
+const truenas = require('./truenas-api');
 const { checkOne } = require('./routes/health');
 const { sendTelegramMessage, formatTelegramNotifyMessage } = require('./telegram');
 const { pollNetdevMonitoringItems } = require('./routes/netdevices-snmp');
@@ -84,6 +85,47 @@ function getProxmoxConnectionId() {
     return r ? String(r.connectionId) : null;
 }
 
+function resolveTrueNASConnectionFromStore() {
+    const raw = store.getSetting('truenas_servers');
+    const idx = parseInt(store.getSetting('current_truenas_index'), 10) || 0;
+    let servers = [];
+    try {
+        servers = JSON.parse(raw);
+    } catch {
+        servers = [];
+    }
+    if (!Array.isArray(servers) || !servers.length) return null;
+    const url = normalizeUrl(servers[idx] || servers[0]);
+    if (!url) return null;
+    const mapRaw = store.getSetting('connection_id_map');
+    let map = {};
+    try {
+        map = JSON.parse(mapRaw);
+    } catch {
+        map = {};
+    }
+    const key = `truenas|${url}`;
+    let connId = map[key];
+    if (!connId) {
+        for (const k of Object.keys(map)) {
+            if (String(k).startsWith('truenas|')) {
+                connId = map[k];
+                if (connId) break;
+            }
+        }
+    }
+    if (!connId) return null;
+    const conn = connectionStore.getConnectionById(String(connId));
+    if (!conn || conn.type !== 'truenas') return null;
+    return { apiKey: conn.secret, serverUrl: url, connectionId: connId };
+}
+
+function getTrueNASConnection() {
+    const r = resolveTrueNASConnectionFromStore();
+    if (!r) return null;
+    return { apiKey: r.apiKey, serverUrl: r.serverUrl };
+}
+
 function parseNotifyState() {
     const raw = store.getSetting('telegram_notify_state');
     if (!raw) {
@@ -96,7 +138,11 @@ function parseNotifyState() {
             hostLink: {},
             upsLoad: {},
             upsPower: {},
-            upsCharge: {}
+            upsCharge: {},
+            truenasDisk: {},
+            truenasPoolUsage: {},
+            truenasService: {},
+            truenasPoolState: {}
         };
     }
     try {
@@ -120,7 +166,11 @@ function parseNotifyState() {
             hostLink: p.hostLink && typeof p.hostLink === 'object' ? p.hostLink : {},
             upsLoad: p.upsLoad && typeof p.upsLoad === 'object' ? p.upsLoad : {},
             upsPower: p.upsPower && typeof p.upsPower === 'object' ? p.upsPower : {},
-            upsCharge: p.upsCharge && typeof p.upsCharge === 'object' ? p.upsCharge : {}
+            upsCharge: p.upsCharge && typeof p.upsCharge === 'object' ? p.upsCharge : {},
+            truenasDisk: p.truenasDisk && typeof p.truenasDisk === 'object' ? p.truenasDisk : {},
+            truenasPoolUsage: p.truenasPoolUsage && typeof p.truenasPoolUsage === 'object' ? p.truenasPoolUsage : {},
+            truenasService: p.truenasService && typeof p.truenasService === 'object' ? p.truenasService : {},
+            truenasPoolState: p.truenasPoolState && typeof p.truenasPoolState === 'object' ? p.truenasPoolState : {}
         };
     } catch {
         return {
@@ -132,7 +182,11 @@ function parseNotifyState() {
             hostLink: {},
             upsLoad: {},
             upsPower: {},
-            upsCharge: {}
+            upsCharge: {},
+            truenasDisk: {},
+            truenasPoolUsage: {},
+            truenasService: {},
+            truenasPoolState: {}
         };
     }
 }
@@ -198,6 +252,7 @@ async function runNotifyTick() {
 
     const conn = getProxmoxConnection();
     const connectionId = getProxmoxConnectionId();
+    const tnConn = getTrueNASConnection();
 
     let nodeDetails = null;
     let vmByVmid = null;
@@ -257,6 +312,24 @@ async function runNotifyTick() {
             upsBySlot = new Map();
         }
         return upsBySlot;
+    }
+
+    let trueNASOverview = null;
+    async function getTrueNASOverview() {
+        if (trueNASOverview) return trueNASOverview;
+        if (!tnConn) return null;
+        try {
+            const [pools, disks, services] = await Promise.all([
+                truenas.getPools(tnConn.apiKey, tnConn.serverUrl),
+                truenas.getDisks(tnConn.apiKey, tnConn.serverUrl),
+                truenas.getServices(tnConn.apiKey, tnConn.serverUrl)
+            ]);
+            trueNASOverview = { pools: pools || [], disks: disks || [], services: services || [] };
+        } catch (e) {
+            log('warn', `[MonitorNotify] truenas batch: ${e.message}`);
+            trueNASOverview = { pools: [], disks: [], services: [] };
+        }
+        return trueNASOverview;
     }
 
     function getUpsPowerState(upsItem) {
@@ -470,6 +543,139 @@ async function runNotifyTick() {
                         await sendTelegramMessage(token, chatId, msg, threadId, { proxyUrl: telegramProxyUrl });
                     }
                     state.hostLink[linkStateKey] = mbps;
+                }
+                continue;
+            }
+
+            if (rule.type === 'truenas_disk_state') {
+                const ov = await getTrueNASOverview();
+                if (!ov) continue;
+                const selected = Array.isArray(rule.diskIds) && rule.diskIds.length
+                    ? rule.diskIds
+                    : (rule.diskId ? [rule.diskId] : []);
+                for (const diskIdRaw of selected) {
+                    const diskId = String(diskIdRaw || '').trim();
+                    if (!diskId) continue;
+                    const disk = (ov.disks || []).find((d, idx) => {
+                        const id = String(d?.entityId || d?.id || d?.name || (idx + 1));
+                        return id === diskId;
+                    });
+                    if (!disk) continue;
+                    const nowState = disk.healthy === false ? 'degraded' : 'healthy';
+                    const key = `${String(rule.id || 'rule')}|${diskId}`;
+                    const prev = state.truenasDisk[key];
+                    if (prev !== undefined && prev !== nowState) {
+                        const diskName = String(disk.name || diskId);
+                        const stateRu = nowState === 'healthy' ? 'Исправен' : 'Проблема';
+                        const msg = formatTelegramNotifyMessage(
+                            rule,
+                            { diskName, diskId, state: nowState, stateRu },
+                            `TrueNAS disk «${diskName}»\n${stateRu}`
+                        );
+                        await sendTelegramMessage(token, chatId, msg, threadId, { proxyUrl: telegramProxyUrl });
+                    }
+                    state.truenasDisk[key] = nowState;
+                }
+                continue;
+            }
+
+            if (rule.type === 'truenas_service_state') {
+                const ov = await getTrueNASOverview();
+                if (!ov) continue;
+                const selected = Array.isArray(rule.truenasServiceIds) && rule.truenasServiceIds.length
+                    ? rule.truenasServiceIds
+                    : (rule.truenasServiceId ? [rule.truenasServiceId] : []);
+                for (const serviceIdRaw of selected) {
+                    const serviceId = String(serviceIdRaw || '').trim();
+                    if (!serviceId) continue;
+                    const svc = (ov.services || []).find((s, idx) => {
+                        const id = String(s?.entityId || s?.id || s?.name || (idx + 1));
+                        return id === serviceId;
+                    });
+                    if (!svc) continue;
+                    const nowState = svc.running ? 'running' : 'stopped';
+                    const key = `${String(rule.id || 'rule')}|${serviceId}`;
+                    const prev = state.truenasService[key];
+                    if (prev !== undefined && prev !== nowState) {
+                        const serviceName = String(svc.name || serviceId);
+                        const stateRu = nowState === 'running' ? 'Запущен' : 'Остановлен';
+                        const msg = formatTelegramNotifyMessage(
+                            rule,
+                            { serviceName, serviceId, state: nowState, stateRu },
+                            `TrueNAS service «${serviceName}»\n${stateRu}`
+                        );
+                        await sendTelegramMessage(token, chatId, msg, threadId, { proxyUrl: telegramProxyUrl });
+                    }
+                    state.truenasService[key] = nowState;
+                }
+                continue;
+            }
+
+            if (rule.type === 'truenas_pool_state') {
+                const ov = await getTrueNASOverview();
+                if (!ov) continue;
+                const selected = Array.isArray(rule.poolIds) && rule.poolIds.length
+                    ? rule.poolIds
+                    : (rule.poolId ? [rule.poolId] : []);
+                for (const poolIdRaw of selected) {
+                    const poolId = String(poolIdRaw || '').trim();
+                    if (!poolId) continue;
+                    const pool = (ov.pools || []).find((p, idx) => {
+                        const id = String(p?.id || p?.name || (idx + 1));
+                        return id === poolId;
+                    });
+                    if (!pool) continue;
+                    const nowState = pool.healthy === false ? 'degraded' : 'healthy';
+                    const key = `${String(rule.id || 'rule')}|${poolId}`;
+                    const prev = state.truenasPoolState[key];
+                    if (prev !== undefined && prev !== nowState) {
+                        const poolName = String(pool.name || poolId);
+                        const stateRu = nowState === 'healthy' ? 'Исправен' : 'Проблема';
+                        const msg = formatTelegramNotifyMessage(
+                            rule,
+                            { poolName, poolId, state: nowState, stateRu },
+                            `TrueNAS pool «${poolName}»\n${stateRu}`
+                        );
+                        await sendTelegramMessage(token, chatId, msg, threadId, { proxyUrl: telegramProxyUrl });
+                    }
+                    state.truenasPoolState[key] = nowState;
+                }
+                continue;
+            }
+
+            if (rule.type === 'truenas_pool_usage') {
+                const ov = await getTrueNASOverview();
+                if (!ov) continue;
+                const thr = Number(rule.poolUsageThresholdPct);
+                const selected = Array.isArray(rule.poolIds) && rule.poolIds.length
+                    ? rule.poolIds
+                    : (rule.poolId ? [rule.poolId] : []);
+                for (const poolIdRaw of selected) {
+                    const poolId = String(poolIdRaw || '').trim();
+                    if (!poolId) continue;
+                    const pool = (ov.pools || []).find((p, idx) => {
+                        const id = String(p?.id || p?.name || (idx + 1));
+                        return id === poolId;
+                    });
+                    if (!pool) continue;
+                    const total = Number(pool.total || 0);
+                    const used = Number(pool.used || 0);
+                    if (!Number.isFinite(total) || total <= 0 || !Number.isFinite(used)) continue;
+                    const usagePct = (used / total) * 100;
+                    const nowLevel = usagePct >= thr ? 'high' : 'ok';
+                    const key = `${String(rule.id || 'rule')}|${poolId}`;
+                    const prev = state.truenasPoolUsage[key];
+                    if (prev !== undefined && prev !== nowLevel) {
+                        const poolName = String(pool.name || poolId);
+                        const stateRu = nowLevel === 'high' ? 'Порог превышен' : 'Норма';
+                        const msg = formatTelegramNotifyMessage(
+                            rule,
+                            { poolName, poolId, usagePct: usagePct.toFixed(1), thr: String(thr), state: nowLevel, stateRu },
+                            `TrueNAS pool «${poolName}»: ${usagePct.toFixed(1)}% used (threshold ${thr}%)`
+                        );
+                        await sendTelegramMessage(token, chatId, msg, threadId, { proxyUrl: telegramProxyUrl });
+                    }
+                    state.truenasPoolUsage[key] = nowLevel;
                 }
                 continue;
             }

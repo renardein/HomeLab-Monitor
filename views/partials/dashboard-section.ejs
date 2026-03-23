@@ -36,6 +36,44 @@
                 </div>
             </div>
 
+            <div class="row mb-4" id="nocOverviewSection" style="display: none;">
+                <div class="col-12">
+                    <div class="card noc-panel">
+                        <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+                            <h5 class="mb-0"><i class="bi bi-broadcast-pin me-2"></i><span id="nocOverviewTitle">NOC Overview</span></h5>
+                            <div class="btn-group btn-group-sm" role="group" aria-label="NOC filter">
+                                <button type="button" class="btn btn-outline-primary active" id="nocFilterAllBtn" onclick="setNocFilter('all')">All</button>
+                                <button type="button" class="btn btn-outline-danger" id="nocFilterCriticalBtn" onclick="setNocFilter('critical')">Critical</button>
+                                <button type="button" class="btn btn-outline-warning" id="nocFilterWarningBtn" onclick="setNocFilter('warning')">Warning</button>
+                                <button type="button" class="btn btn-outline-info" id="nocFilterChangedBtn" onclick="setNocFilter('changed')">Changed</button>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-2 mb-3" id="nocAlarmStrip">
+                                <div class="col-6 col-lg-3"><div class="noc-kpi"><div class="noc-kpi__value" id="nocCriticalNow">0</div><div class="noc-kpi__label">Critical</div></div></div>
+                                <div class="col-6 col-lg-3"><div class="noc-kpi"><div class="noc-kpi__value" id="nocWarningNow">0</div><div class="noc-kpi__label">Warning</div></div></div>
+                                <div class="col-6 col-lg-3"><div class="noc-kpi"><div class="noc-kpi__value" id="nocChangedNow">0</div><div class="noc-kpi__label">Changed</div></div></div>
+                                <div class="col-6 col-lg-3"><div class="noc-kpi"><div class="noc-kpi__value" id="nocTotalOpen">0</div><div class="noc-kpi__label">Open</div></div></div>
+                            </div>
+                            <div class="row g-3">
+                                <div class="col-xl-8">
+                                    <div class="noc-list-wrap">
+                                        <div class="noc-list-title" id="nocIncidentListTitle">Incident queue</div>
+                                        <div id="nocIncidentList" class="noc-incident-list"></div>
+                                    </div>
+                                </div>
+                                <div class="col-xl-4">
+                                    <div class="noc-list-wrap">
+                                        <div class="noc-list-title" id="nocDomainHealthTitle">Domain health</div>
+                                        <div id="nocDomainGrid" class="row g-2"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Cluster resource summary -->
             <div class="row mb-4">
                 <div class="col-12">
@@ -142,6 +180,12 @@
                         <i class="bi bi-people me-1"></i><span id="tabQuorum">Quorum</span>
                     </button>
                 </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="tiles-tab" data-bs-toggle="tab" data-bs-target="#tiles" type="button"
+                        role="tab">
+                        <i class="bi bi-grid-3x3-gap me-1"></i><span id="tabTiles">Tiles</span>
+                    </button>
+                </li>
             </ul>
 
             <!-- Loading indicator -->
@@ -242,6 +286,10 @@
                             <div class="row" id="quorumNodesList"></div>
                         </div>
                     </div>
+                </div>
+
+                <div class="tab-pane fade" id="tiles" role="tabpanel">
+                    <div class="row g-3" id="tilesNormalGrid"></div>
                 </div>
             </div>
 
@@ -406,6 +454,31 @@
                     <div class="mt-2 small text-muted" id="speedtestMonitorExtra"></div>
                 </div>
             </div>
+        </div>
+
+        <!-- Monitor: Tiles screen -->
+        <div id="tilesMonitorSection" class="mb-4 monitor-screen" style="display: none;">
+            <div class="row g-3" id="tilesMonitorGrid"></div>
+        </div>
+
+        <!-- Monitor: TrueNAS Pools -->
+        <div id="truenasPoolsMonitorSection" class="mb-4 monitor-screen" style="display: none;">
+            <div class="row g-3" id="truenasPoolsMonitorGrid"></div>
+        </div>
+
+        <!-- Monitor: TrueNAS Disks -->
+        <div id="truenasDisksMonitorSection" class="mb-4 monitor-screen" style="display: none;">
+            <div class="row g-3" id="truenasDisksMonitorGrid"></div>
+        </div>
+
+        <!-- Monitor: TrueNAS Services -->
+        <div id="truenasServicesMonitorSection" class="mb-4 monitor-screen" style="display: none;">
+            <div class="row g-3" id="truenasServicesMonitorGrid"></div>
+        </div>
+
+        <!-- Monitor: TrueNAS Apps -->
+        <div id="truenasAppsMonitorSection" class="mb-4 monitor-screen" style="display: none;">
+            <div class="row g-3" id="truenasAppsMonitorGrid"></div>
         </div>
 
         <!-- Monitor: backups screen -->

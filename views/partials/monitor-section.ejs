@@ -1,12 +1,6 @@
 <!-- Панель режима монитора (тип сервера + навигация экранов + темы + выход) -->
         <div id="monitorToolbar" class="monitor-toolbar">
             <div class="monitor-toolbar-left">
-                <div id="monitorServerTypeSelectWrap" class="monitor-toolbar-server-wrap">
-                    <select class="form-select form-select-sm monitor-toolbar-select" id="monitorServerTypeSelect" onchange="setServerType(this.value)">
-                        <option value="proxmox">Proxmox</option>
-                        <option value="truenas">TrueNAS</option>
-                    </select>
-                </div>
                 <span class="monitor-toolbar-title monitor-toolbar-title--home" id="monitorToolbarTitle" role="button" tabindex="0" onclick="goToAppHome()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();goToAppHome();}">Монитор</span>
             </div>
             <div class="monitor-toolbar-theme">

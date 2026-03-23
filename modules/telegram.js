@@ -147,6 +147,36 @@ function buildSampleVarsForTelegramRule(rule) {
                 prev: '1000',
                 mbps: '100'
             };
+        case 'truenas_disk_state':
+            return {
+                diskName: 'ada0',
+                diskId: String(r.diskId || 'ada0'),
+                state: 'healthy',
+                stateRu: 'Исправен'
+            };
+        case 'truenas_pool_usage':
+            return {
+                poolName: 'tank',
+                poolId: String(r.poolId || 'tank'),
+                usagePct: '87.2',
+                thr: String(r.poolUsageThresholdPct != null ? r.poolUsageThresholdPct : 85),
+                state: 'high',
+                stateRu: 'Порог превышен'
+            };
+        case 'truenas_service_state':
+            return {
+                serviceName: 'smb',
+                serviceId: String(r.truenasServiceId || 'smb'),
+                state: 'running',
+                stateRu: 'Запущен'
+            };
+        case 'truenas_pool_state':
+            return {
+                poolName: 'tank',
+                poolId: String(r.poolId || 'tank'),
+                state: 'healthy',
+                stateRu: 'Исправен'
+            };
         case 'ups_load_high':
             return {
                 upsName: `UPS ${Number.isFinite(firstUpsSlot) ? firstUpsSlot : 1}`,
@@ -280,6 +310,19 @@ function buildTelegramTestRuleMessage(rule) {
             break;
         case 'netdev_updown':
             lines.push(escapeMarkdownV2(`Target: SNMP slot ${r.netdevSlot != null ? r.netdevSlot : '—'}`));
+            break;
+        case 'truenas_disk_state':
+            lines.push(escapeMarkdownV2(`Target: TrueNAS disk ${r.diskId != null ? r.diskId : '—'}`));
+            break;
+        case 'truenas_pool_usage':
+            lines.push(escapeMarkdownV2(`Target: TrueNAS pool ${r.poolId != null ? r.poolId : '—'}`));
+            lines.push(escapeMarkdownV2(`Threshold: ${r.poolUsageThresholdPct != null ? r.poolUsageThresholdPct : '—'} %`));
+            break;
+        case 'truenas_service_state':
+            lines.push(escapeMarkdownV2(`Target: TrueNAS service ${r.truenasServiceId != null ? r.truenasServiceId : '—'}`));
+            break;
+        case 'truenas_pool_state':
+            lines.push(escapeMarkdownV2(`Target: TrueNAS pool ${r.poolId != null ? r.poolId : '—'}`));
             break;
         case 'ups_load_high':
             lines.push(escapeMarkdownV2(`Target: UPS slot ${r.upsSlot != null ? r.upsSlot : '—'}`));

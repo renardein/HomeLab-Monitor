@@ -31,6 +31,8 @@
             --hm-label-tracking: 0.04em;
             --hm-progress-h: 10px;
             --hm-progress-h-monitor: 8px;
+            --homelab-font-scale: 1;
+            --homelab-content-scale: 1;
         }
 
         /* KPI-блоки (Speedtest и др.): одна шкала подпись / значение */
@@ -409,6 +411,31 @@
             font-weight: 700;
             line-height: var(--hm-line-tight);
             color: #333;
+        }
+
+        /* HomeLab: increase typography with free space (set by JS). */
+        #dashboardContent .stat-value {
+            font-size: calc(var(--hm-text-stat) * var(--homelab-font-scale));
+        }
+        #dashboardContent .card .display-6 {
+            font-size: calc(var(--hm-text-metric) * var(--homelab-font-scale)) !important;
+        }
+        #dashboardContent .card-header h5,
+        #dashboardContent .cluster-scroll-item .node-card h5 {
+            font-size: calc(var(--hm-text-lg) * var(--homelab-font-scale));
+        }
+        #dashboardContent .nav-tabs .nav-link {
+            font-size: calc(var(--hm-text-base) * var(--homelab-font-scale));
+        }
+        #dashboardContent .cluster-scroll-item .node-card .small {
+            font-size: calc(var(--hm-text-sm) * var(--homelab-font-scale));
+        }
+        #dashboardContent {
+            transform-origin: top center;
+            transform: scale(var(--homelab-content-scale));
+            width: calc(100% / var(--homelab-content-scale));
+            margin-left: auto;
+            margin-right: auto;
         }
         .stat-label {
             color: #666;
@@ -1550,6 +1577,86 @@
             min-height: 0 !important;
         }
 
+.noc-panel {
+    border: 1px solid rgba(108, 117, 125, 0.25);
+}
+
+.noc-kpi {
+    border: 1px solid rgba(108, 117, 125, 0.22);
+    border-radius: 0.6rem;
+    padding: 0.55rem 0.65rem;
+    min-height: 84px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.noc-kpi__value {
+    font-size: 1.35rem;
+    font-weight: 700;
+    line-height: 1.1;
+}
+
+.noc-kpi__label {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    opacity: 0.75;
+}
+
+.noc-list-wrap {
+    border: 1px solid rgba(108, 117, 125, 0.2);
+    border-radius: 0.65rem;
+    padding: 0.7rem;
+    min-height: 100%;
+}
+
+.noc-list-title {
+    font-size: 0.82rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 700;
+    opacity: 0.8;
+    margin-bottom: 0.55rem;
+}
+
+.noc-incident-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+}
+
+.noc-incident {
+    border: 1px solid rgba(108, 117, 125, 0.2);
+    border-radius: 0.55rem;
+    padding: 0.45rem 0.55rem;
+}
+
+.noc-incident--critical {
+    border-color: rgba(220, 53, 69, 0.45);
+}
+
+.noc-incident--warning {
+    border-color: rgba(255, 193, 7, 0.5);
+}
+
+.noc-domain {
+    border: 1px solid rgba(108, 117, 125, 0.2);
+    border-radius: 0.55rem;
+    padding: 0.45rem 0.55rem;
+}
+
+.noc-domain__label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    opacity: 0.75;
+}
+
+.noc-domain__value {
+    font-size: 1.1rem;
+    font-weight: 700;
+}
+
         /* Экран бэкапов: весь viewport под тулбар, без скролла */
         body.monitor-mode #backupsMonitorSection.monitor-backups-screen {
             display: flex;
@@ -2061,6 +2168,17 @@
             overflow: hidden;
             height: 100%;
         }
+
+#tilesMonitorGrid .cluster-scroll-item {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: 100%;
+}
+
+#tilesMonitorGrid .tiles-monitor-cell .node-card {
+    height: 100%;
+    margin-bottom: 0;
+}
 
         .monitor-view__panel-title {
             flex: 0 0 auto;

@@ -73,6 +73,7 @@ function computeSetupCompleted(st) {
 
 const SETTING_KEYS = [
     'theme', 'refresh_interval', 'units', 'thresholds',
+    'ui_design', 'classic_design',
     'monitor_theme', 'monitor_mode', 'server_type',
     'current_server_index', 'current_truenas_index',
     'proxmox_servers', 'truenas_servers', 'connection_id_map',
@@ -96,6 +97,7 @@ const SETTING_KEYS = [
     'monitor_vms',
     'monitor_hidden_vm_ids',
     'monitor_screens_order',
+    'monitor_screens_enabled',
     'cluster_dashboard_tiles',
     'dashboard_weather_city',
     'dashboard_timezone',
@@ -137,6 +139,7 @@ router.get('/', (req, res) => {
                     key === 'monitor_vms' ||
                     key === 'monitor_hidden_vm_ids' ||
                     key === 'monitor_screens_order' ||
+                    key === 'monitor_screens_enabled' ||
                     key === 'cluster_dashboard_tiles' ||
                     key === 'telegram_routes' ||
                     key === 'telegram_notification_rules'
@@ -163,6 +166,11 @@ router.get('/', (req, res) => {
                     key === 'monitor_show_weather'
                 ) {
                     payload[key] = !(value === '0' || value === 'false' || value === false);
+                } else if (key === 'classic_design') {
+                    payload[key] = !(value === '0' || value === 'false' || value === false);
+                } else if (key === 'ui_design') {
+                    const raw = String(value || '').trim().toLowerCase();
+                    payload[key] = raw === 'classic' ? 'classic' : 'retro';
                 } else {
                     payload[key] = value;
                 }
@@ -179,6 +187,8 @@ router.get('/', (req, res) => {
             if (payload[k] === undefined) payload[k] = true;
             else payload[k] = !(payload[k] === false || payload[k] === '0' || payload[k] === 0 || payload[k] === 'false');
         }
+        if (payload.classic_design === undefined) payload.classic_design = false;
+        if (payload.ui_design === undefined) payload.ui_design = payload.classic_design ? 'classic' : 'retro';
         if (!payload.telegram_routes || typeof payload.telegram_routes !== 'object') {
             payload.telegram_routes = { service: {}, vm: {}, node: {}, netdev: {} };
         }
@@ -213,6 +223,20 @@ router.post('/', (req, res) => {
                 return normalizeThresholdsObject(v);
             })(),
             monitor_theme: body.monitor_theme ?? body.monitorTheme,
+            ui_design: (() => {
+                const v = body.ui_design ?? body.uiDesign;
+                if (v === undefined) return undefined;
+                return String(v).trim().toLowerCase() === 'classic' ? 'classic' : 'retro';
+            })(),
+            classic_design: (() => {
+                const v = body.classic_design ?? body.classicDesign;
+                if (v === undefined) {
+                    const d = String(body.ui_design ?? body.uiDesign ?? '').trim().toLowerCase();
+                    if (!d) return undefined;
+                    return d === 'classic' ? '1' : '0';
+                }
+                return v === true || v === '1' || v === 1 || v === 'true' ? '1' : '0';
+            })(),
             monitor_mode: body.monitor_mode ?? body.monitorMode,
             server_type: body.server_type ?? body.serverType,
             current_server_index: body.current_server_index ?? body.currentServerIndex,
@@ -232,6 +256,7 @@ router.post('/', (req, res) => {
             monitor_vm_icons: body.monitor_vm_icons ?? body.monitorVmIcons,
             monitor_vm_icon_colors: body.monitor_vm_icon_colors ?? body.monitorVmIconColors,
             monitor_screens_order: body.monitor_screens_order ?? body.monitorScreensOrder,
+            monitor_screens_enabled: body.monitor_screens_enabled ?? body.monitorScreensEnabled,
             cluster_dashboard_tiles: body.cluster_dashboard_tiles ?? body.clusterDashboardTiles,
             dashboard_weather_city: body.dashboard_weather_city ?? body.dashboardWeatherCity,
             dashboard_timezone: body.dashboard_timezone ?? body.dashboardTimezone,

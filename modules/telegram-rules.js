@@ -7,6 +7,10 @@ const RULE_TYPES = new Set([
     'netdev_updown',
     'host_temp',
     'host_link_speed',
+    'truenas_disk_state',
+    'truenas_pool_usage',
+    'truenas_service_state',
+    'truenas_pool_state',
     'ups_load_high',
     'ups_on_battery',
     'ups_back_to_mains',
@@ -28,6 +32,11 @@ function normalizeNumberList(raw) {
     return raw
         .map((x) => parseInt(x, 10))
         .filter((n) => Number.isFinite(n));
+}
+
+function normalizeNonEmptyStringList(raw) {
+    if (!Array.isArray(raw)) return [];
+    return raw.map((x) => safeStr(x)).filter(Boolean);
 }
 
 function migrateLegacyTelegramRoutesToRules(routes) {
@@ -164,6 +173,38 @@ function normalizeRule(raw) {
         if (!nodeNames.length && !fallback) return null;
         const uniq = nodeNames.length ? Array.from(new Set(nodeNames)) : [fallback];
         return { ...base, nodeName: uniq[0], nodeNames: uniq };
+    }
+    if (type === 'truenas_disk_state') {
+        const diskIds = normalizeNonEmptyStringList(raw.diskIds);
+        const fallback = safeStr(raw.diskId);
+        if (!diskIds.length && !fallback) return null;
+        const uniq = diskIds.length ? Array.from(new Set(diskIds)) : [fallback];
+        return { ...base, diskId: uniq[0], diskIds: uniq };
+    }
+    if (type === 'truenas_service_state') {
+        const truenasServiceIds = normalizeNonEmptyStringList(raw.truenasServiceIds);
+        const fallback = safeStr(raw.truenasServiceId);
+        if (!truenasServiceIds.length && !fallback) return null;
+        const uniq = truenasServiceIds.length ? Array.from(new Set(truenasServiceIds)) : [fallback];
+        return { ...base, truenasServiceId: uniq[0], truenasServiceIds: uniq };
+    }
+    if (type === 'truenas_pool_state') {
+        const poolIds = normalizeNonEmptyStringList(raw.poolIds);
+        const fallback = safeStr(raw.poolId);
+        if (!poolIds.length && !fallback) return null;
+        const uniq = poolIds.length ? Array.from(new Set(poolIds)) : [fallback];
+        return { ...base, poolId: uniq[0], poolIds: uniq };
+    }
+    if (type === 'truenas_pool_usage') {
+        const poolIds = normalizeNonEmptyStringList(raw.poolIds);
+        const fallback = safeStr(raw.poolId);
+        if (!poolIds.length && !fallback) return null;
+        const uniq = poolIds.length ? Array.from(new Set(poolIds)) : [fallback];
+        let t = parseFloat(raw.poolUsageThresholdPct);
+        if (!Number.isFinite(t)) t = 85;
+        if (t < 0) t = 0;
+        if (t > 100) t = 100;
+        return { ...base, poolId: uniq[0], poolIds: uniq, poolUsageThresholdPct: t };
     }
     if (type === 'ups_load_high') {
         const upsSlots = normalizeNumberList(raw.upsSlots);
