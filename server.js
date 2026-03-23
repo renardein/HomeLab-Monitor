@@ -1,4 +1,6 @@
 const express = require('express');
+const http = require('http');
+const https = require('https');
 const cors = require('cors');
 const path = require('path');
 const helmet = require('helmet');
@@ -9,8 +11,17 @@ const i18n = require('./modules/i18n');
 const { log } = require('./modules/utils');
 const { getDb, closeDb } = require('./modules/db');
 
+if (config.ssl.error) {
+    log('error', '[Server] SSL misconfiguration', { error: config.ssl.error });
+    process.exit(1);
+}
+
 // Создаем приложение
 const app = express();
+
+if (config.trustProxy) {
+    app.set('trust proxy', config.trustProxy);
+}
 
 // EJS templates (for splitting index.html into partials safely)
 app.set('views', path.join(__dirname, 'views'));
@@ -157,8 +168,12 @@ app.get('/api/diagnose', (req, res) => {
     res.json({
         server: {
             port: config.port,
+            bindHost: config.bindHost,
             env: config.env,
-            version: config.version
+            version: config.version,
+            https: config.ssl.enabled,
+            trustProxy: !!config.trustProxy,
+            publicUrl: config.publicUrl || null
         },
         proxmox: {
             host: config.proxmox.host,
@@ -206,7 +221,7 @@ app.get('/api/auth/check', (req, res) => {
 app.post('/api/auth/logout', (req, res) => {
     res.clearCookie('proxmox_token', {
         httpOnly: true,
-        secure: config.env === 'production',
+        secure: config.cookieSecure,
         sameSite: 'lax',
         path: '/'
     });
@@ -247,14 +262,23 @@ getDb()
         } catch (e) {
             log('warn', `Monitor notify scheduler: ${e.message}`);
         }
-        app.listen(config.port, '0.0.0.0', () => {
+        const scheme = config.ssl.enabled ? 'https' : 'http';
+        const publicBase = config.publicUrl || `${scheme}://localhost:${config.port}`;
+        const srv = config.ssl.enabled
+            ? https.createServer(config.ssl.options, app)
+            : http.createServer(app);
+        srv.listen(config.port, config.bindHost, () => {
             log('info', '[Server] started', {
                 port: config.port,
+                bind: config.bindHost,
+                scheme: config.ssl.enabled ? 'HTTPS' : 'HTTP',
                 env: config.env,
                 db: 'SQLite (data/app.db)',
                 proxmox: `${config.proxmox.host}:${config.proxmox.port}`,
-                cookies: config.env === 'production' ? 'Secure' : 'Development',
-                url: `http://localhost:${config.port}`
+                trustProxy: !!config.trustProxy,
+                publicUrl: config.publicUrl || null,
+                cookies: config.cookieSecure ? 'Secure' : 'Non-secure',
+                url: publicBase
             });
         });
     })

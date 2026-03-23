@@ -32,3 +32,9 @@ Thumbs.db
 data/connections.json
 data/app.db
 data/*.db
+
+# TLS material in project certs/ (see certs/README.md)
+certs/*.pem
+certs/*.key
+certs/*.crt
+certs/*.cer

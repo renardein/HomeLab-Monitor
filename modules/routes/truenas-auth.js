@@ -73,13 +73,13 @@ router.get('/key', (req, res) => {
 router.post('/logout', (req, res) => {
     res.clearCookie('truenas_key', {
         httpOnly: true,
-        secure: config.env === 'production',
+        secure: config.cookieSecure,
         sameSite: 'lax',
         path: '/'
     });
     res.clearCookie('truenas_server', {
         httpOnly: true,
-        secure: config.env === 'production',
+        secure: config.cookieSecure,
         sameSite: 'lax',
         path: '/'
     });

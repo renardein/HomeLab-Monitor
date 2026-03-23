@@ -12,6 +12,8 @@ router.get('/', (req, res) => {
         timestamp: new Date().toISOString(),
         server: 'HomeLab Monitor',
         version: config.version,
+        https: config.ssl.enabled,
+        publicUrl: config.publicUrl || null,
         proxmox: {
             host: config.proxmox.host,
             port: config.proxmox.port

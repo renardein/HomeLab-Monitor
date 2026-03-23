@@ -95,13 +95,13 @@ router.get('/token', (req, res) => {
 router.post('/logout', (req, res) => {
     res.clearCookie('proxmox_token', {
         httpOnly: true,
-        secure: config.env === 'production',
+        secure: config.cookieSecure,
         sameSite: 'lax',
         path: '/'
     });
     res.clearCookie('proxmox_server', {
         httpOnly: true,
-        secure: config.env === 'production',
+        secure: config.cookieSecure,
         sameSite: 'lax',
         path: '/'
     });
