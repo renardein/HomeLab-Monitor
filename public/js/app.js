@@ -6302,8 +6302,7 @@ function buildClusterTrueNASPoolTileHtml(tile) {
     const badgeClass = pool.healthy === false ? 'bg-danger' : 'bg-success';
     const bodyHtml = [
         buildClusterDashboardMetricCell(t('storageUsedSpace') || 'Used', formatSize(used), usagePercent, usagePercent >= 85 ? 'bg-danger' : (usagePercent >= 65 ? 'bg-warning' : 'bg-success'), 'col-6'),
-        buildClusterDashboardMetricCell(t('storageTotalSpace') || 'Total', formatSize(total), null, null, 'col-6'),
-        buildClusterDashboardMetricCell(t('monVmStatusCol') || 'Status', statusLabel, null, null, 'col-12 mt-2')
+        buildClusterDashboardMetricCell(t('storageTotalSpace') || 'Total', formatSize(total), null, null, 'col-6')
     ].join('');
     return buildClusterDashboardTileShell(
         `<i class="bi bi-database me-2 text-primary"></i><span class="text-truncate">${escapeHtml(pool.name || 'Pool')}</span>`,
@@ -6326,16 +6325,17 @@ function buildClusterTrueNASDiskTileHtml(tile) {
     if (!disk) return buildClusterDashboardUnavailableTile('TrueNAS Disk', 'Диск не найден');
     const healthy = disk.healthy !== false;
     const statusLabel = disk.statusLabel || (healthy ? 'healthy' : 'degraded');
+    const diskLabel = String(disk.name || '').trim();
+    const diskTitle = String(disk.model || disk.name || 'Disk').trim();
     const badgeClass = healthy ? 'bg-success' : 'bg-warning text-dark';
     const bodyHtml = [
-        buildClusterDashboardMetricCell('Model', disk.model || '—', null, null, 'col-6'),
         buildClusterDashboardMetricCell('SN', disk.serial || '—', null, null, 'col-6'),
         buildClusterDashboardMetricCell('Size', Number.isFinite(Number(disk.sizeBytes)) ? formatSize(Number(disk.sizeBytes)) : '—', null, null, 'col-6 mt-2'),
         buildClusterDashboardMetricCell('Temp', disk.temperatureC == null ? '—' : `${disk.temperatureC} C`, null, null, 'col-6 mt-2')
     ].join('');
     return buildClusterDashboardTileShell(
-        `<i class="bi bi-device-hdd me-2 text-primary"></i><span class="text-truncate">${escapeHtml(disk.name || 'Disk')}</span>`,
-        `<span class="badge ${badgeClass}">${escapeHtml(statusLabel)}</span>`,
+        `<i class="bi bi-device-hdd me-2 text-primary"></i><span class="text-truncate">${escapeHtml(diskTitle || 'Disk')}</span>`,
+        `<span class="badge ${badgeClass}">${escapeHtml(statusLabel)}${diskLabel ? ` · ${escapeHtml(diskLabel)}` : ''}</span>`,
         bodyHtml,
         escapeHtml(disk.pool || '')
     );
@@ -6356,8 +6356,7 @@ function buildClusterTrueNASServiceTileHtml(tile) {
     const statusLabel = service.statusLabel || (running ? 'running' : 'stopped');
     const badgeClass = running ? 'bg-success' : 'bg-warning text-dark';
     const bodyHtml = [
-        buildClusterDashboardMetricCell('Enabled', service.enabled ? 'yes' : 'no', null, null, 'col-6'),
-        buildClusterDashboardMetricCell('Status', statusLabel, null, null, 'col-6')
+        buildClusterDashboardMetricCell('Enabled', service.enabled ? 'yes' : 'no', null, null, 'col-12')
     ].join('');
     return buildClusterDashboardTileShell(
         `<i class="bi bi-gear-wide-connected me-2 text-primary"></i><span class="text-truncate">${escapeHtml(service.name || 'Service')}</span>`,

@@ -1,6 +1,8 @@
 const express = require('express');
+const crypto = require('crypto');
 const { log } = require('../utils');
 const store = require('../settings-store');
+const cache = require('../cache');
 
 const router = express.Router();
 
@@ -13,6 +15,7 @@ const NETDEV_MAX_FIELDS = 15;
 const NETDEV_DISPLAY_SLOTS_MONITOR_KEY = 'netdev_display_slots_monitor';
 const NETDEV_DISPLAY_SLOTS_DASHBOARD_KEY = 'netdev_display_slots_dashboard';
 const DEFAULT_NETDEV_DISPLAY_SLOTS = Array.from({ length: MAX_NETDEV_CONFIGS }, (_, i) => i + 1);
+const NETDEV_CURRENT_CACHE_TTL_SEC = 8;
 
 function normalizeDisplaySlots(raw) {
     const maxSlot = MAX_NETDEV_CONFIGS;
@@ -342,6 +345,16 @@ function saveNetdevConfigsToStore(configs) {
     return normalized;
 }
 
+function buildNetdevCurrentCacheKey() {
+    const configs = loadNetdevConfigsFromStore();
+    const fingerprint = crypto
+        .createHash('sha1')
+        .update(JSON.stringify(configs))
+        .digest('hex')
+        .slice(0, 16);
+    return `netdev_current_${fingerprint}`;
+}
+
 async function pollNetdevSlot(cfg, slotIdx, nowIso) {
     const snmpPort = cfg.port || 161;
     const community = cfg.community;
@@ -562,21 +575,30 @@ router.post('/display', (req, res) => {
 });
 
 router.get('/current', async (req, res) => {
+    const cacheKey = buildNetdevCurrentCacheKey();
+    const cached = cache.get(cacheKey);
+    if (cached) {
+        return res.json(cached);
+    }
     try {
         const results = await pollNetdevMonitoringItems();
         if (!results.length) {
-            return res.json({
+            const payload = {
                 configured: false,
                 updatedAt: new Date().toISOString()
-            });
+            };
+            cache.set(cacheKey, payload, NETDEV_CURRENT_CACHE_TTL_SEC);
+            return res.json(payload);
         }
         const nowIso = results[0].updatedAt || new Date().toISOString();
 
-        res.json({
+        const payload = {
             configured: true,
             items: results,
             updatedAt: nowIso
-        });
+        };
+        cache.set(cacheKey, payload, NETDEV_CURRENT_CACHE_TTL_SEC);
+        res.json(payload);
     } catch (e) {
         log('error', `[NetDev] GET /current: ${e.message}`, e.stack ? { stack: e.stack } : null);
         res.status(500).json({ configured: false, error: e.message, updatedAt: new Date().toISOString() });

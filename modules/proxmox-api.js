@@ -1,8 +1,9 @@
 const axios = require('axios');
 const https = require('https');
-const { constants: cryptoConstants } = require('crypto');
+const { constants: cryptoConstants, createHash } = require('crypto');
 const config = require('./config');
 const { log } = require('./utils');
+const cache = require('./cache');
 
 // Создаем HTTPS агент для игнорирования SSL ошибок
 const httpsAgent = new https.Agent({
@@ -11,6 +12,12 @@ const httpsAgent = new https.Agent({
     // явное отключение TLSv1/1.1 помогает избежать negotiation edge-cases.
     secureOptions: cryptoConstants.SSL_OP_NO_TLSv1 | cryptoConstants.SSL_OP_NO_TLSv1_1
 });
+const inFlightGetRequests = new Map();
+
+function buildRequestCacheKey(baseUrl, endpoint, token) {
+    const tokenHash = createHash('sha1').update(String(token || '')).digest('hex').slice(0, 16);
+    return `pmx_req_${createHash('sha1').update(`${baseUrl}|${endpoint}|${tokenHash}`).digest('hex')}`;
+}
 
 function getBaseUrl(serverUrl) {
     if (serverUrl) {
@@ -39,53 +46,80 @@ function normalizeToken(rawToken) {
 
 // Выполнение запроса к Proxmox API
 async function request(endpoint, token, method = 'GET', data = null, serverUrl = null) {
-    const url = `${getBaseUrl(serverUrl)}${endpoint}`;
+    const baseUrl = getBaseUrl(serverUrl);
+    const url = `${baseUrl}${endpoint}`;
     const normalizedToken = normalizeToken(token);
+    const upperMethod = String(method || 'GET').toUpperCase();
+    const shouldUseCache = upperMethod === 'GET' && (data === null || data === undefined);
+    const cacheKey = shouldUseCache ? buildRequestCacheKey(baseUrl, endpoint, normalizedToken) : null;
     
     log('debug', `Proxmox API Request: ${method} ${url}`);
     log('debug', `Token: ${normalizedToken ? normalizedToken.substring(0, 16) + '...' : 'none'}`);
+
+    if (shouldUseCache && cacheKey) {
+        const cached = cache.get(cacheKey);
+        if (cached !== undefined) {
+            return cached;
+        }
+        if (inFlightGetRequests.has(cacheKey)) {
+            return inFlightGetRequests.get(cacheKey);
+        }
+    }
     
     try {
-        const axiosConfig = {
-            method,
-            url,
-            headers: {
-                ...(normalizedToken ? { 'Authorization': `PVEAPIToken=${normalizedToken}` } : {}),
-                'Accept': 'application/json'
-            },
-            httpsAgent,
-            timeout: 10000,
-            validateStatus: function (status) {
-                return true; // Разбираем любые статусы сами, чтобы не терять тело ответа
+        const execRequest = async () => {
+            const axiosConfig = {
+                method,
+                url,
+                headers: {
+                    ...(normalizedToken ? { 'Authorization': `PVEAPIToken=${normalizedToken}` } : {}),
+                    'Accept': 'application/json'
+                },
+                httpsAgent,
+                timeout: 10000,
+                validateStatus: function (status) {
+                    return true; // Разбираем любые статусы сами, чтобы не терять тело ответа
+                }
+            };
+            
+            // Важно: Proxmox API возвращает 501 "Unexpected content for method 'GET'",
+            // если у GET-запроса есть тело. Поэтому прикладываем body только там,
+            // где это действительно нужно.
+            if (data !== null && data !== undefined && upperMethod !== 'GET' && upperMethod !== 'HEAD') {
+                axiosConfig.data = data;
+                axiosConfig.headers['Content-Type'] = 'application/json';
             }
+            
+            const response = await axios(axiosConfig);
+            
+            // Проверяем статус ответа
+            if (response.status >= 400) {
+                const err = new Error(
+                    response.status === 401
+                        ? 'Unauthorized: Invalid token'
+                        : response.status === 403
+                            ? 'Forbidden: Insufficient permissions'
+                            : `HTTP ${response.status}: ${response.statusText}`
+                );
+                // Сохраняем response, чтобы роуты могли корректно разобрать причину
+                err.response = response;
+                throw err;
+            }
+            
+            if (shouldUseCache && cacheKey) {
+                cache.set(cacheKey, response.data, config.cacheTTLs.status);
+            }
+            return response.data;
         };
-        
-        // Важно: Proxmox API возвращает 501 "Unexpected content for method 'GET'",
-        // если у GET-запроса есть тело. Поэтому прикладываем body только там,
-        // где это действительно нужно.
-        const upperMethod = String(method || 'GET').toUpperCase();
-        if (data !== null && data !== undefined && upperMethod !== 'GET' && upperMethod !== 'HEAD') {
-            axiosConfig.data = data;
-            axiosConfig.headers['Content-Type'] = 'application/json';
+
+        if (shouldUseCache && cacheKey) {
+            const promise = execRequest().finally(() => {
+                inFlightGetRequests.delete(cacheKey);
+            });
+            inFlightGetRequests.set(cacheKey, promise);
+            return await promise;
         }
-        
-        const response = await axios(axiosConfig);
-        
-        // Проверяем статус ответа
-        if (response.status >= 400) {
-            const err = new Error(
-                response.status === 401
-                    ? 'Unauthorized: Invalid token'
-                    : response.status === 403
-                        ? 'Forbidden: Insufficient permissions'
-                        : `HTTP ${response.status}: ${response.statusText}`
-            );
-            // Сохраняем response, чтобы роуты могли корректно разобрать причину
-            err.response = response;
-            throw err;
-        }
-        
-        return response.data;
+        return await execRequest();
     } catch (error) {
         const status = error?.response?.status;
         const statusText = error?.response?.statusText;

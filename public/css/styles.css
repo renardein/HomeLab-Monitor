@@ -1909,6 +1909,48 @@
             display: none;
         }
 
+        /* Monitor screens (except Homelab): show only data cards, no title bars/hints */
+        body.monitor-mode #servicesMonitorSection .card-header,
+        body.monitor-mode #vmsMonitorSection .card-header,
+        body.monitor-mode #upsMonitorSection .card-header,
+        body.monitor-mode #netdevMonitorSection .card-header,
+        body.monitor-mode #speedtestMonitorSection .card-header,
+        body.monitor-mode #backupsMonitorSection .card-header {
+            display: none !important;
+        }
+        body.monitor-mode #servicesMonitorSection #servicesMonitorHint,
+        body.monitor-mode #vmsMonitorSection #vmsMonitorHint,
+        body.monitor-mode #upsMonitorSection #upsUpdatedAt,
+        body.monitor-mode #netdevMonitorSection #netdevUpdatedAt,
+        body.monitor-mode #speedtestMonitorSection #speedtestMonitorExtra {
+            display: none !important;
+        }
+        body.monitor-mode #upsMonitorSection .card-body > .d-flex.align-items-center.mb-3,
+        body.monitor-mode #netdevMonitorSection .card-body > .d-flex.align-items-center.mb-3 {
+            display: none !important;
+        }
+
+        /* Remove remaining outer "background plates": monitor screens should look like uniform tiles */
+        body.monitor-mode #servicesMonitorSection > .card,
+        body.monitor-mode #vmsMonitorSection > .card,
+        body.monitor-mode #upsMonitorSection > .card,
+        body.monitor-mode #netdevMonitorSection > .card,
+        body.monitor-mode #speedtestMonitorSection > .card,
+        body.monitor-mode #backupsMonitorSection > .card {
+            background: transparent !important;
+            border: 0 !important;
+            box-shadow: none !important;
+            margin: 0 !important;
+        }
+        body.monitor-mode #servicesMonitorSection > .card > .card-body,
+        body.monitor-mode #vmsMonitorSection > .card > .card-body,
+        body.monitor-mode #upsMonitorSection > .card > .card-body,
+        body.monitor-mode #netdevMonitorSection > .card > .card-body,
+        body.monitor-mode #speedtestMonitorSection > .card > .card-body,
+        body.monitor-mode #backupsMonitorSection > .card > .card-body {
+            padding: 0 !important;
+        }
+
         body.monitor-mode .monitor-screen__panel-body {
             flex: 1 1 auto;
             min-height: 0;

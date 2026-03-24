@@ -1,8 +1,9 @@
 const axios = require('axios');
 const https = require('https');
-const { constants: cryptoConstants } = require('crypto');
+const { constants: cryptoConstants, createHash } = require('crypto');
 const config = require('./config');
 const { log } = require('./utils');
+const cache = require('./cache');
 
 const httpsAgent = new https.Agent({
     rejectUnauthorized: false,
@@ -26,6 +27,12 @@ const integrationStats = {
     errorsByClass: {},
     lastError: null
 };
+const inFlightGetRequests = new Map();
+
+function buildRequestCacheKey(baseUrl, endpoint, apiKey) {
+    const keyHash = createHash('sha1').update(String(apiKey || '')).digest('hex').slice(0, 16);
+    return `tn_req_${createHash('sha1').update(`${baseUrl}|${endpoint}|${keyHash}`).digest('hex')}`;
+}
 
 function getBaseUrl(serverUrl) {
     if (serverUrl) {
@@ -102,39 +109,64 @@ function capabilityCacheKey(apiKey, serverUrl) {
 }
 
 async function request(endpoint, apiKey, method = 'GET', data = null, serverUrl = null) {
-    const url = `${getBaseUrl(serverUrl)}${endpoint}`;
+    const baseUrl = getBaseUrl(serverUrl);
+    const url = `${baseUrl}${endpoint}`;
     const normalizedKey = apiKey ? String(apiKey).trim() : null;
     const startMs = Date.now();
+    const upperMethod = String(method || 'GET').toUpperCase();
+    const shouldUseCache = upperMethod === 'GET' && (data === null || data === undefined);
+    const cacheKey = shouldUseCache ? buildRequestCacheKey(baseUrl, endpoint, normalizedKey) : null;
     const statMethod = `${String(method || 'GET').toUpperCase()} ${endpoint}`;
 
     log('debug', `TrueNAS API Request: ${method} ${url}`);
 
-    try {
-        const axiosConfig = {
-            method,
-            url,
-            headers: {
-                ...(normalizedKey ? { Authorization: `Bearer ${normalizedKey}` } : {}),
-                Accept: 'application/json'
-            },
-            httpsAgent,
-            timeout: 10000,
-            validateStatus: () => true
-        };
-        const upperMethod = String(method || 'GET').toUpperCase();
-        if (data !== null && data !== undefined && upperMethod !== 'GET' && upperMethod !== 'HEAD') {
-            axiosConfig.data = data;
-            axiosConfig.headers['Content-Type'] = 'application/json';
+    if (shouldUseCache && cacheKey) {
+        const cached = cache.get(cacheKey);
+        if (cached !== undefined) return cached;
+        if (inFlightGetRequests.has(cacheKey)) {
+            return inFlightGetRequests.get(cacheKey);
         }
+    }
 
-        const response = await axios(axiosConfig);
-        if (response.status >= 400) {
-            const err = new Error(`HTTP ${response.status}: ${response.statusText}`);
-            err.response = response;
-            throw err;
+    try {
+        const execRequest = async () => {
+            const axiosConfig = {
+                method,
+                url,
+                headers: {
+                    ...(normalizedKey ? { Authorization: `Bearer ${normalizedKey}` } : {}),
+                    Accept: 'application/json'
+                },
+                httpsAgent,
+                timeout: 10000,
+                validateStatus: () => true
+            };
+            if (data !== null && data !== undefined && upperMethod !== 'GET' && upperMethod !== 'HEAD') {
+                axiosConfig.data = data;
+                axiosConfig.headers['Content-Type'] = 'application/json';
+            }
+
+            const response = await axios(axiosConfig);
+            if (response.status >= 400) {
+                const err = new Error(`HTTP ${response.status}: ${response.statusText}`);
+                err.response = response;
+                throw err;
+            }
+            if (shouldUseCache && cacheKey) {
+                cache.set(cacheKey, response.data, config.cacheTTLs.status);
+            }
+            updateIntegrationStats(statMethod, startMs, null);
+            return response.data;
+        };
+
+        if (shouldUseCache && cacheKey) {
+            const promise = execRequest().finally(() => {
+                inFlightGetRequests.delete(cacheKey);
+            });
+            inFlightGetRequests.set(cacheKey, promise);
+            return await promise;
         }
-        updateIntegrationStats(statMethod, startMs, null);
-        return response.data;
+        return await execRequest();
     } catch (error) {
         const status = error?.response?.status;
         const statusText = error?.response?.statusText;

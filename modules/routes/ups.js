@@ -1,7 +1,9 @@
 const express = require('express');
 const net = require('net');
+const crypto = require('crypto');
 const { log } = require('../utils');
 const store = require('../settings-store');
+const cache = require('../cache');
 
 const router = express.Router();
 
@@ -13,6 +15,7 @@ const MAX_UPS_CONFIGS = 4;
 const UPS_DISPLAY_SLOTS_MONITOR_KEY = 'ups_display_slots_monitor';
 const UPS_DISPLAY_SLOTS_DASHBOARD_KEY = 'ups_display_slots_dashboard';
 const DEFAULT_UPS_DISPLAY_SLOTS = [1, 2, 3, 4];
+const UPS_CURRENT_CACHE_TTL_SEC = 8;
 
 function normalizeDisplaySlots(raw) {
     const maxSlot = MAX_UPS_CONFIGS;
@@ -230,6 +233,16 @@ function saveUpsConfigsToStore(configs) {
     });
 
     return normalized;
+}
+
+function buildUpsCurrentCacheKey() {
+    const configs = loadUpsConfigsFromStore();
+    const fingerprint = crypto
+        .createHash('sha1')
+        .update(JSON.stringify(configs))
+        .digest('hex')
+        .slice(0, 16);
+    return `ups_current_${fingerprint}`;
 }
 
 function mapNutStatus(statusRaw) {
@@ -636,8 +649,14 @@ async function fetchUpsCurrentForNotify() {
 }
 
 router.get('/current', async (req, res) => {
+    const cacheKey = buildUpsCurrentCacheKey();
+    const cached = cache.get(cacheKey);
+    if (cached) {
+        return res.json(cached);
+    }
     try {
         const data = await fetchUpsCurrentForNotify();
+        cache.set(cacheKey, data, UPS_CURRENT_CACHE_TTL_SEC);
         return res.json(data);
     } catch (e) {
         log('error', `[UPS] GET /current: ${e.message}`, e.stack ? { stack: e.stack } : null);
