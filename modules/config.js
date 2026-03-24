@@ -139,7 +139,14 @@ function cookieSecureDefault() {
     return ssl.enabled || process.env.NODE_ENV === 'production';
 }
 
+function parseUpdateApplyEnabled() {
+    const v = String(process.env.UPDATE_APPLY_ENABLED || '').trim().toLowerCase();
+    return v === '1' || v === 'true' || v === 'yes';
+}
+
 module.exports = {
+    projectRoot: PROJECT_ROOT,
+
     port: parseInt(process.env.PORT, 10) || 3000,
     env: process.env.NODE_ENV || 'development',
     bindHost: process.env.BIND_HOST ? String(process.env.BIND_HOST).trim() : '0.0.0.0',
@@ -174,6 +181,12 @@ module.exports = {
         repoUrl: 'https://github.com/renardein/HomeLab-Monitor',
         owner: 'renardein',
         repo: 'HomeLab-Monitor'
+    },
+
+    /** In-place update (git + npm): opt-in via UPDATE_APPLY_ENABLED; auth via settings password and/or UPDATE_APPLY_TOKEN */
+    updateApply: {
+        enabled: parseUpdateApplyEnabled(),
+        token: String(process.env.UPDATE_APPLY_TOKEN || '').trim()
     },
 
     networkInterfaces: process.env.NETWORK_INTERFACES

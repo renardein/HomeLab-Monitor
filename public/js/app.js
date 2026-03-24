@@ -345,33 +345,251 @@ function markUpdateVersionAsSeen(version) {
 
 function renderFooterUpdateStatus() {
     const el = document.getElementById('footerUpdateStatus');
-    if (!el) return;
-
-    if (!latestUpdateInfo) {
-        el.textContent = t('statusDash') || '—';
-        return;
+    if (el) {
+        if (!latestUpdateInfo) {
+            el.textContent = t('statusDash') || '—';
+        } else if (latestUpdateInfo.error) {
+            el.textContent = t('updateStatusCheckFailed') || 'Update check failed';
+        } else if (latestUpdateInfo.updateAvailable && latestUpdateInfo.latestVersion) {
+            const label = tParams('updateStatusAvailableShort', { latest: latestUpdateInfo.latestVersion });
+            const url = latestUpdateInfo.releaseUrl || latestUpdateInfo.repoUrl || '';
+            el.innerHTML = url
+                ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(label)}</a>`
+                : escapeHtml(label);
+        } else if (latestUpdateInfo.latestVersion) {
+            el.textContent = tParams('updateStatusCurrentShort', { version: latestUpdateInfo.latestVersion });
+        } else {
+            el.textContent = t('statusDash') || '—';
+        }
     }
+    renderAppUpdateActionButtons();
+}
 
-    if (latestUpdateInfo.error) {
-        el.textContent = t('updateStatusCheckFailed') || 'Update check failed';
-        return;
+const UPDATE_APPLY_ERROR_I18N = {
+    update_apply_disabled: 'updateApplyErrorDisabled',
+    update_apply_not_configured: 'updateApplyErrorNotConfigured',
+    update_apply_password_required: 'updateApplyErrorPasswordRequired',
+    update_apply_token_required: 'updateApplyErrorTokenRequired',
+    update_apply_invalid_token: 'updateApplyErrorInvalidToken',
+    update_apply_unauthorized: 'updateApplyErrorUnauthorized',
+    update_apply_not_git_repo: 'updateApplyErrorNotGit',
+    update_apply_already_up_to_date: 'updateApplyErrorUpToDate',
+    update_apply_working_tree_dirty: 'updateApplyErrorDirty',
+    update_apply_git_status_failed: 'updateApplyErrorGitStatus',
+    update_apply_command_failed: 'updateApplyErrorCommand',
+    failed_to_check_updates: 'updateStatusCheckFailed'
+};
+
+function translateUpdateApplyError(code, detail) {
+    const k = code && UPDATE_APPLY_ERROR_I18N[code];
+    let msg = k ? t(k) : (code ? String(code) : t('updateApplyErrorGeneric'));
+    if (detail && code === 'update_apply_command_failed') {
+        msg += ': ' + detail;
     }
+    return msg;
+}
 
-    if (latestUpdateInfo.updateAvailable && latestUpdateInfo.latestVersion) {
-        const label = tParams('updateStatusAvailableShort', { latest: latestUpdateInfo.latestVersion });
-        const url = latestUpdateInfo.releaseUrl || latestUpdateInfo.repoUrl || '';
-        el.innerHTML = url
-            ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(label)}</a>`
-            : escapeHtml(label);
-        return;
+function localizeAppUpdateApplyModal() {
+    setText('appUpdateApplyModalTitleText', t('updateApplyModalTitle'));
+    setText('appUpdateApplyPasswordLabel', t('settingsPasswordCurrentLabel') || t('settingsUnlockPasswordLabel') || 'Password');
+    setText('appUpdateApplyTokenLabel', t('updateApplyTokenLabel'));
+    setText('appUpdateApplyCancelText', t('updateApplyCancel'));
+    setText('appUpdateApplySubmitText', t('updateApplySubmit'));
+    const closeBtn = document.getElementById('appUpdateApplyModalCloseBtn');
+    if (closeBtn) closeBtn.setAttribute('aria-label', t('ariaClose'));
+}
+
+function showAppUpdateApplyModalPromise(meta) {
+    return new Promise((resolve) => {
+        const modalEl = document.getElementById('appUpdateApplyModal');
+        if (!modalEl || typeof bootstrap === 'undefined' || !bootstrap.Modal) {
+            resolve(null);
+            return;
+        }
+
+        const pwdWrap = document.getElementById('appUpdateApplyPasswordWrap');
+        const tokWrap = document.getElementById('appUpdateApplyTokenWrap');
+        const pwdIn = document.getElementById('appUpdateApplyPassword');
+        const tokIn = document.getElementById('appUpdateApplyToken');
+        const errEl = document.getElementById('appUpdateApplyError');
+        const hint = document.getElementById('appUpdateApplyModalHint');
+        const submitBtn = document.getElementById('appUpdateApplySubmitBtn');
+
+        if (pwdIn) pwdIn.value = '';
+        if (tokIn) tokIn.value = '';
+        if (errEl) {
+            errEl.textContent = '';
+            errEl.style.display = 'none';
+        }
+
+        const hasP = !!meta.hasSettingsPassword;
+        const hasT = !!meta.hasApplyToken;
+        if (pwdWrap) pwdWrap.style.display = hasP ? '' : 'none';
+        if (tokWrap) tokWrap.style.display = hasT ? '' : 'none';
+        if (hint) {
+            hint.textContent = tParams('updateApplyModalHint', {
+                latest: meta.latestVersion || '—',
+                current: meta.currentVersion != null ? String(meta.currentVersion) : '—'
+            });
+        }
+
+        let done = false;
+        const finish = (v) => {
+            if (done) return;
+            done = true;
+            resolve(v);
+        };
+
+        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+
+        const onSubmit = () => {
+            const password = hasP && pwdIn ? String(pwdIn.value || '') : '';
+            const applyToken = hasT && tokIn ? String(tokIn.value || '') : '';
+            if (hasP && hasT && !password && !applyToken) {
+                if (errEl) {
+                    errEl.textContent = t('updateApplyErrorAuthOneRequired');
+                    errEl.style.display = 'block';
+                }
+                return;
+            }
+            if (hasP && !hasT && !password) {
+                if (errEl) {
+                    errEl.textContent = t('updateApplyErrorPasswordRequired');
+                    errEl.style.display = 'block';
+                }
+                return;
+            }
+            if (!hasP && hasT && !applyToken) {
+                if (errEl) {
+                    errEl.textContent = t('updateApplyErrorTokenRequired');
+                    errEl.style.display = 'block';
+                }
+                return;
+            }
+            finish({ password, applyToken });
+            modal.hide();
+        };
+
+        const onSubmitClick = (ev) => {
+            ev.preventDefault();
+            onSubmit();
+        };
+
+        if (submitBtn) submitBtn.addEventListener('click', onSubmitClick);
+
+        modalEl.addEventListener('hidden.bs.modal', () => {
+            if (submitBtn) submitBtn.removeEventListener('click', onSubmitClick);
+            finish(null);
+        }, { once: true });
+        modal.show();
+    });
+}
+
+function openLatestAppRelease() {
+    void runAppUpdateOrOpenRelease();
+}
+
+async function runAppUpdateOrOpenRelease() {
+    const priorReleaseUrl = latestUpdateInfo && !latestUpdateInfo.error
+        ? (latestUpdateInfo.releaseUrl || latestUpdateInfo.repoUrl || '')
+        : '';
+
+    try {
+        await checkForAppUpdates(true, { refresh: true, silent: true, manual: false });
+        const meta = latestUpdateInfo;
+        const releaseOpenUrl = meta && !meta.error
+            ? (meta.releaseUrl || meta.repoUrl || priorReleaseUrl)
+            : priorReleaseUrl;
+        if (!meta || meta.error) {
+            if (releaseOpenUrl) window.open(releaseOpenUrl, '_blank', 'noopener,noreferrer');
+            showToast(t('updateStatusCheckFailed') || 'Update check failed', 'error');
+            return;
+        }
+
+        if (meta.applyEnabled && meta.canApply && meta.updateAvailable && meta.latestVersion) {
+            localizeAppUpdateApplyModal();
+            const creds = await showAppUpdateApplyModalPromise(meta);
+            if (!creds) return;
+
+            const submitBtn = document.getElementById('appUpdateApplySubmitBtn');
+            if (submitBtn) submitBtn.disabled = true;
+            try {
+                const resp = await fetch('/api/updates/apply', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({
+                        password: creds.password || '',
+                        applyToken: creds.applyToken || ''
+                    })
+                });
+                const data = await resp.json().catch(() => ({}));
+                if (!resp.ok) {
+                    showToast(translateUpdateApplyError(data.error, data.detail), 'error');
+                    return;
+                }
+                showToast(t('updateApplySuccess') || 'Updated. Reloading…', 'success');
+                setTimeout(() => { window.location.reload(); }, 2500);
+            } finally {
+                if (submitBtn) submitBtn.disabled = false;
+            }
+            return;
+        }
+
+        if (releaseOpenUrl) window.open(releaseOpenUrl, '_blank', 'noopener,noreferrer');
+        if (meta.applyEnabled && !meta.canApply) {
+            showToast(t('updateApplyErrorNotConfigured'), 'warning');
+        }
+    } catch (e) {
+        console.warn('runAppUpdateOrOpenRelease', e);
+        const u = latestUpdateInfo && !latestUpdateInfo.error
+            ? (latestUpdateInfo.releaseUrl || latestUpdateInfo.repoUrl || '')
+            : priorReleaseUrl;
+        if (u) window.open(u, '_blank', 'noopener,noreferrer');
+        showToast(e.message || t('updateApplyErrorGeneric'), 'error');
     }
+}
 
-    if (latestUpdateInfo.latestVersion) {
-        el.textContent = tParams('updateStatusCurrentShort', { version: latestUpdateInfo.latestVersion });
-        return;
+function renderAppUpdateActionButtons() {
+    const topBtn = document.getElementById('topbarUpdateAvailableBtn');
+    const monBtn = document.getElementById('monitorToolbarUpdateReleaseBtn');
+    const url = latestUpdateInfo && !latestUpdateInfo.error
+        ? (latestUpdateInfo.releaseUrl || latestUpdateInfo.repoUrl || '')
+        : '';
+    const show = !!(latestUpdateInfo && !latestUpdateInfo.error && latestUpdateInfo.updateAvailable
+        && latestUpdateInfo.latestVersion && url);
+    const label = t('updateAvailableButton') || 'Update';
+    const title = (latestUpdateInfo && latestUpdateInfo.latestVersion)
+        ? tParams('updateAvailableButtonTitle', {
+            latest: latestUpdateInfo.latestVersion,
+            current: String(latestUpdateInfo.currentVersion || '').trim() || '—'
+        })
+        : label;
+
+    if (topBtn) {
+        if (!show) {
+            topBtn.style.display = 'none';
+            topBtn.setAttribute('aria-hidden', 'true');
+        } else {
+            topBtn.style.display = 'inline-flex';
+            topBtn.removeAttribute('aria-hidden');
+            topBtn.title = title;
+            topBtn.setAttribute('aria-label', title);
+            const lab = topBtn.querySelector('.js-topbar-update-label');
+            if (lab) lab.textContent = label;
+        }
     }
-
-    el.textContent = t('statusDash') || '—';
+    if (monBtn) {
+        if (!show) {
+            monBtn.style.display = 'none';
+            monBtn.setAttribute('aria-hidden', 'true');
+        } else {
+            monBtn.style.display = 'inline-flex';
+            monBtn.removeAttribute('aria-hidden');
+            monBtn.title = title;
+            monBtn.setAttribute('aria-label', title);
+        }
+    }
 }
 
 function normalizeDashboardWeatherCity(value) {
@@ -1820,6 +2038,7 @@ function updateUILanguage() {
         footerUpdBtn.setAttribute('title', lbl);
         footerUpdBtn.setAttribute('aria-label', lbl);
     }
+    localizeAppUpdateApplyModal();
     setText('settingsPasswordCurrentLabel', t('settingsPasswordCurrentLabel'));
     setText('settingsPasswordNewLabel', t('settingsPasswordNewLabel'));
     setText('settingsPasswordRepeatLabel', t('settingsPasswordRepeatLabel'));
@@ -3418,6 +3637,7 @@ async function checkServerStatus() {
 async function checkForAppUpdates(force = false, options = {}) {
     const manual = !!options.manual;
     const refresh = !!options.refresh;
+    const silent = !!options.silent;
     if (!force && updateCheckPromise) return updateCheckPromise;
 
     updateCheckPromise = (async () => {
@@ -3428,7 +3648,7 @@ async function checkForAppUpdates(force = false, options = {}) {
             latestUpdateInfo = data || null;
             renderFooterUpdateStatus();
 
-            if (manual) {
+            if (manual && !silent) {
                 if (!response.ok || (data && data.error)) {
                     const errMsg = (data && data.error) ? String(data.error) : (t('updateStatusCheckFailed') || 'Update check failed');
                     showToast(escapeHtml(errMsg), 'error');
@@ -3451,20 +3671,22 @@ async function checkForAppUpdates(force = false, options = {}) {
 
             if (getSeenUpdateVersion() === data.latestVersion) return data;
 
-            const message = `${escapeHtml(tParams('updateAvailableToast', {
-                latest: data.latestVersion,
-                current: data.currentVersion || 'unknown'
-            }))} <a href="${escapeHtml(data.releaseUrl || data.repoUrl || '#')}" target="_blank" rel="noopener noreferrer">${escapeHtml(t('updateAvailableOpenRelease'))}</a>`;
+            if (!silent) {
+                const message = `${escapeHtml(tParams('updateAvailableToast', {
+                    latest: data.latestVersion,
+                    current: data.currentVersion || 'unknown'
+                }))} <a href="${escapeHtml(data.releaseUrl || data.repoUrl || '#')}" target="_blank" rel="noopener noreferrer">${escapeHtml(t('updateAvailableOpenRelease'))}</a>`;
 
-            showToast(message, 'warning');
-            markUpdateVersionAsSeen(data.latestVersion);
+                showToast(message, 'warning');
+                markUpdateVersionAsSeen(data.latestVersion);
+            }
             return data;
         } catch (error) {
             latestUpdateInfo = {
                 error: error && error.message ? error.message : String(error)
             };
             renderFooterUpdateStatus();
-            if (manual) {
+            if (manual && !silent) {
                 showToast(t('updateStatusCheckFailed') || 'Update check failed', 'error');
             }
             console.warn('Update check failed:', error);

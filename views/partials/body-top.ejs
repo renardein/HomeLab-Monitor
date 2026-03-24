@@ -24,6 +24,34 @@
         </div>
     </div>
 
+    <!-- In-place update (git checkout + npm) — requires UPDATE_APPLY_ENABLED and password or token -->
+    <div class="modal fade" id="appUpdateApplyModal" tabindex="-1" aria-labelledby="appUpdateApplyModalTitle" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="appUpdateApplyModalTitle"><i class="bi bi-cloud-download me-2"></i><span id="appUpdateApplyModalTitleText">Update application</span></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" id="appUpdateApplyModalCloseBtn"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="small text-muted mb-3" id="appUpdateApplyModalHint"></p>
+                    <div class="mb-3" id="appUpdateApplyPasswordWrap" style="display: none;">
+                        <label class="form-label fw-bold" for="appUpdateApplyPassword" id="appUpdateApplyPasswordLabel">Settings password</label>
+                        <input type="password" class="form-control" id="appUpdateApplyPassword" autocomplete="current-password">
+                    </div>
+                    <div class="mb-3" id="appUpdateApplyTokenWrap" style="display: none;">
+                        <label class="form-label fw-bold" for="appUpdateApplyToken" id="appUpdateApplyTokenLabel">Update token</label>
+                        <input type="password" class="form-control" id="appUpdateApplyToken" autocomplete="off">
+                    </div>
+                    <div class="invalid-feedback d-block" id="appUpdateApplyError"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" id="appUpdateApplyCancelBtn"><span id="appUpdateApplyCancelText">Cancel</span></button>
+                    <button type="button" class="btn btn-warning" id="appUpdateApplySubmitBtn"><i class="bi bi-download me-1"></i><span id="appUpdateApplySubmitText">Update</span></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
 <%- include('./setup-wizard') %>
 
     <!-- Telegram rule message template -->
@@ -168,6 +196,9 @@
                                 <i class="bi bi-server"></i><span id="currentServerName"></span>
                             </span>
                         </div>
+                        <button type="button" class="btn btn-sm btn-warning app-topbar-update-available" id="topbarUpdateAvailableBtn" style="display: none;" onclick="openLatestAppRelease()" aria-hidden="true">
+                            <i class="bi bi-download" aria-hidden="true"></i><span class="js-topbar-update-label">Update</span>
+                        </button>
                         <button type="button" class="btn btn-sm btn-primary app-topbar-refresh" onclick="refreshData()" id="refreshBtn">
                             <i class="bi bi-arrow-repeat"></i><span id="refreshText">Refresh</span>
                         </button>
