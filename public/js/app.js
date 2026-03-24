@@ -5567,12 +5567,27 @@ function initHostMetricProblemPopovers() {
         const lines = raw.split('\n').map((x) => x.trim()).filter(Boolean);
         if (!lines.length) return;
         const content = `<ul class="mb-0 ps-3">${lines.map((line) => `<li>${escapeHtml(line)}</li>`).join('')}</ul>`;
-        bootstrap.Popover.getOrCreateInstance(el, {
+        const popover = bootstrap.Popover.getOrCreateInstance(el, {
             trigger: 'click focus',
             placement: 'bottom',
             html: true,
             sanitize: true,
             content
+        });
+        el.addEventListener('shown.bs.popover', () => {
+            if (el._hostProblemPopoverTimer) {
+                clearTimeout(el._hostProblemPopoverTimer);
+            }
+            el._hostProblemPopoverTimer = setTimeout(() => {
+                try { popover.hide(); } catch (_) {}
+                el._hostProblemPopoverTimer = null;
+            }, 3000);
+        });
+        el.addEventListener('hide.bs.popover', () => {
+            if (el._hostProblemPopoverTimer) {
+                clearTimeout(el._hostProblemPopoverTimer);
+                el._hostProblemPopoverTimer = null;
+            }
         });
     });
 }
