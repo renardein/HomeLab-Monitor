@@ -7683,23 +7683,23 @@ const CUSTOM_THEME_STYLE_DEFAULTS = {
             monitorViewCardBg: 'rgba(255, 255, 255, 0.95)'
         },
         dark: {
-            cardBg: '#16213e',
+            cardBg: '#1e1e1e',
             cardTextColor: '#ffffff',
-            cardHeaderFrom: '#0f3460',
-            cardHeaderTo: '#533483',
+            cardHeaderFrom: '#2a3f5c',
+            cardHeaderTo: '#4a3478',
             cardHeaderTextColor: '#ffffff',
             statValueColor: '#ffffff',
-            statLabelColor: '#a0aec0',
-            statCardBg: '#16213e',
-            nodeCardBg: '#1a2740',
-            nodeCardTextColor: '#e2e8f0',
-            tableHeaderBg: '#0f3460',
+            statLabelColor: '#9e9e9e',
+            statCardBg: '#1e1e1e',
+            nodeCardBg: '#1c1c1c',
+            nodeCardTextColor: '#e8e8e8',
+            tableHeaderBg: '#2a3f5c',
             tableHeaderTextColor: '#ffffff',
-            tableCellTextColor: '#e2e8f0',
-            tableBorderColor: '#2d3748',
-            tableHoverTdBg: 'rgba(255, 255, 255, 0.06)',
-            progressBg: '#2d3748',
-            monitorViewCardBg: '#1a2740'
+            tableCellTextColor: '#e8e8e8',
+            tableBorderColor: 'rgba(255,255,255,0.09)',
+            tableHoverTdBg: 'rgba(66, 165, 245, 0.08)',
+            progressBg: 'rgba(255,255,255,0.08)',
+            monitorViewCardBg: '#1c1c1c'
         }
     }
 };
