@@ -81,93 +81,113 @@
             padding: var(--hm-app-padding);
             transition: background-color 0.3s, color 0.3s;
         }
+        /* Обычная тёмная тема — та же палитра «midnight», что и у тёмного режима монитора */
         body.dark-mode {
-            background: #1a1a2e;
-            color: #eee;
+            --hm-monitor-bg: #121212;
+            --hm-monitor-surface: #1e1e1e;
+            --hm-monitor-raised: #1c1c1c;
+            --hm-monitor-border: rgba(255, 255, 255, 0.09);
+            --hm-monitor-muted: #9e9e9e;
+            --hm-monitor-blue: #42a5f5;
+            --hm-monitor-purple: #7e57c2;
+            --hm-monitor-pink: #d81b60;
+            --hm-monitor-amber: #ffa000;
+            background: var(--hm-monitor-bg);
+            color: #fff;
         }
         body.dark-mode .card {
-            background: #16213e;
-            color: #eee;
+            background: var(--hm-monitor-surface);
+            color: #fff;
+            border: 1px solid var(--hm-monitor-border);
         }
         body.dark-mode .card-header {
-            background: linear-gradient(135deg, #0f3460 0%, #533483 100%);
+            background: linear-gradient(135deg, rgba(66, 165, 245, 0.22) 0%, rgba(126, 87, 194, 0.24) 52%, rgba(216, 27, 96, 0.16) 100%);
+            color: #fff;
+            border-bottom: 1px solid var(--hm-monitor-border);
         }
         body.dark-mode .stat-card {
-            background: #16213e;
+            background: var(--hm-monitor-surface);
+            border: 1px solid var(--hm-monitor-border);
         }
         body.dark-mode .stat-value {
-            color: #eee;
+            color: #fff;
         }
         body.dark-mode .stat-label {
-            color: #aaa;
+            color: var(--hm-monitor-muted);
         }
         body.dark-mode .stat-card-meta {
-            color: #aaa;
+            color: var(--hm-monitor-muted);
         }
         body.dark-mode .node-card {
-            background: #16213e;
+            background: var(--hm-monitor-raised);
+            border: 1px solid var(--hm-monitor-border);
         }
         body.dark-mode .table {
-            color: #e2e8f0;
-            border-color: #2d3748;
+            color: #e8e8e8;
+            border-color: var(--hm-monitor-border);
         }
         body.dark-mode .table thead th {
-            background-color: #0f3460;
+            background: linear-gradient(135deg, #2a3f5c 0%, #4a3478 100%);
             color: #fff;
-            border-color: #2d3748;
+            border-color: var(--hm-monitor-border);
         }
         body.dark-mode .table tbody td {
-            background-color: #16213e;
-            color: #e2e8f0;
-            border-color: #2d3748;
+            background-color: var(--hm-monitor-surface);
+            color: #e8e8e8;
+            border-color: var(--hm-monitor-border);
         }
         body.dark-mode .table tbody tr:hover td {
-            background-color: rgba(255, 255, 255, 0.06);
+            background-color: rgba(66, 165, 245, 0.08);
         }
         body.dark-mode .table .text-muted,
         body.dark-mode .table small {
-            color: #a0aec0 !important;
+            color: var(--hm-monitor-muted) !important;
         }
         body.dark-mode .table code {
-            background: rgba(0, 0, 0, 0.25);
-            color: #e2e8f0;
-            border-color: #2d3748;
+            background: rgba(0, 0, 0, 0.35);
+            color: #e8e8e8;
+            border-color: var(--hm-monitor-border);
         }
         body.dark-mode .table .badge {
             color: #fff;
         }
-        body.dark-mode .table-success { background-color: rgba(40, 167, 69, 0.2) !important; color: #e2e8f0; }
-        body.dark-mode .table-danger { background-color: rgba(220, 53, 69, 0.2) !important; color: #e2e8f0; }
-        body.dark-mode .table-warning { background-color: rgba(255, 193, 7, 0.15) !important; color: #e2e8f0; }
+        body.dark-mode .table-success { background-color: rgba(40, 167, 69, 0.18) !important; color: #e8e8e8; }
+        body.dark-mode .table-danger { background-color: rgba(216, 27, 96, 0.2) !important; color: #e8e8e8; }
+        body.dark-mode .table-warning { background-color: rgba(255, 160, 0, 0.16) !important; color: #e8e8e8; }
         body.dark-mode .navbar {
-            background: #0f3460 !important;
-            color: #eee;
+            background: var(--hm-monitor-raised) !important;
+            color: #fff;
+            border-bottom: 1px solid var(--hm-monitor-border);
         }
         body.dark-mode .form-control {
-            background: #0f3460;
-            border-color: #533483;
-            color: #eee;
+            background: var(--hm-monitor-surface);
+            border-color: rgba(66, 165, 245, 0.35);
+            color: #fff;
         }
         body.dark-mode .form-control:focus {
-            background: #1a1a2e;
-            color: #eee;
+            background: var(--hm-monitor-bg);
+            color: #fff;
+            border-color: rgba(126, 87, 194, 0.5);
         }
         body.dark-mode .nav-tabs .nav-link {
-            color: #aaa;
+            color: var(--hm-monitor-muted);
         }
         body.dark-mode .nav-tabs .nav-link.active {
-            background: #16213e;
-            color: #eee;
-            border-color: #533483 #533483 transparent;
+            background: var(--hm-monitor-surface);
+            color: #fff;
+            border-color: rgba(126, 87, 194, 0.45) rgba(126, 87, 194, 0.45) transparent;
         }
         body.dark-mode .nav-tabs {
-            border-color: #533483;
+            border-color: rgba(126, 87, 194, 0.35);
         }
         body.dark-mode .btn-group .btn {
-            border-color: #533483;
+            border-color: rgba(126, 87, 194, 0.35);
         }
         body.dark-mode .progress {
-            background: #0f3460;
+            background: rgba(255, 255, 255, 0.08);
+        }
+        body.dark-mode .progress-bar.bg-primary {
+            background: linear-gradient(90deg, var(--hm-monitor-blue), var(--hm-monitor-purple)) !important;
         }
         .container {
             max-width: 1600px;
@@ -316,9 +336,9 @@
             padding-right: 0.85rem !important;
         }
         body.dark-mode .app-topbar {
-            background: linear-gradient(180deg, #0f3460 0%, #16213e 100%);
-            border-color: rgba(102, 126, 234, 0.35);
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+            background: rgba(28, 28, 28, 0.96);
+            border-color: rgba(66, 165, 245, 0.22);
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.45);
         }
         body.dark-mode .app-topbar-brand {
             color: #f1f5f9 !important;
@@ -326,28 +346,33 @@
         body.dark-mode .app-topbar-brand:hover {
             color: #fff !important;
         }
+        body.dark-mode .app-topbar-brand-icon {
+            background: linear-gradient(135deg, #42a5f5 0%, #7e57c2 100%);
+            box-shadow: 0 2px 12px rgba(66, 165, 245, 0.35);
+        }
         body.dark-mode .app-topbar-actions {
             background: rgba(255, 255, 255, 0.06);
             border-color: rgba(255, 255, 255, 0.12);
         }
         body.dark-mode .app-topbar-btn {
-            background: rgba(15, 52, 96, 0.65) !important;
-            color: #e2e8f0 !important;
+            background: rgba(30, 30, 30, 0.95) !important;
+            color: #e8e8e8 !important;
             font-weight: 400 !important;
+            border-color: rgba(66, 165, 245, 0.2) !important;
         }
         body.dark-mode .app-topbar-btn:hover,
         body.dark-mode .app-topbar-btn:focus,
         body.dark-mode .app-topbar-btn:focus-visible,
         body.dark-mode .app-topbar-btn:active,
         body.dark-mode .app-topbar-actions .dropdown-toggle.show {
-            background: rgba(15, 52, 96, 0.95) !important;
+            background: rgba(66, 165, 245, 0.18) !important;
             color: #fff !important;
             font-weight: 400 !important;
         }
         body.dark-mode .app-topbar-pill {
-            background: rgba(15, 52, 96, 0.5);
-            border-color: rgba(255, 255, 255, 0.15);
-            color: #e2e8f0;
+            background: rgba(30, 30, 30, 0.9);
+            border-color: rgba(255, 255, 255, 0.12);
+            color: #e8e8e8;
         }
         body.dark-mode .app-topbar-pill--server.app-topbar-pill--ok {
             background: rgba(34, 197, 94, 0.15);
@@ -360,13 +385,13 @@
             color: #fecaca;
         }
         body.dark-mode .app-topbar-pill--conn {
-            background: rgba(15, 52, 96, 0.45);
-            color: #cbd5e1;
+            background: rgba(30, 30, 30, 0.85);
+            color: #9e9e9e;
         }
         body.dark-mode .app-topbar-pill--host {
-            background: rgba(59, 130, 246, 0.15);
-            border-color: rgba(96, 165, 250, 0.35);
-            color: #bfdbfe;
+            background: rgba(66, 165, 245, 0.14);
+            border-color: rgba(66, 165, 245, 0.4);
+            color: #90caf9;
         }
         .card {
             border-radius: var(--hm-radius-card);
@@ -375,10 +400,10 @@
             margin-bottom: var(--hm-space-5);
         }
         body.dark-mode .card-body {
-            color: #eee;
+            color: #fff;
         }
         body.dark-mode .navbar-brand {
-            color: #eee !important;
+            color: #fff !important;
         }
         .card-header {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -579,10 +604,10 @@
         }
 
         body.dark-mode:not(.monitor-mode) #vmsMonitorSection #vmsMonitorCards .node-card {
-            background: #16213e;
-            border: 1px solid rgba(83, 52, 131, 0.8);
-            box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
-            color: #e2e8f0;
+            background: var(--hm-monitor-surface);
+            border: 1px solid rgba(126, 87, 194, 0.45);
+            box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+            color: #e8e8e8;
         }
 
         .vm-icon {
@@ -831,10 +856,10 @@
         }
 
         body.dark-mode:not(.monitor-mode) #servicesMonitorSection #servicesCards .node-card {
-            background: #16213e;
-            border: 1px solid rgba(83, 52, 131, 0.85);
-            box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
-            color: #e2e8f0;
+            background: var(--hm-monitor-surface);
+            border: 1px solid rgba(126, 87, 194, 0.45);
+            box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+            color: #e8e8e8;
         }
 
         body:not(.monitor-mode) #servicesMonitorSection #servicesCards .node-card h6 {
@@ -871,10 +896,10 @@
             height: 3rem;
         }
         body.dark-mode .spinner-border {
-            border-color: #667eea;
+            border-color: #42a5f5;
         }
         body.dark-mode .spinner-border.text-primary {
-            border-color: #667eea !important;
+            border-color: #42a5f5 !important;
         }
         .nav-tabs {
             margin-bottom: var(--hm-space-6) !important;
@@ -918,8 +943,8 @@
         }
 
         body.dark-mode #upsSettingsCardWrap > .card {
-            background: #0f3460;
-            border-color: #533483;
+            background: var(--hm-monitor-surface);
+            border-color: var(--hm-monitor-border);
         }
 
         body.dark-mode #upsSettingsCardWrap > .card .card-header {
@@ -978,6 +1003,13 @@
             background-color: #667eea;
             color: white;
         }
+        body.dark-mode .language-switcher:hover {
+            background-color: rgba(255, 255, 255, 0.08);
+        }
+        body.dark-mode .language-switcher.active {
+            background: linear-gradient(135deg, #42a5f5 0%, #7e57c2 100%);
+            color: white;
+        }
         #settingsNav .nav-link {
             text-align: left;
             border-radius: 8px;
@@ -1028,8 +1060,8 @@
             background: rgba(0, 0, 0, 0.02);
         }
         body.dark-mode .settings-section {
-            background: #0f3460;
-            border-color: #533483;
+            background: var(--hm-monitor-surface);
+            border-color: var(--hm-monitor-border);
         }
         body.dark-mode #upsDisplayTabsContent,
         body.dark-mode #netdevDisplayTabsContent {
@@ -1037,73 +1069,75 @@
             background: rgba(0, 0, 0, 0.15);
         }
         body.dark-mode .toast {
-            background: #16213e;
-            color: #eee;
+            background: var(--hm-monitor-surface);
+            color: #fff;
+            border: 1px solid var(--hm-monitor-border);
         }
         body.dark-mode .btn-close {
             filter: invert(1) grayscale(100%) brightness(200%);
         }
         body.dark-mode .form-select {
-            background: #0f3460;
-            border-color: #533483;
-            color: #eee;
+            background: var(--hm-monitor-surface);
+            border-color: rgba(66, 165, 245, 0.35);
+            color: #fff;
         }
         body.dark-mode .form-select:focus {
-            background: #1a1a2e;
-            color: #eee;
+            background: var(--hm-monitor-bg);
+            color: #fff;
+            border-color: rgba(126, 87, 194, 0.5);
         }
         body.dark-mode .form-check-input {
-            background-color: #0f3460;
-            border-color: #533483;
+            background-color: var(--hm-monitor-surface);
+            border-color: rgba(126, 87, 194, 0.45);
         }
         body.dark-mode .form-check-input:checked {
-            background-color: #667eea;
-            border-color: #667eea;
+            background-color: #42a5f5;
+            border-color: #7e57c2;
         }
         body.dark-mode .form-check-label {
-            color: #eee;
+            color: #fff;
         }
         body.dark-mode .form-label {
-            color: #eee;
+            color: #fff;
         }
         body.dark-mode .form-text {
-            color: #aaa;
+            color: var(--hm-monitor-muted);
         }
         body.dark-mode .bg-white {
-            background-color: #16213e !important;
+            background-color: var(--hm-monitor-surface) !important;
         }
         body.dark-mode .bg-light {
-            background-color: #0f3460 !important;
+            background-color: var(--hm-monitor-raised) !important;
         }
         body.dark-mode .text-muted {
-            color: #aaa !important;
+            color: var(--hm-monitor-muted) !important;
         }
         body.dark-mode .text-dark {
-            color: #eee !important;
+            color: #fff !important;
         }
         body.dark-mode .btn-outline-primary {
-            border-color: #667eea;
-            color: #667eea;
+            border-color: #42a5f5;
+            color: #42a5f5;
         }
         body.dark-mode .btn-outline-primary:hover {
-            background-color: #667eea;
+            background-color: #42a5f5;
             color: white;
         }
         body.dark-mode .btn-outline-dark {
-            border-color: #aaa;
-            color: #aaa;
+            border-color: #9e9e9e;
+            color: #9e9e9e;
         }
         body.dark-mode .btn-outline-dark:hover {
-            background-color: #aaa;
-            color: #1a1a2e;
+            background-color: #9e9e9e;
+            color: #121212;
         }
         body.dark-mode .btn-outline-secondary {
-            border-color: #aaa;
-            color: #aaa;
+            border-color: #9e9e9e;
+            color: #9e9e9e;
         }
         body.dark-mode .btn-outline-secondary:hover {
-            background-color: #aaa;
-            color: #1a1a2e;
+            background-color: #9e9e9e;
+            color: #121212;
         }
         body.dark-mode .btn-outline-danger {
             border-color: #dc3545;
@@ -1114,12 +1148,13 @@
             color: white;
         }
         body.dark-mode .btn-primary {
-            background-color: #667eea;
-            border-color: #667eea;
+            background: linear-gradient(135deg, #42a5f5 0%, #7e57c2 100%);
+            border-color: transparent;
         }
         body.dark-mode .btn-primary:hover {
-            background-color: #5a6fd6;
-            border-color: #5a6fd6;
+            background: linear-gradient(135deg, #389ce9 0%, #6d48b0 100%);
+            border-color: transparent;
+            filter: brightness(1.05);
         }
         body.dark-mode .btn-outline-info {
             border-color: #17a2b8;
@@ -1152,16 +1187,16 @@
             opacity: 0.9;
         }
         body.dark-mode .btn {
-            color: #eee;
+            color: #fff;
         }
         body.dark-mode .text-center {
-            color: #eee;
+            color: #fff;
         }
         body.dark-mode .form-range::-webkit-slider-thumb {
-            background: #667eea;
+            background: #42a5f5;
         }
         body.dark-mode .form-range::-moz-range-thumb {
-            background: #667eea;
+            background: #42a5f5;
         }
         body.dark-mode .navbar-toggler {
             border-color: rgba(255,255,255,0.5);
@@ -1182,7 +1217,8 @@
             }
             body.dark-mode .navbar-collapse,
             body.dark-mode .app-topbar-collapse {
-                background: #16213e;
+                background: var(--hm-monitor-surface);
+                border: 1px solid var(--hm-monitor-border);
             }
             .app-topbar-toolbar {
                 flex-direction: column;
@@ -1225,29 +1261,29 @@
         }
         
         body.dark-mode .input-group-text {
-            background: #0f3460;
-            border-color: #533483;
-            color: #eee;
+            background: var(--hm-monitor-surface);
+            border-color: rgba(66, 165, 245, 0.3);
+            color: #fff;
         }
         body.dark-mode .input-group > .form-control {
-            background: #0f3460;
-            border-color: #533483;
-            color: #eee;
+            background: var(--hm-monitor-surface);
+            border-color: rgba(66, 165, 245, 0.3);
+            color: #fff;
         }
         body.dark-mode .alert-info {
-            background: #0f3460;
-            border-color: #533483;
-            color: #eee;
+            background: rgba(66, 165, 245, 0.12);
+            border-color: rgba(66, 165, 245, 0.35);
+            color: #e8e8e8;
         }
         body.dark-mode .alert-warning {
-            background: #3d340f;
-            border-color: #837a34;
-            color: #eee;
+            background: rgba(255, 160, 0, 0.12);
+            border-color: rgba(255, 160, 0, 0.35);
+            color: #e8e8e8;
         }
         body.dark-mode .alert-danger {
-            background: #3d0f0f;
-            border-color: #833434;
-            color: #eee;
+            background: rgba(216, 27, 96, 0.14);
+            border-color: rgba(216, 27, 96, 0.4);
+            color: #e8e8e8;
         }
         body.dark-mode .alert-success {
             background: #0f3d1f;
@@ -1267,7 +1303,7 @@
             color: white;
         }
         body.dark-mode .bg-primary {
-            background-color: #667eea !important;
+            background: linear-gradient(135deg, #42a5f5 0%, #7e57c2 100%) !important;
             color: white;
         }
         body.dark-mode .bg-secondary {
@@ -1279,19 +1315,19 @@
             color: white;
         }
         body.dark-mode .text-primary {
-            color: #667eea !important;
+            color: #42a5f5 !important;
         }
         body.dark-mode .text-success {
             color: #28a745 !important;
         }
         body.dark-mode .text-warning {
-            color: #ffc107 !important;
+            color: #ffa000 !important;
         }
         body.dark-mode .text-danger {
             color: #dc3545 !important;
         }
         body.dark-mode .progress-bar.bg-primary {
-            background-color: #667eea !important;
+            background: linear-gradient(90deg, #42a5f5, #7e57c2) !important;
         }
         body.dark-mode .progress-bar.bg-success {
             background-color: #28a745 !important;
@@ -1306,8 +1342,8 @@
             color: white;
         }
         body.dark-mode .badge.bg-light {
-            background-color: #0f3460 !important;
-            color: #eee;
+            background-color: var(--hm-monitor-raised) !important;
+            color: #fff;
         }
         body.dark-mode .badge.bg-success {
             background-color: #28a745 !important;
@@ -1326,10 +1362,10 @@
             color: white;
         }
         body.dark-mode .table-responsive {
-            border-color: #2d3748;
+            border-color: var(--hm-monitor-border);
         }
         body.dark-mode .card .table {
-            background-color: #16213e;
+            background-color: var(--hm-monitor-surface);
         }
         .threshold-input {
             width: 5.5rem;
@@ -2813,7 +2849,7 @@
         }
 
         body.dark-mode #loadingIndicator {
-            background: rgba(26, 26, 46, 0.7);
+            background: rgba(18, 18, 18, 0.88);
         }
 
         body.monitor-mode.monitor-theme-dark #loadingIndicator {
