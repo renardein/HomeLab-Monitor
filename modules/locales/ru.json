@@ -444,6 +444,7 @@
     "settingsDashboardShowWeatherLabel": "Показывать погоду",
     "settingsMonitorShowTimeLabel": "Показывать дату и время",
     "settingsMonitorShowWeatherLabel": "Показывать погоду",
+    "settingsMonitorDisableChromeGesturesLabel": "Отключать жесты Chrome в режиме монитора",
     "settingsDashboardTimezoneInvalid": "Некорректный часовой пояс",
     "dashboardTimeWeatherTitle": "Время и погода",
     "dashboardTimeBlockTitle": "Время",

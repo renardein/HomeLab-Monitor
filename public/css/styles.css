@@ -1362,6 +1362,15 @@
             --monitor-toolbar-top: var(--monitor-toolbar-h);
             --monitor-dock-h: 52px;
         }
+        body.monitor-mode.chrome-gestures-disabled {
+            overscroll-behavior-x: none;
+            overscroll-behavior-y: none;
+        }
+        body.monitor-mode.chrome-gestures-disabled #dashboardSection,
+        body.monitor-mode.chrome-gestures-disabled .monitor-screen,
+        body.monitor-mode.chrome-gestures-disabled .monitor-view {
+            overscroll-behavior: none;
+        }
         body.monitor-mode.monitor-toolbar-hidden {
             --monitor-toolbar-top: 0px;
         }
@@ -1419,7 +1428,8 @@
         body.monitor-mode #nodesContainer {
             height: 100%;
             min-height: 0;
-            overflow: hidden;
+            overflow-x: auto;
+            overflow-y: hidden;
         }
 
         /* Вкладки Nodes / Storage / Backups / Quorum — только вне режима монитора */
@@ -2756,6 +2766,59 @@
             }
             .monitor-view__card {
                 padding: var(--hm-space-3) var(--hm-space-4);
+            }
+        }
+
+        /* Режим монитора: компактный профиль для 1280x800 и похожих экранов */
+        @media (max-width: 1366px) and (max-height: 840px) {
+            body.monitor-mode {
+                --monitor-toolbar-h: 44px;
+                --monitor-dock-h: 40px;
+                --monitor-toolbar-btn-h: 34px;
+                --monitor-toolbar-icon-w: 34px;
+                --monitor-toolbar-text-btn-w: 8.6rem;
+                --hm-text-label: 0.78rem;
+                --hm-text-base: 0.92rem;
+                --hm-text-lg: 1.02rem;
+                --hm-text-stat: 1.72rem;
+                --hm-text-metric: 2.1rem;
+                --hm-space-3: 0.55rem;
+                --hm-space-4: 0.75rem;
+                --hm-space-5: 0.95rem;
+                --hm-space-6: 1.15rem;
+                --hm-card-header-py: 0.6rem;
+                --hm-card-header-px: 0.95rem;
+                --hm-card-body-pad: 0.95rem;
+                --hm-stat-pad: 0.9rem;
+                --hm-node-pad: 0.8rem;
+                --hm-progress-h-monitor: 6px;
+            }
+
+            body.monitor-mode .monitor-toolbar {
+                min-height: 44px;
+                gap: 0.5rem;
+                padding: 0 clamp(0.5rem, 2vw, 0.9rem);
+            }
+
+            body.monitor-mode .monitor-dots-dock {
+                padding: 6px 10px calc(6px + env(safe-area-inset-bottom, 0px));
+            }
+
+            body.monitor-mode .stat-card {
+                min-height: 104px;
+            }
+
+            body.monitor-mode .monitor-screen {
+                padding: var(--hm-space-2) var(--hm-space-3) var(--hm-space-3);
+            }
+
+            body.monitor-mode .monitor-screen__meta-grid {
+                grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            }
+
+            body.monitor-mode .cluster-scroll-item {
+                flex: 0 0 calc((100% - 1.65rem) / 4);
+                min-width: 248px;
             }
         }
 

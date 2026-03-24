@@ -444,6 +444,7 @@
     "settingsDashboardShowWeatherLabel": "Show weather",
     "settingsMonitorShowTimeLabel": "Show date and time",
     "settingsMonitorShowWeatherLabel": "Show weather",
+    "settingsMonitorDisableChromeGesturesLabel": "Disable Chrome gestures in monitor mode",
     "settingsDashboardTimezoneInvalid": "Invalid time zone",
     "dashboardTimeWeatherTitle": "Time & weather",
     "dashboardTimeBlockTitle": "Time",

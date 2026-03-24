@@ -122,6 +122,8 @@ let dashboardShowWeather = true;
 /** То же для экрана кластера в режиме монитора */
 let monitorShowTime = true;
 let monitorShowWeather = true;
+/** Блокировать системные gesture-навигации Chrome в monitor mode */
+let monitorDisableChromeGestures = true;
 
 function parseBoolSettingClient(v, defaultVal = true) {
     if (v === undefined || v === null || v === '') return defaultVal;
@@ -597,6 +599,7 @@ async function saveDashboardTimeWeatherSettings() {
     dashboardShowWeather = !!(el('settingsDashboardShowWeatherCheckbox') && el('settingsDashboardShowWeatherCheckbox').checked);
     monitorShowTime = !!(el('settingsMonitorShowTimeCheckbox') && el('settingsMonitorShowTimeCheckbox').checked);
     monitorShowWeather = !!(el('settingsMonitorShowWeatherCheckbox') && el('settingsMonitorShowWeatherCheckbox').checked);
+    monitorDisableChromeGestures = !!(el('settingsMonitorDisableChromeGesturesCheckbox') && el('settingsMonitorDisableChromeGesturesCheckbox').checked);
 
     dashboardWeatherCity = nextCity;
     dashboardTimezone = nextTimezone;
@@ -612,8 +615,10 @@ async function saveDashboardTimeWeatherSettings() {
             dashboardShowTime,
             dashboardShowWeather,
             monitorShowTime,
-            monitorShowWeather
+            monitorShowWeather,
+            monitorDisableChromeGestures
         });
+        applyMonitorChromeGestureGuards();
         refreshDashboardWeather(true).catch(() => {});
         showToast(t('dataUpdated') || 'Настройки сохранены', 'success');
     } catch (error) {
@@ -1146,6 +1151,7 @@ async function saveSettingsToServer(payload) {
     if (payload.dashboardShowWeather !== undefined) body.dashboardShowWeather = !!payload.dashboardShowWeather;
     if (payload.monitorShowTime !== undefined) body.monitorShowTime = !!payload.monitorShowTime;
     if (payload.monitorShowWeather !== undefined) body.monitorShowWeather = !!payload.monitorShowWeather;
+    if (payload.monitorDisableChromeGestures !== undefined) body.monitorDisableChromeGestures = !!payload.monitorDisableChromeGestures;
     if (payload.speedtestEnabled !== undefined) body.speedtestEnabled = !!payload.speedtestEnabled;
     if (payload.speedtestServer !== undefined) body.speedtestServer = payload.speedtestServer;
     if (payload.speedtestPerDay !== undefined) body.speedtestPerDay = payload.speedtestPerDay;
@@ -1857,6 +1863,7 @@ function updateUILanguage() {
     setText('settingsDashboardShowWeatherLabel', t('settingsDashboardShowWeatherLabel'));
     setText('settingsMonitorShowTimeLabel', t('settingsMonitorShowTimeLabel'));
     setText('settingsMonitorShowWeatherLabel', t('settingsMonitorShowWeatherLabel'));
+    setText('settingsMonitorDisableChromeGesturesLabel', t('settingsMonitorDisableChromeGesturesLabel'));
     setPlaceholder('settingsDashboardWeatherCityInput', t('settingsDashboardWeatherCityPlaceholder') || 'Berlin');
     setPlaceholder('settingsDashboardTimezoneInput', t('settingsDashboardTimezonePlaceholder') || 'Europe/Berlin');
     setText('settingsClusterTilesTitle', t('settingsClusterTilesTitle'));
@@ -6416,6 +6423,11 @@ async function renderClusterDashboardTiles() {
     const containerEl = document.getElementById('dashboardClusterTiles');
     if (!sectionEl || !containerEl) return;
 
+    // Tiles are disabled on the HomeLab (Cluster) screen.
+    sectionEl.style.display = 'none';
+    setHTMLIfChanged('dashboardClusterTiles', '');
+    return;
+
     const tiles = normalizeClusterDashboardTiles(clusterDashboardTiles).filter((tile) => tile.showOnCluster !== false);
     if (!tiles.length) {
         sectionEl.style.display = 'none';
@@ -6988,6 +7000,7 @@ async function toggleMonitorMode() {
     const upsMonSection = document.getElementById('upsMonitorSection');
 
     document.body.classList.toggle('monitor-mode', monitorMode);
+    applyMonitorChromeGestureGuards();
 
     const btn = document.getElementById('monitorModeBtn');
     if (monitorMode) {
@@ -7051,6 +7064,10 @@ async function toggleMonitorMode() {
 
 let monitorSwipeStartX = null;
 let monitorSwipeHandlersAttached = false;
+let monitorChromeGestureGuardsAttached = false;
+let monitorChromeGestureStartX = null;
+let monitorChromeGestureStartY = null;
+let monitorChromeGestureStartedAtEdge = false;
 /** Текущий экран режима монитора */
 let monitorCurrentView = 'cluster';
 /** Последние данные бэкапов для экрана монитора */
@@ -7068,6 +7085,71 @@ let speedtestClientEnabled = false;
 let upsMonitorConfigured = null;
 let netdevMonitorConfigured = null;
 let speedtestMonitorConfigured = null;
+
+function destroyMonitorChromeGestureGuards() {
+    monitorChromeGestureGuardsAttached = false;
+    monitorChromeGestureStartX = null;
+    monitorChromeGestureStartY = null;
+    monitorChromeGestureStartedAtEdge = false;
+    document.body.classList.remove('chrome-gestures-disabled');
+    const target = document.body;
+    if (target._monitorChromeGestureStart) {
+        target.removeEventListener('touchstart', target._monitorChromeGestureStart, { capture: true });
+        target.removeEventListener('touchmove', target._monitorChromeGestureMove, { capture: true });
+        target.removeEventListener('touchend', target._monitorChromeGestureEnd, { capture: true });
+        target.removeEventListener('touchcancel', target._monitorChromeGestureEnd, { capture: true });
+        delete target._monitorChromeGestureStart;
+        delete target._monitorChromeGestureMove;
+        delete target._monitorChromeGestureEnd;
+    }
+}
+
+function initMonitorChromeGestureGuards() {
+    if (monitorChromeGestureGuardsAttached) return;
+    const edgePx = 28;
+    const minHorizontalDelta = 10;
+    function onStart(e) {
+        if (!monitorMode || !monitorDisableChromeGestures) return;
+        const t = e && e.touches && e.touches[0] ? e.touches[0] : null;
+        if (!t) return;
+        const x = Number(t.clientX) || 0;
+        const y = Number(t.clientY) || 0;
+        monitorChromeGestureStartX = x;
+        monitorChromeGestureStartY = y;
+        monitorChromeGestureStartedAtEdge = x <= edgePx || x >= (window.innerWidth - edgePx);
+    }
+    function onMove(e) {
+        if (!monitorMode || !monitorDisableChromeGestures) return;
+        if (!monitorChromeGestureStartedAtEdge) return;
+        const t = e && e.touches && e.touches[0] ? e.touches[0] : null;
+        if (!t) return;
+        const dx = (Number(t.clientX) || 0) - (monitorChromeGestureStartX || 0);
+        const dy = (Number(t.clientY) || 0) - (monitorChromeGestureStartY || 0);
+        if (Math.abs(dx) > minHorizontalDelta && Math.abs(dx) > Math.abs(dy)) {
+            e.preventDefault();
+        }
+    }
+    function onEnd() {
+        monitorChromeGestureStartX = null;
+        monitorChromeGestureStartY = null;
+        monitorChromeGestureStartedAtEdge = false;
+    }
+    document.body._monitorChromeGestureStart = onStart;
+    document.body._monitorChromeGestureMove = onMove;
+    document.body._monitorChromeGestureEnd = onEnd;
+    document.body.addEventListener('touchstart', onStart, { passive: true, capture: true });
+    document.body.addEventListener('touchmove', onMove, { passive: false, capture: true });
+    document.body.addEventListener('touchend', onEnd, { passive: true, capture: true });
+    document.body.addEventListener('touchcancel', onEnd, { passive: true, capture: true });
+    monitorChromeGestureGuardsAttached = true;
+}
+
+function applyMonitorChromeGestureGuards() {
+    const enabled = monitorMode && monitorDisableChromeGestures;
+    document.body.classList.toggle('chrome-gestures-disabled', enabled);
+    if (enabled) initMonitorChromeGestureGuards();
+    else destroyMonitorChromeGestureGuards();
+}
 
 async function refreshMonitorScreensAvailability() {
     // Если пользователь ещё не подключился к серверу/кластеру — не пытаемся определять доступность,
@@ -10595,6 +10677,7 @@ async function loadSettings() {
     dashboardShowWeather = parseBoolSettingClient(data.dashboard_show_weather, true);
     monitorShowTime = parseBoolSettingClient(data.monitor_show_time, true);
     monitorShowWeather = parseBoolSettingClient(data.monitor_show_weather, true);
+    monitorDisableChromeGestures = parseBoolSettingClient(data.monitor_disable_chrome_gestures, true);
     setValue('settingsDashboardWeatherCityInput', dashboardWeatherCity);
     setValue('settingsDashboardTimezoneInput', dashboardTimezone);
     const cDashT = el('settingsDashboardShowTimeCheckbox');
@@ -10605,6 +10688,8 @@ async function loadSettings() {
     if (cMonT) cMonT.checked = monitorShowTime;
     const cMonW = el('settingsMonitorShowWeatherCheckbox');
     if (cMonW) cMonW.checked = monitorShowWeather;
+    const cMonChrome = el('settingsMonitorDisableChromeGesturesCheckbox');
+    if (cMonChrome) cMonChrome.checked = monitorDisableChromeGestures;
     monitorVmIcons = normalizeMonitorVmIconsMap(data.monitor_vm_icons);
     monitorVmIconColors = normalizeMonitorVmIconColorsMap(data.monitor_vm_icon_colors);
     if (data.current_server_index != null) currentServerIndex = parseInt(data.current_server_index, 10) || 0;
@@ -10685,6 +10770,7 @@ async function loadSettings() {
         applyMonitorTheme();
         initMonitorSwipes();
         initMonitorKeyboardNavigation();
+        applyMonitorChromeGestureGuards();
         applyMonitorToolbarHiddenState();
     }
     startDashboardClockTimer();

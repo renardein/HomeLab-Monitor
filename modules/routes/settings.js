@@ -183,7 +183,7 @@ router.get('/', (req, res) => {
         if (payload.telegram_notify_interval_sec == null || !Number.isFinite(parseInt(payload.telegram_notify_interval_sec, 10))) {
             payload.telegram_notify_interval_sec = 60;
         }
-        for (const k of ['dashboard_show_time', 'dashboard_show_weather', 'monitor_show_time', 'monitor_show_weather']) {
+        for (const k of ['dashboard_show_time', 'dashboard_show_weather', 'monitor_show_time', 'monitor_show_weather', 'monitor_disable_chrome_gestures']) {
             if (payload[k] === undefined) payload[k] = true;
             else payload[k] = !(payload[k] === false || payload[k] === '0' || payload[k] === 0 || payload[k] === 'false');
         }
@@ -277,6 +277,11 @@ router.post('/', (req, res) => {
             })(),
             monitor_show_weather: (() => {
                 const v = body.monitor_show_weather ?? body.monitorShowWeather;
+                if (v === undefined) return undefined;
+                return v === true || v === '1' || v === 1 || v === 'true' ? '1' : '0';
+            })(),
+            monitor_disable_chrome_gestures: (() => {
+                const v = body.monitor_disable_chrome_gestures ?? body.monitorDisableChromeGestures;
                 if (v === undefined) return undefined;
                 return v === true || v === '1' || v === 1 || v === 'true' ? '1' : '0';
             })(),
