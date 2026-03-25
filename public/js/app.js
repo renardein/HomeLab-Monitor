@@ -7055,6 +7055,52 @@ async function updateNetdevDashboard() {
     }
 }
 
+async function parseHttpJsonResponse(res) {
+    const text = await res.text();
+    let data = null;
+    let parseFailed = false;
+    if (text) {
+        try {
+            data = JSON.parse(text);
+        } catch {
+            parseFailed = true;
+        }
+    } else {
+        data = {};
+    }
+    return { data, parseFailed, text };
+}
+
+function speedtestNetworkErrorMessage(err) {
+    const name = err && err.name;
+    const msg = (err && err.message) ? String(err.message) : String(err || '');
+    const low = msg.toLowerCase();
+    if (name === 'AbortError') {
+        return t('speedtestErrorAborted') || 'Cancelled';
+    }
+    if (
+        msg === 'Failed to fetch'
+        || low.includes('networkerror')
+        || low.includes('load failed')
+        || low.includes('network request failed')
+    ) {
+        return t('speedtestErrorNetwork') || 'Could not reach the server';
+    }
+    return msg.trim() || (t('speedtestErrorUnknown') || 'Unknown error');
+}
+
+function speedtestDescribeRunFailure(data) {
+    if (!data || data.ok !== false) return '';
+    const code = data.error;
+    if (code === 'cli_missing') {
+        return t('speedtestCliMissing') || 'CLI: not found';
+    }
+    if (typeof code === 'string' && code.trim()) {
+        return code.trim();
+    }
+    return t('speedtestRunFailedGeneric') || 'Measurement failed';
+}
+
 function formatSpeedtestMbps(v) {
     if (v == null || !Number.isFinite(Number(v))) return '—';
     const n = Math.round(Number(v) * 10) / 10;
@@ -7093,8 +7139,13 @@ async function updateSpeedtestDashboard() {
     }
     try {
         const res = await fetch('/api/speedtest/summary');
-        const summary = await res.json();
-        if (!res.ok) throw new Error(summary.error || `HTTP ${res.status}`);
+        const { data: summary, parseFailed } = await parseHttpJsonResponse(res);
+        if (parseFailed) {
+            throw new Error(t('speedtestErrorBadResponse') || 'Invalid server response');
+        }
+        if (!res.ok) {
+            throw new Error((summary && summary.error) || `HTTP ${res.status}`);
+        }
 
         const enabled = !!(summary.enabled === true || summary.enabled === '1' || summary.enabled === 1);
 
@@ -7174,12 +7225,18 @@ async function updateSpeedtestDashboard() {
         setEl('speedtestMonitorAvg', '—');
         setEl('speedtestMonitorMin', '—');
         setEl('speedtestMonitorMax', '—');
-        const fallback = t('backupNoData') || 'Нет данных';
-        const msg = (e && e.message) ? String(e.message) : null;
-        setEl('speedtestMonitorExtra', msg ? `${fallback}: ${msg}` : fallback);
+        const prefix = t('speedtestSummaryLoadError') || 'Could not load speedtest data';
+        const detail = e instanceof Error && e.message ? e.message : speedtestNetworkErrorMessage(e);
+        const msg = detail ? `${prefix}: ${detail}` : prefix;
+        setEl('speedtestMonitorExtra', msg);
         setSpeedtestDownloadBarPercent('speedtestMonitorAvgBar', null, 1);
         setSpeedtestDownloadBarPercent('speedtestMonitorMinBar', null, 1);
         setSpeedtestDownloadBarPercent('speedtestMonitorMaxBar', null, 1);
+        const cliEl = document.getElementById('speedtestCliStatus');
+        if (cliEl) {
+            cliEl.textContent = msg;
+            cliEl.className = 'small text-danger';
+        }
     }
 }
 
@@ -7457,7 +7514,20 @@ function buildClusterUpsTileHtml(tile, payload) {
 }
 
 function buildClusterSpeedtestTileHtml(summary) {
-    if (!summary || !summary.enabled) {
+    if (!summary) {
+        return buildClusterDashboardUnavailableTile(
+            t('dashboardSpeedtestTitle') || 'Speedtest',
+            t('speedtestErrorNetwork') || t('backupNoData') || 'Нет данных'
+        );
+    }
+    if (summary.error) {
+        const hint = t('speedtestSummaryLoadError') || 'Could not load speedtest data';
+        return buildClusterDashboardUnavailableTile(
+            t('dashboardSpeedtestTitle') || 'Speedtest',
+            `${hint}: ${String(summary.error)}`
+        );
+    }
+    if (!summary.enabled) {
         return buildClusterDashboardUnavailableTile(t('dashboardSpeedtestTitle') || 'Speedtest', t('backupNoData') || 'Нет данных');
     }
     const last = summary.last || {};
@@ -7814,14 +7884,28 @@ async function runSpeedtestNow() {
     if (btn) btn.disabled = true;
     try {
         const res = await fetch('/api/speedtest/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-        const data = await res.json();
+        const { data, parseFailed } = await parseHttpJsonResponse(res);
+        if (parseFailed) {
+            showToast(t('speedtestErrorBadResponse') || 'Invalid server response', 'error');
+            return;
+        }
         if (!res.ok) {
-            throw new Error(data.error || data.message || `HTTP ${res.status}`);
+            const msg = res.status === 409
+                ? (t('speedtestErrorBusy') || 'Another speedtest is running')
+                : (data && (data.error || data.message)) || `HTTP ${res.status}`;
+            showToast((t('speedtestRunError') || 'Speedtest: {msg}').replace('{msg}', String(msg)), 'error');
+            return;
+        }
+        if (data.ok === false) {
+            const detail = speedtestDescribeRunFailure(data);
+            showToast((t('speedtestRunError') || 'Speedtest: {msg}').replace('{msg}', detail), 'error');
+            updateSpeedtestDashboard().catch(() => {});
+            return;
         }
         showToast(t('speedtestRunDone') || t('dataUpdated'), 'success');
         updateSpeedtestDashboard().catch(() => {});
     } catch (e) {
-        const msg = (e && e.message) ? e.message : String(e);
+        const msg = speedtestNetworkErrorMessage(e);
         showToast((t('speedtestRunError') || 'Speedtest: {msg}').replace('{msg}', msg), 'error');
     } finally {
         if (btn) btn.disabled = false;
@@ -7834,9 +7918,12 @@ async function clearSpeedtestHistory() {
     if (btn) btn.disabled = true;
     try {
         const res = await fetch('/api/speedtest/results', { method: 'DELETE' });
-        const data = await res.json();
+        const { data, parseFailed } = await parseHttpJsonResponse(res);
+        if (parseFailed) {
+            throw new Error(t('speedtestErrorBadResponse') || 'Invalid server response');
+        }
         if (!res.ok) {
-            throw new Error(data.error || data.message || `HTTP ${res.status}`);
+            throw new Error((data && (data.error || data.message)) || `HTTP ${res.status}`);
         }
         showToast(t('speedtestClearDone') || t('dataUpdated'), 'success');
         updateSpeedtestDashboard().catch(() => {});
@@ -7846,7 +7933,7 @@ async function clearSpeedtestHistory() {
             applyMonitorView('cluster');
         }
     } catch (e) {
-        const msg = (e && e.message) ? e.message : String(e);
+        const msg = e instanceof Error && e.message ? e.message : speedtestNetworkErrorMessage(e);
         showToast((t('speedtestClearError') || '{msg}').replace('{msg}', msg), 'error');
     } finally {
         if (btn) btn.disabled = false;

@@ -74,6 +74,24 @@ function parseStdout(stdout) {
     return last ? parseResultObject(last) : null;
 }
 
+/** Ookla CLI пишет в stdout поток NDJSON: строки type:log (в т.ч. level:error) и в конце type:result. */
+function lastErrorMessagesFromSpeedtestJsonl(stdout, maxLines = 4) {
+    const raw = String(stdout || '').trim();
+    const lines = raw.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    const errors = [];
+    for (const line of lines) {
+        if (!line.startsWith('{')) continue;
+        try {
+            const o = JSON.parse(line);
+            if (o && o.type === 'log' && String(o.level || '').toLowerCase() === 'error' && o.message) {
+                errors.push(String(o.message).trim());
+            }
+        } catch (_) { /* skip */ }
+    }
+    if (!errors.length || maxLines <= 0) return errors;
+    return errors.slice(-maxLines);
+}
+
 function probeCli() {
     return new Promise((resolve) => {
         const exe = speedtestExecutable();
@@ -123,21 +141,36 @@ function runSpeedtestProcess(serverIdOrEmpty) {
         proc.stderr.on('data', (d) => { err += d.toString(); });
         proc.on('error', (e) => {
             clearTimeout(t);
-            reject(e);
+            const code = e && e.code;
+            const base = e && e.message ? String(e.message) : String(e);
+            if (code === 'ENOENT') {
+                reject(new Error(`Speedtest executable not found (${exe}). Set SPEEDTEST_CLI to the full path or install Ookla CLI.`));
+            } else {
+                reject(new Error(base));
+            }
         });
         proc.on('close', (code) => {
             clearTimeout(t);
+            const parsed = parseStdout(out);
+            if (parsed) {
+                resolve(parsed);
+                return;
+            }
+            const logErrs = lastErrorMessagesFromSpeedtestJsonl(out);
+            const logHint = logErrs.length ? logErrs.join('; ') : '';
+            const stderrHint = (err || '').trim();
             if (code !== 0) {
-                const msg = (err || out || `exit ${code}`).trim() || `speedtest exited with code ${code}`;
+                const parts = [logHint, stderrHint, (out || '').trim()].filter(Boolean);
+                const msg = parts.length
+                    ? parts.join(' · ')
+                    : `speedtest exited with code ${code}`;
                 reject(new Error(msg));
                 return;
             }
-            const parsed = parseStdout(out);
-            if (!parsed) {
-                reject(new Error('Could not parse speedtest JSON output'));
-                return;
-            }
-            resolve(parsed);
+            const parseFailMsg = logHint
+                ? `Could not parse speedtest JSON output (${logHint})`
+                : 'Could not parse speedtest JSON output';
+            reject(new Error(parseFailMsg));
         });
     });
 }
