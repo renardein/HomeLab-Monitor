@@ -3003,7 +3003,9 @@ let serverDefaultLanguage = null;
 // Load available languages from server and initialize
 document.addEventListener('DOMContentLoaded', async function() {
     console.log('DOM loaded');
-    
+    initMonitorPageZoomGuards();
+    initMonitorChromeGestureGuards();
+
     // Load translations and available languages from server
     await loadTranslations();
     
@@ -8150,6 +8152,8 @@ async function toggleMonitorMode() {
     const upsMonSection = document.getElementById('upsMonitorSection');
 
     document.body.classList.toggle('monitor-mode', monitorMode);
+    applyMonitorRootLayoutClass(monitorMode);
+    applyMonitorViewportPageZoomLock(monitorMode);
     applyMonitorChromeGestureGuards();
 
     const btn = document.getElementById('monitorModeBtn');
@@ -8223,10 +8227,11 @@ async function toggleMonitorMode() {
 
 let monitorSwipeStartX = null;
 let monitorSwipeHandlersAttached = false;
-let monitorChromeGestureGuardsAttached = false;
 let monitorChromeGestureStartX = null;
 let monitorChromeGestureStartY = null;
-let monitorChromeGestureStartedAtEdge = false;
+/** 'left' | 'right' | null — жест «назад/вперёд» Chrome начинается с края */
+let monitorChromeGestureEdge = null;
+let monitorChromeGestureListenersRegistered = false;
 /** Текущий экран режима монитора */
 let monitorCurrentView = 'cluster';
 /** Последние данные бэкапов для экрана монитора */
@@ -8246,69 +8251,117 @@ let netdevMonitorConfigured = null;
 let speedtestMonitorConfigured = null;
 let smartSensorsMonitorConfigured = null;
 
-function destroyMonitorChromeGestureGuards() {
-    monitorChromeGestureGuardsAttached = false;
+function resetMonitorChromeGestureState() {
     monitorChromeGestureStartX = null;
     monitorChromeGestureStartY = null;
-    monitorChromeGestureStartedAtEdge = false;
-    document.body.classList.remove('chrome-gestures-disabled');
-    const target = document.body;
-    if (target._monitorChromeGestureStart) {
-        target.removeEventListener('touchstart', target._monitorChromeGestureStart, { capture: true });
-        target.removeEventListener('touchmove', target._monitorChromeGestureMove, { capture: true });
-        target.removeEventListener('touchend', target._monitorChromeGestureEnd, { capture: true });
-        target.removeEventListener('touchcancel', target._monitorChromeGestureEnd, { capture: true });
-        delete target._monitorChromeGestureStart;
-        delete target._monitorChromeGestureMove;
-        delete target._monitorChromeGestureEnd;
-    }
+    monitorChromeGestureEdge = null;
 }
 
+/** Слушатели вешаются один раз; флаги monitorMode + monitorDisableChromeGestures включают блокировку. */
 function initMonitorChromeGestureGuards() {
-    if (monitorChromeGestureGuardsAttached) return;
-    const edgePx = 28;
-    const minHorizontalDelta = 10;
+    if (monitorChromeGestureListenersRegistered) return;
+    monitorChromeGestureListenersRegistered = true;
+    function edgeWidthPx() {
+        const w = window.innerWidth || 0;
+        return Math.min(96, Math.max(44, Math.round(w * 0.14)));
+    }
     function onStart(e) {
         if (!monitorMode || !monitorDisableChromeGestures) return;
         const t = e && e.touches && e.touches[0] ? e.touches[0] : null;
         if (!t) return;
         const x = Number(t.clientX) || 0;
         const y = Number(t.clientY) || 0;
+        const w = window.innerWidth || 0;
+        const edge = edgeWidthPx();
         monitorChromeGestureStartX = x;
         monitorChromeGestureStartY = y;
-        monitorChromeGestureStartedAtEdge = x <= edgePx || x >= (window.innerWidth - edgePx);
+        monitorChromeGestureEdge = null;
+        if (x <= edge) monitorChromeGestureEdge = 'left';
+        else if (w > 0 && x >= w - edge) monitorChromeGestureEdge = 'right';
     }
     function onMove(e) {
         if (!monitorMode || !monitorDisableChromeGestures) return;
-        if (!monitorChromeGestureStartedAtEdge) return;
+        if (!monitorChromeGestureEdge) return;
         const t = e && e.touches && e.touches[0] ? e.touches[0] : null;
         if (!t) return;
         const dx = (Number(t.clientX) || 0) - (monitorChromeGestureStartX || 0);
         const dy = (Number(t.clientY) || 0) - (monitorChromeGestureStartY || 0);
-        if (Math.abs(dx) > minHorizontalDelta && Math.abs(dx) > Math.abs(dy)) {
+        const absDx = Math.abs(dx);
+        const absDy = Math.abs(dy);
+        const horizontalIntent = absDx > 4 && absDx >= absDy * 0.85;
+        const backFromLeft = monitorChromeGestureEdge === 'left' && dx > 4 && horizontalIntent;
+        const forwardFromRight = monitorChromeGestureEdge === 'right' && dx < -4 && horizontalIntent;
+        if (backFromLeft || forwardFromRight) {
             e.preventDefault();
         }
     }
     function onEnd() {
-        monitorChromeGestureStartX = null;
-        monitorChromeGestureStartY = null;
-        monitorChromeGestureStartedAtEdge = false;
+        resetMonitorChromeGestureState();
     }
-    document.body._monitorChromeGestureStart = onStart;
-    document.body._monitorChromeGestureMove = onMove;
-    document.body._monitorChromeGestureEnd = onEnd;
-    document.body.addEventListener('touchstart', onStart, { passive: true, capture: true });
-    document.body.addEventListener('touchmove', onMove, { passive: false, capture: true });
-    document.body.addEventListener('touchend', onEnd, { passive: true, capture: true });
-    document.body.addEventListener('touchcancel', onEnd, { passive: true, capture: true });
-    monitorChromeGestureGuardsAttached = true;
+    document.addEventListener('touchstart', onStart, { passive: true, capture: true });
+    document.addEventListener('touchmove', onMove, { passive: false, capture: true });
+    document.addEventListener('touchend', onEnd, { passive: true, capture: true });
+    document.addEventListener('touchcancel', onEnd, { passive: true, capture: true });
 }
 
 function applyMonitorChromeGestureGuards() {
     const enabled = monitorMode && monitorDisableChromeGestures;
     document.body.classList.toggle('chrome-gestures-disabled', enabled);
-    if (enabled) initMonitorChromeGestureGuards();
-    else destroyMonitorChromeGestureGuards();
+    if (!enabled) resetMonitorChromeGestureState();
+}
+
+/** Класс на <html>: overscroll / жесты браузера завязаны на корень документа */
+function applyMonitorRootLayoutClass(enabled) {
+    document.documentElement.classList.toggle('monitor-mode-root', !!enabled);
+}
+
+/** content meta viewport до входа в monitor mode (восстанавливаем при выходе) */
+let monitorViewportMetaOriginalContent = null;
+let monitorPageZoomGuardsAttached = false;
+
+/** Запрет масштабирования страницы в режиме монитора (pinch / Ctrl+колесо / Safari gesture). */
+function applyMonitorViewportPageZoomLock(enabled) {
+    let meta = document.querySelector('meta[name="viewport"]');
+    if (!meta) {
+        meta = document.createElement('meta');
+        meta.setAttribute('name', 'viewport');
+        document.head.appendChild(meta);
+    }
+    if (enabled) {
+        if (monitorViewportMetaOriginalContent === null) {
+            monitorViewportMetaOriginalContent = meta.getAttribute('content') || 'width=device-width, initial-scale=1.0';
+        }
+        meta.setAttribute(
+            'content',
+            'width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover'
+        );
+    } else if (monitorViewportMetaOriginalContent !== null) {
+        meta.setAttribute('content', monitorViewportMetaOriginalContent);
+    }
+}
+
+function initMonitorPageZoomGuards() {
+    if (monitorPageZoomGuardsAttached) return;
+    monitorPageZoomGuardsAttached = true;
+    function blockGestureIfMonitor(e) {
+        if (monitorMode) e.preventDefault();
+    }
+    document.addEventListener('gesturestart', blockGestureIfMonitor, { passive: false });
+    document.addEventListener('gesturechange', blockGestureIfMonitor, { passive: false });
+    document.addEventListener('gestureend', blockGestureIfMonitor, { passive: false });
+    window.addEventListener(
+        'wheel',
+        function (e) {
+            if (!monitorMode) return;
+            if (e.ctrlKey) e.preventDefault();
+        },
+        { passive: false }
+    );
+    function blockPinchTouchMove(e) {
+        if (!monitorMode) return;
+        if (e.touches && e.touches.length > 1) e.preventDefault();
+    }
+    document.addEventListener('touchmove', blockPinchTouchMove, { passive: false, capture: true });
 }
 
 async function refreshMonitorScreensAvailability() {
@@ -12157,6 +12210,8 @@ async function loadSettings() {
         applyMonitorChromeGestureGuards();
         applyMonitorToolbarHiddenState();
     }
+    applyMonitorRootLayoutClass(!!monitorMode);
+    applyMonitorViewportPageZoomLock(!!monitorMode);
     startDashboardClockTimer();
     refreshDashboardWeather().catch(() => {});
     // Preferred language select in settings

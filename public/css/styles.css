@@ -1411,21 +1411,31 @@
         .color-red { background: #dc3545; }
         
         /* Режим монитора: полный дашборд с крупными блоками, переключение свайпами */
+        /* Жесты «назад/вперёд» и rubber-band завязаны на <html> — без класса на корне overscroll часто не срабатывает */
+        html.monitor-mode-root {
+            height: 100%;
+            overscroll-behavior: none;
+            overscroll-behavior-x: none;
+            touch-action: pan-y;
+        }
         body.monitor-mode {
             padding: 0;
             overflow: hidden;
+            min-height: 100%;
+            overscroll-behavior: none;
+            overscroll-behavior-x: none;
+            touch-action: manipulation;
+            -webkit-text-size-adjust: 100%;
+            text-size-adjust: 100%;
             --monitor-toolbar-h: 52px;
             --monitor-toolbar-top: var(--monitor-toolbar-h);
             --monitor-dock-h: 52px;
         }
-        body.monitor-mode.chrome-gestures-disabled {
-            overscroll-behavior-x: none;
-            overscroll-behavior-y: none;
-        }
-        body.monitor-mode.chrome-gestures-disabled #dashboardSection,
-        body.monitor-mode.chrome-gestures-disabled .monitor-screen,
-        body.monitor-mode.chrome-gestures-disabled .monitor-view {
+        body.monitor-mode #dashboardSection,
+        body.monitor-mode .monitor-screen,
+        body.monitor-mode .monitor-view {
             overscroll-behavior: none;
+            overscroll-behavior-x: none;
         }
         body.monitor-mode.monitor-toolbar-hidden {
             --monitor-toolbar-top: 0px;
@@ -1486,6 +1496,7 @@
             min-height: 0;
             overflow-x: auto;
             overflow-y: hidden;
+            touch-action: pan-x pan-y;
         }
 
         /* Вкладки Nodes / Storage / Backups / Quorum — только вне режима монитора */
