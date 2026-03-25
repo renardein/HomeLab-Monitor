@@ -239,16 +239,208 @@ function buildSampleVarsForTelegramRule(rule) {
     }
 }
 
+/** Один запрос getUpdates (limit 100). При ошибке API поле telegramErrorCode на объекте Error. */
+async function telegramBotGetUpdates(botToken, proxyUrl, params) {
+    const token = String(botToken || '').trim();
+    if (!token) throw new Error('bot token required');
+    const url = `https://api.telegram.org/bot${encodeURIComponent(token)}/getUpdates`;
+    const axiosCfg = buildAxiosConfigForTelegram(proxyUrl);
+    const query = { timeout: 0, limit: 100, ...(params && typeof params === 'object' ? params : {}) };
+    const resp = await axios.get(url, { ...axiosCfg, params: query });
+    const data = resp && resp.data;
+    if (!data || data.ok !== true) {
+        const desc = data && data.description ? String(data.description) : 'getUpdates failed';
+        const err = new Error(desc);
+        err.telegramErrorCode = data && data.error_code;
+        throw err;
+    }
+    return Array.isArray(data.result) ? data.result : [];
+}
+
+async function telegramBotCallGet(botToken, method, proxyUrl, params) {
+    const token = String(botToken || '').trim();
+    if (!token) throw new Error('bot token required');
+    const m = String(method || '').replace(/^\//, '');
+    if (!m) throw new Error('method required');
+    const url = `https://api.telegram.org/bot${encodeURIComponent(token)}/${m}`;
+    const axiosCfg = buildAxiosConfigForTelegram(proxyUrl);
+    const resp = await axios.get(url, { ...axiosCfg, params: params && typeof params === 'object' ? params : {} });
+    const data = resp && resp.data;
+    if (!data || data.ok !== true) {
+        const err = new Error(data && data.description ? String(data.description) : `${m} failed`);
+        err.telegramErrorCode = data && data.error_code;
+        err.telegramMethodFailed = true;
+        throw err;
+    }
+    return data.result;
+}
+
+function _labelFromTelegramChatApi(chat, idStr) {
+    const fallbackId = idStr != null ? String(idStr) : String(chat && chat.id != null ? chat.id : '');
+    if (!chat || chat.id == null) return fallbackId;
+    const title = chat.title != null ? String(chat.title).trim() : '';
+    const username = chat.username != null ? String(chat.username).trim() : '';
+    const fn = [chat.first_name, chat.last_name]
+        .filter((x) => x != null && String(x).trim() !== '')
+        .map((x) => String(x).trim())
+        .join(' ');
+    return title || (username ? `@${username}` : '') || fn || fallbackId;
+}
+
+async function _enrichChatsMapWithGetChat(botToken, proxyUrl, chatsMap) {
+    const ids = Array.from(chatsMap.keys());
+    await Promise.all(
+        ids.map(async (idStr) => {
+            try {
+                const chat = await telegramBotCallGet(botToken, 'getChat', proxyUrl, { chat_id: idStr });
+                if (!chat || chat.id == null) return;
+                const title = chat.title != null ? String(chat.title).trim() : '';
+                const username = chat.username != null ? String(chat.username).trim() : '';
+                const label = _labelFromTelegramChatApi(chat, idStr);
+                chatsMap.set(idStr, {
+                    id: idStr,
+                    type: chat.type != null ? String(chat.type) : '',
+                    title: title || null,
+                    username: username || null,
+                    first_name: chat.first_name != null ? String(chat.first_name) : null,
+                    last_name: chat.last_name != null ? String(chat.last_name) : null,
+                    label
+                });
+            } catch (_) {
+                /* оставляем данные из getUpdates */
+            }
+        })
+    );
+}
+
+function _sleepMs(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Для названий тем нужны права администратора с can_manage_topics (иначе запрос тихо пропускается). */
+async function _enrichThreadsMapWithGetForumTopic(botToken, proxyUrl, threadsMap) {
+    const pairs = [];
+    for (const [cid, tmap] of threadsMap) {
+        for (const tid of tmap.keys()) {
+            pairs.push([cid, tid]);
+        }
+    }
+    for (let i = 0; i < pairs.length; i++) {
+        const [cid, tid] = pairs[i];
+        try {
+            const ft = await telegramBotCallGet(botToken, 'getForumTopic', proxyUrl, {
+                chat_id: cid,
+                message_thread_id: tid
+            });
+            if (ft && ft.name != null && String(ft.name).trim()) {
+                const tmap = threadsMap.get(cid);
+                if (tmap) tmap.set(tid, String(ft.name).trim());
+            }
+        } catch (_) {
+            /* нет прав или не форум — остаётся имя из update / topic id */
+        }
+        if (i < pairs.length - 1) await _sleepMs(45);
+    }
+}
+
+function _telegramAddChatFromApi(chatsMap, chat) {
+    if (!chat || chat.id == null) return;
+    const idStr = String(chat.id);
+    if (chatsMap.has(idStr)) return;
+    const title = chat.title != null ? String(chat.title).trim() : '';
+    const username = chat.username != null ? String(chat.username).trim() : '';
+    const fn = [chat.first_name, chat.last_name]
+        .filter((x) => x != null && String(x).trim() !== '')
+        .map((x) => String(x).trim())
+        .join(' ');
+    const label = title || (username ? `@${username}` : '') || fn || idStr;
+    chatsMap.set(idStr, {
+        id: idStr,
+        type: chat.type != null ? String(chat.type) : '',
+        title: title || null,
+        username: username || null,
+        first_name: chat.first_name != null ? String(chat.first_name) : null,
+        last_name: chat.last_name != null ? String(chat.last_name) : null,
+        label
+    });
+}
+
+function _telegramAddThread(threadsMap, chatId, threadId, nameHint) {
+    if (chatId == null || threadId == null) return;
+    const cid = String(chatId);
+    const tid = parseInt(String(threadId), 10);
+    if (!Number.isFinite(tid)) return;
+    if (!threadsMap.has(cid)) threadsMap.set(cid, new Map());
+    const m = threadsMap.get(cid);
+    const hint = nameHint != null && String(nameHint).trim() ? String(nameHint).trim() : '';
+    if (hint) m.set(tid, hint);
+    else if (!m.has(tid)) m.set(tid, `topic ${tid}`);
+}
+
+function _collectTelegramChatsFromMessageLike(msg, chatsMap, threadsMap) {
+    if (!msg || !msg.chat) return;
+    _telegramAddChatFromApi(chatsMap, msg.chat);
+    const mtid = msg.message_thread_id;
+    if (mtid != null) {
+        let topicName = '';
+        if (msg.forum_topic_created && msg.forum_topic_created.name) {
+            topicName = String(msg.forum_topic_created.name);
+        } else if (msg.forum_topic_edited && msg.forum_topic_edited.name) {
+            topicName = String(msg.forum_topic_edited.name);
+        }
+        _telegramAddThread(threadsMap, msg.chat.id, mtid, topicName);
+    }
+}
+
+function _processTelegramUpdateForChatList(upd, chatsMap, threadsMap) {
+    if (!upd || typeof upd !== 'object') return;
+    if (upd.message) _collectTelegramChatsFromMessageLike(upd.message, chatsMap, threadsMap);
+    if (upd.edited_message) _collectTelegramChatsFromMessageLike(upd.edited_message, chatsMap, threadsMap);
+    if (upd.channel_post) _collectTelegramChatsFromMessageLike(upd.channel_post, chatsMap, threadsMap);
+    if (upd.edited_channel_post) _collectTelegramChatsFromMessageLike(upd.edited_channel_post, chatsMap, threadsMap);
+    if (upd.callback_query && upd.callback_query.message) {
+        _collectTelegramChatsFromMessageLike(upd.callback_query.message, chatsMap, threadsMap);
+    }
+    const cJoin = upd.my_chat_member && upd.my_chat_member.chat;
+    if (cJoin) _telegramAddChatFromApi(chatsMap, cJoin);
+    const cMem = upd.chat_member && upd.chat_member.chat;
+    if (cMem) _telegramAddChatFromApi(chatsMap, cMem);
+    const cReq = upd.chat_join_request && upd.chat_join_request.chat;
+    if (cReq) _telegramAddChatFromApi(chatsMap, cReq);
+}
+
 /**
- * @param {string} botToken
- * @param {string} chatId
- * @param {string} text
- * @param {string|number|null|undefined} threadId message_thread_id (forum topics)
+ * Чаты и темы форумов из одной порции getUpdates (до 100). Не вызывайте параллельно с другим long polling этим же ботом.
+ * При активном webhook Telegram вернёт 409 — см. telegramErrorCode на ошибке (если пробросили).
  */
-/**
- * @param {string|number|null|undefined} threadId message_thread_id (forum topics)
- * @param {{ proxyUrl?: string }} [options]
- */
+async function fetchTelegramChatsAndThreadsFromUpdates(botToken, proxyUrl) {
+    const updates = await telegramBotGetUpdates(botToken, proxyUrl);
+    const chatsMap = new Map();
+    const threadsMap = new Map();
+    for (const u of updates) {
+        _processTelegramUpdateForChatList(u, chatsMap, threadsMap);
+    }
+    if (chatsMap.size) {
+        await _enrichChatsMapWithGetChat(botToken, proxyUrl, chatsMap);
+    }
+    if (threadsMap.size) {
+        await _enrichThreadsMapWithGetForumTopic(botToken, proxyUrl, threadsMap);
+    }
+    const chats = Array.from(chatsMap.values()).sort((a, b) =>
+        a.label.localeCompare(b.label, undefined, { sensitivity: 'base' })
+    );
+    const threadsByChat = {};
+    for (const [cid, tmap] of threadsMap) {
+        threadsByChat[cid] = Array.from(tmap.entries())
+            .map(([threadId, name]) => ({
+                threadId,
+                name: name != null && String(name).trim() ? String(name).trim() : `topic ${threadId}`
+            }))
+            .sort((a, b) => a.threadId - b.threadId);
+    }
+    return { updatesCount: updates.length, chats, threadsByChat };
+}
+
 async function sendTelegramMessage(botToken, chatId, text, threadId, options) {
     const token = String(botToken || '').trim();
     const cid = String(chatId || '').trim();
@@ -395,5 +587,6 @@ module.exports = {
     escapeMarkdownV2,
     formatTelegramNotifyMessage,
     isValidTelegramBotTokenFormat,
-    buildAxiosConfigForTelegram
+    buildAxiosConfigForTelegram,
+    fetchTelegramChatsAndThreadsFromUpdates
 };

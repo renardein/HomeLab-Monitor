@@ -88,6 +88,8 @@ let monitorVmIconColors = {}; // vmid -> CSS hex color
 /** @type {Array<object>} */
 let telegramNotificationRules = [];
 let telegramBotTokenSet = false;
+/** Кэш последнего ответа telegram-fetch-chats: { chats, threadsByChat } */
+let telegramChatsCache = { chats: [], threadsByChat: {} };
 /** false → показать мастер начальной настройки (первый запуск или сброс) */
 let setupCompleted = true;
 let setupWizardStep = 1;
@@ -2363,6 +2365,8 @@ function updateUILanguage() {
         settingsTelegramRulesMessageHintShort: 'telegramRulesMessageHintShort',
         settingsTelegramRuleChatHeader: 'settingsTelegramRuleChatHeader',
         settingsTelegramRuleThreadHeader: 'settingsTelegramRuleThreadHeader',
+        settingsTelegramFetchChatsText: 'settingsTelegramFetchChats',
+        settingsTelegramFetchChatsHelp: 'settingsTelegramFetchChatsHelp',
         settingsTelegramNotifyOpt0: 'settingsTelegramNotifyOptionOff',
         settingsTelegramNotifyOpt1: 'settingsTelegramNotifyOptionOn',
         settingsServiceIconHeader: 'settingsServiceIconHeader',
@@ -3447,6 +3451,113 @@ function telegramSmartSensorDatalistId(ruleId) {
     return `telegramSsFields_${raw}`;
 }
 
+function telegramRuleThreadDatalistId(ruleId) {
+    const raw = String(ruleId || 'x').replace(/[^a-zA-Z0-9_-]/g, '_');
+    return `telegramTgThr_${raw}`;
+}
+
+function refillTelegramChatsDatalistFromCache() {
+    const dl = document.getElementById('telegramTgChatsDatalist');
+    if (!dl) return;
+    const chats = Array.isArray(telegramChatsCache.chats) ? telegramChatsCache.chats : [];
+    dl.innerHTML = chats
+        .map((c) => {
+            const id = String(c.id);
+            const lab = c.label != null ? String(c.label) : id;
+            const disp = `${lab} (${id})`;
+            return `<option value="${escapeHtml(id)}">${escapeHtml(disp)}</option>`;
+        })
+        .join('');
+}
+
+function refillTelegramThreadDatalistForRule(ruleId, chatIdRaw) {
+    const dlId = telegramRuleThreadDatalistId(ruleId);
+    const dl = document.getElementById(dlId);
+    if (!dl) return;
+    const cid = String(chatIdRaw || '').trim();
+    const threadsBy =
+        telegramChatsCache.threadsByChat && typeof telegramChatsCache.threadsByChat === 'object'
+            ? telegramChatsCache.threadsByChat
+            : {};
+    const list = cid && threadsBy[cid] ? threadsBy[cid] : [];
+    const rule = findTelegramRuleById(ruleId);
+    const curThr = rule && rule.threadId != null ? String(rule.threadId).trim() : '';
+    const seen = new Set();
+    const parts = [];
+    for (const t of list) {
+        const tid = Number(t.threadId);
+        if (!Number.isFinite(tid)) continue;
+        const s = String(tid);
+        seen.add(s);
+        const name = t.name != null ? String(t.name) : `topic ${tid}`;
+        parts.push(`<option value="${escapeHtml(s)}">${escapeHtml(`${name} (${tid})`)}</option>`);
+    }
+    if (curThr && !seen.has(curThr)) {
+        parts.push(`<option value="${escapeHtml(curThr)}">${escapeHtml(curThr)}</option>`);
+    }
+    dl.innerHTML = parts.join('');
+}
+
+async function fetchTelegramChatsFromApi() {
+    const tokEl = document.getElementById('settingsTelegramBotTokenInput');
+    const proxyEl = document.getElementById('settingsTelegramProxyUrlInput');
+    const rawTok = tokEl ? String(tokEl.value).trim() : '';
+    const proxyUrl = proxyEl ? String(proxyEl.value || '').trim() : '';
+    const payload = { telegramProxyUrl: proxyUrl };
+    if (rawTok && isTelegramBotTokenFormatClient(rawTok)) payload.telegramBotToken = rawTok;
+
+    const btn = document.getElementById('settingsTelegramFetchChatsBtn');
+    if (btn) btn.disabled = true;
+    try {
+        const res = await fetch('/api/settings/telegram-fetch-chats', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.success) {
+            const err = data.description || data.error || res.statusText;
+            if (data.error === 'telegram_webhook_or_conflict') {
+                showToast(t('settingsTelegramFetchChatsWebhookError') || String(err), 'warning');
+            } else if (data.error === 'bot_token_required') {
+                showToast(t('telegramTestRuleNeedToken') || err, 'warning');
+            } else {
+                showToast((t('settingsTelegramFetchChatsError') || 'Error') + ': ' + err, 'error');
+            }
+            return;
+        }
+        telegramChatsCache = {
+            chats: Array.isArray(data.chats) ? data.chats : [],
+            threadsByChat:
+                data.threadsByChat && typeof data.threadsByChat === 'object' ? data.threadsByChat : {}
+        };
+        refillTelegramChatsDatalistFromCache();
+        const tblBody = document.getElementById('telegramRulesTableBody');
+        if (tblBody) {
+            tblBody.querySelectorAll('[data-tr-field="chatId"]').forEach((inp) => {
+                const rid = inp.getAttribute('data-rule-id');
+                if (rid) refillTelegramThreadDatalistForRule(rid, inp.value);
+            });
+        }
+        const nUpd = data.updatesCount != null ? data.updatesCount : 0;
+        const nc = telegramChatsCache.chats.length;
+        let msg;
+        if (nc) {
+            msg = tParams('settingsTelegramFetchChatsOk', { n: String(nc), u: String(nUpd) });
+            if (!msg || msg === 'settingsTelegramFetchChatsOk') {
+                msg = `Chats: ${nc}, updates: ${nUpd}`;
+            }
+        } else {
+            msg = t('settingsTelegramFetchChatsEmpty') || '';
+        }
+        showToast(msg || `updates ${nUpd}`, nc ? 'success' : 'info');
+    } catch (e) {
+        showToast((t('settingsTelegramFetchChatsError') || 'Error') + ': ' + (e.message || String(e)), 'error');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
 function getUpsRuleTargetOptions(rule) {
     const active = (Array.isArray(upsConfigs) ? upsConfigs : [])
         .map((cfg, idx) => ({ cfg, slot: idx + 1 }))
@@ -3761,8 +3872,8 @@ function renderTelegramRulesTable() {
                     </button>
                     <div class="text-muted small mt-1">${escapeHtml(statusText)}</div>
                 </td>
-                <td><input type="text" class="form-control form-control-sm" data-tr-field="chatId" data-rule-id="${escapeHtml(rule.id)}" value="${escapeHtml(rule.chatId || '')}" placeholder="${escapeHtml(t('settingsTelegramChatIdPlaceholder') || 'chat_id')}" autocomplete="off"></td>
-                <td><input type="text" class="form-control form-control-sm" data-tr-field="threadId" data-rule-id="${escapeHtml(rule.id)}" value="${escapeHtml(rule.threadId || '')}" placeholder="${escapeHtml(t('settingsTelegramThreadPlaceholder') || 'thread')}" autocomplete="off"></td>
+                <td><input type="text" class="form-control form-control-sm" list="telegramTgChatsDatalist" data-tr-field="chatId" data-rule-id="${escapeHtml(rule.id)}" value="${escapeHtml(rule.chatId || '')}" placeholder="${escapeHtml(t('settingsTelegramChatIdPlaceholder') || 'chat_id')}" autocomplete="off"></td>
+                <td><datalist id="${escapeHtml(telegramRuleThreadDatalistId(rule.id))}"></datalist><input type="text" class="form-control form-control-sm" list="${escapeHtml(telegramRuleThreadDatalistId(rule.id))}" data-tr-field="threadId" data-rule-id="${escapeHtml(rule.id)}" value="${escapeHtml(rule.threadId || '')}" placeholder="${escapeHtml(t('settingsTelegramThreadPlaceholder') || 'thread')}" autocomplete="off" title="${escapeHtml(t('settingsTelegramThreadDatalistHint') || '')}"></td>
                 <td class="text-nowrap">
                     <button type="button" class="btn btn-sm btn-outline-secondary me-1" data-tr-test="${escapeHtml(rule.id)}" title="${escapeHtml(t('telegramTestRuleButton') || 'Test')}"><i class="bi bi-send"></i></button>
                     <button type="button" class="btn btn-sm btn-outline-danger" data-tr-remove="${escapeHtml(rule.id)}" title="${escapeHtml(t('remove') || 'Удалить')}"><i class="bi bi-trash"></i></button>
@@ -3786,6 +3897,11 @@ function renderTelegramRulesTable() {
     });
     body.querySelectorAll('[data-tr-test]').forEach((btn) => {
         btn.addEventListener('click', () => testTelegramNotificationRule(btn.getAttribute('data-tr-test')));
+    });
+    refillTelegramChatsDatalistFromCache();
+    body.querySelectorAll('[data-tr-field="chatId"]').forEach((inp) => {
+        const rid = inp.getAttribute('data-rule-id');
+        if (rid) refillTelegramThreadDatalistForRule(rid, inp.value);
     });
 }
 
@@ -3955,6 +4071,10 @@ function onTelegramRuleFieldChange(ev) {
         if (rule && rule.type === 'smart_sensor_threshold') {
             renderTelegramRulesTable();
         }
+    }
+    if (field === 'chatId') {
+        const rid = el.getAttribute('data-rule-id');
+        if (rid) refillTelegramThreadDatalistForRule(rid, el.value);
     }
 }
 

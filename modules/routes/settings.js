@@ -672,4 +672,35 @@ router.post('/telegram-test-rule', async (req, res) => {
     }
 });
 
+// POST /api/settings/telegram-fetch-chats — чаты и темы из getUpdates (токен из тела или БД)
+router.post('/telegram-fetch-chats', async (req, res) => {
+    try {
+        const { fetchTelegramChatsAndThreadsFromUpdates, isValidTelegramBotTokenFormat } = require('../telegram');
+        const body = req.body || {};
+        let token = String(body.telegramBotToken ?? body.telegram_bot_token ?? '').trim();
+        if (token && !isValidTelegramBotTokenFormat(token)) token = '';
+        if (!token) token = String(store.getSetting('telegram_bot_token') || '').trim();
+        if (!token) {
+            return res.status(400).json({ success: false, error: 'bot_token_required' });
+        }
+        const proxyUrl = String(
+            body.telegramProxyUrl ?? body.telegram_proxy_url ?? store.getSetting('telegram_proxy_url') ?? ''
+        ).trim();
+        const { updatesCount, chats, threadsByChat } = await fetchTelegramChatsAndThreadsFromUpdates(token, proxyUrl);
+        res.json({ success: true, updatesCount, chats, threadsByChat });
+    } catch (e) {
+        const code = e && e.telegramErrorCode;
+        const msg = e && e.message ? String(e.message) : 'getUpdates failed';
+        if (code === 409 || /webhook|getupdates/i.test(msg)) {
+            return res.status(400).json({
+                success: false,
+                error: 'telegram_webhook_or_conflict',
+                description: msg
+            });
+        }
+        log('warn', `[Settings] telegram-fetch-chats: ${msg}`);
+        res.status(500).json({ success: false, error: msg });
+    }
+});
+
 module.exports = router;
