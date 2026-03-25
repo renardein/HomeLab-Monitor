@@ -1414,7 +1414,88 @@
         .color-green { background: #28a745; }
         .color-yellow { background: #ffc107; }
         .color-red { background: #dc3545; }
-        
+
+        /* Speedtest на главной (без body.monitor-mode): те же KPI-плитки, что в полноэкранном мониторе */
+        body:not(.monitor-mode) #speedtestMonitorSection .monitor-screen__panel-body.speedtest-monitor__body {
+            display: flex;
+            flex-direction: column;
+            gap: var(--hm-space-4);
+        }
+
+        body:not(.monitor-mode) #speedtestMonitorSection .monitor-screen__meta-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: var(--hm-space-3);
+        }
+
+        body:not(.monitor-mode) #speedtestMonitorSection .monitor-screen__meta-card {
+            background: #fff;
+            border-radius: var(--hm-radius);
+            border: 1px solid rgba(226, 232, 240, 1);
+            box-shadow: var(--hm-shadow-card);
+            padding: var(--hm-space-3) var(--hm-space-4);
+        }
+
+        body:not(.monitor-mode) #speedtestMonitorSection .monitor-screen__meta-label {
+            font-size: var(--hm-text-label);
+            text-transform: uppercase;
+            letter-spacing: var(--hm-label-tracking);
+            font-weight: 600;
+            opacity: 0.8;
+            color: var(--bs-secondary);
+            margin-bottom: var(--hm-space-1);
+            line-height: var(--hm-line-tight);
+        }
+
+        body:not(.monitor-mode) #speedtestMonitorSection .monitor-screen__meta-value {
+            font-size: var(--hm-text-lg);
+            font-weight: 700;
+            line-height: var(--hm-line-snug);
+        }
+
+        body:not(.monitor-mode) #speedtestMonitorSection .speedtest-monitor__speed-val {
+            font-size: clamp(1.2rem, 2.4vw, 1.85rem);
+            font-weight: 300;
+            line-height: 1.15;
+        }
+
+        body:not(.monitor-mode) #speedtestMonitorSection .monitor-screen__meta-extra {
+            background: rgba(248, 250, 252, 0.98);
+            border-radius: var(--hm-radius);
+            border: 1px solid rgba(226, 232, 240, 1);
+            box-shadow: var(--hm-shadow-card-soft);
+            padding: var(--hm-space-3) var(--hm-space-4);
+        }
+
+        body:not(.monitor-mode) #speedtestMonitorSection .monitor-screen__meta-card .progress.hm-progress--cluster {
+            height: var(--hm-progress-h);
+        }
+
+        body.dark-mode:not(.monitor-mode) #speedtestMonitorSection .monitor-screen__meta-card {
+            background: var(--hm-monitor-raised);
+            border-color: var(--hm-monitor-border);
+            color: #e8e8e8;
+        }
+
+        body.dark-mode:not(.monitor-mode) #speedtestMonitorSection .monitor-screen__meta-label {
+            color: var(--hm-monitor-muted);
+            opacity: 1;
+        }
+
+        body.dark-mode:not(.monitor-mode) #speedtestMonitorSection .monitor-screen__meta-value {
+            color: #fff;
+        }
+
+        body.dark-mode:not(.monitor-mode) #speedtestMonitorSection .speedtest-monitor__speed-val {
+            color: #fff;
+        }
+
+        body.dark-mode:not(.monitor-mode) #speedtestMonitorSection .monitor-screen__meta-extra {
+            background: var(--hm-monitor-raised);
+            border-color: var(--hm-monitor-border);
+            color: var(--hm-monitor-muted);
+        }
+
         /* Режим монитора: полный дашборд с крупными блоками, переключение свайпами */
         /* Жесты «назад/вперёд» и rubber-band завязаны на <html> — без класса на корне overscroll часто не срабатывает */
         html.monitor-mode-root {
@@ -2009,17 +2090,16 @@
         body.monitor-mode #vmsMonitorSection .card-header,
         body.monitor-mode #upsMonitorSection .card-header,
         body.monitor-mode #netdevMonitorSection .card-header,
-        body.monitor-mode #speedtestMonitorSection .card-header,
         body.monitor-mode #smartSensorsMonitorSection .card-header,
-        body.monitor-mode #backupsMonitorSection .card-header {
+        body.monitor-mode #backupsMonitorSection .card-header,
+        body.monitor-mode #speedtestMonitorSection .card-header {
             display: none !important;
         }
         body.monitor-mode #servicesMonitorSection #servicesMonitorHint,
         body.monitor-mode #vmsMonitorSection #vmsMonitorHint,
         body.monitor-mode #upsMonitorSection #upsUpdatedAt,
         body.monitor-mode #netdevMonitorSection #netdevUpdatedAt,
-        body.monitor-mode #smartSensorsMonitorSection #smartSensorsUpdatedAt,
-        body.monitor-mode #speedtestMonitorSection #speedtestMonitorExtra {
+        body.monitor-mode #smartSensorsMonitorSection #smartSensorsUpdatedAt {
             display: none !important;
         }
         body.monitor-mode #upsMonitorSection .card-body > .d-flex.align-items-center.mb-3,
@@ -2032,9 +2112,9 @@
         body.monitor-mode #vmsMonitorSection > .card,
         body.monitor-mode #upsMonitorSection > .card,
         body.monitor-mode #netdevMonitorSection > .card,
-        body.monitor-mode #speedtestMonitorSection > .card,
         body.monitor-mode #smartSensorsMonitorSection > .card,
-        body.monitor-mode #backupsMonitorSection > .card {
+        body.monitor-mode #backupsMonitorSection > .card,
+        body.monitor-mode #speedtestMonitorSection > .card.speedtest-monitor__shell {
             background: transparent !important;
             border: 0 !important;
             box-shadow: none !important;
@@ -2044,9 +2124,9 @@
         body.monitor-mode #vmsMonitorSection > .card > .card-body,
         body.monitor-mode #upsMonitorSection > .card > .card-body,
         body.monitor-mode #netdevMonitorSection > .card > .card-body,
-        body.monitor-mode #speedtestMonitorSection > .card > .card-body,
         body.monitor-mode #smartSensorsMonitorSection > .card > .card-body,
-        body.monitor-mode #backupsMonitorSection > .card > .card-body {
+        body.monitor-mode #backupsMonitorSection > .card > .card-body,
+        body.monitor-mode #speedtestMonitorSection > .card.speedtest-monitor__shell > .card-body {
             padding: 0 !important;
         }
 
@@ -2155,6 +2235,168 @@
             overflow: auto;
             height: 100%;
             align-content: flex-start;
+        }
+
+        #speedtestMonitorSection .speedtest-monitor__speed-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: baseline;
+            gap: 0.25rem 0.6rem;
+            min-width: 0;
+        }
+
+        #speedtestMonitorSection .speedtest-monitor__speed-row .speedtest-monitor__speed-val {
+            flex: 0 1 auto;
+            min-width: 0;
+        }
+
+        #speedtestMonitorSection .speedtest-monitor__last-dev {
+            margin-top: 0;
+            flex: 1 1 auto;
+            min-width: 0;
+            font-size: clamp(0.8rem, 2vw, 1rem);
+            font-weight: 600;
+            line-height: 1.2;
+            letter-spacing: 0.02em;
+            white-space: nowrap;
+        }
+
+        #speedtestMonitorSection .speedtest-monitor__last-dev-plan {
+            opacity: 0.72;
+            font-weight: 500;
+        }
+
+        #speedtestMonitorSection table.speedtest-monitor__table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            vertical-align: middle;
+        }
+
+        #speedtestMonitorSection .speedtest-monitor__table thead th {
+            position: sticky;
+            top: 0;
+            z-index: 1;
+            font-size: var(--hm-text-label);
+            text-transform: uppercase;
+            letter-spacing: var(--hm-label-tracking);
+            font-weight: 600;
+            opacity: 0.85;
+            padding: 0.5rem 0.65rem;
+            text-align: left;
+            border-bottom: 1px solid rgba(226, 232, 240, 1);
+            background: rgba(255, 255, 255, 0.98);
+            white-space: nowrap;
+        }
+
+        #speedtestMonitorSection .speedtest-monitor__table thead th.text-end {
+            text-align: right;
+        }
+
+        #speedtestMonitorSection .speedtest-monitor__table tbody .speedtest-monitor__cell {
+            padding: 0.45rem 0.65rem;
+            font-size: var(--hm-text-base);
+            font-weight: 500;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+            vertical-align: middle;
+        }
+
+        #speedtestMonitorSection .speedtest-monitor__table tbody tr:last-child .speedtest-monitor__cell {
+            border-bottom: none;
+        }
+
+        #speedtestMonitorSection .speedtest-monitor__table tbody .speedtest-monitor__cell--dev {
+            font-weight: 600;
+            font-variant-numeric: tabular-nums;
+        }
+
+        #speedtestMonitorSection .speedtest-monitor__table tbody .speedtest-monitor__cell--note {
+            font-size: var(--hm-text-sm);
+            opacity: 0.92;
+        }
+
+        #speedtestMonitorSection .speedtest-monitor__table tbody tr:nth-child(even) {
+            background: rgba(148, 163, 184, 0.08);
+        }
+
+        #speedtestMonitorSection .speedtest-monitor__table tbody tr.speedtest-monitor__row:hover .speedtest-monitor__cell {
+            background: rgba(66, 165, 245, 0.07);
+        }
+
+        #speedtestMonitorSection .speedtest-monitor__table-scroll {
+            border-radius: var(--hm-radius);
+            border: 1px solid rgba(226, 232, 240, 1);
+            background: rgba(255, 255, 255, 0.97);
+            box-shadow: var(--hm-shadow-card);
+            overflow: auto;
+        }
+
+        body.dark-mode #speedtestMonitorSection .speedtest-monitor__table-scroll {
+            border-color: var(--hm-monitor-border);
+            background: rgba(15, 23, 42, 0.42);
+        }
+
+        body.dark-mode #speedtestMonitorSection .speedtest-monitor__table thead th {
+            border-bottom-color: var(--hm-monitor-border);
+            background: rgba(15, 23, 42, 0.88);
+            color: inherit;
+        }
+
+        body.dark-mode #speedtestMonitorSection .speedtest-monitor__table tbody .speedtest-monitor__cell {
+            border-bottom-color: rgba(255, 255, 255, 0.08);
+        }
+
+        body.dark-mode #speedtestMonitorSection .speedtest-monitor__table tbody tr:nth-child(even) {
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        body.dark-mode #speedtestMonitorSection .speedtest-monitor__table tbody tr.speedtest-monitor__row:hover .speedtest-monitor__cell {
+            background: rgba(66, 165, 245, 0.1);
+        }
+
+        body.monitor-mode #speedtestMonitorSection .speedtest-monitor__table-scroll {
+            flex: 1 1 auto;
+            min-height: 0;
+        }
+
+        body.monitor-mode #speedtestMonitorSection .monitor-screen__panel-body.speedtest-monitor__body,
+        body.monitor-mode #speedtestMonitorSection .monitor-screen__panel-body > .speedtest-monitor__body {
+            flex: 1 1 auto;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            gap: var(--hm-space-3);
+        }
+        body.monitor-mode #speedtestMonitorSection .speedtest-monitor__speed-val {
+            font-size: clamp(1.35rem, 3.2vw, 2.15rem);
+            font-weight: 200;
+            line-height: 1.15;
+        }
+        body.monitor-mode #speedtestMonitorSection .speedtest-monitor__meta-card .progress.hm-progress--cluster {
+            height: var(--hm-progress-h);
+        }
+        body.monitor-mode.monitor-theme-dark #speedtestMonitorSection .speedtest-monitor__table-scroll {
+            border-color: var(--hm-monitor-border);
+            background: rgba(15, 23, 42, 0.55);
+        }
+        body.monitor-mode.monitor-theme-dark #speedtestMonitorSection .speedtest-monitor__table thead th {
+            border-bottom-color: var(--hm-monitor-border);
+            background: rgba(15, 23, 42, 0.92);
+            color: inherit;
+        }
+        body.monitor-mode.monitor-theme-dark #speedtestMonitorSection .speedtest-monitor__table tbody .speedtest-monitor__cell {
+            border-bottom-color: rgba(255, 255, 255, 0.08);
+        }
+        body.monitor-mode.monitor-theme-dark #speedtestMonitorSection .speedtest-monitor__table tbody tr:nth-child(even) {
+            background: rgba(255, 255, 255, 0.04);
+        }
+        body.monitor-mode.monitor-theme-dark #speedtestMonitorSection .speedtest-monitor__table tbody tr.speedtest-monitor__row:hover .speedtest-monitor__cell {
+            background: rgba(66, 165, 245, 0.1);
+        }
+        body.monitor-mode #speedtestMonitorSection .speedtest-monitor__table-block {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow: hidden;
         }
 
         .ups-node-card {

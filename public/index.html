@@ -1775,80 +1775,68 @@
 
         <!-- Режим монитора: Speedtest -->
         <div id="speedtestMonitorSection" class="mb-4 monitor-screen" style="display: none;">
-            <div class="monitor-screen__layout">
-                <div class="monitor-screen__panel">
-                    <div class="monitor-view__panel-title monitor-screen__panel-title">
-                        <h5 class="mb-0"><i class="bi bi-speedometer2 me-2"></i><span id="speedtestMonitorTitle">Speedtest</span></h5>
-                    </div>
-                    <div class="monitor-screen__panel-body">
-                        <div class="row g-2 hm-cluster-metric-panel">
-                            <div class="col-6 col-xl-3">
-                                <div class="text-center p-3 hm-cluster-metric-cell">
-                                    <h6><i class="bi bi-clock-history me-2"></i><span id="speedtestMonitorLastRunLabel">Последний замер</span></h6>
-                                    <div class="hm-speedtest-last-run text-break" id="speedtestMonitorLastRun">—</div>
-                                </div>
+            <div class="card speedtest-monitor__shell">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-speedometer2 me-2"></i><span id="speedtestDashboardSectionTitle">Speedtest</span></h5>
+                </div>
+                <div class="card-body monitor-screen__panel-body speedtest-monitor__body">
+                        <div class="monitor-screen__meta-grid speedtest-monitor__kpi-grid">
+                            <div class="monitor-screen__meta-card speedtest-monitor__meta-card">
+                                <div class="monitor-screen__meta-label"><i class="bi bi-clock-history me-1"></i><span id="speedtestMonitorLastRunLabel">Последний замер</span></div>
+                                <div class="monitor-screen__meta-value hm-speedtest-last-run text-break" id="speedtestMonitorLastRun">—</div>
                             </div>
-                            <div class="col-6 col-xl-3">
-                                <div class="text-center p-3 hm-cluster-metric-cell">
-                                    <h6><i class="bi bi-arrow-down-circle me-2"></i><span id="speedtestMonitorLastDownloadLabel">Приём</span></h6>
-                                    <div class="display-6 text-break" id="speedtestMonitorLastDownload">—</div>
-                                </div>
-                            </div>
-                            <div class="col-6 col-xl-3">
-                                <div class="text-center p-3 hm-cluster-metric-cell">
-                                    <h6><i class="bi bi-cloud-upload me-2"></i><span id="speedtestMonitorLastUploadLabel">Отдача</span></h6>
-                                    <div class="display-6 text-break" id="speedtestMonitorLastUpload">—</div>
-                                </div>
-                            </div>
-                            <div class="col-6 col-xl-3">
-                                <div class="text-center p-3 hm-cluster-metric-cell">
-                                    <h6><i class="bi bi-activity me-2"></i><span id="speedtestMonitorLastPingLabel">Пинг</span></h6>
-                                    <div class="display-6 text-break" id="speedtestMonitorLastPing">—</div>
-                                </div>
-                            </div>
-                        </div>
-                        <div id="speedtestMonitorPlanBlock" class="mt-3 p-2 rounded border bg-body-secondary d-none">
-                            <h6 class="small fw-semibold mb-0 pb-2 border-bottom border-secondary border-opacity-25" id="speedtestMonitorPlanTitle">Тариф и отклонения</h6>
-                            <div class="small mt-2 mb-1" id="speedtestMonitorPlanEtalon"></div>
-                            <div class="small mb-1" id="speedtestMonitorPlanDevLast"></div>
-                            <div class="small mb-1" id="speedtestMonitorPlanDevToday"></div>
-                            <div class="small d-none" id="speedtestMonitorPlanDevMinMax"></div>
-                        </div>
-                        <div class="mt-3 mb-1 small text-muted text-center text-xl-start" id="speedtestMonitorTodayDownloadSectionTitle"></div>
-                        <div class="row g-2 hm-cluster-metric-panel">
-                            <div class="col-md-4 col-6">
-                                <div class="text-center p-3 hm-cluster-metric-cell">
-                                    <h6><i class="bi bi-graph-up-arrow me-2"></i><span id="speedtestMonitorAvgLabel">Средняя скорость (сегодня)</span></h6>
-                                    <div class="display-6" id="speedtestMonitorAvg">—</div>
-                                    <div class="progress mt-2 hm-progress hm-progress--cluster">
-                                        <div class="progress-bar bg-success" id="speedtestMonitorAvgBar" style="width: 0%"></div>
+                            <div class="monitor-screen__meta-card speedtest-monitor__meta-card">
+                                <div class="monitor-screen__meta-label"><i class="bi bi-arrow-down-circle me-1"></i><span id="speedtestMonitorLastDownloadLabel">Приём</span></div>
+                                <div class="speedtest-monitor__speed-row">
+                                    <div class="monitor-screen__meta-value speedtest-monitor__speed-val text-break mb-0" id="speedtestMonitorLastDownload">—</div>
+                                    <div class="speedtest-monitor__last-dev d-none" id="speedtestMonitorLastDownloadDevWrap" aria-hidden="true">
+                                        <span class="speedtest-monitor__last-dev-pct" id="speedtestMonitorLastDownloadDevPct"></span><span class="speedtest-monitor__last-dev-plan" id="speedtestMonitorLastDownloadDevPlan"></span>
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-4 col-6">
-                                <div class="text-center p-3 hm-cluster-metric-cell">
-                                    <h6><i class="bi bi-arrow-down-circle me-2"></i><span id="speedtestMonitorMinLabel">Минимум</span></h6>
-                                    <div class="display-6" id="speedtestMonitorMin">—</div>
-                                    <div class="progress mt-2 hm-progress hm-progress--cluster">
-                                        <div class="progress-bar bg-success" id="speedtestMonitorMinBar" style="width: 0%"></div>
+                            <div class="monitor-screen__meta-card speedtest-monitor__meta-card">
+                                <div class="monitor-screen__meta-label"><i class="bi bi-cloud-upload me-1"></i><span id="speedtestMonitorLastUploadLabel">Отдача</span></div>
+                                <div class="speedtest-monitor__speed-row">
+                                    <div class="monitor-screen__meta-value speedtest-monitor__speed-val text-break mb-0" id="speedtestMonitorLastUpload">—</div>
+                                    <div class="speedtest-monitor__last-dev d-none" id="speedtestMonitorLastUploadDevWrap" aria-hidden="true">
+                                        <span class="speedtest-monitor__last-dev-pct" id="speedtestMonitorLastUploadDevPct"></span><span class="speedtest-monitor__last-dev-plan" id="speedtestMonitorLastUploadDevPlan"></span>
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-4 col-12">
-                                <div class="text-center p-3 hm-cluster-metric-cell">
-                                    <h6><i class="bi bi-arrow-up-circle me-2"></i><span id="speedtestMonitorMaxLabel">Максимум</span></h6>
-                                    <div class="display-6" id="speedtestMonitorMax">—</div>
-                                    <div class="progress mt-2 hm-progress hm-progress--cluster">
-                                        <div class="progress-bar bg-success" id="speedtestMonitorMaxBar" style="width: 0%"></div>
-                                    </div>
+                            <div class="monitor-screen__meta-card speedtest-monitor__meta-card">
+                                <div class="monitor-screen__meta-label"><i class="bi bi-activity me-1"></i><span id="speedtestMonitorLastPingLabel">Пинг</span></div>
+                                <div class="monitor-screen__meta-value speedtest-monitor__speed-val text-break" id="speedtestMonitorLastPing">—</div>
+                            </div>
+                        </div>
+                        <div class="monitor-screen__meta-label mb-1" id="speedtestMonitorTodayDownloadSectionTitle"></div>
+                        <div class="monitor-screen__meta-grid speedtest-monitor__today-grid">
+                            <div class="monitor-screen__meta-card speedtest-monitor__meta-card">
+                                <div class="monitor-screen__meta-label"><i class="bi bi-graph-up-arrow me-1"></i><span id="speedtestMonitorAvgLabel">Средняя скорость (сегодня)</span></div>
+                                <div class="monitor-screen__meta-value speedtest-monitor__speed-val" id="speedtestMonitorAvg">—</div>
+                                <div class="progress mt-2 hm-progress hm-progress--cluster">
+                                    <div class="progress-bar bg-success" id="speedtestMonitorAvgBar" style="width: 0%"></div>
+                                </div>
+                            </div>
+                            <div class="monitor-screen__meta-card speedtest-monitor__meta-card">
+                                <div class="monitor-screen__meta-label"><i class="bi bi-arrow-down-circle me-1"></i><span id="speedtestMonitorMinLabel">Минимум</span></div>
+                                <div class="monitor-screen__meta-value speedtest-monitor__speed-val" id="speedtestMonitorMin">—</div>
+                                <div class="progress mt-2 hm-progress hm-progress--cluster">
+                                    <div class="progress-bar bg-success" id="speedtestMonitorMinBar" style="width: 0%"></div>
+                                </div>
+                            </div>
+                            <div class="monitor-screen__meta-card speedtest-monitor__meta-card">
+                                <div class="monitor-screen__meta-label"><i class="bi bi-arrow-up-circle me-1"></i><span id="speedtestMonitorMaxLabel">Максимум</span></div>
+                                <div class="monitor-screen__meta-value speedtest-monitor__speed-val" id="speedtestMonitorMax">—</div>
+                                <div class="progress mt-2 hm-progress hm-progress--cluster">
+                                    <div class="progress-bar bg-success" id="speedtestMonitorMaxBar" style="width: 0%"></div>
                                 </div>
                             </div>
                         </div>
-                        <div class="mt-2 small text-muted monitor-screen__meta-extra" id="speedtestMonitorExtra"></div>
-                        <div class="mt-4">
-                            <h6 class="mb-2" id="speedtestMonitorLast24hTitle">Замеры за сегодня</h6>
-                            <div id="speedtestMonitorLast24hTableWrap" class="table-responsive d-none">
-                                <table class="table table-sm table-striped table-hover align-middle mb-0">
+                        <div class="monitor-screen__meta-extra small text-muted speedtest-monitor__extra" id="speedtestMonitorExtra"></div>
+                        <div class="speedtest-monitor__table-block d-flex flex-column min-h-0 flex-grow-1">
+                            <div class="monitor-screen__meta-label mb-2 flex-shrink-0" id="speedtestMonitorLast24hTitle">Замеры за сегодня</div>
+                            <div id="speedtestMonitorLast24hTableWrap" class="table-responsive speedtest-monitor__table-scroll d-none flex-grow-1 min-h-0">
+                                <table class="speedtest-monitor__table mb-0" id="speedtestMonitorRunsTable">
                                     <thead>
                                         <tr>
                                             <th scope="col" id="speedtestMonitor24hColTime">Время</th>
@@ -1863,9 +1851,8 @@
                                     <tbody id="speedtestMonitorLast24hBody"></tbody>
                                 </table>
                             </div>
-                            <p class="small text-muted mb-0 d-none" id="speedtestMonitorLast24hEmpty">Сегодня замеров пока нет.</p>
+                            <p class="small text-muted mb-0 flex-shrink-0 d-none" id="speedtestMonitorLast24hEmpty">Сегодня замеров пока нет.</p>
                         </div>
-                    </div>
                 </div>
             </div>
         </div>

@@ -2761,11 +2761,11 @@ function updateUILanguage() {
     setText('speedtestRunNowText', t('speedtestRunNowText'));
     setText('speedtestClearHistoryText', t('speedtestClearHistoryText'));
     setText('dashboardClusterTilesTitle', t('dashboardClusterTilesTitle'));
-    setText('speedtestMonitorTitle', t('dashboardSpeedtestTitle'));
     setText('speedtestLastRunLabel', t('speedtestLastRunLabel'));
     setText('speedtestAvgLabel', t('speedtestAvgLabel'));
     setText('speedtestMinLabel', t('speedtestMinLabel'));
     setText('speedtestMaxLabel', t('speedtestMaxLabel'));
+    setText('speedtestDashboardSectionTitle', t('dashboardSpeedtestTitle'));
     setText('speedtestMonitorLastRunLabel', t('speedtestLastRunLabel'));
     setText('speedtestMonitorLastDownloadLabel', t('speedtestDownloadShort'));
     setText('speedtestMonitorLastUploadLabel', t('speedtestUploadShort'));
@@ -2779,7 +2779,6 @@ function updateUILanguage() {
     setText('speedtestMonitor24hColServer', t('speedtest24hColServer'));
     setText('speedtestMonitor24hColDevDownload', t('speedtest24hColDevDownload'));
     setText('speedtestMonitor24hColDevUpload', t('speedtest24hColDevUpload'));
-    setText('speedtestMonitorPlanTitle', t('speedtestReferenceSectionTitle'));
     setText('speedtestMonitorLast24hEmpty', t('speedtestRunsTodayEmpty'));
     setText('speedtestMonitorAvgLabel', t('speedtestAvgLabel'));
     setText('speedtestMonitorMinLabel', t('speedtestMinLabel'));
@@ -7157,95 +7156,53 @@ function speedtestDeviationTextClass(measuredMbps, planMbps, pctStr) {
     return Number(measuredMbps) >= Number(planMbps) ? 'text-success' : 'text-danger';
 }
 
-function buildSpeedtestEtalonLine(pDl, pUl) {
-    const bits = [];
-    if (Number.isFinite(pDl) && pDl > 0) {
-        bits.push(`${t('speedtestPlanDownloadShort')}: ${formatSpeedtestMbps(pDl)}`);
-    }
-    if (Number.isFinite(pUl) && pUl > 0) {
-        bits.push(`${t('speedtestPlanUploadShort')}: ${formatSpeedtestMbps(pUl)}`);
-    }
-    return bits.join(' · ');
-}
-
-function buildSpeedtestDeviationLabeledLine(labelKey, measuredDl, measuredUl, pDl, pUl) {
-    const bits = [];
-    const dd = formatSpeedtestDeviationPct(measuredDl, pDl);
-    if (dd != null) bits.push(`${t('speedtestPlanDownloadShort')}: ${dd}`);
-    const du = formatSpeedtestDeviationPct(measuredUl, pUl);
-    if (du != null) bits.push(`${t('speedtestPlanUploadShort')}: ${du}`);
-    if (!bits.length) return '';
-    return `${t(labelKey)}: ${bits.join(' · ')}`;
-}
-
-function buildSpeedtestMinMaxDownloadDevLine(dlMin, dlMax, pDl) {
-    const minPct = formatSpeedtestDeviationPct(dlMin, pDl);
-    const maxPct = formatSpeedtestDeviationPct(dlMax, pDl);
-    if (minPct == null && maxPct == null) return '';
-    const bits = [];
-    if (minPct != null) bits.push(`${t('speedtestMinLabel')}: ${minPct}`);
-    if (maxPct != null) bits.push(`${t('speedtestMaxLabel')}: ${maxPct}`);
-    return `${t('speedtestDeviationTodayMinMaxLabel')}: ${bits.join(' · ')}`;
-}
-
-function updateSpeedtestPlanBlock(last, lastOk, dl, ul, pDl, pUl) {
-    const block = document.getElementById('speedtestMonitorPlanBlock');
-    const minMaxEl = document.getElementById('speedtestMonitorPlanDevMinMax');
-    const setLine = (id, text) => {
-        const el = document.getElementById(id);
-        if (!el) return;
-        const s = String(text || '').trim();
-        el.textContent = s;
-        el.classList.toggle('d-none', !s);
-    };
-    if (!block) return;
-    const hasPlan = (Number.isFinite(pDl) && pDl > 0) || (Number.isFinite(pUl) && pUl > 0);
-    if (!hasPlan) {
-        block.classList.add('d-none');
-        if (minMaxEl) {
-            minMaxEl.textContent = '';
-            minMaxEl.classList.add('d-none');
-        }
-        ['speedtestMonitorPlanEtalon', 'speedtestMonitorPlanDevLast', 'speedtestMonitorPlanDevToday'].forEach((id) => {
-            const el = document.getElementById(id);
-            if (el) {
-                el.textContent = '';
-                el.classList.add('d-none');
-            }
-        });
+function setSpeedtestLastRunDeviationRow(wrapId, pctId, planId, measuredMbps, planMbps, lastOk) {
+    const wrap = document.getElementById(wrapId);
+    const pctEl = document.getElementById(pctId);
+    const planEl = document.getElementById(planId);
+    if (!wrap || !pctEl || !planEl) return;
+    const hasPlan = Number.isFinite(Number(planMbps)) && Number(planMbps) > 0;
+    if (!lastOk || !hasPlan) {
+        wrap.classList.add('d-none');
+        wrap.setAttribute('aria-hidden', 'true');
+        pctEl.textContent = '';
+        planEl.textContent = '';
+        pctEl.className = 'speedtest-monitor__last-dev-pct';
         return;
     }
-    block.classList.remove('d-none');
-    setLine('speedtestMonitorPlanEtalon', buildSpeedtestEtalonLine(pDl, pUl));
-    setLine(
-        'speedtestMonitorPlanDevLast',
-        buildSpeedtestDeviationLabeledLine(
-            'speedtestDeviationLastRunLabel',
-            lastOk && last ? last.downloadMbps : null,
-            lastOk && last ? last.uploadMbps : null,
-            pDl,
-            pUl
-        )
-    );
-    setLine(
-        'speedtestMonitorPlanDevToday',
-        buildSpeedtestDeviationLabeledLine(
-            'speedtestDeviationTodayAvgLabel',
-            dl.avg != null ? dl.avg : null,
-            ul.avg != null ? ul.avg : null,
-            pDl,
-            pUl
-        )
-    );
-    const minMaxLine = buildSpeedtestMinMaxDownloadDevLine(
-        dl.min != null ? dl.min : null,
-        dl.max != null ? dl.max : null,
-        pDl
-    );
-    if (minMaxEl) {
-        minMaxEl.textContent = minMaxLine;
-        minMaxEl.classList.toggle('d-none', !minMaxLine);
+    const pct = formatSpeedtestDeviationPct(measuredMbps, planMbps);
+    if (pct == null || pct === '—') {
+        wrap.classList.add('d-none');
+        wrap.setAttribute('aria-hidden', 'true');
+        pctEl.textContent = '';
+        planEl.textContent = '';
+        pctEl.className = 'speedtest-monitor__last-dev-pct';
+        return;
     }
+    pctEl.textContent = pct;
+    pctEl.className = `speedtest-monitor__last-dev-pct ${speedtestDeviationTextClass(measuredMbps, planMbps, pct)}`;
+    planEl.textContent = ` \u2013 ${formatSpeedtestMbps(planMbps)}`;
+    wrap.classList.remove('d-none');
+    wrap.setAttribute('aria-hidden', 'false');
+}
+
+function clearSpeedtestLastRunDeviationRows() {
+    setSpeedtestLastRunDeviationRow(
+        'speedtestMonitorLastDownloadDevWrap',
+        'speedtestMonitorLastDownloadDevPct',
+        'speedtestMonitorLastDownloadDevPlan',
+        null,
+        NaN,
+        false
+    );
+    setSpeedtestLastRunDeviationRow(
+        'speedtestMonitorLastUploadDevWrap',
+        'speedtestMonitorLastUploadDevPct',
+        'speedtestMonitorLastUploadDevPlan',
+        null,
+        NaN,
+        false
+    );
 }
 
 function renderSpeedtestRunsTodayTable(runs, options = {}) {
@@ -7288,16 +7245,17 @@ function renderSpeedtestRunsTodayTable(runs, options = {}) {
     const frag = document.createDocumentFragment();
     for (const r of list) {
         const tr = document.createElement('tr');
+        tr.className = 'speedtest-monitor__row';
         const tdTime = document.createElement('td');
         const tdDl = document.createElement('td');
         const tdUl = document.createElement('td');
         const tdPing = document.createElement('td');
         const tdSrv = document.createElement('td');
-        tdTime.className = 'text-nowrap';
-        tdDl.className = 'text-end';
-        tdUl.className = 'text-end';
-        tdPing.className = 'text-end';
-        tdSrv.className = 'small text-break';
+        tdTime.className = 'speedtest-monitor__cell speedtest-monitor__cell--time text-nowrap';
+        tdDl.className = 'speedtest-monitor__cell speedtest-monitor__cell--num text-end';
+        tdUl.className = 'speedtest-monitor__cell speedtest-monitor__cell--num text-end';
+        tdPing.className = 'speedtest-monitor__cell speedtest-monitor__cell--num text-end';
+        tdSrv.className = 'speedtest-monitor__cell speedtest-monitor__cell--note text-break';
         const runAt = r && r.runAt;
         tdTime.textContent = runAt ? new Date(runAt).toLocaleString() : '—';
         const err = r && r.error;
@@ -7319,7 +7277,7 @@ function renderSpeedtestRunsTodayTable(runs, options = {}) {
         if (showDevDl) {
             const td = document.createElement('td');
             const pct = err ? '—' : formatSpeedtestDeviationPct(r.downloadMbps, planDl);
-            td.className = `text-end ${speedtestDeviationTextClass(r && r.downloadMbps, planDl, pct)}`;
+            td.className = `speedtest-monitor__cell speedtest-monitor__cell--dev text-end ${speedtestDeviationTextClass(r && r.downloadMbps, planDl, pct)}`;
             td.textContent = pct == null ? '—' : pct;
             tr.appendChild(td);
         }
@@ -7327,7 +7285,7 @@ function renderSpeedtestRunsTodayTable(runs, options = {}) {
         if (showDevUl) {
             const td = document.createElement('td');
             const pct = err ? '—' : formatSpeedtestDeviationPct(r.uploadMbps, planUl);
-            td.className = `text-end ${speedtestDeviationTextClass(r && r.uploadMbps, planUl, pct)}`;
+            td.className = `speedtest-monitor__cell speedtest-monitor__cell--dev text-end ${speedtestDeviationTextClass(r && r.uploadMbps, planUl, pct)}`;
             td.textContent = pct == null ? '—' : pct;
             tr.appendChild(td);
         }
@@ -7399,7 +7357,7 @@ async function updateSpeedtestDashboard() {
             setSpeedtestDownloadBarPercent('speedtestMonitorAvgBar', null, 1);
             setSpeedtestDownloadBarPercent('speedtestMonitorMinBar', null, 1);
             setSpeedtestDownloadBarPercent('speedtestMonitorMaxBar', null, 1);
-            updateSpeedtestPlanBlock(null, false, {}, {}, NaN, NaN);
+            clearSpeedtestLastRunDeviationRows();
             renderSpeedtestRunsTodayTable([]);
             return;
         }
@@ -7425,7 +7383,22 @@ async function updateSpeedtestDashboard() {
             extra += (extra ? ' · ' : '') + `${t('speedtestUploadAvgToday')}: ${formatSpeedtestMbps(ul.avg)}`;
         }
 
-        updateSpeedtestPlanBlock(last, lastOk, dl, ul, pDl, pUl);
+        setSpeedtestLastRunDeviationRow(
+            'speedtestMonitorLastDownloadDevWrap',
+            'speedtestMonitorLastDownloadDevPct',
+            'speedtestMonitorLastDownloadDevPlan',
+            lastOk && last ? last.downloadMbps : null,
+            pDl,
+            lastOk
+        );
+        setSpeedtestLastRunDeviationRow(
+            'speedtestMonitorLastUploadDevWrap',
+            'speedtestMonitorLastUploadDevPct',
+            'speedtestMonitorLastUploadDevPlan',
+            lastOk && last ? last.uploadMbps : null,
+            pUl,
+            lastOk
+        );
 
         setEl('speedtestMonitorLastRun', lastRunDisplay);
         setEl(
@@ -7493,7 +7466,7 @@ async function updateSpeedtestDashboard() {
         setSpeedtestDownloadBarPercent('speedtestMonitorAvgBar', null, 1);
         setSpeedtestDownloadBarPercent('speedtestMonitorMinBar', null, 1);
         setSpeedtestDownloadBarPercent('speedtestMonitorMaxBar', null, 1);
-        updateSpeedtestPlanBlock(null, false, {}, {}, NaN, NaN);
+        clearSpeedtestLastRunDeviationRows();
         renderSpeedtestRunsTodayTable(null, { loadFailed: true });
         const cliEl = document.getElementById('speedtestCliStatus');
         if (cliEl) {
