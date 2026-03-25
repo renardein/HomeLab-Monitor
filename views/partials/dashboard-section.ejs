@@ -108,8 +108,8 @@
                                 <div class="col-md-3 col-6">
                                     <div class="text-center p-3">
                                         <h6><i class="bi bi-pc-display me-2"></i><span id="dashboardClusterVmTitle">VM</span></h6>
-                                        <div class="display-6" id="clusterVmTotal">0</div>
-                                        <small class="text-muted d-block" id="dashboardClusterVmSub"><span id="dashboardClusterVmRunningLbl">Running</span>: <span class="text-success fw-semibold" id="clusterVmRunning">0</span></small>
+                                        <div class="display-6" id="clusterVmRunning">0</div>
+                                        <small class="text-muted d-block" id="dashboardClusterVmSub"><span id="dashboardClusterVmTotalLbl">Total</span>: <span class="fw-semibold" id="clusterVmTotal">0</span></small>
                                         <div class="progress mt-2 hm-progress hm-progress--cluster">
                                             <div class="progress-bar bg-success" id="clusterVmRunningBar" style="width: 0%" title=""></div>
                                         </div>
@@ -118,8 +118,8 @@
                                 <div class="col-md-3 col-6">
                                     <div class="text-center p-3">
                                         <h6><i class="bi bi-box-seam me-2"></i><span id="dashboardClusterCtTitle">CT</span></h6>
-                                        <div class="display-6" id="clusterCtTotal">0</div>
-                                        <small class="text-muted d-block" id="dashboardClusterCtSub"><span id="dashboardClusterCtRunningLbl">Running</span>: <span class="text-success fw-semibold" id="clusterCtRunning">0</span></small>
+                                        <div class="display-6" id="clusterCtRunning">0</div>
+                                        <small class="text-muted d-block" id="dashboardClusterCtSub"><span id="dashboardClusterCtTotalLbl">Total</span>: <span class="fw-semibold" id="clusterCtTotal">0</span></small>
                                         <div class="progress mt-2 hm-progress hm-progress--cluster">
                                             <div class="progress-bar bg-success" id="clusterCtRunningBar" style="width: 0%" title=""></div>
                                         </div>
@@ -316,13 +316,13 @@
                     <div class="monitor-view__res"><span class="monitor-view__res-label">RAM</span><span class="monitor-view__res-value" id="monitorMemory">0%</span><div class="monitor-view__res-bar"><div class="monitor-view__res-fill monitor-view__res-fill--tier-success" id="monitorMemoryBar"></div></div></div>
                     <div class="monitor-view__res monitor-view__res--guest" aria-label="VM">
                         <div class="monitor-view__res-guest-title" id="monitorBlockVmTitle">VM</div>
-                        <div class="monitor-view__res-guest-line"><span class="monitor-view__res-guest-lbl" id="monitorVmTotalLbl">Total</span><span class="monitor-view__res-guest-val" id="monitorVmTotal">0</span></div>
                         <div class="monitor-view__res-guest-line"><span class="monitor-view__res-guest-lbl" id="monitorVmRunningLbl">Running</span><span class="monitor-view__res-guest-val monitor-view__res-guest-val--run" id="monitorVmRunning">0</span></div>
+                        <div class="monitor-view__res-guest-line"><span class="monitor-view__res-guest-lbl" id="monitorVmTotalLbl">Total</span><span class="monitor-view__res-guest-val" id="monitorVmTotal">0</span></div>
                     </div>
                     <div class="monitor-view__res monitor-view__res--guest" aria-label="CT">
                         <div class="monitor-view__res-guest-title" id="monitorBlockCtTitle">CT</div>
-                        <div class="monitor-view__res-guest-line"><span class="monitor-view__res-guest-lbl" id="monitorCtTotalLbl">Total</span><span class="monitor-view__res-guest-val" id="monitorCtTotal">0</span></div>
                         <div class="monitor-view__res-guest-line"><span class="monitor-view__res-guest-lbl" id="monitorCtRunningLbl">Running</span><span class="monitor-view__res-guest-val monitor-view__res-guest-val--run" id="monitorCtRunning">0</span></div>
+                        <div class="monitor-view__res-guest-line"><span class="monitor-view__res-guest-lbl" id="monitorCtTotalLbl">Total</span><span class="monitor-view__res-guest-val" id="monitorCtTotal">0</span></div>
                     </div>
                 </div>
                 <div class="monitor-view__body">

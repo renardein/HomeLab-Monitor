@@ -2433,7 +2433,7 @@ function updateUILanguage() {
     setText('monitorCtRunningLbl', t('monitorGuestRunning'));
     setText('dashboardClusterVmTitle', t('monitorBlockVm'));
     setText('dashboardClusterCtTitle', t('monitorBlockCt'));
-    setText('dashboardClusterVmRunningLbl', t('monitorGuestRunning'));
+    setText('dashboardClusterVmTotalLbl', t('monitorGuestTotal'));
     setText('dashboardClusterCtTotalLbl', t('monitorGuestTotal'));
     setText('upsTitle', t('upsTitle') || 'UPS');
     setText('smartSensorsMonitorTitle', t('monitorScreenSmartSensors'));
@@ -10095,7 +10095,7 @@ function updateTrueNASDashboard(systemData, poolsData, overviewData = null) {
     const totalStorage = Number(summary.total_space || 0);
     const usedStorage = Number(summary.used_space || 0);
     const storagePercent = totalStorage > 0 ? Math.round((usedStorage / totalStorage) * 100) : 0;
-    setText('dashboardClusterVmRunningLbl', t('backupRunning') || 'Running');
+    setText('dashboardClusterVmTotalLbl', t('monitorGuestTotal') || 'Total');
     setText('clusterVmTotal', String(apps.length));
     setText('clusterVmRunning', String(appsRunning));
     setText('dashboardClusterCtTotalLbl', t('storageTotalSpace') || 'Total');
