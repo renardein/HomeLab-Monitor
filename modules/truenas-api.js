@@ -53,7 +53,7 @@ function classifyTrueNASError(error) {
     if (status >= 500) return 'remote_server';
     if (status >= 400) return 'bad_request';
     if (code === 'ETIMEDOUT' || code === 'ECONNABORTED') return 'timeout';
-    if (code === 'ECONNREFUSED' || code === 'ENOTFOUND') return 'unreachable';
+    if (code === 'ECONNREFUSED' || code === 'ENOTFOUND' || code === 'ECONNRESET' || code === 'EHOSTUNREACH') return 'unreachable';
     return 'unknown';
 }
 
@@ -244,6 +244,37 @@ function parsePoolList(data) {
     return [];
 }
 
+/** Список датасетов из ответа API (разные формы оболочки). */
+function normalizeDatasetListBody(data) {
+    if (Array.isArray(data)) return data;
+    if (data && typeof data === 'object') {
+        if (Array.isArray(data.result)) return data.result;
+        if (Array.isArray(data.data)) return data.data;
+    }
+    return [];
+}
+
+/** Корневые датасеты по имени пула (имя без «/») — для used/available без N запросов. */
+function mapPoolRootDatasets(data) {
+    const map = new Map();
+    for (const d of normalizeDatasetListBody(data)) {
+        if (!d || typeof d !== 'object') continue;
+        const name = d.name != null ? String(d.name) : '';
+        if (!name || name.includes('/')) continue;
+        map.set(name, d);
+    }
+    return map;
+}
+
+function peekCapabilities(apiKey, serverUrl) {
+    const key = capabilityCacheKey(apiKey, serverUrl);
+    const cached = capabilityCache.get(key);
+    if (!cached || !cached.capabilities) return null;
+    const ttlMs = Number(cached.ttlMs) > 0 ? cached.ttlMs : 10 * 60 * 1000;
+    if (Date.now() - cached.checkedAt >= ttlMs) return null;
+    return cached.capabilities;
+}
+
 async function getSystemInfo(apiKey, serverUrl = null) {
     let raw;
     try {
@@ -263,8 +294,13 @@ async function getSystemInfo(apiKey, serverUrl = null) {
     return { ...raw, hostname, version, uptime: typeof uptime === 'number' ? uptime : uptime };
 }
 
+const POOL_DATASET_FALLBACK_CONCURRENCY = 4;
+
 async function getPools(apiKey, serverUrl = null) {
     let poolList = [];
+    let rootDatasetByPool = new Map();
+    let datasetListPrimed = false;
+
     try {
         const data = await request('/pool', apiKey, 'GET', null, serverUrl);
         poolList = parsePoolList(data);
@@ -272,9 +308,11 @@ async function getPools(apiKey, serverUrl = null) {
         if (e?.response?.status === 404) {
             try {
                 const dsList = await request('/pool/dataset', apiKey, 'GET', null, serverUrl);
-                const arr = Array.isArray(dsList) ? dsList : (dsList && typeof dsList === 'object' ? (dsList.pool_dataset || dsList.pool || Object.values(dsList).find(Array.isArray) || []) : []);
+                const arr = normalizeDatasetListBody(dsList);
                 const rootOnly = arr.filter((d) => d && typeof d === 'object' && (d.name || d.id) && !String(d.name || d.id || '').includes('/'));
                 poolList = (rootOnly.length ? rootOnly : arr).map((d) => ({ name: d.name || d.id, id: d.id || d.name, healthy: d.healthy, status: d.status }));
+                rootDatasetByPool = mapPoolRootDatasets(dsList);
+                datasetListPrimed = true;
             } catch {
                 return [];
             }
@@ -282,27 +320,57 @@ async function getPools(apiKey, serverUrl = null) {
             throw e;
         }
     }
-    const results = await Promise.all(poolList.map(async (p) => {
+
+    if (!datasetListPrimed) {
+        try {
+            const dsBody = await request('/pool/dataset', apiKey, 'GET', null, serverUrl);
+            rootDatasetByPool = mapPoolRootDatasets(dsBody);
+        } catch (_) {
+            /* Остаётся точечный fallback через /pool/dataset/id/… */
+        }
+    }
+
+    const enrichOne = async (p) => {
         const name = p?.name || p?.id;
         if (!name) return null;
+        const nameStr = String(name);
         let used = null;
         let available = null;
         let total = null;
-        try {
-            const idEnc = encodeURIComponent(String(name));
-            const ds = await request(`/pool/dataset/id/${idEnc}`, apiKey, 'GET', null, serverUrl);
-            used = extractBytes(ds?.used);
-            available = extractBytes(ds?.available);
+
+        const dsRow = rootDatasetByPool.get(nameStr);
+        if (dsRow) {
+            used = extractBytes(dsRow.used);
+            available = extractBytes(dsRow.available);
             if (used !== null && available !== null) total = used + available;
-        } catch (_) {
-            const size = extractBytes(p?.size);
-            const alloc = extractBytes(p?.allocated);
-            if (size !== null) total = size;
-            if (alloc !== null) used = alloc;
-            if (total !== null && used !== null) available = Math.max(0, total - used);
         }
-        return { name: String(name), id: String(name), healthy: p?.healthy ?? null, status: p?.status ?? null, used, available, total };
-    }));
+
+        const needDetail = total === null || (used === null && available === null);
+        if (needDetail) {
+            try {
+                const idEnc = encodeURIComponent(nameStr);
+                const ds = await request(`/pool/dataset/id/${idEnc}`, apiKey, 'GET', null, serverUrl);
+                used = extractBytes(ds?.used);
+                available = extractBytes(ds?.available);
+                if (used !== null && available !== null) total = used + available;
+            } catch (_) {
+                const size = extractBytes(p?.size);
+                const alloc = extractBytes(p?.allocated);
+                if (size !== null) total = size;
+                if (alloc !== null) used = alloc;
+                if (total !== null && used !== null) available = Math.max(0, total - used);
+            }
+        }
+
+        return { name: nameStr, id: nameStr, healthy: p?.healthy ?? null, status: p?.status ?? null, used, available, total };
+    };
+
+    const results = [];
+    for (let i = 0; i < poolList.length; i += POOL_DATASET_FALLBACK_CONCURRENCY) {
+        const chunk = poolList.slice(i, i + POOL_DATASET_FALLBACK_CONCURRENCY);
+        const part = await Promise.all(chunk.map(enrichOne));
+        results.push(...part);
+    }
     return results.filter(Boolean);
 }
 
@@ -519,6 +587,65 @@ async function getApps(apiKey, serverUrl = null) {
     });
 }
 
+/**
+ * Одна согласованная загрузка для overview / health-summary: меньше дублирования и гонок.
+ * @param {boolean} [options.includeReporting=true] — тяжёлые графики reporting (только для overview).
+ */
+async function fetchDashboardSnapshot(apiKey, serverUrl = null, options = {}) {
+    const includeReporting = options.includeReporting !== false;
+
+    const [system, pools] = await Promise.all([
+        getSystemInfo(apiKey, serverUrl),
+        getPools(apiKey, serverUrl)
+    ]);
+
+    const reportingPlaceholder = { graphs: [], graphCount: 0, updatedAt: new Date().toISOString() };
+
+    const [
+        alertsR,
+        servicesR,
+        interfacesR,
+        disksR,
+        scrubsR,
+        reportingR,
+        appsR
+    ] = await Promise.allSettled([
+        getAlerts(apiKey, serverUrl),
+        getServices(apiKey, serverUrl),
+        getInterfaces(apiKey, serverUrl),
+        getDisks(apiKey, serverUrl),
+        getPoolScrubs(apiKey, serverUrl),
+        includeReporting ? getReportingSnapshot(apiKey, serverUrl) : Promise.resolve(reportingPlaceholder),
+        getApps(apiKey, serverUrl)
+    ]);
+
+    const val = (r, fallback) => (r.status === 'fulfilled' ? r.value : fallback);
+
+    let capabilities = peekCapabilities(apiKey, serverUrl);
+    if (!capabilities) {
+        capabilities = await detectCapabilities(apiKey, serverUrl).catch(() => null);
+    }
+
+    const reporting = val(reportingR, reportingPlaceholder);
+    const safeReporting =
+        reporting && typeof reporting === 'object' && Array.isArray(reporting.graphs)
+            ? reporting
+            : reportingPlaceholder;
+
+    return {
+        system,
+        pools,
+        alerts: val(alertsR, []),
+        services: val(servicesR, []),
+        interfaces: val(interfacesR, []),
+        disks: val(disksR, []),
+        scrubs: val(scrubsR, []),
+        reporting: safeReporting,
+        apps: val(appsR, []),
+        capabilities
+    };
+}
+
 function buildHealthSummary({ system, pools, alerts, services, interfaces, disks, scrubs, apps, capabilities }) {
     const alertsArr = Array.isArray(alerts) ? alerts : [];
     const servicesArr = Array.isArray(services) ? services : [];
@@ -573,6 +700,8 @@ module.exports = {
     getSystemInfo,
     getPools,
     detectCapabilities,
+    peekCapabilities,
+    fetchDashboardSnapshot,
     getAlerts,
     getServices,
     getInterfaces,
