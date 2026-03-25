@@ -138,7 +138,7 @@ async function request(endpoint, apiKey, method = 'GET', data = null, serverUrl 
                     Accept: 'application/json'
                 },
                 httpsAgent,
-                timeout: 10000,
+                timeout: config.truenas.apiTimeoutMs,
                 validateStatus: () => true
             };
             if (data !== null && data !== undefined && upperMethod !== 'GET' && upperMethod !== 'HEAD') {
@@ -175,9 +175,22 @@ async function request(endpoint, apiKey, method = 'GET', data = null, serverUrl 
             updateIntegrationStats(statMethod, startMs, error);
             throw error;
         }
-        if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND' || error.code === 'ETIMEDOUT') {
-            const err = new Error(error.code === 'ETIMEDOUT' ? 'Connection timeout' : (error.code === 'ENOTFOUND' ? 'Host not found' : 'Connection refused'));
-            err.code = error.code;
+        if (
+            error.code === 'ECONNREFUSED' ||
+            error.code === 'ENOTFOUND' ||
+            error.code === 'ETIMEDOUT' ||
+            error.code === 'ECONNABORTED'
+        ) {
+            const isTimeout =
+                error.code === 'ETIMEDOUT' ||
+                error.code === 'ECONNABORTED' ||
+                (String(error.message || '').toLowerCase().includes('timeout'));
+            const err = new Error(
+                isTimeout
+                    ? `TrueNAS API timeout (${config.truenas.apiTimeoutMs} ms)`
+                    : (error.code === 'ENOTFOUND' ? 'Host not found' : 'Connection refused')
+            );
+            err.code = isTimeout ? 'ETIMEDOUT' : error.code;
             updateIntegrationStats(statMethod, startMs, err);
             throw err;
         }

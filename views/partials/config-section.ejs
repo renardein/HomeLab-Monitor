@@ -34,6 +34,9 @@
                             <button class="nav-link" id="settings-nav-hostmetrics" data-bs-toggle="pill" data-bs-target="#settings-tab-services" type="button" role="tab" onclick="onSettingsNavSectionChange('hostMetrics')">
                                 <i class="bi bi-thermometer-half me-2"></i><span id="settingsNavHostMetrics">Метрики хостов</span>
                             </button>
+                            <button class="nav-link" id="settings-nav-smart-sensors" data-bs-toggle="pill" data-bs-target="#settings-tab-services" type="button" role="tab" onclick="onSettingsNavSectionChange('smartSensors')">
+                                <i class="bi bi-bluetooth me-2"></i><span id="settingsNavSmartSensors">Умный дом — датчики</span>
+                            </button>
                             <button class="nav-link" id="settings-nav-speedtest" data-bs-toggle="pill" data-bs-target="#settings-tab-speedtest" type="button" role="tab">
                                 <i class="bi bi-wifi me-2"></i><span id="settingsNavSpeedtest">Speedtest</span>
                             </button>
@@ -823,6 +826,23 @@
                             <div class="d-flex justify-content-end mt-3">
                                 <button class="btn btn-primary" type="button" onclick="saveHostMetricsSettings()">
                                     <i class="bi bi-save me-2"></i><span id="hostMetricsSaveButtonText">Сохранить метрики хостов</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="smartSensorsSettingsCardWrap" style="display: none;">
+                        <div class="settings-section mb-4">
+                            <h5 class="mb-2"><i class="bi bi-house-heart me-2"></i><span id="smartSensorsSettingsTitle">Датчики умного дома</span></h5>
+                            <p class="text-muted small mb-2" id="smartSensorsSettingsHint">REST JSON (HTTP/HTTPS) и опционально BLE через @abandonware/noble (типично Linux). Пути — точечная нотация: например <code>data.temp</code> или <code>0.value</code>.</p>
+                            <p class="small mb-3" id="smartSensorsBleStatusLine"><span class="text-muted" id="smartSensorsBleStatusLabel">BLE:</span> <span id="smartSensorsBleStatusText">—</span></p>
+                            <div class="d-flex flex-wrap gap-2 mb-3">
+                                <button type="button" class="btn btn-sm btn-outline-primary" onclick="addSmartSensorRow('rest')"><i class="bi bi-cloud-arrow-down me-1"></i><span id="smartSensorsAddRestBtn">Добавить REST</span></button>
+                                <button type="button" class="btn btn-sm btn-outline-primary" onclick="addSmartSensorRow('ble')"><i class="bi bi-bluetooth me-1"></i><span id="smartSensorsAddBleBtn">Добавить Bluetooth</span></button>
+                            </div>
+                            <div id="smartSensorsSettingsEditorRoot" class="d-flex flex-column gap-3 mb-3"></div>
+                            <div class="d-flex justify-content-end">
+                                <button class="btn btn-primary" type="button" onclick="saveSmartSensorsSettings()" id="smartSensorsSaveBtn">
+                                    <i class="bi bi-save me-2"></i><span id="smartSensorsSaveButtonText">Сохранить датчики</span>
                                 </button>
                             </div>
                         </div>

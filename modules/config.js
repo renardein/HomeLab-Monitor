@@ -158,7 +158,13 @@ module.exports = {
 
     truenas: {
         host: process.env.TRUENAS_HOST || '10.200.0.2',
-        port: parseInt(process.env.TRUENAS_PORT, 10) || 443
+        port: parseInt(process.env.TRUENAS_PORT, 10) || 443,
+        /** HTTP(S) timeout для запросов к TrueNAS API (мс). Env: TRUENAS_API_TIMEOUT_MS */
+        apiTimeoutMs: (() => {
+            const n = parseInt(process.env.TRUENAS_API_TIMEOUT_MS, 10);
+            if (Number.isFinite(n) && n >= 3000 && n <= 120000) return n;
+            return 30000;
+        })()
     },
 
     corsOrigin: process.env.CORS_ORIGIN || '*',

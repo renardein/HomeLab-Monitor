@@ -1486,15 +1486,63 @@ function setServerType(type) {
     }
 }
 
+function hideAllTrueNASMonitorSections() {
+    ['truenasPoolsMonitorSection', 'truenasDisksMonitorSection', 'truenasServicesMonitorSection', 'truenasAppsMonitorSection'].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = 'none';
+    });
+}
+
+function openTrueNASCategoryMonitorFromMenu(kind) {
+    const map = {
+        pools: { sectionId: 'truenasPoolsMonitorSection', gridId: 'truenasPoolsMonitorGrid', type: 'truenas_pool' },
+        disks: { sectionId: 'truenasDisksMonitorSection', gridId: 'truenasDisksMonitorGrid', type: 'truenas_disk' },
+        services: { sectionId: 'truenasServicesMonitorSection', gridId: 'truenasServicesMonitorGrid', type: 'truenas_service' },
+        apps: { sectionId: 'truenasAppsMonitorSection', gridId: 'truenasAppsMonitorGrid', type: 'truenas_app' }
+    };
+    const cfg = map[kind];
+    if (!cfg) return;
+
+    const dashboardSection = document.getElementById('dashboardSection');
+    const configSection = document.getElementById('configSection');
+    const servicesSection = document.getElementById('servicesMonitorSection');
+    const vmsSection = document.getElementById('vmsMonitorSection');
+    const netdevSection = document.getElementById('netdevMonitorSection');
+    const upsMonSection = document.getElementById('upsMonitorSection');
+    const speedtestSection = document.getElementById('speedtestMonitorSection');
+    const smartSection = document.getElementById('smartSensorsMonitorSection');
+    const backupsMon = document.getElementById('backupsMonitorSection');
+
+    hideAllTrueNASMonitorSections();
+
+    if (dashboardSection) dashboardSection.style.display = 'none';
+    if (configSection) configSection.style.display = 'none';
+    if (servicesSection) servicesSection.style.display = 'none';
+    if (vmsSection) vmsSection.style.display = 'none';
+    if (netdevSection) netdevSection.style.display = 'none';
+    if (upsMonSection) upsMonSection.style.display = 'none';
+    if (speedtestSection) speedtestSection.style.display = 'none';
+    if (smartSection) smartSection.style.display = 'none';
+    if (backupsMon) backupsMon.style.display = 'none';
+
+    const target = document.getElementById(cfg.sectionId);
+    if (target) target.style.display = 'block';
+
+    renderTrueNASMonitorScreenTiles(cfg.gridId, cfg.type).catch(() => {});
+}
+
 function openServicesMonitorFromMenu() {
     const dashboardSection = document.getElementById('dashboardSection');
     const servicesSection = document.getElementById('servicesMonitorSection');
     const vmsSection = document.getElementById('vmsMonitorSection');
+    const smartSection = document.getElementById('smartSensorsMonitorSection');
     const backupsMon = document.getElementById('backupsMonitorSection');
     const configSection = document.getElementById('configSection');
+    hideAllTrueNASMonitorSections();
     if (dashboardSection) dashboardSection.style.display = 'none';
     if (configSection) configSection.style.display = 'none';
     if (vmsSection) vmsSection.style.display = 'none';
+    if (smartSection) smartSection.style.display = 'none';
     if (backupsMon) backupsMon.style.display = 'none';
     if (servicesSection) servicesSection.style.display = 'block';
     renderMonitoredServices();
@@ -1508,6 +1556,7 @@ function closeServicesMonitor() {
     if (servicesSection) servicesSection.style.display = 'none';
     if (vmsSection) vmsSection.style.display = 'none';
     if (backupsMon) backupsMon.style.display = 'none';
+    hideAllTrueNASMonitorSections();
     if (dashboardSection) dashboardSection.style.display = '';
 }
 
@@ -1515,11 +1564,14 @@ function openVmsMonitorFromMenu() {
     const dashboardSection = document.getElementById('dashboardSection');
     const servicesSection = document.getElementById('servicesMonitorSection');
     const vmsSection = document.getElementById('vmsMonitorSection');
+    const smartSection = document.getElementById('smartSensorsMonitorSection');
     const backupsMon = document.getElementById('backupsMonitorSection');
     const configSection = document.getElementById('configSection');
+    hideAllTrueNASMonitorSections();
     if (dashboardSection) dashboardSection.style.display = 'none';
     if (servicesSection) servicesSection.style.display = 'none';
     if (configSection) configSection.style.display = 'none';
+    if (smartSection) smartSection.style.display = 'none';
     if (backupsMon) backupsMon.style.display = 'none';
     if (vmsSection) vmsSection.style.display = 'block';
     renderVmsMonitorCards();
@@ -1531,6 +1583,7 @@ function closeVmsMonitor() {
     const backupsMon = document.getElementById('backupsMonitorSection');
     if (vmsSection) vmsSection.style.display = 'none';
     if (backupsMon) backupsMon.style.display = 'none';
+    hideAllTrueNASMonitorSections();
     if (dashboardSection) dashboardSection.style.display = '';
 }
 
@@ -1541,15 +1594,18 @@ function openNetdevMonitorFromMenu() {
     const netdevSection = document.getElementById('netdevMonitorSection');
     const upsMonSection = document.getElementById('upsMonitorSection');
     const speedtestSection = document.getElementById('speedtestMonitorSection');
+    const smartSection = document.getElementById('smartSensorsMonitorSection');
     const backupsMon = document.getElementById('backupsMonitorSection');
     const configSection = document.getElementById('configSection');
 
     if (dashboardSection) dashboardSection.style.display = 'none';
+    hideAllTrueNASMonitorSections();
     if (configSection) configSection.style.display = 'none';
     if (servicesSection) servicesSection.style.display = 'none';
     if (vmsSection) vmsSection.style.display = 'none';
     if (upsMonSection) upsMonSection.style.display = 'none';
     if (speedtestSection) speedtestSection.style.display = 'none';
+    if (smartSection) smartSection.style.display = 'none';
     if (backupsMon) backupsMon.style.display = 'none';
     if (netdevSection) netdevSection.style.display = 'block';
 
@@ -1562,6 +1618,7 @@ function closeNetdevMonitor() {
     const backupsMon = document.getElementById('backupsMonitorSection');
     if (netdevSection) netdevSection.style.display = 'none';
     if (backupsMon) backupsMon.style.display = 'none';
+    hideAllTrueNASMonitorSections();
     if (dashboardSection) dashboardSection.style.display = '';
     updateNetdevDashboard().catch(() => {});
 }
@@ -1573,15 +1630,18 @@ function openSpeedtestMonitorFromMenu() {
     const speedtestSection = document.getElementById('speedtestMonitorSection');
     const netdevSection = document.getElementById('netdevMonitorSection');
     const upsMonSection = document.getElementById('upsMonitorSection');
+    const smartSection = document.getElementById('smartSensorsMonitorSection');
     const backupsMon = document.getElementById('backupsMonitorSection');
     const configSection = document.getElementById('configSection');
 
+    hideAllTrueNASMonitorSections();
     if (dashboardSection) dashboardSection.style.display = 'none';
     if (configSection) configSection.style.display = 'none';
     if (servicesSection) servicesSection.style.display = 'none';
     if (vmsSection) vmsSection.style.display = 'none';
     if (netdevSection) netdevSection.style.display = 'none';
     if (upsMonSection) upsMonSection.style.display = 'none';
+    if (smartSection) smartSection.style.display = 'none';
     if (backupsMon) backupsMon.style.display = 'none';
     if (speedtestSection) speedtestSection.style.display = 'block';
 
@@ -1594,6 +1654,7 @@ function closeSpeedtestMonitor() {
     const backupsMon = document.getElementById('backupsMonitorSection');
     if (speedtestSection) speedtestSection.style.display = 'none';
     if (backupsMon) backupsMon.style.display = 'none';
+    hideAllTrueNASMonitorSections();
     if (dashboardSection) dashboardSection.style.display = '';
     updateSpeedtestDashboard().catch(() => {});
 }
@@ -1605,15 +1666,18 @@ function openUpsMonitorFromMenu() {
     const speedtestSection = document.getElementById('speedtestMonitorSection');
     const netdevSection = document.getElementById('netdevMonitorSection');
     const upsMonSection = document.getElementById('upsMonitorSection');
+    const smartSection = document.getElementById('smartSensorsMonitorSection');
     const backupsMon = document.getElementById('backupsMonitorSection');
     const configSection = document.getElementById('configSection');
 
+    hideAllTrueNASMonitorSections();
     if (dashboardSection) dashboardSection.style.display = 'none';
     if (configSection) configSection.style.display = 'none';
     if (servicesSection) servicesSection.style.display = 'none';
     if (vmsSection) vmsSection.style.display = 'none';
     if (netdevSection) netdevSection.style.display = 'none';
     if (speedtestSection) speedtestSection.style.display = 'none';
+    if (smartSection) smartSection.style.display = 'none';
     if (backupsMon) backupsMon.style.display = 'none';
     if (upsMonSection) upsMonSection.style.display = 'block';
 
@@ -1626,8 +1690,439 @@ function closeUpsMonitor() {
     const backupsMon = document.getElementById('backupsMonitorSection');
     if (upsMonSection) upsMonSection.style.display = 'none';
     if (backupsMon) backupsMon.style.display = 'none';
+    hideAllTrueNASMonitorSections();
     if (dashboardSection) dashboardSection.style.display = '';
     updateUPSDashboard().catch(() => {});
+}
+
+function openSmartSensorsMonitorFromMenu() {
+    const dashboardSection = document.getElementById('dashboardSection');
+    const servicesSection = document.getElementById('servicesMonitorSection');
+    const vmsSection = document.getElementById('vmsMonitorSection');
+    const speedtestSection = document.getElementById('speedtestMonitorSection');
+    const netdevSection = document.getElementById('netdevMonitorSection');
+    const upsMonSection = document.getElementById('upsMonitorSection');
+    const smartSection = document.getElementById('smartSensorsMonitorSection');
+    const backupsMon = document.getElementById('backupsMonitorSection');
+    const configSection = document.getElementById('configSection');
+
+    hideAllTrueNASMonitorSections();
+    if (dashboardSection) dashboardSection.style.display = 'none';
+    if (configSection) configSection.style.display = 'none';
+    if (servicesSection) servicesSection.style.display = 'none';
+    if (vmsSection) vmsSection.style.display = 'none';
+    if (netdevSection) netdevSection.style.display = 'none';
+    if (upsMonSection) upsMonSection.style.display = 'none';
+    if (speedtestSection) speedtestSection.style.display = 'none';
+    if (backupsMon) backupsMon.style.display = 'none';
+    if (smartSection) smartSection.style.display = 'block';
+
+    updateSmartSensorsDashboard().catch(() => {});
+}
+
+function closeSmartSensorsMonitor() {
+    const dashboardSection = document.getElementById('dashboardSection');
+    const smartSection = document.getElementById('smartSensorsMonitorSection');
+    const backupsMon = document.getElementById('backupsMonitorSection');
+    if (smartSection) smartSection.style.display = 'none';
+    if (backupsMon) backupsMon.style.display = 'none';
+    hideAllTrueNASMonitorSections();
+    if (dashboardSection) dashboardSection.style.display = '';
+    updateSmartSensorsDashboard().catch(() => {});
+}
+
+// ==================== SMART SENSORS (REST + BLE) ====================
+
+function newSmartSensorId() {
+    try {
+        if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+    } catch (_) {}
+    return 'ss-' + Date.now() + '-' + Math.random().toString(16).slice(2);
+}
+
+function smartSensorDefaults(type) {
+    if (type === 'ble') {
+        return {
+            id: newSmartSensorId(),
+            type: 'ble',
+            name: '',
+            enabled: true,
+            bleAddress: '',
+            bleServiceUuid: '1809',
+            bleChannels: [
+                { metric: 'temperature', uuid: '2a1c', format: 'int16le', scale: 0.01, offset: 0, label: '' }
+            ]
+        };
+    }
+    return {
+        id: newSmartSensorId(),
+        type: 'rest',
+        name: '',
+        enabled: true,
+        restUrl: '',
+        restMethod: 'GET',
+        restHeadersJson: '{}',
+        restBody: '',
+        restFields: [{ label: '', path: '', enabled: true }]
+    };
+}
+
+const SMART_SENSOR_MAX_REST_FIELDS = 15;
+
+let smartSensorsEditorRows = [];
+
+function syncSmartSensorRowEnabled(i, v) {
+    if (smartSensorsEditorRows[i]) smartSensorsEditorRows[i].enabled = !!v;
+}
+
+function persistSmartSensorRestFieldsFromDom(sensorIdx) {
+    const row = smartSensorsEditorRows[sensorIdx];
+    if (!row || row.type !== 'rest') return;
+    const fields = [];
+    let j = 0;
+    for (;;) {
+        const labEl = document.getElementById(`ssRf${sensorIdx}_${j}Label`);
+        if (!labEl) break;
+        const pathEl = document.getElementById(`ssRf${sensorIdx}_${j}Path`);
+        const enEl = document.getElementById(`ssRf${sensorIdx}_${j}En`);
+        fields.push({
+            label: labEl.value.trim(),
+            path: pathEl ? pathEl.value.trim() : '',
+            enabled: enEl ? !!enEl.checked : true
+        });
+        j++;
+    }
+    row.restFields = fields.length ? fields : [{ label: '', path: '', enabled: true }];
+}
+
+function addSmartSensorRestField(sensorIdx) {
+    persistSmartSensorRestFieldsFromDom(sensorIdx);
+    const row = smartSensorsEditorRows[sensorIdx];
+    if (!row || row.type !== 'rest') return;
+    if (!Array.isArray(row.restFields)) row.restFields = [];
+    if (row.restFields.length >= SMART_SENSOR_MAX_REST_FIELDS) {
+        showToast(t('smartSensorsRestFieldsMaxToast') || 'Max fields', 'warning');
+        return;
+    }
+    row.restFields.push({ label: '', path: '', enabled: true });
+    renderSmartSensorsSettingsEditor();
+}
+
+function removeSmartSensorRestField(sensorIdx, fieldIdx) {
+    persistSmartSensorRestFieldsFromDom(sensorIdx);
+    const row = smartSensorsEditorRows[sensorIdx];
+    if (!row || row.type !== 'rest' || !Array.isArray(row.restFields)) return;
+    row.restFields.splice(fieldIdx, 1);
+    if (!row.restFields.length) row.restFields.push({ label: '', path: '', enabled: true });
+    renderSmartSensorsSettingsEditor();
+}
+
+function addSmartSensorRow(type) {
+    smartSensorsEditorRows.push(smartSensorDefaults(type === 'ble' ? 'ble' : 'rest'));
+    renderSmartSensorsSettingsEditor();
+}
+
+function removeSmartSensorRow(idx) {
+    smartSensorsEditorRows.splice(idx, 1);
+    renderSmartSensorsSettingsEditor();
+}
+
+function renderSmartSensorsSettingsEditor() {
+    const root = document.getElementById('smartSensorsSettingsEditorRoot');
+    if (!root) return;
+    root.innerHTML = smartSensorsEditorRows.map((row, i) => {
+        const en = row.enabled !== false ? 'checked' : '';
+        if (row.type === 'ble') {
+            let chJson;
+            try {
+                chJson = JSON.stringify(row.bleChannels || [], null, 2);
+            } catch (_) {
+                chJson = '[]';
+            }
+            return `<div class="card border-secondary" data-ss-idx="${i}">
+        <div class="card-body p-3">
+          <div class="d-flex flex-wrap justify-content-between gap-2 mb-2">
+            <span class="badge bg-primary">Bluetooth</span>
+            <div class="d-flex align-items-center gap-2">
+              <div class="form-check m-0">
+                <input class="form-check-input" type="checkbox" id="ssEn${i}" ${en} onchange="syncSmartSensorRowEnabled(${i}, this.checked)">
+                <label class="form-check-label" for="ssEn${i}">On</label>
+              </div>
+              <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeSmartSensorRow(${i})" aria-label="Remove">×</button>
+            </div>
+          </div>
+          <div class="row g-2">
+            <div class="col-md-4"><label class="form-label small">Name</label><input class="form-control form-control-sm" id="ssName${i}" value="${escapeHtml(row.name)}"></div>
+            <div class="col-md-4"><label class="form-label small">MAC</label><input class="form-control form-control-sm" id="ssBleAddr${i}" value="${escapeHtml(row.bleAddress)}" placeholder="aa:bb:cc:dd:ee:ff"></div>
+            <div class="col-md-4"><label class="form-label small">Service UUID</label><input class="form-control form-control-sm" id="ssBleSvc${i}" value="${escapeHtml(row.bleServiceUuid)}"></div>
+            <div class="col-12"><label class="form-label small">Channels JSON</label><textarea class="form-control form-control-sm font-monospace" rows="5" id="ssBleCh${i}">${escapeHtml(chJson)}</textarea></div>
+          </div>
+        </div>
+      </div>`;
+        }
+        const hdr = row.restHeadersJson != null ? String(row.restHeadersJson) : '{}';
+        let rf = Array.isArray(row.restFields) && row.restFields.length
+            ? row.restFields
+            : [{ label: '', path: '', enabled: true }];
+        if (rf.length > SMART_SENSOR_MAX_REST_FIELDS) rf = rf.slice(0, SMART_SENSOR_MAX_REST_FIELDS);
+        const lblRestFields = t('smartSensorsRestFieldsTitle') || 'JSON fields';
+        const lblFieldName = t('smartSensorsFieldName') || 'Name';
+        const lblJsonPath = t('smartSensorsFieldJsonPath') || 'JSON path';
+        const lblPoll = t('netdevFieldEnabled') || 'Poll';
+        const lblRemoveField = t('netdevFieldRemove') || 'Remove';
+        const lblAddField = t('smartSensorsAddRestField') || 'Add field';
+        const fieldsRows = rf.map((f, j) => {
+            const fen = f.enabled !== false ? 'checked' : '';
+            return `
+            <div class="row g-2 align-items-end mb-2 border-bottom border-secondary-subtle pb-2">
+              <div class="col-md-3">
+                <label class="form-label small mb-0" for="ssRf${i}_${j}Label">${escapeHtml(lblFieldName)}</label>
+                <input type="text" class="form-control form-control-sm" id="ssRf${i}_${j}Label" value="${escapeHtml(f.label)}" placeholder="Temperature">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label small mb-0" for="ssRf${i}_${j}Path">${escapeHtml(lblJsonPath)}</label>
+                <input type="text" class="form-control form-control-sm font-monospace" id="ssRf${i}_${j}Path" value="${escapeHtml(f.path)}" placeholder="data.temperature">
+              </div>
+              <div class="col-md-2">
+                <div class="form-check mt-3">
+                  <input class="form-check-input" type="checkbox" id="ssRf${i}_${j}En" ${fen}>
+                  <label class="form-check-label small" for="ssRf${i}_${j}En">${escapeHtml(lblPoll)}</label>
+                </div>
+              </div>
+              <div class="col-md-1 text-md-end">
+                <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeSmartSensorRestField(${i},${j})" title="${escapeHtml(lblRemoveField)}">×</button>
+              </div>
+            </div>`;
+        }).join('');
+        return `<div class="card border-secondary" data-ss-idx="${i}">
+      <div class="card-body p-3">
+        <div class="d-flex flex-wrap justify-content-between gap-2 mb-2">
+          <span class="badge bg-info">REST</span>
+          <div class="d-flex align-items-center gap-2">
+            <div class="form-check m-0">
+              <input class="form-check-input" type="checkbox" id="ssEn${i}" ${en} onchange="syncSmartSensorRowEnabled(${i}, this.checked)">
+              <label class="form-check-label" for="ssEn${i}">On</label>
+            </div>
+            <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeSmartSensorRow(${i})" aria-label="Remove">×</button>
+          </div>
+        </div>
+        <div class="row g-2">
+          <div class="col-md-4"><label class="form-label small">Name</label><input class="form-control form-control-sm" id="ssName${i}" value="${escapeHtml(row.name)}"></div>
+          <div class="col-md-6"><label class="form-label small">URL</label><input class="form-control form-control-sm" id="ssUrl${i}" value="${escapeHtml(row.restUrl)}"></div>
+          <div class="col-md-2"><label class="form-label small">Method</label><select class="form-select form-select-sm" id="ssMethod${i}"><option value="GET" ${row.restMethod === 'POST' ? '' : 'selected'}>GET</option><option value="POST" ${row.restMethod === 'POST' ? 'selected' : ''}>POST</option></select></div>
+          <div class="col-md-6"><label class="form-label small">Headers JSON</label><input class="form-control form-control-sm font-monospace" id="ssHdr${i}" value="${escapeHtml(hdr)}"></div>
+          <div class="col-md-6"><label class="form-label small">Body (POST)</label><input class="form-control form-control-sm" id="ssBody${i}" value="${escapeHtml(row.restBody)}"></div>
+          <div class="col-12 mt-2">
+            <div class="fw-semibold small mb-2">${escapeHtml(lblRestFields)}</div>
+            ${fieldsRows}
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="addSmartSensorRestField(${i})"><i class="bi bi-plus-lg me-1"></i>${escapeHtml(lblAddField)}</button>
+            <span class="text-muted small ms-2">${escapeHtml(t('smartSensorsRestFieldsHint') || '')}</span>
+          </div>
+        </div>
+      </div>
+    </div>`;
+    }).join('');
+}
+
+function collectSmartSensorsFromEditor() {
+    const out = [];
+    for (let i = 0; i < smartSensorsEditorRows.length; i++) {
+        const base = smartSensorsEditorRows[i];
+        const enEl = document.getElementById('ssEn' + i);
+        const nameEl = document.getElementById('ssName' + i);
+        const enabled = enEl ? !!enEl.checked : base.enabled !== false;
+        const name = nameEl ? nameEl.value.trim() : '';
+        if (base.type === 'ble') {
+            const addr = document.getElementById('ssBleAddr' + i)?.value.trim() || '';
+            const svc = document.getElementById('ssBleSvc' + i)?.value.trim() || '1809';
+            let channels = [];
+            try {
+                const raw = document.getElementById('ssBleCh' + i)?.value || '[]';
+                const p = JSON.parse(raw);
+                if (Array.isArray(p)) channels = p;
+            } catch (_) {}
+            out.push({
+                id: base.id,
+                type: 'ble',
+                name,
+                enabled,
+                bleAddress: addr,
+                bleServiceUuid: svc,
+                bleChannels: channels
+            });
+        } else {
+            persistSmartSensorRestFieldsFromDom(i);
+            const row = smartSensorsEditorRows[i];
+            const rf = Array.isArray(row.restFields) ? row.restFields : [];
+            out.push({
+                id: base.id,
+                type: 'rest',
+                name,
+                enabled,
+                restUrl: document.getElementById('ssUrl' + i)?.value.trim() || '',
+                restMethod: document.getElementById('ssMethod' + i)?.value === 'POST' ? 'POST' : 'GET',
+                restHeadersJson: document.getElementById('ssHdr' + i)?.value.trim() || '{}',
+                restBody: document.getElementById('ssBody' + i)?.value || '',
+                restFields: rf.map((f) => ({
+                    label: f.label != null ? String(f.label).trim() : '',
+                    path: f.path != null ? String(f.path).trim() : '',
+                    enabled: f.enabled !== false
+                })).filter((f) => f.path)
+            });
+        }
+    }
+    return out;
+}
+
+async function loadSmartSensorsSettings() {
+    try {
+        const res = await fetch('/api/smart-sensors/settings');
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.error || 'load failed');
+        const list = Array.isArray(data.configs) ? data.configs : [];
+        smartSensorsEditorRows = list.map((c) => {
+            if (c.type === 'ble') {
+                return {
+                    ...c,
+                    bleChannels: Array.isArray(c.bleChannels) ? c.bleChannels : []
+                };
+            }
+            const headersJson = c.restHeaders && typeof c.restHeaders === 'object'
+                ? JSON.stringify(c.restHeaders)
+                : (c.restHeadersJson != null ? String(c.restHeadersJson) : '{}');
+            let restFields = Array.isArray(c.restFields) ? c.restFields.map((f) => ({
+                label: f && f.label != null ? String(f.label) : '',
+                path: f && f.path != null ? String(f.path) : '',
+                enabled: f && f.enabled !== false
+            })) : [];
+            if (!restFields.length) {
+                restFields = [{ label: '', path: '', enabled: true }];
+            }
+            return {
+                ...c,
+                type: 'rest',
+                restHeadersJson: headersJson,
+                restMethod: c.restMethod === 'POST' ? 'POST' : 'GET',
+                restBody: c.restBody != null ? String(c.restBody) : '',
+                restFields
+            };
+        });
+        renderSmartSensorsSettingsEditor();
+        const ble = data.ble || {};
+        const el = document.getElementById('smartSensorsBleStatusText');
+        if (el) {
+            el.textContent = ble.available
+                ? `${ble.state || '—'} · ${ble.hint || ''}`
+                : (ble.reason || 'unavailable');
+        }
+    } catch (e) {
+        console.warn('smart-sensors settings load', e);
+    }
+}
+
+async function saveSmartSensorsSettings() {
+    const configs = collectSmartSensorsFromEditor();
+    try {
+        const res = await fetch('/api/smart-sensors/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ configs })
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.error || 'save failed');
+        showToast(t('toastSmartSensorsSaved'), 'success');
+        await refreshMonitorScreensAvailability();
+        updateSmartSensorsDashboard().catch(() => {});
+        if (monitorMode && monitorCurrentView === 'smartSensors' && smartSensorsMonitorConfigured === false) {
+            applyMonitorView('cluster');
+        }
+    } catch (e) {
+        showToast(tParams('toastSmartSensorsSaveError', { msg: e.message || String(e) }), 'error');
+    }
+}
+
+function formatSmartSensorMetricEntry(entry) {
+    if (!entry) return '—';
+    if (entry.value != null && Number.isFinite(Number(entry.value))) {
+        const n = Number(entry.value);
+        const rounded = Math.abs(n) >= 100 ? Math.round(n) : Math.round(n * 10) / 10;
+        return String(rounded);
+    }
+    if (entry.raw != null) {
+        const s = String(entry.raw).trim();
+        if (s) return s.length > 32 ? s.slice(0, 32) + '…' : s;
+    }
+    return '—';
+}
+
+function buildSmartSensorsCardsHtml(data) {
+    const items = Array.isArray(data.items) ? data.items : [];
+    if (!items.length) {
+        const msg = t('smartSensorsNotConfigured');
+        const err = data?.error ? `: ${data.error}` : '';
+        return {
+            html: `<div class="col-12"><div class="text-muted small">${escapeHtml(msg + err)}</div></div>`,
+            rowClass: 'row g-2'
+        };
+    }
+    const html = items.map((it) => {
+        const name = it.name || it.id || '—';
+        const errBlock = it.error ? `<div class="text-danger small mt-2">${escapeHtml(it.error)}</div>` : '';
+        const vals = it.values && typeof it.values === 'object' ? it.values : {};
+        const keys = Object.keys(vals);
+        const tiles = keys.length
+            ? keys.map((k) => `
+                <div class="col-6 col-md-4">
+                    <div class="border rounded p-2 h-100 bg-body-tertiary">
+                        <div class="small text-muted text-truncate" title="${escapeHtml(k)}">${escapeHtml(k)}</div>
+                        <div class="fw-semibold">${escapeHtml(formatSmartSensorMetricEntry(vals[k]))}</div>
+                    </div>
+                </div>`).join('')
+            : '<div class="col-12"><span class="text-muted small">—</span></div>';
+        const typeBadge = escapeHtml(it.type || '');
+        return `
+            <div class="col-12 col-md-6">
+                <div class="card h-100 shadow-sm">
+                    <div class="card-header py-2 d-flex justify-content-between align-items-center gap-2">
+                        <span class="text-truncate" title="${escapeHtml(name)}">${escapeHtml(name)}</span>
+                        <span class="badge bg-secondary flex-shrink-0">${typeBadge}</span>
+                    </div>
+                    <div class="card-body py-2">
+                        <div class="row g-2 small">${tiles}</div>
+                        ${errBlock}
+                    </div>
+                </div>
+            </div>`;
+    }).join('');
+    return { html, rowClass: 'row g-2' };
+}
+
+async function updateSmartSensorsDashboard() {
+    const cardsEl = document.getElementById('smartSensorsMonitorCards');
+    const updatedAtEl = document.getElementById('smartSensorsUpdatedAt');
+    if (!cardsEl) return;
+    cardsEl.innerHTML = '';
+    cardsEl.className = 'row g-2';
+    if (updatedAtEl) updatedAtEl.textContent = '';
+    try {
+        const res = await fetch('/api/smart-sensors/current');
+        const data = await res.json();
+        smartSensorsMonitorConfigured = !!(data && data.configured && Array.isArray(data.items) && data.items.length > 0);
+
+        if (!data || !data.configured || !Array.isArray(data.items) || data.items.length === 0) {
+            const msg = t('smartSensorsNotConfigured');
+            const err = data?.error ? `: ${data.error}` : '';
+            cardsEl.innerHTML = `<div class="col-12"><div class="text-muted small">${escapeHtml(msg + err)}</div></div>`;
+            if (updatedAtEl && data?.updatedAt) updatedAtEl.textContent = new Date(data.updatedAt).toLocaleString();
+            return;
+        }
+        if (updatedAtEl && data.updatedAt) updatedAtEl.textContent = new Date(data.updatedAt).toLocaleString();
+        const { html, rowClass } = buildSmartSensorsCardsHtml(data);
+        cardsEl.className = rowClass;
+        cardsEl.innerHTML = html;
+    } catch (e) {
+        cardsEl.innerHTML = `<div class="col-12"><div class="text-danger small">${escapeHtml((e && e.message) ? e.message : String(e))}</div></div>`;
+    }
 }
 
 // Language switch function
@@ -1649,7 +2144,12 @@ function setLanguage(lang) {
     } catch (_) {}
     updateUILanguage();
     renderFooterUpdateStatus();
-    
+    try {
+        if (smartSensorsEditorRows.length && document.getElementById('smartSensorsSettingsEditorRoot')) {
+            renderSmartSensorsSettingsEditor();
+        }
+    } catch (_) {}
+
     // Re-render server list to update translated tooltips and text
     renderServerList();
     
@@ -1820,12 +2320,18 @@ function updateUILanguage() {
         menuNetdevMonitorText: 'monitorScreenNetdev',
         menuSpeedtestMonitorText: 'monitorScreenSpeedtest',
         menuUpsMonitorText: 'monitorScreenUps',
+        menuSmartSensorsMonitorText: 'monitorScreenSmartSensors',
+        menuTruenasPoolsMonitorText: 'menuTruenasPoolsMonitor',
+        menuTruenasDisksMonitorText: 'menuTruenasDisksMonitor',
+        menuTruenasServicesMonitorText: 'menuTruenasServicesMonitor',
+        menuTruenasAppsMonitorText: 'menuTruenasAppsMonitor',
         resetBackendProxmoxText: 'settingsResetBackendProxmox',
         resetBackendTrueNASText: 'settingsResetBackendTrueNAS',
         settingsNavUps: 'settingsNavUps',
         settingsNavVms: 'settingsNavVms',
         settingsNavNetdevices: 'settingsNavNetdevices',
         settingsNavHostMetrics: 'settingsNavHostMetrics',
+        settingsNavSmartSensors: 'settingsNavSmartSensors',
         settingsNavSpeedtest: 'settingsNavSpeedtest',
         settingsNavTelegramIntegration: 'settingsNavTelegramIntegration',
         settingsTelegramTitle: 'settingsTelegramTitle',
@@ -1917,6 +2423,13 @@ function updateUILanguage() {
     setText('dashboardClusterVmRunningLbl', t('monitorGuestRunning'));
     setText('dashboardClusterCtTotalLbl', t('monitorGuestTotal'));
     setText('upsTitle', t('upsTitle') || 'UPS');
+    setText('smartSensorsMonitorTitle', t('monitorScreenSmartSensors'));
+    setText('smartSensorsSettingsTitle', t('smartSensorsSettingsTitle'));
+    setText('smartSensorsSettingsHint', t('smartSensorsSettingsHint'));
+    setText('smartSensorsBleStatusLabel', t('smartSensorsBleStatusLabel'));
+    setText('smartSensorsAddRestBtn', t('smartSensorsAddRest') || 'REST');
+    setText('smartSensorsAddBleBtn', t('smartSensorsAddBle') || 'Bluetooth');
+    setText('smartSensorsSaveButtonText', t('smartSensorsSaveButton') || 'Save');
     setText('upsLabelInputVoltage', t('upsLabelInputVoltage') || 'Вход U');
     setText('upsLabelOutputVoltage', t('upsLabelOutputVoltage') || 'Выход U');
     setText('upsLabelPower', t('upsLabelPower') || 'Мощность');
@@ -2622,6 +3135,7 @@ function showConfigSectionOnly() {
     const servicesSection = document.getElementById('servicesMonitorSection');
     const vmsSection = document.getElementById('vmsMonitorSection');
     const upsMonSection = document.getElementById('upsMonitorSection');
+    const smartSensorsSection = document.getElementById('smartSensorsMonitorSection');
     const backupsMon = document.getElementById('backupsMonitorSection');
     const monitorView = document.getElementById('monitorView');
     if (configSection) configSection.style.display = 'block';
@@ -2629,7 +3143,9 @@ function showConfigSectionOnly() {
     if (servicesSection) servicesSection.style.display = 'none';
     if (vmsSection) vmsSection.style.display = 'none';
     if (upsMonSection) upsMonSection.style.display = 'none';
+    if (smartSensorsSection) smartSensorsSection.style.display = 'none';
     if (backupsMon) backupsMon.style.display = 'none';
+    hideAllTrueNASMonitorSections();
     if (monitorView) monitorView.style.display = 'none';
 }
 
@@ -7159,12 +7675,13 @@ async function toggleSettings() {
 function onSettingsNavSectionChange(section) {
     // Мы держим все настройки UPS/Netdev внутри settings-tab-services по разметке,
     // но по клику слева показываем "только нужный блок", чтобы экраны не выглядели одинаково.
-    // section: 'services' | 'vms' | 'ups' | 'netdev' | 'hostMetrics'
+    // section: 'services' | 'vms' | 'ups' | 'netdev' | 'hostMetrics' | 'smartSensors'
     const servicesHosts = document.getElementById('servicesHostsSettingsWrap');
     const upsWrap = document.getElementById('upsSettingsCardWrap');
     const netdevWrap = document.getElementById('netdevSettingsCardWrap');
     const hostMetricsWrap = document.getElementById('hostMetricsSettingsWrap');
     const vmsWrap = document.getElementById('vmsForMonitoringSettingsWrap');
+    const smartWrap = document.getElementById('smartSensorsSettingsCardWrap');
 
     if (!servicesHosts || !upsWrap || !netdevWrap || !vmsWrap) return;
 
@@ -7180,6 +7697,7 @@ function onSettingsNavSectionChange(section) {
     hide(netdevWrap);
     hide(vmsWrap);
     if (hostMetricsWrap) hide(hostMetricsWrap);
+    if (smartWrap) hide(smartWrap);
 
     if (section === 'ups') {
         show(upsWrap);
@@ -7187,6 +7705,9 @@ function onSettingsNavSectionChange(section) {
         show(netdevWrap);
     } else if (section === 'hostMetrics') {
         show(hostMetricsWrap);
+    } else if (section === 'smartSensors') {
+        if (smartWrap) show(smartWrap);
+        loadSmartSensorsSettings();
     } else if (section === 'vms') {
         show(vmsWrap);
     } else {
@@ -7272,6 +7793,13 @@ async function toggleMonitorMode() {
         if (servicesSection) servicesSection.style.display = 'none';
         if (vmsSection) vmsSection.style.display = 'none';
         if (upsMonSection) upsMonSection.style.display = 'none';
+        const smartSensorsExit = document.getElementById('smartSensorsMonitorSection');
+        if (smartSensorsExit) smartSensorsExit.style.display = 'none';
+        hideAllTrueNASMonitorSections();
+        const netdevExit = document.getElementById('netdevMonitorSection');
+        if (netdevExit) netdevExit.style.display = 'none';
+        const speedtestExit = document.getElementById('speedtestMonitorSection');
+        if (speedtestExit) speedtestExit.style.display = 'none';
         const backupsMonExit = document.getElementById('backupsMonitorSection');
         if (backupsMonExit) backupsMonExit.style.display = 'none';
         if (monitorView) monitorView.style.display = 'none';
@@ -7310,7 +7838,7 @@ let monitorCurrentView = 'cluster';
 let lastBackupsDataForMonitor = null;
 
 /** Полный порядок экранов монитора (в БД). */
-const MONITOR_SCREEN_IDS_ALL = ['cluster', 'tiles', 'truenasPools', 'truenasDisks', 'truenasServices', 'truenasApps', 'ups', 'netdev', 'speedtest', 'vms', 'services', 'backupRuns'];
+const MONITOR_SCREEN_IDS_ALL = ['cluster', 'tiles', 'truenasPools', 'truenasDisks', 'truenasServices', 'truenasApps', 'ups', 'netdev', 'speedtest', 'smartSensors', 'vms', 'services', 'backupRuns'];
 let monitorScreensOrder = MONITOR_SCREEN_IDS_ALL.slice();
 let monitorScreensEnabled = {};
 /** Speedtest включён в настройках (для скрытия экрана в режиме монитора) */
@@ -7321,6 +7849,7 @@ let speedtestClientEnabled = false;
 let upsMonitorConfigured = null;
 let netdevMonitorConfigured = null;
 let speedtestMonitorConfigured = null;
+let smartSensorsMonitorConfigured = null;
 
 function destroyMonitorChromeGestureGuards() {
     monitorChromeGestureGuardsAttached = false;
@@ -7388,19 +7917,28 @@ function applyMonitorChromeGestureGuards() {
 }
 
 async function refreshMonitorScreensAvailability() {
-    // Если пользователь ещё не подключился к серверу/кластеру — не пытаемся определять доступность,
-    // чтобы не “обнулить” экраны из-за ошибок авторизации.
-    if (!apiToken && !getCurrentConnectionId()) return;
-
     const safeSet = (key, val) => {
         if (val === true || val === false) {
             if (key === 'ups') upsMonitorConfigured = val;
             if (key === 'netdev') netdevMonitorConfigured = val;
             if (key === 'speedtest') speedtestMonitorConfigured = val;
+            if (key === 'smartSensors') smartSensorsMonitorConfigured = val;
         }
     };
 
     try {
+        try {
+            const sensRes = await fetch('/api/smart-sensors/current');
+            if (sensRes.ok) {
+                const sData = await sensRes.json();
+                safeSet('smartSensors', !!(sData && sData.configured && Array.isArray(sData.items) && sData.items.length > 0));
+            }
+        } catch (_) {}
+
+        // Если пользователь ещё не подключился к серверу/кластеру — не пытаемся определять доступность
+        // UPS/Netdev/Speedtest, чтобы не “обнулить” экраны из-за ошибок авторизации.
+        if (!apiToken && !getCurrentConnectionId()) return;
+
         const [upsRes, netdevRes, speedRes] = await Promise.allSettled([
             fetch('/api/ups/current'),
             fetch('/api/netdevices/current'),
@@ -7465,6 +8003,7 @@ function getMonitorViewsOrder() {
         if (id === 'ups' && upsMonitorConfigured === false) return false;
         if (id === 'netdev' && netdevMonitorConfigured === false) return false;
         if (id === 'speedtest' && speedtestMonitorConfigured === false) return false;
+        if (id === 'smartSensors' && smartSensorsMonitorConfigured === false) return false;
         return true;
     });
 }
@@ -7473,13 +8012,14 @@ function monitorScreenSettingsLabel(id) {
     const map = {
         cluster: t('monitorScreenCluster'),
         tiles: 'Tiles',
-        truenasPools: 'TrueNAS Pools',
-        truenasDisks: 'TrueNAS Disks',
-        truenasServices: 'TrueNAS Services',
-        truenasApps: 'TrueNAS Apps',
+        truenasPools: t('monitorScreenTruenasPools'),
+        truenasDisks: t('monitorScreenTruenasDisks'),
+        truenasServices: t('monitorScreenTruenasServices'),
+        truenasApps: t('monitorScreenTruenasApps'),
         ups: t('monitorScreenUps'),
         netdev: t('monitorScreenNetdev'),
         speedtest: t('monitorScreenSpeedtest'),
+        smartSensors: t('monitorScreenSmartSensors'),
         vms: t('monitorScreenVms'),
         services: t('monitorScreenServices'),
         backupRuns: t('monitorScreenBackupRuns')
@@ -7537,13 +8077,14 @@ function updateMonitorToolbarTitleForView() {
     const titles = {
         cluster: t('monitorScreenCluster'),
         tiles: 'Tiles',
-        truenasPools: 'TrueNAS Pools',
-        truenasDisks: 'TrueNAS Disks',
-        truenasServices: 'TrueNAS Services',
-        truenasApps: 'TrueNAS Apps',
+        truenasPools: t('monitorScreenTruenasPools'),
+        truenasDisks: t('monitorScreenTruenasDisks'),
+        truenasServices: t('monitorScreenTruenasServices'),
+        truenasApps: t('monitorScreenTruenasApps'),
         ups: t('monitorScreenUps'),
         netdev: t('monitorScreenNetdev'),
         speedtest: t('monitorScreenSpeedtest'),
+        smartSensors: t('monitorScreenSmartSensors'),
         vms: t('monitorScreenVms'),
         services: t('monitorScreenServices'),
         backupRuns: t('monitorScreenBackupRuns')
@@ -7621,7 +8162,7 @@ function renderMonitorScreenDots() {
 
 // Переключение экранов в режиме монитора:
 // cluster/services/vms -> компактный #monitorView (без скролла/пустых зон)
-// ups/netdev/speedtest/backupRuns -> полноэкранные секции
+// ups/netdev/speedtest/smartSensors/backupRuns -> полноэкранные секции
 function applyMonitorView(view) {
     monitorCurrentView = view;
 
@@ -7632,6 +8173,7 @@ function applyMonitorView(view) {
     const upsMonSection = document.getElementById('upsMonitorSection');
     const netdevMonSection = document.getElementById('netdevMonitorSection');
     const speedtestMonSection = document.getElementById('speedtestMonitorSection');
+    const smartSensorsMonSection = document.getElementById('smartSensorsMonitorSection');
     const backupsMon = document.getElementById('backupsMonitorSection');
     const tilesMonSection = document.getElementById('tilesMonitorSection');
     const truenasPoolsMonSection = document.getElementById('truenasPoolsMonitorSection');
@@ -7648,6 +8190,7 @@ function applyMonitorView(view) {
         if (upsMonSection) upsMonSection.style.display = 'none';
         if (netdevMonSection) netdevMonSection.style.display = 'none';
         if (speedtestMonSection) speedtestMonSection.style.display = 'none';
+        if (smartSensorsMonSection) smartSensorsMonSection.style.display = 'none';
         if (backupsMon) backupsMon.style.display = 'none';
         if (tilesMonSection) tilesMonSection.style.display = 'none';
         if (truenasPoolsMonSection) truenasPoolsMonSection.style.display = 'none';
@@ -7667,6 +8210,7 @@ function applyMonitorView(view) {
     if (upsMonSection) upsMonSection.style.display = 'none';
     if (netdevMonSection) netdevMonSection.style.display = 'none';
     if (speedtestMonSection) speedtestMonSection.style.display = 'none';
+    if (smartSensorsMonSection) smartSensorsMonSection.style.display = 'none';
     if (backupsMon) backupsMon.style.display = 'none';
     if (tilesMonSection) tilesMonSection.style.display = 'none';
     if (truenasPoolsMonSection) truenasPoolsMonSection.style.display = 'none';
@@ -7708,6 +8252,9 @@ function applyMonitorView(view) {
     } else if (view === 'speedtest') {
         if (speedtestMonSection) speedtestMonSection.style.display = 'block';
         updateSpeedtestDashboard().catch(() => {});
+    } else if (view === 'smartSensors') {
+        if (smartSensorsMonSection) smartSensorsMonSection.style.display = 'block';
+        updateSmartSensorsDashboard().catch(() => {});
     } else if (view === 'tiles') {
         if (tilesMonSection) tilesMonSection.style.display = 'block';
         renderTilesMonitorScreen().catch(() => {});
@@ -8770,7 +9317,10 @@ async function refreshData(options = {}) {
         if (!monitorMode || monitorCurrentView === 'cluster' || monitorCurrentView === 'speedtest') {
             updateSpeedtestDashboard().catch(() => {});
         }
-        
+        if (!monitorMode || monitorCurrentView === 'cluster' || monitorCurrentView === 'smartSensors') {
+            updateSmartSensorsDashboard().catch(() => {});
+        }
+
         // Restore scroll/focus to avoid visible "jumps" on full re-render
         requestAnimationFrame(() => {
             window.scrollTo({ top: prevScrollY, left: 0, behavior: 'auto' });

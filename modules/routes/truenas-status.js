@@ -25,206 +25,162 @@ const TTL = {
     capabilities: 300
 };
 
-async function respondWithCachedJson(req, res, prefix, ttlSec, producer) {
-    const key = cacheKey(prefix, req);
-    const cached = cache.get(key);
-    if (cached) return res.json(cached);
-    const payload = await producer();
-    cache.set(key, payload, ttlSec);
-    return res.json(payload);
+async function respondWithCachedJson(req, res, prefix, ttlSec, producer, errorFallback) {
+    const fallback = errorFallback || 'Ошибка запроса TrueNAS';
+    try {
+        const key = cacheKey(prefix, req);
+        const cached = cache.get(key);
+        if (cached) return res.json(cached);
+        const payload = await producer();
+        cache.set(key, payload, ttlSec);
+        return res.json(payload);
+    } catch (error) {
+        return handleTrueNASError(res, error, fallback);
+    }
 }
 
 function handleTrueNASError(res, error, fallbackMessage) {
-    log('error', `${fallbackMessage}: ${error.message}`);
+    const errMsg = error && error.message ? String(error.message) : String(error || '');
+    log('error', `${fallbackMessage}: ${errMsg}`);
     const status = error?.response?.status;
-    const msg = error?.response?.data?.message || error?.response?.data?.error || error.message;
-    if (status) return res.status(status).json({ error: msg || `Ошибка API: ${status}` });
-    return res.status(500).json({ error: fallbackMessage });
+    const remoteMsg = error?.response?.data?.message || error?.response?.data?.error;
+    if (status) {
+        return res.status(status).json({ error: remoteMsg || `Ошибка API: ${status}` });
+    }
+    const detail = errMsg && errMsg !== fallbackMessage ? `${fallbackMessage} (${errMsg})` : (remoteMsg || errMsg || fallbackMessage);
+    const code = String(error && error.code ? error.code : '').toUpperCase();
+    const isTimeout = code === 'ETIMEDOUT' || /timeout/i.test(errMsg);
+    return res.status(isTimeout ? 504 : 502).json({ error: detail });
 }
 
-router.get('/system', checkTrueNASAuth, async (req, res) => {
-    try {
-        return respondWithCachedJson(req, res, 'system', TTL.system, async () => {
-            return truenas.getSystemInfo(req.apiKey, req.serverUrl || null);
-        });
-    } catch (error) {
-        return handleTrueNASError(res, error, 'Ошибка получения данных TrueNAS');
-    }
-});
+router.get('/system', checkTrueNASAuth, (req, res) =>
+    respondWithCachedJson(req, res, 'system', TTL.system, async () => {
+        return truenas.getSystemInfo(req.apiKey, req.serverUrl || null);
+    }, 'Ошибка получения данных TrueNAS'));
 
-router.get('/storage/pools', checkTrueNASAuth, async (req, res) => {
-    try {
-        return respondWithCachedJson(req, res, 'pools', TTL.pools, async () => {
-            const pools = await truenas.getPools(req.apiKey, req.serverUrl || null);
-            const all = pools.map((p) => {
-                const total = p.total ?? 0;
-                const used = p.used ?? 0;
-                const usage_percent = total > 0 ? Math.round((used / total) * 100) : 0;
-                return {
-                    node: 'truenas',
-                    name: p.name,
-                    type: 'pool',
-                    server: null,
-                    export: null,
-                    used,
-                    total,
-                    used_fmt: used,
-                    total_fmt: total,
-                    usage_percent,
-                    content: [],
-                    active: p.healthy === null ? true : !!p.healthy,
-                    shared: true,
-                    status: p.status || null
-                };
-            });
-            const byType = { pool: { count: all.length, total: all.reduce((s, x) => s + x.total, 0), used: all.reduce((s, x) => s + x.used, 0) } };
-            const total_space = byType.pool.total;
-            const used_space = byType.pool.used;
+router.get('/storage/pools', checkTrueNASAuth, (req, res) =>
+    respondWithCachedJson(req, res, 'pools', TTL.pools, async () => {
+        const pools = await truenas.getPools(req.apiKey, req.serverUrl || null);
+        const all = pools.map((p) => {
+            const total = p.total ?? 0;
+            const used = p.used ?? 0;
+            const usage_percent = total > 0 ? Math.round((used / total) * 100) : 0;
             return {
-                all,
-                byType,
-                summary: {
-                    total: all.length,
-                    active: all.filter((s) => s.active).length,
-                    total_space,
-                    used_space,
-                    total_space_fmt: total_space,
-                    used_space_fmt: used_space
-                }
+                node: 'truenas',
+                name: p.name,
+                type: 'pool',
+                server: null,
+                export: null,
+                used,
+                total,
+                used_fmt: used,
+                total_fmt: total,
+                usage_percent,
+                content: [],
+                active: p.healthy === null ? true : !!p.healthy,
+                shared: true,
+                status: p.status || null
             };
         });
-    } catch (error) {
-        return handleTrueNASError(res, error, 'Ошибка получения пулов TrueNAS');
-    }
-});
+        const byType = { pool: { count: all.length, total: all.reduce((s, x) => s + x.total, 0), used: all.reduce((s, x) => s + x.used, 0) } };
+        const total_space = byType.pool.total;
+        const used_space = byType.pool.used;
+        return {
+            all,
+            byType,
+            summary: {
+                total: all.length,
+                active: all.filter((s) => s.active).length,
+                total_space,
+                used_space,
+                total_space_fmt: total_space,
+                used_space_fmt: used_space
+            }
+        };
+    }, 'Ошибка получения пулов TrueNAS'));
 
-router.get('/capabilities', checkTrueNASAuth, async (req, res) => {
-    try {
-        return respondWithCachedJson(req, res, 'capabilities', TTL.capabilities, async () => {
-            return truenas.detectCapabilities(req.apiKey, req.serverUrl || null);
-        });
-    } catch (error) {
-        return handleTrueNASError(res, error, 'Ошибка получения возможностей TrueNAS API');
-    }
-});
+router.get('/capabilities', checkTrueNASAuth, (req, res) =>
+    respondWithCachedJson(req, res, 'capabilities', TTL.capabilities, async () => {
+        return truenas.detectCapabilities(req.apiKey, req.serverUrl || null);
+    }, 'Ошибка получения возможностей TrueNAS API'));
 
-router.get('/alerts', checkTrueNASAuth, async (req, res) => {
-    try {
-        return respondWithCachedJson(req, res, 'alerts', TTL.alerts, async () => {
-            const items = await truenas.getAlerts(req.apiKey, req.serverUrl || null);
-            return { items, updatedAt: new Date().toISOString() };
-        });
-    } catch (error) {
-        return handleTrueNASError(res, error, 'Ошибка получения алертов TrueNAS');
-    }
-});
+router.get('/alerts', checkTrueNASAuth, (req, res) =>
+    respondWithCachedJson(req, res, 'alerts', TTL.alerts, async () => {
+        const items = await truenas.getAlerts(req.apiKey, req.serverUrl || null);
+        return { items, updatedAt: new Date().toISOString() };
+    }, 'Ошибка получения алертов TrueNAS'));
 
-router.get('/services', checkTrueNASAuth, async (req, res) => {
-    try {
-        return respondWithCachedJson(req, res, 'services', TTL.services, async () => {
-            const items = await truenas.getServices(req.apiKey, req.serverUrl || null);
-            return { items, updatedAt: new Date().toISOString() };
-        });
-    } catch (error) {
-        return handleTrueNASError(res, error, 'Ошибка получения сервисов TrueNAS');
-    }
-});
+router.get('/services', checkTrueNASAuth, (req, res) =>
+    respondWithCachedJson(req, res, 'services', TTL.services, async () => {
+        const items = await truenas.getServices(req.apiKey, req.serverUrl || null);
+        return { items, updatedAt: new Date().toISOString() };
+    }, 'Ошибка получения сервисов TrueNAS'));
 
-router.get('/network', checkTrueNASAuth, async (req, res) => {
-    try {
-        return respondWithCachedJson(req, res, 'network', TTL.network, async () => {
-            const items = await truenas.getInterfaces(req.apiKey, req.serverUrl || null);
-            return { items, updatedAt: new Date().toISOString() };
-        });
-    } catch (error) {
-        return handleTrueNASError(res, error, 'Ошибка получения сетевых данных TrueNAS');
-    }
-});
+router.get('/network', checkTrueNASAuth, (req, res) =>
+    respondWithCachedJson(req, res, 'network', TTL.network, async () => {
+        const items = await truenas.getInterfaces(req.apiKey, req.serverUrl || null);
+        return { items, updatedAt: new Date().toISOString() };
+    }, 'Ошибка получения сетевых данных TrueNAS'));
 
-router.get('/disks', checkTrueNASAuth, async (req, res) => {
-    try {
-        return respondWithCachedJson(req, res, 'disks', TTL.disks, async () => {
-            const items = await truenas.getDisks(req.apiKey, req.serverUrl || null);
-            return { items, updatedAt: new Date().toISOString() };
-        });
-    } catch (error) {
-        return handleTrueNASError(res, error, 'Ошибка получения дисков TrueNAS');
-    }
-});
+router.get('/disks', checkTrueNASAuth, (req, res) =>
+    respondWithCachedJson(req, res, 'disks', TTL.disks, async () => {
+        const items = await truenas.getDisks(req.apiKey, req.serverUrl || null);
+        return { items, updatedAt: new Date().toISOString() };
+    }, 'Ошибка получения дисков TrueNAS'));
 
-router.get('/scrubs', checkTrueNASAuth, async (req, res) => {
-    try {
-        return respondWithCachedJson(req, res, 'scrubs', TTL.scrubs, async () => {
-            const items = await truenas.getPoolScrubs(req.apiKey, req.serverUrl || null);
-            return { items, updatedAt: new Date().toISOString() };
-        });
-    } catch (error) {
-        return handleTrueNASError(res, error, 'Ошибка получения статуса scrub TrueNAS');
-    }
-});
+router.get('/scrubs', checkTrueNASAuth, (req, res) =>
+    respondWithCachedJson(req, res, 'scrubs', TTL.scrubs, async () => {
+        const items = await truenas.getPoolScrubs(req.apiKey, req.serverUrl || null);
+        return { items, updatedAt: new Date().toISOString() };
+    }, 'Ошибка получения статуса scrub TrueNAS'));
 
-router.get('/apps', checkTrueNASAuth, async (req, res) => {
-    try {
-        return respondWithCachedJson(req, res, 'apps', TTL.apps, async () => {
-            const items = await truenas.getApps(req.apiKey, req.serverUrl || null);
-            return {
-                items,
-                summary: {
-                    total: items.length,
-                    running: items.filter((x) => x.running).length,
-                    stopped: items.filter((x) => !x.running).length
-                },
-                updatedAt: new Date().toISOString()
-            };
-        });
-    } catch (error) {
-        return handleTrueNASError(res, error, 'Ошибка получения приложений TrueNAS');
-    }
-});
+router.get('/apps', checkTrueNASAuth, (req, res) =>
+    respondWithCachedJson(req, res, 'apps', TTL.apps, async () => {
+        const items = await truenas.getApps(req.apiKey, req.serverUrl || null);
+        return {
+            items,
+            summary: {
+                total: items.length,
+                running: items.filter((x) => x.running).length,
+                stopped: items.filter((x) => !x.running).length
+            },
+            updatedAt: new Date().toISOString()
+        };
+    }, 'Ошибка получения приложений TrueNAS'));
 
-router.get('/health-summary', checkTrueNASAuth, async (req, res) => {
-    try {
-        return respondWithCachedJson(req, res, 'health_summary', TTL.overview, async () => {
-            const [system, pools, alerts, services, interfaces, disks, scrubs, apps, capabilities] = await Promise.all([
-                truenas.getSystemInfo(req.apiKey, req.serverUrl || null),
-                truenas.getPools(req.apiKey, req.serverUrl || null),
-                truenas.getAlerts(req.apiKey, req.serverUrl || null).catch(() => []),
-                truenas.getServices(req.apiKey, req.serverUrl || null).catch(() => []),
-                truenas.getInterfaces(req.apiKey, req.serverUrl || null).catch(() => []),
-                truenas.getDisks(req.apiKey, req.serverUrl || null).catch(() => []),
-                truenas.getPoolScrubs(req.apiKey, req.serverUrl || null).catch(() => []),
-                truenas.getApps(req.apiKey, req.serverUrl || null).catch(() => []),
-                truenas.detectCapabilities(req.apiKey, req.serverUrl || null).catch(() => null)
-            ]);
-            return truenas.buildHealthSummary({ system, pools, alerts, services, interfaces, disks, scrubs, apps, capabilities });
-        });
-    } catch (error) {
-        return handleTrueNASError(res, error, 'Ошибка получения health summary TrueNAS');
-    }
-});
+router.get('/health-summary', checkTrueNASAuth, (req, res) =>
+    respondWithCachedJson(req, res, 'health_summary', TTL.overview, async () => {
+        const [system, pools, alerts, services, interfaces, disks, scrubs, apps, capabilities] = await Promise.all([
+            truenas.getSystemInfo(req.apiKey, req.serverUrl || null),
+            truenas.getPools(req.apiKey, req.serverUrl || null),
+            truenas.getAlerts(req.apiKey, req.serverUrl || null).catch(() => []),
+            truenas.getServices(req.apiKey, req.serverUrl || null).catch(() => []),
+            truenas.getInterfaces(req.apiKey, req.serverUrl || null).catch(() => []),
+            truenas.getDisks(req.apiKey, req.serverUrl || null).catch(() => []),
+            truenas.getPoolScrubs(req.apiKey, req.serverUrl || null).catch(() => []),
+            truenas.getApps(req.apiKey, req.serverUrl || null).catch(() => []),
+            truenas.detectCapabilities(req.apiKey, req.serverUrl || null).catch(() => null)
+        ]);
+        return truenas.buildHealthSummary({ system, pools, alerts, services, interfaces, disks, scrubs, apps, capabilities });
+    }, 'Ошибка получения health summary TrueNAS'));
 
-router.get('/overview', checkTrueNASAuth, async (req, res) => {
-    try {
-        return respondWithCachedJson(req, res, 'overview', TTL.overview, async () => {
-            const [system, pools, alerts, services, interfaces, disks, scrubs, reporting, apps, capabilities] = await Promise.all([
-                truenas.getSystemInfo(req.apiKey, req.serverUrl || null),
-                truenas.getPools(req.apiKey, req.serverUrl || null),
-                truenas.getAlerts(req.apiKey, req.serverUrl || null).catch(() => []),
-                truenas.getServices(req.apiKey, req.serverUrl || null).catch(() => []),
-                truenas.getInterfaces(req.apiKey, req.serverUrl || null).catch(() => []),
-                truenas.getDisks(req.apiKey, req.serverUrl || null).catch(() => []),
-                truenas.getPoolScrubs(req.apiKey, req.serverUrl || null).catch(() => []),
-                truenas.getReportingSnapshot(req.apiKey, req.serverUrl || null).catch(() => ({ graphs: [], graphCount: 0, updatedAt: new Date().toISOString() })),
-                truenas.getApps(req.apiKey, req.serverUrl || null).catch(() => []),
-                truenas.detectCapabilities(req.apiKey, req.serverUrl || null).catch(() => null)
-            ]);
-            const health = truenas.buildHealthSummary({ system, pools, alerts, services, interfaces, disks, scrubs, apps, capabilities });
-            return { system, pools, alerts, services, interfaces, disks, scrubs, reporting, apps, capabilities, health, updatedAt: new Date().toISOString() };
-        });
-    } catch (error) {
-        return handleTrueNASError(res, error, 'Ошибка получения overview TrueNAS');
-    }
-});
+router.get('/overview', checkTrueNASAuth, (req, res) =>
+    respondWithCachedJson(req, res, 'overview', TTL.overview, async () => {
+        const [system, pools, alerts, services, interfaces, disks, scrubs, reporting, apps, capabilities] = await Promise.all([
+            truenas.getSystemInfo(req.apiKey, req.serverUrl || null),
+            truenas.getPools(req.apiKey, req.serverUrl || null),
+            truenas.getAlerts(req.apiKey, req.serverUrl || null).catch(() => []),
+            truenas.getServices(req.apiKey, req.serverUrl || null).catch(() => []),
+            truenas.getInterfaces(req.apiKey, req.serverUrl || null).catch(() => []),
+            truenas.getDisks(req.apiKey, req.serverUrl || null).catch(() => []),
+            truenas.getPoolScrubs(req.apiKey, req.serverUrl || null).catch(() => []),
+            truenas.getReportingSnapshot(req.apiKey, req.serverUrl || null).catch(() => ({ graphs: [], graphCount: 0, updatedAt: new Date().toISOString() })),
+            truenas.getApps(req.apiKey, req.serverUrl || null).catch(() => []),
+            truenas.detectCapabilities(req.apiKey, req.serverUrl || null).catch(() => null)
+        ]);
+        const health = truenas.buildHealthSummary({ system, pools, alerts, services, interfaces, disks, scrubs, apps, capabilities });
+        return { system, pools, alerts, services, interfaces, disks, scrubs, reporting, apps, capabilities, health, updatedAt: new Date().toISOString() };
+    }, 'Ошибка получения overview TrueNAS'));
 
 router.get('/debug/integration', checkTrueNASAuth, async (req, res) => {
     try {
