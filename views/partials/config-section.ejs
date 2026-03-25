@@ -49,6 +49,9 @@
                             <button class="nav-link" id="settings-nav-speedtest" data-bs-toggle="pill" data-bs-target="#settings-tab-speedtest" type="button" role="tab">
                                 <i class="bi bi-wifi me-2"></i><span id="settingsNavSpeedtest">Speedtest</span>
                             </button>
+                            <button class="nav-link" id="settings-nav-iperf3" data-bs-toggle="pill" data-bs-target="#settings-tab-iperf3" type="button" role="tab">
+                                <i class="bi bi-arrow-left-right me-2"></i><span id="settingsNavIperf3">iperf3</span>
+                            </button>
                             <div class="settings-nav-category" role="presentation"><span id="settingsNavCategoryAlerts"></span></div>
                             <button class="nav-link" id="settings-nav-telegram" data-bs-toggle="pill" data-bs-target="#settings-tab-telegram" type="button" role="tab">
                                 <i class="bi bi-send me-2"></i><span id="settingsNavTelegramIntegration">Интеграция Telegram</span>
@@ -305,7 +308,7 @@
                             <div class="tab-pane fade settings-display-subtab" id="settings-tab-display-cluster-tiles" role="tabpanel">
                                 <div class="settings-section">
                                     <h5 class="mb-3 settings-display-tab-title"><i class="bi bi-grid-3x2-gap me-2"></i><span id="settingsClusterTilesTitle">Плитки экрана Cluster</span></h5>
-                                    <p class="text-muted small mb-2" id="settingsClusterTilesHint">Соберите до 12 плиток для экрана Cluster из VM/CT, сервисов, SNMP, UPS и Speedtest. На экране они листаются горизонтально.</p>
+                                    <p class="text-muted small mb-2" id="settingsClusterTilesHint">Соберите до 12 плиток для экрана Cluster из VM/CT, сервисов, SNMP, UPS, Speedtest и iperf3. На экране они листаются горизонтально.</p>
                                     <div id="settingsClusterTilesList"></div>
                                     <div class="d-flex gap-2 flex-wrap mt-3">
                                         <button class="btn btn-outline-primary btn-sm" type="button" onclick="addClusterDashboardTile()" id="settingsClusterTilesAddBtn">
@@ -1034,6 +1037,70 @@
                                             </button>
                                         </div>
                                         <div class="small" id="speedtestCliStatus"></div>
+                                </div>
+                            </div>
+                            <!-- iperf3 -->
+                            <div class="tab-pane fade" id="settings-tab-iperf3" role="tabpanel">
+                                <div class="settings-section">
+                                        <h5 class="mb-3"><i class="bi bi-arrow-left-right me-2"></i><span id="iperf3SettingsTitle">iperf3</span></h5>
+                                        <p class="text-muted small mb-3" id="iperf3SettingsHint"></p>
+                                        <div class="row g-3 align-items-end mb-3">
+                                            <div class="col-md-3">
+                                                <label class="form-label fw-bold" for="iperf3EnabledSelect" id="iperf3EnabledLabel">Замер</label>
+                                                <select class="form-select" id="iperf3EnabledSelect" onchange="saveIperf3Settings()">
+                                                    <option value="0" selected>Выключено</option>
+                                                    <option value="1">Включено</option>
+                                                </select>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <label class="form-label fw-bold" for="iperf3HostInput" id="iperf3HostLabel">Хост</label>
+                                                <input type="text" class="form-control" id="iperf3HostInput" placeholder="" autocomplete="off" onchange="saveIperf3Settings()" onblur="saveIperf3Settings()">
+                                                <div class="form-text" id="iperf3HostHint"></div>
+                                            </div>
+                                            <div class="col-md-2">
+                                                <label class="form-label fw-bold" for="iperf3PortInput" id="iperf3PortLabel">Порт</label>
+                                                <input type="number" class="form-control" id="iperf3PortInput" min="1" max="65535" value="5201" onchange="saveIperf3Settings()" onblur="saveIperf3Settings()">
+                                                <div class="form-text" id="iperf3PortHint"></div>
+                                            </div>
+                                            <div class="col-md-3 d-grid">
+                                                <button type="button" class="btn btn-outline-primary" id="iperf3RunNowBtn" onclick="runIperf3Now()">
+                                                    <i class="bi bi-play-fill me-1"></i><span id="iperf3RunNowText">Сейчас</span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div class="row g-3 align-items-end mb-3">
+                                            <div class="col-md-3">
+                                                <label class="form-label fw-bold" for="iperf3DurationInput" id="iperf3DurationLabel">Длительность (с)</label>
+                                                <input type="number" class="form-control" id="iperf3DurationInput" min="1" max="120" value="8" onchange="saveIperf3Settings()" onblur="saveIperf3Settings()">
+                                                <div class="form-text" id="iperf3DurationHint"></div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <label class="form-label fw-bold" for="iperf3ParallelInput" id="iperf3ParallelLabel">Потоки</label>
+                                                <input type="number" class="form-control" id="iperf3ParallelInput" min="1" max="32" value="1" onchange="saveIperf3Settings()" onblur="saveIperf3Settings()">
+                                                <div class="form-text" id="iperf3ParallelHint"></div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <label class="form-label fw-bold" for="iperf3PerDayInput" id="iperf3PerDayLabel">Замеров в сутки</label>
+                                                <input type="number" class="form-control" id="iperf3PerDayInput" min="1" max="6" value="4" onchange="saveIperf3Settings()">
+                                            </div>
+                                        </div>
+                                        <div class="row g-3 mb-2">
+                                            <div class="col-md-6">
+                                                <label class="form-label fw-bold" for="iperf3ProviderDownloadMbpsInput" id="iperf3ProviderDownloadLabel">Эталон — приём (Мбит/с)</label>
+                                                <input type="number" class="form-control" id="iperf3ProviderDownloadMbpsInput" min="0" step="0.1" placeholder="" onchange="saveIperf3Settings()" onblur="saveIperf3Settings()">
+                                            </div>
+                                            <div class="col-md-6">
+                                                <label class="form-label fw-bold" for="iperf3ProviderUploadMbpsInput" id="iperf3ProviderUploadLabel">Эталон — отдача (Мбит/с)</label>
+                                                <input type="number" class="form-control" id="iperf3ProviderUploadMbpsInput" min="0" step="0.1" placeholder="" onchange="saveIperf3Settings()" onblur="saveIperf3Settings()">
+                                            </div>
+                                        </div>
+                                        <p class="form-text mb-3" id="iperf3ProviderHint"></p>
+                                        <div class="mb-2">
+                                            <button type="button" class="btn btn-outline-danger btn-sm" id="iperf3ClearHistoryBtn" onclick="clearIperf3History()">
+                                                <i class="bi bi-trash me-1"></i><span id="iperf3ClearHistoryText">Очистить историю</span>
+                                            </button>
+                                        </div>
+                                        <div class="small" id="iperf3CliStatus"></div>
                                 </div>
                             </div>
                             <div class="tab-pane fade" id="settings-tab-telegram" role="tabpanel">

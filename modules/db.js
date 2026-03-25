@@ -79,6 +79,20 @@ function initSchema(database) {
     database.run(`CREATE INDEX IF NOT EXISTS idx_speedtest_run_at ON speedtest_results(run_at)`);
 
     database.run(`
+        CREATE TABLE IF NOT EXISTS iperf3_results (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            run_at TEXT NOT NULL,
+            download_mbps REAL,
+            upload_mbps REAL,
+            ping_ms REAL,
+            server_id TEXT,
+            server_name TEXT,
+            error TEXT
+        )
+    `);
+    database.run(`CREATE INDEX IF NOT EXISTS idx_iperf3_run_at ON iperf3_results(run_at)`);
+
+    database.run(`
         CREATE TABLE IF NOT EXISTS monitor_icon_styles (
             scope TEXT NOT NULL CHECK (scope IN ('service', 'vm')),
             entity_id INTEGER NOT NULL,

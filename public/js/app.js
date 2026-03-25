@@ -97,10 +97,10 @@ let setupWizardServerType = 'proxmox';
 let setupWizardListenersBound = false;
 let telegramRuleMessageModalBound = false;
 let setupWizardFinishMode = 'success';
-let clusterDashboardTiles = []; // [{ type: 'service'|'vmct'|'netdev'|'ups'|'speedtest'|'smart_sensor'|'truenas_server'|…, sourceId: 'type:id' }]
+let clusterDashboardTiles = []; // [{ type: 'service'|'vmct'|'netdev'|'ups'|'speedtest'|'iperf3'|'smart_sensor'|'truenas_server'|…, sourceId: 'type:id' }]
 let clusterDashboardTilesDirty = false;
 let clusterDashboardTilesSettingPresent = false;
-const CLUSTER_DASHBOARD_TILE_TYPES = ['service', 'vmct', 'netdev', 'ups', 'speedtest', 'truenas_server', 'truenas_pool', 'truenas_disk', 'truenas_service', 'truenas_app', 'smart_sensor'];
+const CLUSTER_DASHBOARD_TILE_TYPES = ['service', 'vmct', 'netdev', 'ups', 'speedtest', 'iperf3', 'truenas_server', 'truenas_pool', 'truenas_disk', 'truenas_service', 'truenas_app', 'smart_sensor'];
 /** Кэш конфигов для выпадающего списка плиток «датчик» (не только открытый редактор). */
 let smartSensorsConfigsForTiles = [];
 const MAX_CLUSTER_DASHBOARD_TILES = 12;
@@ -1428,6 +1428,14 @@ async function saveSettingsToServer(payload) {
     if (payload.speedtestHttpProxy !== undefined) body.speedtestHttpProxy = payload.speedtestHttpProxy;
     if (payload.speedtestHttpsProxy !== undefined) body.speedtestHttpsProxy = payload.speedtestHttpsProxy;
     if (payload.speedtestNoProxy !== undefined) body.speedtestNoProxy = payload.speedtestNoProxy;
+    if (payload.iperf3Enabled !== undefined) body.iperf3Enabled = !!payload.iperf3Enabled;
+    if (payload.iperf3Host !== undefined) body.iperf3Host = payload.iperf3Host;
+    if (payload.iperf3Port !== undefined) body.iperf3Port = payload.iperf3Port;
+    if (payload.iperf3DurationSec !== undefined) body.iperf3DurationSec = payload.iperf3DurationSec;
+    if (payload.iperf3Parallel !== undefined) body.iperf3Parallel = payload.iperf3Parallel;
+    if (payload.iperf3PerDay !== undefined) body.iperf3PerDay = payload.iperf3PerDay;
+    if (payload.iperf3ProviderDownloadMbps !== undefined) body.iperf3ProviderDownloadMbps = payload.iperf3ProviderDownloadMbps;
+    if (payload.iperf3ProviderUploadMbps !== undefined) body.iperf3ProviderUploadMbps = payload.iperf3ProviderUploadMbps;
     if (payload.telegramNotifyEnabled !== undefined) body.telegramNotifyEnabled = !!payload.telegramNotifyEnabled;
     if (payload.telegramNotifyIntervalSec !== undefined) body.telegramNotifyIntervalSec = payload.telegramNotifyIntervalSec;
     if (payload.telegramRoutes !== undefined) body.telegramRoutes = payload.telegramRoutes;
@@ -1565,6 +1573,7 @@ function openTrueNASCategoryMonitorFromMenu(kind) {
     const netdevSection = document.getElementById('netdevMonitorSection');
     const upsMonSection = document.getElementById('upsMonitorSection');
     const speedtestSection = document.getElementById('speedtestMonitorSection');
+    const iperf3Section = document.getElementById('iperf3MonitorSection');
     const smartSection = document.getElementById('smartSensorsMonitorSection');
     const backupsMon = document.getElementById('backupsMonitorSection');
 
@@ -1577,6 +1586,7 @@ function openTrueNASCategoryMonitorFromMenu(kind) {
     if (netdevSection) netdevSection.style.display = 'none';
     if (upsMonSection) upsMonSection.style.display = 'none';
     if (speedtestSection) speedtestSection.style.display = 'none';
+    if (iperf3Section) iperf3Section.style.display = 'none';
     if (smartSection) smartSection.style.display = 'none';
     if (backupsMon) backupsMon.style.display = 'none';
 
@@ -1649,6 +1659,7 @@ function openNetdevMonitorFromMenu() {
     const netdevSection = document.getElementById('netdevMonitorSection');
     const upsMonSection = document.getElementById('upsMonitorSection');
     const speedtestSection = document.getElementById('speedtestMonitorSection');
+    const iperf3Section = document.getElementById('iperf3MonitorSection');
     const smartSection = document.getElementById('smartSensorsMonitorSection');
     const backupsMon = document.getElementById('backupsMonitorSection');
     const configSection = document.getElementById('configSection');
@@ -1660,6 +1671,7 @@ function openNetdevMonitorFromMenu() {
     if (vmsSection) vmsSection.style.display = 'none';
     if (upsMonSection) upsMonSection.style.display = 'none';
     if (speedtestSection) speedtestSection.style.display = 'none';
+    if (iperf3Section) iperf3Section.style.display = 'none';
     if (smartSection) smartSection.style.display = 'none';
     if (backupsMon) backupsMon.style.display = 'none';
     if (netdevSection) netdevSection.style.display = 'block';
@@ -1683,6 +1695,7 @@ function openSpeedtestMonitorFromMenu() {
     const servicesSection = document.getElementById('servicesMonitorSection');
     const vmsSection = document.getElementById('vmsMonitorSection');
     const speedtestSection = document.getElementById('speedtestMonitorSection');
+    const iperf3Section = document.getElementById('iperf3MonitorSection');
     const netdevSection = document.getElementById('netdevMonitorSection');
     const upsMonSection = document.getElementById('upsMonitorSection');
     const smartSection = document.getElementById('smartSensorsMonitorSection');
@@ -1698,9 +1711,37 @@ function openSpeedtestMonitorFromMenu() {
     if (upsMonSection) upsMonSection.style.display = 'none';
     if (smartSection) smartSection.style.display = 'none';
     if (backupsMon) backupsMon.style.display = 'none';
+    if (iperf3Section) iperf3Section.style.display = 'none';
     if (speedtestSection) speedtestSection.style.display = 'block';
 
     updateSpeedtestDashboard().catch(() => {});
+}
+
+function openIperf3MonitorFromMenu() {
+    const dashboardSection = document.getElementById('dashboardSection');
+    const servicesSection = document.getElementById('servicesMonitorSection');
+    const vmsSection = document.getElementById('vmsMonitorSection');
+    const speedtestSection = document.getElementById('speedtestMonitorSection');
+    const iperf3Section = document.getElementById('iperf3MonitorSection');
+    const netdevSection = document.getElementById('netdevMonitorSection');
+    const upsMonSection = document.getElementById('upsMonitorSection');
+    const smartSection = document.getElementById('smartSensorsMonitorSection');
+    const backupsMon = document.getElementById('backupsMonitorSection');
+    const configSection = document.getElementById('configSection');
+
+    hideAllTrueNASMonitorSections();
+    if (dashboardSection) dashboardSection.style.display = 'none';
+    if (configSection) configSection.style.display = 'none';
+    if (servicesSection) servicesSection.style.display = 'none';
+    if (vmsSection) vmsSection.style.display = 'none';
+    if (netdevSection) netdevSection.style.display = 'none';
+    if (upsMonSection) upsMonSection.style.display = 'none';
+    if (smartSection) smartSection.style.display = 'none';
+    if (backupsMon) backupsMon.style.display = 'none';
+    if (speedtestSection) speedtestSection.style.display = 'none';
+    if (iperf3Section) iperf3Section.style.display = 'block';
+
+    updateIperf3Dashboard().catch(() => {});
 }
 
 function closeSpeedtestMonitor() {
@@ -1714,11 +1755,23 @@ function closeSpeedtestMonitor() {
     updateSpeedtestDashboard().catch(() => {});
 }
 
+function closeIperf3Monitor() {
+    const dashboardSection = document.getElementById('dashboardSection');
+    const iperf3Section = document.getElementById('iperf3MonitorSection');
+    const backupsMon = document.getElementById('backupsMonitorSection');
+    if (iperf3Section) iperf3Section.style.display = 'none';
+    if (backupsMon) backupsMon.style.display = 'none';
+    hideAllTrueNASMonitorSections();
+    if (dashboardSection) dashboardSection.style.display = '';
+    updateIperf3Dashboard().catch(() => {});
+}
+
 function openUpsMonitorFromMenu() {
     const dashboardSection = document.getElementById('dashboardSection');
     const servicesSection = document.getElementById('servicesMonitorSection');
     const vmsSection = document.getElementById('vmsMonitorSection');
     const speedtestSection = document.getElementById('speedtestMonitorSection');
+    const iperf3Section = document.getElementById('iperf3MonitorSection');
     const netdevSection = document.getElementById('netdevMonitorSection');
     const upsMonSection = document.getElementById('upsMonitorSection');
     const smartSection = document.getElementById('smartSensorsMonitorSection');
@@ -1732,6 +1785,7 @@ function openUpsMonitorFromMenu() {
     if (vmsSection) vmsSection.style.display = 'none';
     if (netdevSection) netdevSection.style.display = 'none';
     if (speedtestSection) speedtestSection.style.display = 'none';
+    if (iperf3Section) iperf3Section.style.display = 'none';
     if (smartSection) smartSection.style.display = 'none';
     if (backupsMon) backupsMon.style.display = 'none';
     if (upsMonSection) upsMonSection.style.display = 'block';
@@ -1755,6 +1809,7 @@ function openSmartSensorsMonitorFromMenu() {
     const servicesSection = document.getElementById('servicesMonitorSection');
     const vmsSection = document.getElementById('vmsMonitorSection');
     const speedtestSection = document.getElementById('speedtestMonitorSection');
+    const iperf3Section = document.getElementById('iperf3MonitorSection');
     const netdevSection = document.getElementById('netdevMonitorSection');
     const upsMonSection = document.getElementById('upsMonitorSection');
     const smartSection = document.getElementById('smartSensorsMonitorSection');
@@ -1769,6 +1824,7 @@ function openSmartSensorsMonitorFromMenu() {
     if (netdevSection) netdevSection.style.display = 'none';
     if (upsMonSection) upsMonSection.style.display = 'none';
     if (speedtestSection) speedtestSection.style.display = 'none';
+    if (iperf3Section) iperf3Section.style.display = 'none';
     if (backupsMon) backupsMon.style.display = 'none';
     if (smartSection) smartSection.style.display = 'block';
 
@@ -2373,6 +2429,7 @@ function updateUILanguage() {
         menuVmsMonitorText: 'menuVmsMonitorText',
         menuNetdevMonitorText: 'monitorScreenNetdev',
         menuSpeedtestMonitorText: 'monitorScreenSpeedtest',
+        menuIperf3MonitorText: 'monitorScreenIperf3',
         menuUpsMonitorText: 'monitorScreenUps',
         menuSmartSensorsMonitorText: 'monitorScreenSmartSensors',
         menuTruenasPoolsMonitorText: 'menuTruenasPoolsMonitor',
@@ -2387,6 +2444,7 @@ function updateUILanguage() {
         settingsNavHostMetrics: 'settingsNavHostMetrics',
         settingsNavSmartSensors: 'settingsNavSmartSensors',
         settingsNavSpeedtest: 'settingsNavSpeedtest',
+        settingsNavIperf3: 'settingsNavIperf3',
         settingsNavTelegramIntegration: 'settingsNavTelegramIntegration',
         settingsTelegramTitle: 'settingsTelegramTitle',
         settingsTelegramHint: 'settingsTelegramHint',
@@ -2783,11 +2841,49 @@ function updateUILanguage() {
     setText('speedtestMonitorAvgLabel', t('speedtestAvgLabel'));
     setText('speedtestMonitorMinLabel', t('speedtestMinLabel'));
     setText('speedtestMonitorMaxLabel', t('speedtestMaxLabel'));
+
+    setText('iperf3SettingsTitle', t('iperf3SettingsTitle'));
+    setText('iperf3SettingsHint', t('iperf3SettingsHint'));
+    setText('iperf3EnabledLabel', t('iperf3EnabledLabel'));
+    setText('iperf3HostLabel', t('iperf3HostLabel'));
+    setText('iperf3HostHint', t('iperf3HostHint'));
+    setText('iperf3PortLabel', t('iperf3PortLabel'));
+    setText('iperf3PortHint', t('iperf3PortHint'));
+    setText('iperf3DurationLabel', t('iperf3DurationLabel'));
+    setText('iperf3DurationHint', t('iperf3DurationHint'));
+    setText('iperf3ParallelLabel', t('iperf3ParallelLabel'));
+    setText('iperf3ParallelHint', t('iperf3ParallelHint'));
+    setText('iperf3PerDayLabel', t('iperf3PerDayLabel'));
+    setText('iperf3ProviderDownloadLabel', t('iperf3ProviderDownloadLabel'));
+    setText('iperf3ProviderUploadLabel', t('iperf3ProviderUploadLabel'));
+    setText('iperf3ProviderHint', t('iperf3ProviderHint'));
+    setText('iperf3RunNowText', t('iperf3RunNowText'));
+    setText('iperf3ClearHistoryText', t('iperf3ClearHistoryText'));
+    setText('iperf3DashboardSectionTitle', t('dashboardIperf3Title'));
+    setText('iperf3MonitorLastRunLabel', t('speedtestLastRunLabel'));
+    setText('iperf3MonitorLastDownloadLabel', t('speedtestDownloadShort'));
+    setText('iperf3MonitorLastUploadLabel', t('speedtestUploadShort'));
+    setText('iperf3MonitorLastPingLabel', t('speedtestPingLabel'));
+    setText('iperf3MonitorTodayDownloadSectionTitle', t('speedtestTodayDownloadSectionTitle'));
+    setText('iperf3MonitorLast24hTitle', t('speedtestRunsTodaySectionTitle'));
+    setText('iperf3Monitor24hColTime', t('speedtest24hColTime'));
+    setText('iperf3Monitor24hColDownload', t('speedtestDownloadShort'));
+    setText('iperf3Monitor24hColUpload', t('speedtestUploadShort'));
+    setText('iperf3Monitor24hColPing', t('speedtestPingLabel'));
+    setText('iperf3Monitor24hColServer', t('speedtest24hColServer'));
+    setText('iperf3Monitor24hColDevDownload', t('speedtest24hColDevDownload'));
+    setText('iperf3Monitor24hColDevUpload', t('speedtest24hColDevUpload'));
+    setText('iperf3MonitorLast24hEmpty', t('speedtestRunsTodayEmpty'));
+    setText('iperf3MonitorAvgLabel', t('speedtestAvgLabel'));
+    setText('iperf3MonitorMinLabel', t('speedtestMinLabel'));
+    setText('iperf3MonitorMaxLabel', t('speedtestMaxLabel'));
+
     setPlaceholder('settingsServiceNameInput', t('settingsServicePlaceholderName'));
     setPlaceholder('settingsServiceHostInput', t('settingsServicePlaceholderHost'));
     setPlaceholder('upsHostInput', t('upsHostPlaceholder'));
     setPlaceholder('netdevHostInput', t('netdevHostPlaceholder'));
     setPlaceholder('speedtestServerInput', t('speedtestServerPlaceholder'));
+    setPlaceholder('iperf3HostInput', t('iperf3HostPlaceholder'));
 
     [
         'upsSnmpOidChargeInput',
@@ -2807,6 +2903,7 @@ function updateUILanguage() {
     localizeYesNoSelect('netdevShowOnDashboardSelect');
     localizeYesNoSelect('netdevShowOnMonitorSelect');
     localizeYesNoSelect('speedtestEnabledSelect');
+    localizeYesNoSelect('iperf3EnabledSelect');
     localizeServiceTypeSelect();
     localizeUpsTypeSelect();
     syncSettingsConnectionStatusText();
@@ -3170,6 +3267,10 @@ document.addEventListener('DOMContentLoaded', async function() {
     const speedtestNav = document.getElementById('settings-nav-speedtest');
     if (speedtestNav) {
         speedtestNav.addEventListener('shown.bs.tab', () => updateSpeedtestDashboard().catch(() => {}));
+    }
+    const iperf3Nav = document.getElementById('settings-nav-iperf3');
+    if (iperf3Nav) {
+        iperf3Nav.addEventListener('shown.bs.tab', () => updateIperf3Dashboard().catch(() => {}));
     }
     const homeTabs = document.getElementById('myTab');
     if (homeTabs) {
@@ -4874,6 +4975,7 @@ function normalizeClusterDashboardTile(raw) {
     if (!CLUSTER_DASHBOARD_TILE_TYPES.includes(type)) return null;
     let sourceId = String(tile.sourceId || '').trim();
     if (type === 'speedtest') sourceId = 'speedtest:default';
+    if (type === 'iperf3') sourceId = 'iperf3:default';
     if (type === 'ups') {
         const m = /^ups:(\d+)$/.exec(sourceId);
         if (!m) return null;
@@ -4918,6 +5020,7 @@ function getClusterDashboardTileTypeLabel(type) {
     if (type === 'netdev') return t('settingsClusterTileTypeNetdev');
     if (type === 'ups') return t('settingsClusterTileTypeUps');
     if (type === 'speedtest') return t('settingsClusterTileTypeSpeedtest');
+    if (type === 'iperf3') return t('settingsClusterTileTypeIperf3');
     if (type === 'smart_sensor') return t('settingsClusterTileTypeSmartSensor');
     if (type === 'truenas_server') return 'TrueNAS Server';
     if (type === 'truenas_pool') return 'TrueNAS Pool';
@@ -5000,6 +5103,13 @@ function getClusterDashboardTileSourceOptions(type) {
         return [{
             value: 'speedtest:default',
             label: t('dashboardSpeedtestTitle') || 'Speedtest'
+        }];
+    }
+
+    if (type === 'iperf3') {
+        return [{
+            value: 'iperf3:default',
+            label: t('dashboardIperf3Title') || 'iperf3'
         }];
     }
 
@@ -5179,6 +5289,7 @@ function addClusterDashboardTile() {
     const firstSource = getClusterDashboardTileSourceOptions(selectedType)[0];
     const fallbackSourceByType = {
         speedtest: 'speedtest:default',
+        iperf3: 'iperf3:default',
         ups: 'ups:1',
         netdev: 'netdev:1',
         service: 'service:default',
@@ -5208,6 +5319,7 @@ function updateClusterDashboardTileType(index, nextType) {
     const current = clusterDashboardTiles[index];
     const fallbackSourceByType = {
         speedtest: 'speedtest:default',
+        iperf3: 'iperf3:default',
         ups: 'ups:1',
         netdev: 'netdev:1',
         service: 'service:default',
@@ -7127,6 +7239,21 @@ function speedtestDescribeRunFailure(data) {
     return t('speedtestRunFailedGeneric') || 'Measurement failed';
 }
 
+function iperf3DescribeRunFailure(data) {
+    if (!data || data.ok !== false) return '';
+    const code = data.error;
+    if (code === 'cli_missing') {
+        return t('iperf3CliMissing') || 'CLI: not found';
+    }
+    if (code === 'no_host') {
+        return t('iperf3ErrorNoHost') || 'iperf3 server host is not configured';
+    }
+    if (typeof code === 'string' && code.trim()) {
+        return code.trim();
+    }
+    return t('speedtestRunFailedGeneric') || 'Measurement failed';
+}
+
 function formatSpeedtestMbps(v) {
     if (v == null || !Number.isFinite(Number(v))) return '—';
     const n = Math.round(Number(v) * 10) / 10;
@@ -7469,6 +7596,272 @@ async function updateSpeedtestDashboard() {
         clearSpeedtestLastRunDeviationRows();
         renderSpeedtestRunsTodayTable(null, { loadFailed: true });
         const cliEl = document.getElementById('speedtestCliStatus');
+        if (cliEl) {
+            cliEl.textContent = msg;
+            cliEl.className = 'small text-danger';
+        }
+    }
+}
+
+function clearIperf3LastRunDeviationRows() {
+    setSpeedtestLastRunDeviationRow(
+        'iperf3MonitorLastDownloadDevWrap',
+        'iperf3MonitorLastDownloadDevPct',
+        'iperf3MonitorLastDownloadDevPlan',
+        null,
+        NaN,
+        false
+    );
+    setSpeedtestLastRunDeviationRow(
+        'iperf3MonitorLastUploadDevWrap',
+        'iperf3MonitorLastUploadDevPct',
+        'iperf3MonitorLastUploadDevPlan',
+        null,
+        NaN,
+        false
+    );
+}
+
+function renderIperf3RunsTodayTable(runs, options = {}) {
+    const tbody = document.getElementById('iperf3MonitorLast24hBody');
+    const tableWrap = document.getElementById('iperf3MonitorLast24hTableWrap');
+    const emptyEl = document.getElementById('iperf3MonitorLast24hEmpty');
+    if (!tbody || !tableWrap || !emptyEl) return;
+    tbody.replaceChildren();
+    const hidePlanCols = () => {
+        const thDevDl = document.getElementById('iperf3Monitor24hColDevDownload');
+        const thDevUl = document.getElementById('iperf3Monitor24hColDevUpload');
+        if (thDevDl) thDevDl.classList.add('d-none');
+        if (thDevUl) thDevUl.classList.add('d-none');
+    };
+    if (options.loadFailed) {
+        hidePlanCols();
+        tableWrap.classList.add('d-none');
+        emptyEl.classList.remove('d-none');
+        emptyEl.textContent = t('iperf3SummaryLoadError') || 'Could not load iperf3 data';
+        return;
+    }
+    const list = Array.isArray(runs) ? runs : [];
+    if (!list.length) {
+        hidePlanCols();
+        tableWrap.classList.add('d-none');
+        emptyEl.classList.remove('d-none');
+        emptyEl.textContent = t('speedtestRunsTodayEmpty') || 'No measurements today yet.';
+        return;
+    }
+    tableWrap.classList.remove('d-none');
+    emptyEl.classList.add('d-none');
+    const planDl = Number(options.planDl);
+    const planUl = Number(options.planUl);
+    const showDevDl = Number.isFinite(planDl) && planDl > 0;
+    const showDevUl = Number.isFinite(planUl) && planUl > 0;
+    const thDevDl = document.getElementById('iperf3Monitor24hColDevDownload');
+    const thDevUl = document.getElementById('iperf3Monitor24hColDevUpload');
+    if (thDevDl) thDevDl.classList.toggle('d-none', !showDevDl);
+    if (thDevUl) thDevUl.classList.toggle('d-none', !showDevUl);
+    const frag = document.createDocumentFragment();
+    for (const r of list) {
+        const tr = document.createElement('tr');
+        tr.className = 'speedtest-monitor__row';
+        const tdTime = document.createElement('td');
+        const tdDl = document.createElement('td');
+        const tdUl = document.createElement('td');
+        const tdPing = document.createElement('td');
+        const tdSrv = document.createElement('td');
+        tdTime.className = 'speedtest-monitor__cell speedtest-monitor__cell--time text-nowrap';
+        tdDl.className = 'speedtest-monitor__cell speedtest-monitor__cell--num text-end';
+        tdUl.className = 'speedtest-monitor__cell speedtest-monitor__cell--num text-end';
+        tdPing.className = 'speedtest-monitor__cell speedtest-monitor__cell--num text-end';
+        tdSrv.className = 'speedtest-monitor__cell speedtest-monitor__cell--note text-break';
+        const runAt = r && r.runAt;
+        tdTime.textContent = runAt ? new Date(runAt).toLocaleString() : '—';
+        const err = r && r.error;
+        if (err) {
+            tdDl.textContent = '—';
+            tdUl.textContent = '—';
+            tdPing.textContent = '—';
+            tdSrv.textContent = String(err).slice(0, 200);
+            tdSrv.classList.add('text-danger');
+        } else {
+            tdDl.textContent = formatSpeedtestMbps(r.downloadMbps);
+            tdUl.textContent = formatSpeedtestMbps(r.uploadMbps);
+            tdPing.textContent = formatSpeedtestPing(r.pingMs);
+            const sn = r.serverName;
+            tdSrv.textContent = sn ? String(sn) : '—';
+        }
+        tr.appendChild(tdTime);
+        tr.appendChild(tdDl);
+        if (showDevDl) {
+            const td = document.createElement('td');
+            const pct = err ? '—' : formatSpeedtestDeviationPct(r.downloadMbps, planDl);
+            td.className = `speedtest-monitor__cell speedtest-monitor__cell--dev text-end ${speedtestDeviationTextClass(r && r.downloadMbps, planDl, pct)}`;
+            td.textContent = pct == null ? '—' : pct;
+            tr.appendChild(td);
+        }
+        tr.appendChild(tdUl);
+        if (showDevUl) {
+            const td = document.createElement('td');
+            const pct = err ? '—' : formatSpeedtestDeviationPct(r.uploadMbps, planUl);
+            td.className = `speedtest-monitor__cell speedtest-monitor__cell--dev text-end ${speedtestDeviationTextClass(r && r.uploadMbps, planUl, pct)}`;
+            td.textContent = pct == null ? '—' : pct;
+            tr.appendChild(td);
+        }
+        tr.appendChild(tdPing);
+        tr.appendChild(tdSrv);
+        frag.appendChild(tr);
+    }
+    tbody.appendChild(frag);
+}
+
+function isIperf3SettingsTabActive() {
+    const pane = document.getElementById('settings-tab-iperf3');
+    return !!(pane && pane.classList.contains('show'));
+}
+
+async function updateIperf3Dashboard() {
+    const iperf3MonSection = document.getElementById('iperf3MonitorSection');
+    const onDedicatedIperf3Monitor = (monitorMode && monitorCurrentView === 'iperf3')
+        || (!!iperf3MonSection && iperf3MonSection.style.display !== 'none');
+    const shouldFetchIperf3 = onDedicatedIperf3Monitor || isIperf3SettingsTabActive();
+    const setEl = (id, text) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = text;
+    };
+    if (!shouldFetchIperf3) {
+        return;
+    }
+    try {
+        const res = await fetch('/api/iperf3/summary');
+        const { data: summary, parseFailed } = await parseHttpJsonResponse(res);
+        if (parseFailed) {
+            throw new Error(t('iperf3ErrorBadResponse') || 'Invalid server response');
+        }
+        if (!res.ok) {
+            throw new Error((summary && summary.error) || `HTTP ${res.status}`);
+        }
+
+        const enabled = !!(summary.enabled === true || summary.enabled === '1' || summary.enabled === 1);
+
+        const last = summary.last;
+        const hasHistory = !!(last && last.runAt);
+
+        iperf3MonitorConfigured = enabled || hasHistory;
+
+        if (!enabled && !hasHistory) {
+            setEl('iperf3MonitorLastRun', '—');
+            setEl('iperf3MonitorLastDownload', '—');
+            setEl('iperf3MonitorLastUpload', '—');
+            setEl('iperf3MonitorLastPing', '—');
+            setEl('iperf3MonitorAvg', '—');
+            setEl('iperf3MonitorMin', '—');
+            setEl('iperf3MonitorMax', '—');
+            setEl('iperf3MonitorExtra', t('backupNoData') || 'Нет данных');
+            setSpeedtestDownloadBarPercent('iperf3MonitorAvgBar', null, 1);
+            setSpeedtestDownloadBarPercent('iperf3MonitorMinBar', null, 1);
+            setSpeedtestDownloadBarPercent('iperf3MonitorMaxBar', null, 1);
+            clearIperf3LastRunDeviationRows();
+            renderIperf3RunsTodayTable([]);
+            return;
+        }
+
+        const lastTime = last && last.runAt ? new Date(last.runAt).toLocaleString() : '—';
+        const lastOk = !!(last && !last.error);
+        let lastRunDisplay = lastTime;
+        if (last && last.error) {
+            lastRunDisplay = lastTime !== '—' ? `${lastTime} · ${last.error}` : String(last.error);
+        }
+
+        const td = summary.today || {};
+        const dl = td.download || {};
+        const ul = td.upload || {};
+        const pDl = summary.providerDownloadMbps != null ? Number(summary.providerDownloadMbps) : NaN;
+        const pUl = summary.providerUploadMbps != null ? Number(summary.providerUploadMbps) : NaN;
+
+        let extra = '';
+        if (last && last.serverName) {
+            extra = String(last.serverName);
+        }
+        if (ul.avg != null) {
+            extra += (extra ? ' · ' : '') + `${t('iperf3UploadAvgToday')}: ${formatSpeedtestMbps(ul.avg)}`;
+        }
+
+        setSpeedtestLastRunDeviationRow(
+            'iperf3MonitorLastDownloadDevWrap',
+            'iperf3MonitorLastDownloadDevPct',
+            'iperf3MonitorLastDownloadDevPlan',
+            lastOk && last ? last.downloadMbps : null,
+            pDl,
+            lastOk
+        );
+        setSpeedtestLastRunDeviationRow(
+            'iperf3MonitorLastUploadDevWrap',
+            'iperf3MonitorLastUploadDevPct',
+            'iperf3MonitorLastUploadDevPlan',
+            lastOk && last ? last.uploadMbps : null,
+            pUl,
+            lastOk
+        );
+
+        setEl('iperf3MonitorLastRun', lastRunDisplay);
+        setEl(
+            'iperf3MonitorLastDownload',
+            lastOk && last.downloadMbps != null ? formatSpeedtestMbps(last.downloadMbps) : '—'
+        );
+        setEl(
+            'iperf3MonitorLastUpload',
+            lastOk && last.uploadMbps != null ? formatSpeedtestMbps(last.uploadMbps) : '—'
+        );
+        setEl(
+            'iperf3MonitorLastPing',
+            lastOk && last.pingMs != null ? formatSpeedtestPing(last.pingMs) : '—'
+        );
+        setEl('iperf3MonitorAvg', dl.avg != null ? formatSpeedtestMbps(dl.avg) : '—');
+        setEl('iperf3MonitorMin', dl.min != null ? formatSpeedtestMbps(dl.min) : '—');
+        setEl('iperf3MonitorMax', dl.max != null ? formatSpeedtestMbps(dl.max) : '—');
+        setEl('iperf3MonitorExtra', extra);
+
+        const dlAvg = dl.avg != null ? Number(dl.avg) : NaN;
+        const dlMin = dl.min != null ? Number(dl.min) : NaN;
+        const dlMax = dl.max != null ? Number(dl.max) : NaN;
+        const scaleMax = Math.max(
+            Number.isFinite(dlAvg) ? dlAvg : 0,
+            Number.isFinite(dlMin) ? dlMin : 0,
+            Number.isFinite(dlMax) ? dlMax : 0,
+            Number.isFinite(pDl) && pDl > 0 ? pDl : 0,
+            1
+        );
+        setSpeedtestDownloadBarPercent('iperf3MonitorAvgBar', dl.avg, scaleMax);
+        setSpeedtestDownloadBarPercent('iperf3MonitorMinBar', dl.min, scaleMax);
+        setSpeedtestDownloadBarPercent('iperf3MonitorMaxBar', dl.max, scaleMax);
+
+        renderIperf3RunsTodayTable(summary.runsToday, { planDl: pDl, planUl: pUl });
+
+        const cliEl = document.getElementById('iperf3CliStatus');
+        if (cliEl) {
+            const cliText = summary.cliAvailable
+                ? (t('iperf3CliOk') || 'CLI: OK')
+                : (t('iperf3CliMissing') || 'CLI: not found');
+            cliEl.textContent = cliText;
+            cliEl.className = 'small ' + (summary.cliAvailable ? 'text-success' : 'text-warning');
+        }
+    } catch (e) {
+        setEl('iperf3MonitorLastRun', '—');
+        setEl('iperf3MonitorLastDownload', '—');
+        setEl('iperf3MonitorLastUpload', '—');
+        setEl('iperf3MonitorLastPing', '—');
+        setEl('iperf3MonitorAvg', '—');
+        setEl('iperf3MonitorMin', '—');
+        setEl('iperf3MonitorMax', '—');
+        const prefix = t('iperf3SummaryLoadError') || 'Could not load iperf3 data';
+        const detail = e instanceof Error && e.message ? e.message : speedtestNetworkErrorMessage(e);
+        const msg = detail ? `${prefix}: ${detail}` : prefix;
+        setEl('iperf3MonitorExtra', msg);
+        setSpeedtestDownloadBarPercent('iperf3MonitorAvgBar', null, 1);
+        setSpeedtestDownloadBarPercent('iperf3MonitorMinBar', null, 1);
+        setSpeedtestDownloadBarPercent('iperf3MonitorMaxBar', null, 1);
+        clearIperf3LastRunDeviationRows();
+        renderIperf3RunsTodayTable(null, { loadFailed: true });
+        const cliEl = document.getElementById('iperf3CliStatus');
         if (cliEl) {
             cliEl.textContent = msg;
             cliEl.className = 'small text-danger';
@@ -7822,6 +8215,80 @@ function buildClusterSpeedtestTileHtml(summary) {
     );
 }
 
+function buildClusterIperf3TileHtml(summary) {
+    const title = t('dashboardIperf3Title') || 'iperf3';
+    if (!summary) {
+        return buildClusterDashboardUnavailableTile(
+            title,
+            t('speedtestErrorNetwork') || t('backupNoData') || 'Нет данных'
+        );
+    }
+    if (summary.error) {
+        const hint = t('iperf3SummaryLoadError') || 'Could not load iperf3 data';
+        return buildClusterDashboardUnavailableTile(
+            title,
+            `${hint}: ${String(summary.error)}`
+        );
+    }
+    if (!summary.enabled) {
+        return buildClusterDashboardUnavailableTile(title, t('backupNoData') || 'Нет данных');
+    }
+    const last = summary.last || {};
+    const today = summary.today || {};
+    const download = today.download || {};
+    const upload = today.upload || {};
+    const badgeClass = last.error ? 'bg-warning text-dark' : 'bg-success';
+    const badgeText = last.error ? (t('serverError') || 'Ошибка') : (t('statusOkShort') || 'OK');
+    const lastRun = last.runAt ? new Date(last.runAt).toLocaleString() : '—';
+    const lastOk = !last.error;
+    const lastDl = lastOk ? formatSpeedtestMbps(last.downloadMbps) : '—';
+    const lastUl = lastOk ? formatSpeedtestMbps(last.uploadMbps) : '—';
+    const pingText = lastOk ? formatSpeedtestPing(last.pingMs) : '—';
+    const bodyHtml = [
+        buildClusterDashboardMetricCell(t('speedtestLastRunLabel') || 'Last run', lastRun, null, null, 'col-6'),
+        buildClusterDashboardMetricCell(t('speedtestDownloadShort') || 'Download', lastDl, null, null, 'col-6'),
+        buildClusterDashboardMetricCell(t('speedtestUploadShort') || 'Upload', lastUl, null, null, 'col-6 mt-2'),
+        buildClusterDashboardMetricCell(t('speedtestPingLabel') || 'Ping', pingText, null, null, 'col-6 mt-2'),
+        buildClusterDashboardMetricCell(t('speedtestAvgLabel') || 'Average', formatSpeedtestMbps(download.avg), null, null, 'col-6 mt-2'),
+        buildClusterDashboardMetricCell(t('iperf3UploadAvgToday') || 'Upload avg', formatSpeedtestMbps(upload.avg), null, null, 'col-6 mt-2')
+    ].join('');
+    const planBits = [];
+    if (summary.providerDownloadMbps != null) {
+        const v = Number(summary.providerDownloadMbps);
+        if (Number.isFinite(v) && v > 0) {
+            planBits.push(`${t('speedtestPlanDownloadShort')}: ${formatSpeedtestMbps(v)}`);
+        }
+    }
+    if (summary.providerUploadMbps != null) {
+        const v = Number(summary.providerUploadMbps);
+        if (Number.isFinite(v) && v > 0) {
+            planBits.push(`${t('speedtestPlanUploadShort')}: ${formatSpeedtestMbps(v)}`);
+        }
+    }
+    const planLine = planBits.join(' · ');
+    const devLastBits = [];
+    if (lastOk) {
+        const pDlv = summary.providerDownloadMbps != null ? Number(summary.providerDownloadMbps) : NaN;
+        const pUlv = summary.providerUploadMbps != null ? Number(summary.providerUploadMbps) : NaN;
+        const dd = formatSpeedtestDeviationPct(last.downloadMbps, pDlv);
+        if (dd != null) devLastBits.push(`${t('speedtestPlanDownloadShort')} ${dd}`);
+        const du = formatSpeedtestDeviationPct(last.uploadMbps, pUlv);
+        if (du != null) devLastBits.push(`${t('speedtestPlanUploadShort')} ${du}`);
+    }
+    const devLastLine = devLastBits.length
+        ? `${t('speedtestDeviationLastRunShort')}: ${devLastBits.join(' · ')}`
+        : '';
+    const footer = [planLine, devLastLine, last.serverName ? escapeHtml(String(last.serverName)) : '']
+        .filter(Boolean)
+        .join(' · ');
+    return buildClusterDashboardTileShell(
+        `<i class="bi bi-arrow-left-right text-primary me-2 flex-shrink-0" aria-hidden="true"></i><span class="text-truncate">${escapeHtml(title)}</span>`,
+        `<span class="badge ${badgeClass}">${escapeHtml(badgeText)}</span>`,
+        bodyHtml,
+        footer
+    );
+}
+
 function buildClusterTrueNASPoolTileHtml(tile) {
     if (!Array.isArray(lastTrueNASOverviewData?.pools)) {
         return buildClusterDashboardUnavailableTile('TrueNAS Pool', t('backupNoData') || 'Нет данных');
@@ -7975,6 +8442,7 @@ async function renderClusterDashboardTiles() {
     const needNetdev = tiles.some((tile) => tile.type === 'netdev');
     const needUps = tiles.some((tile) => tile.type === 'ups');
     const needSpeedtest = tiles.some((tile) => tile.type === 'speedtest');
+    const needIperf3 = tiles.some((tile) => tile.type === 'iperf3');
 
     const fetchJson = async (url) => {
         try {
@@ -7987,10 +8455,11 @@ async function renderClusterDashboardTiles() {
     };
 
     const needTrueNASOverview = tiles.some((tile) => ['truenas_server', 'truenas_pool', 'truenas_disk', 'truenas_service', 'truenas_app'].includes(tile.type));
-    const [netdevPayload, upsPayload, speedtestSummary, truenasOverview] = await Promise.all([
+    const [netdevPayload, upsPayload, speedtestSummary, iperf3Summary, truenasOverview] = await Promise.all([
         needNetdev ? fetchJson('/api/netdevices/current') : Promise.resolve(null),
         needUps ? fetchJson('/api/ups/current') : Promise.resolve(null),
         needSpeedtest ? fetchJson('/api/speedtest/summary') : Promise.resolve(null),
+        needIperf3 ? fetchJson('/api/iperf3/summary') : Promise.resolve(null),
         needTrueNASOverview ? fetchJson('/api/truenas/overview') : Promise.resolve(null)
     ]);
     if (truenasOverview && !truenasOverview.error) lastTrueNASOverviewData = truenasOverview;
@@ -8001,6 +8470,7 @@ async function renderClusterDashboardTiles() {
         if (tile.type === 'netdev') return buildClusterNetdevTileHtml(tile, netdevPayload);
         if (tile.type === 'ups') return buildClusterUpsTileHtml(tile, upsPayload);
         if (tile.type === 'speedtest') return buildClusterSpeedtestTileHtml(speedtestSummary);
+        if (tile.type === 'iperf3') return buildClusterIperf3TileHtml(iperf3Summary);
         if (tile.type === 'truenas_server') return buildClusterTrueNASServerTileHtml(tile);
         if (tile.type === 'truenas_pool') return buildClusterTrueNASPoolTileHtml(tile);
         if (tile.type === 'truenas_disk') return buildClusterTrueNASDiskTileHtml(tile);
@@ -8038,6 +8508,7 @@ async function renderTilesMonitorScreen(targetGridId = 'tilesMonitorGrid') {
     const needNetdev = tiles.some((tile) => tile.type === 'netdev');
     const needUps = tiles.some((tile) => tile.type === 'ups');
     const needSpeedtest = tiles.some((tile) => tile.type === 'speedtest');
+    const needIperf3 = tiles.some((tile) => tile.type === 'iperf3');
     const needSmartSensors = tiles.some((tile) => tile.type === 'smart_sensor');
     const needTrueNASOverview = tiles.some((tile) => ['truenas_server', 'truenas_pool', 'truenas_disk', 'truenas_service', 'truenas_app'].includes(tile.type));
 
@@ -8051,10 +8522,11 @@ async function renderTilesMonitorScreen(targetGridId = 'tilesMonitorGrid') {
         }
     };
 
-    const [netdevPayload, upsPayload, speedtestSummary, smartSensorsPayload, truenasOverview] = await Promise.all([
+    const [netdevPayload, upsPayload, speedtestSummary, iperf3Summary, smartSensorsPayload, truenasOverview] = await Promise.all([
         needNetdev ? fetchJson('/api/netdevices/current') : Promise.resolve(null),
         needUps ? fetchJson('/api/ups/current') : Promise.resolve(null),
         needSpeedtest ? fetchJson('/api/speedtest/summary') : Promise.resolve(null),
+        needIperf3 ? fetchJson('/api/iperf3/summary') : Promise.resolve(null),
         needSmartSensors ? fetchJson('/api/smart-sensors/current') : Promise.resolve(null),
         needTrueNASOverview ? fetchJson('/api/truenas/overview') : Promise.resolve(null)
     ]);
@@ -8067,6 +8539,7 @@ async function renderTilesMonitorScreen(targetGridId = 'tilesMonitorGrid') {
         else if (tile.type === 'netdev') tileHtml = buildClusterNetdevTileHtml(tile, netdevPayload);
         else if (tile.type === 'ups') tileHtml = buildClusterUpsTileHtml(tile, upsPayload);
         else if (tile.type === 'speedtest') tileHtml = buildClusterSpeedtestTileHtml(speedtestSummary);
+        else if (tile.type === 'iperf3') tileHtml = buildClusterIperf3TileHtml(iperf3Summary);
         else if (tile.type === 'smart_sensor') tileHtml = buildClusterSmartSensorTileHtml(tile, smartSensorsPayload);
         else if (tile.type === 'truenas_server') tileHtml = buildClusterTrueNASServerTileHtml(tile);
         else if (tile.type === 'truenas_pool') tileHtml = buildClusterTrueNASPoolTileHtml(tile);
@@ -8215,6 +8688,113 @@ async function clearSpeedtestHistory() {
     } catch (e) {
         const msg = e instanceof Error && e.message ? e.message : speedtestNetworkErrorMessage(e);
         showToast((t('speedtestClearError') || '{msg}').replace('{msg}', msg), 'error');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+async function saveIperf3Settings() {
+    const en = document.getElementById('iperf3EnabledSelect') && document.getElementById('iperf3EnabledSelect').value === '1';
+    iperf3ClientEnabled = en;
+    const host = (document.getElementById('iperf3HostInput')?.value || '').trim();
+    let port = parseInt(document.getElementById('iperf3PortInput')?.value, 10);
+    if (!Number.isFinite(port) || port < 1 || port > 65535) port = 5201;
+    const portInput = document.getElementById('iperf3PortInput');
+    if (portInput) portInput.value = String(port);
+    let duration = parseInt(document.getElementById('iperf3DurationInput')?.value, 10);
+    if (!Number.isFinite(duration) || duration < 1) duration = 8;
+    if (duration > 120) duration = 120;
+    const durInput = document.getElementById('iperf3DurationInput');
+    if (durInput) durInput.value = String(duration);
+    let parallel = parseInt(document.getElementById('iperf3ParallelInput')?.value, 10);
+    if (!Number.isFinite(parallel) || parallel < 1) parallel = 1;
+    if (parallel > 32) parallel = 32;
+    const parInput = document.getElementById('iperf3ParallelInput');
+    if (parInput) parInput.value = String(parallel);
+    let perDay = parseInt(document.getElementById('iperf3PerDayInput')?.value, 10);
+    if (!Number.isFinite(perDay) || perDay < 1) perDay = 4;
+    if (perDay > 6) perDay = 6;
+    const dayInput = document.getElementById('iperf3PerDayInput');
+    if (dayInput) dayInput.value = String(perDay);
+    const provDlRaw = (document.getElementById('iperf3ProviderDownloadMbpsInput')?.value || '').trim().replace(',', '.');
+    const provUlRaw = (document.getElementById('iperf3ProviderUploadMbpsInput')?.value || '').trim().replace(',', '.');
+    await saveSettingsToServer({
+        iperf3Enabled: en,
+        iperf3Host: host,
+        iperf3Port: port,
+        iperf3DurationSec: duration,
+        iperf3Parallel: parallel,
+        iperf3PerDay: perDay,
+        iperf3ProviderDownloadMbps: provDlRaw === '' ? '' : provDlRaw,
+        iperf3ProviderUploadMbps: provUlRaw === '' ? '' : provUlRaw
+    });
+    renderSettingsMonitorScreensOrderList();
+    showToast(t('iperf3Saved') || t('dataUpdated'), 'success');
+    updateIperf3Dashboard().catch(() => {});
+    renderClusterDashboardTiles().catch(() => {});
+
+    await refreshMonitorScreensAvailability();
+    if (monitorMode && monitorCurrentView === 'iperf3' && iperf3MonitorConfigured === false) {
+        applyMonitorView('cluster');
+    }
+}
+
+async function runIperf3Now() {
+    const btn = document.getElementById('iperf3RunNowBtn');
+    if (btn) btn.disabled = true;
+    try {
+        const res = await fetch('/api/iperf3/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+        const { data, parseFailed } = await parseHttpJsonResponse(res);
+        if (parseFailed) {
+            showToast(t('iperf3ErrorBadResponse') || 'Invalid server response', 'error');
+            return;
+        }
+        if (!res.ok) {
+            const msg = res.status === 409
+                ? (t('iperf3ErrorBusy') || 'Another iperf3 run is in progress')
+                : (data && (data.error || data.message)) || `HTTP ${res.status}`;
+            showToast((t('iperf3RunError') || 'iperf3: {msg}').replace('{msg}', String(msg)), 'error');
+            return;
+        }
+        if (data.ok === false) {
+            const detail = iperf3DescribeRunFailure(data);
+            showToast((t('iperf3RunError') || 'iperf3: {msg}').replace('{msg}', detail), 'error');
+            updateIperf3Dashboard().catch(() => {});
+            return;
+        }
+        showToast(t('iperf3RunDone') || t('dataUpdated'), 'success');
+        updateIperf3Dashboard().catch(() => {});
+    } catch (e) {
+        const msg = speedtestNetworkErrorMessage(e);
+        showToast((t('iperf3RunError') || 'iperf3: {msg}').replace('{msg}', msg), 'error');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+async function clearIperf3History() {
+    if (!confirm(t('iperf3ClearConfirm') || 'Delete all iperf3 records?')) return;
+    const btn = document.getElementById('iperf3ClearHistoryBtn');
+    if (btn) btn.disabled = true;
+    try {
+        const res = await fetch('/api/iperf3/results', { method: 'DELETE' });
+        const { data, parseFailed } = await parseHttpJsonResponse(res);
+        if (parseFailed) {
+            throw new Error(t('iperf3ErrorBadResponse') || 'Invalid server response');
+        }
+        if (!res.ok) {
+            throw new Error((data && (data.error || data.message)) || `HTTP ${res.status}`);
+        }
+        showToast(t('iperf3ClearDone') || t('dataUpdated'), 'success');
+        updateIperf3Dashboard().catch(() => {});
+        renderClusterDashboardTiles().catch(() => {});
+        await refreshMonitorScreensAvailability();
+        if (monitorMode && monitorCurrentView === 'iperf3' && iperf3MonitorConfigured === false) {
+            applyMonitorView('cluster');
+        }
+    } catch (e) {
+        const msg = e instanceof Error && e.message ? e.message : speedtestNetworkErrorMessage(e);
+        showToast((t('iperf3ClearError') || '{msg}').replace('{msg}', msg), 'error');
     } finally {
         if (btn) btn.disabled = false;
     }
@@ -8622,6 +9202,8 @@ async function toggleMonitorMode() {
         if (netdevExit) netdevExit.style.display = 'none';
         const speedtestExit = document.getElementById('speedtestMonitorSection');
         if (speedtestExit) speedtestExit.style.display = 'none';
+        const iperf3Exit = document.getElementById('iperf3MonitorSection');
+        if (iperf3Exit) iperf3Exit.style.display = 'none';
         const backupsMonExit = document.getElementById('backupsMonitorSection');
         if (backupsMonExit) backupsMonExit.style.display = 'none';
         const drawMonExit = document.getElementById('drawMonitorSection');
@@ -8663,17 +9245,20 @@ let monitorCurrentView = 'cluster';
 let lastBackupsDataForMonitor = null;
 
 /** Полный порядок экранов монитора (в БД). */
-const MONITOR_SCREEN_IDS_ALL = ['cluster', 'tiles', 'truenasPools', 'truenasDisks', 'truenasServices', 'truenasApps', 'ups', 'netdev', 'speedtest', 'smartSensors', 'vms', 'services', 'backupRuns', 'draw'];
+const MONITOR_SCREEN_IDS_ALL = ['cluster', 'tiles', 'truenasPools', 'truenasDisks', 'truenasServices', 'truenasApps', 'ups', 'netdev', 'speedtest', 'iperf3', 'smartSensors', 'vms', 'services', 'backupRuns', 'draw'];
 let monitorScreensOrder = MONITOR_SCREEN_IDS_ALL.slice();
 let monitorScreensEnabled = {};
 /** Speedtest включён в настройках (для скрытия экрана в режиме монитора) */
 let speedtestClientEnabled = false;
+/** iperf3 включён в настройках */
+let iperf3ClientEnabled = false;
 
 // Доступность экранов зависит от реальной конфигурации (а не только от порядка в настройках).
 // Значение: null = неизвестно (не грузили/ошибка), true/false = известная доступность.
 let upsMonitorConfigured = null;
 let netdevMonitorConfigured = null;
 let speedtestMonitorConfigured = null;
+let iperf3MonitorConfigured = null;
 let smartSensorsMonitorConfigured = null;
 
 function resetMonitorChromeGestureState() {
@@ -8795,6 +9380,7 @@ async function refreshMonitorScreensAvailability() {
             if (key === 'ups') upsMonitorConfigured = val;
             if (key === 'netdev') netdevMonitorConfigured = val;
             if (key === 'speedtest') speedtestMonitorConfigured = val;
+            if (key === 'iperf3') iperf3MonitorConfigured = val;
             if (key === 'smartSensors') smartSensorsMonitorConfigured = val;
         }
     };
@@ -8812,10 +9398,11 @@ async function refreshMonitorScreensAvailability() {
         // UPS/Netdev/Speedtest, чтобы не “обнулить” экраны из-за ошибок авторизации.
         if (!apiToken && !getCurrentConnectionId()) return;
 
-        const [upsRes, netdevRes, speedRes] = await Promise.allSettled([
+        const [upsRes, netdevRes, speedRes, iperfRes] = await Promise.allSettled([
             fetch('/api/ups/current'),
             fetch('/api/netdevices/current'),
-            fetch('/api/speedtest/summary')
+            fetch('/api/speedtest/summary'),
+            fetch('/api/iperf3/summary')
         ]);
 
         if (upsRes.status === 'fulfilled' && upsRes.value?.ok) {
@@ -8829,7 +9416,14 @@ async function refreshMonitorScreensAvailability() {
         if (speedRes.status === 'fulfilled' && speedRes.value?.ok) {
             const data = await speedRes.value.json();
             const enabled = !!(data?.enabled === true || data?.enabled === '1' || data?.enabled === 1);
-            safeSet('speedtest', enabled);
+            const hasHistory = !!(data?.last && data.last.runAt);
+            safeSet('speedtest', enabled || hasHistory);
+        }
+        if (iperfRes.status === 'fulfilled' && iperfRes.value?.ok) {
+            const data = await iperfRes.value.json();
+            const enabled = !!(data?.enabled === true || data?.enabled === '1' || data?.enabled === 1);
+            const hasHistory = !!(data?.last && data.last.runAt);
+            safeSet('iperf3', enabled || hasHistory);
         }
     } catch (e) {
         // Оставляем значения как есть (null/предыдущие), чтобы не скрыть экраны “по ошибке сети”.
@@ -8873,9 +9467,11 @@ function getMonitorViewsOrder() {
         if (monitorScreensEnabled[id] === false) return false;
         if (id === 'backupRuns' && currentServerType !== 'proxmox') return false;
         if (id === 'speedtest' && !speedtestClientEnabled) return false;
+        if (id === 'iperf3' && !iperf3ClientEnabled) return false;
         if (id === 'ups' && upsMonitorConfigured === false) return false;
         if (id === 'netdev' && netdevMonitorConfigured === false) return false;
         if (id === 'speedtest' && speedtestMonitorConfigured === false) return false;
+        if (id === 'iperf3' && iperf3MonitorConfigured === false) return false;
         if (id === 'smartSensors' && smartSensorsMonitorConfigured === false) return false;
         return true;
     });
@@ -8892,6 +9488,7 @@ function monitorScreenSettingsLabel(id) {
         ups: t('monitorScreenUps'),
         netdev: t('monitorScreenNetdev'),
         speedtest: t('monitorScreenSpeedtest'),
+        iperf3: t('monitorScreenIperf3'),
         smartSensors: t('monitorScreenSmartSensors'),
         vms: t('monitorScreenVms'),
         services: t('monitorScreenServices'),
@@ -8958,6 +9555,7 @@ function updateMonitorToolbarTitleForView() {
         ups: t('monitorScreenUps'),
         netdev: t('monitorScreenNetdev'),
         speedtest: t('monitorScreenSpeedtest'),
+        iperf3: t('monitorScreenIperf3'),
         smartSensors: t('monitorScreenSmartSensors'),
         vms: t('monitorScreenVms'),
         services: t('monitorScreenServices'),
@@ -9048,6 +9646,7 @@ function applyMonitorView(view) {
     const upsMonSection = document.getElementById('upsMonitorSection');
     const netdevMonSection = document.getElementById('netdevMonitorSection');
     const speedtestMonSection = document.getElementById('speedtestMonitorSection');
+    const iperf3MonSection = document.getElementById('iperf3MonitorSection');
     const smartSensorsMonSection = document.getElementById('smartSensorsMonitorSection');
     const backupsMon = document.getElementById('backupsMonitorSection');
     const tilesMonSection = document.getElementById('tilesMonitorSection');
@@ -9066,6 +9665,7 @@ function applyMonitorView(view) {
         if (upsMonSection) upsMonSection.style.display = 'none';
         if (netdevMonSection) netdevMonSection.style.display = 'none';
         if (speedtestMonSection) speedtestMonSection.style.display = 'none';
+        if (iperf3MonSection) iperf3MonSection.style.display = 'none';
         if (smartSensorsMonSection) smartSensorsMonSection.style.display = 'none';
         if (backupsMon) backupsMon.style.display = 'none';
         if (tilesMonSection) tilesMonSection.style.display = 'none';
@@ -9087,6 +9687,7 @@ function applyMonitorView(view) {
     if (upsMonSection) upsMonSection.style.display = 'none';
     if (netdevMonSection) netdevMonSection.style.display = 'none';
     if (speedtestMonSection) speedtestMonSection.style.display = 'none';
+    if (iperf3MonSection) iperf3MonSection.style.display = 'none';
     if (smartSensorsMonSection) smartSensorsMonSection.style.display = 'none';
     if (backupsMon) backupsMon.style.display = 'none';
     if (tilesMonSection) tilesMonSection.style.display = 'none';
@@ -9130,6 +9731,9 @@ function applyMonitorView(view) {
     } else if (view === 'speedtest') {
         if (speedtestMonSection) speedtestMonSection.style.display = 'block';
         updateSpeedtestDashboard().catch(() => {});
+    } else if (view === 'iperf3') {
+        if (iperf3MonSection) iperf3MonSection.style.display = 'block';
+        updateIperf3Dashboard().catch(() => {});
     } else if (view === 'smartSensors') {
         if (smartSensorsMonSection) smartSensorsMonSection.style.display = 'block';
         updateSmartSensorsDashboard().catch(() => {});
@@ -10392,6 +10996,9 @@ async function refreshData(options = {}) {
         }
         if (!monitorMode || monitorCurrentView === 'cluster' || monitorCurrentView === 'speedtest') {
             updateSpeedtestDashboard().catch(() => {});
+        }
+        if (!monitorMode || monitorCurrentView === 'cluster' || monitorCurrentView === 'iperf3') {
+            updateIperf3Dashboard().catch(() => {});
         }
         if (!monitorMode || monitorCurrentView === 'cluster' || monitorCurrentView === 'smartSensors') {
             updateSmartSensorsDashboard().catch(() => {});
@@ -12614,6 +13221,49 @@ async function loadSettings() {
     if (spHttpsPx) spHttpsPx.value = data.speedtest_https_proxy != null ? String(data.speedtest_https_proxy) : '';
     const spNoPx = document.getElementById('speedtestNoProxyInput');
     if (spNoPx) spNoPx.value = data.speedtest_no_proxy != null ? String(data.speedtest_no_proxy) : '';
+    iperf3ClientEnabled = !!(data.iperf3_enabled === true || data.iperf3_enabled === '1'
+        || data.iperf3_enabled === 1 || data.iperf3_enabled === 'true');
+    const ipEn = document.getElementById('iperf3EnabledSelect');
+    if (ipEn) ipEn.value = iperf3ClientEnabled ? '1' : '0';
+    const ipHost = document.getElementById('iperf3HostInput');
+    if (ipHost) ipHost.value = data.iperf3_host != null ? String(data.iperf3_host) : '';
+    const ipPort = document.getElementById('iperf3PortInput');
+    if (ipPort) {
+        let p = parseInt(data.iperf3_port, 10);
+        if (!Number.isFinite(p) || p < 1 || p > 65535) p = 5201;
+        ipPort.value = String(p);
+    }
+    const ipDur = document.getElementById('iperf3DurationInput');
+    if (ipDur) {
+        let d = parseInt(data.iperf3_duration_sec, 10);
+        if (!Number.isFinite(d) || d < 1) d = 8;
+        if (d > 120) d = 120;
+        ipDur.value = String(d);
+    }
+    const ipPar = document.getElementById('iperf3ParallelInput');
+    if (ipPar) {
+        let n = parseInt(data.iperf3_parallel, 10);
+        if (!Number.isFinite(n) || n < 1) n = 1;
+        if (n > 32) n = 32;
+        ipPar.value = String(n);
+    }
+    const ipDay = document.getElementById('iperf3PerDayInput');
+    if (ipDay) {
+        let n = parseInt(data.iperf3_per_day, 10);
+        if (!Number.isFinite(n) || n < 1) n = 4;
+        if (n > 6) n = 6;
+        ipDay.value = String(n);
+    }
+    const ipProvDl = document.getElementById('iperf3ProviderDownloadMbpsInput');
+    if (ipProvDl) {
+        const v = data.iperf3_provider_download_mbps;
+        ipProvDl.value = v != null && v !== '' && Number.isFinite(Number(v)) ? String(v) : '';
+    }
+    const ipProvUl = document.getElementById('iperf3ProviderUploadMbpsInput');
+    if (ipProvUl) {
+        const v = data.iperf3_provider_upload_mbps;
+        ipProvUl.value = v != null && v !== '' && Number.isFinite(Number(v)) ? String(v) : '';
+    }
     telegramNotificationRules = normalizeTelegramNotificationRules(data.telegram_notification_rules);
     if (!telegramNotificationRules.length && data.telegram_routes) {
         telegramNotificationRules = migrateLegacyTelegramRoutesToRulesClient(normalizeTelegramRoutes(data.telegram_routes));

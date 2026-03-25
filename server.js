@@ -76,6 +76,7 @@ app.use('/api/smart-sensors', require('./modules/routes/smart-sensors'));
 app.use('/api/netdevices', require('./modules/routes/netdevices-snmp'));
 app.use('/api/host-metrics', require('./modules/routes/host-metrics'));
 app.use('/api/speedtest', require('./modules/routes/speedtest'));
+app.use('/api/iperf3', require('./modules/routes/iperf3'));
 
 // Доступные языки
 app.get('/api/languages', (req, res) => {
@@ -258,6 +259,11 @@ getDb()
             require('./modules/speedtest').startScheduler();
         } catch (e) {
             log('warn', `Speedtest scheduler: ${e.message}`);
+        }
+        try {
+            require('./modules/iperf3').startScheduler();
+        } catch (e) {
+            log('warn', `iperf3 scheduler: ${e.message}`);
         }
         try {
             require('./modules/monitor-notify').startMonitorNotifyScheduler();

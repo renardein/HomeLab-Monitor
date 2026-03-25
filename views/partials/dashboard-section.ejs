@@ -493,6 +493,90 @@
             </div>
         </div>
 
+        <!-- Monitor: iperf3 (тот же каркас и классы, что Speedtest) -->
+        <div id="iperf3MonitorSection" class="mb-4 monitor-screen" style="display: none;">
+            <div class="card speedtest-monitor__shell">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-arrow-left-right me-2"></i><span id="iperf3DashboardSectionTitle">iperf3</span></h5>
+                </div>
+                <div class="card-body monitor-screen__panel-body speedtest-monitor__body">
+                        <div class="monitor-screen__meta-grid speedtest-monitor__kpi-grid">
+                            <div class="monitor-screen__meta-card speedtest-monitor__meta-card">
+                                <div class="monitor-screen__meta-label"><i class="bi bi-clock-history me-1"></i><span id="iperf3MonitorLastRunLabel">Last run</span></div>
+                                <div class="monitor-screen__meta-value hm-speedtest-last-run text-break" id="iperf3MonitorLastRun">—</div>
+                            </div>
+                            <div class="monitor-screen__meta-card speedtest-monitor__meta-card">
+                                <div class="monitor-screen__meta-label"><i class="bi bi-arrow-down-circle me-1"></i><span id="iperf3MonitorLastDownloadLabel">Download</span></div>
+                                <div class="speedtest-monitor__speed-row">
+                                    <div class="monitor-screen__meta-value speedtest-monitor__speed-val text-break mb-0" id="iperf3MonitorLastDownload">—</div>
+                                    <div class="speedtest-monitor__last-dev d-none" id="iperf3MonitorLastDownloadDevWrap" aria-hidden="true">
+                                        <span class="speedtest-monitor__last-dev-pct" id="iperf3MonitorLastDownloadDevPct"></span><span class="speedtest-monitor__last-dev-plan" id="iperf3MonitorLastDownloadDevPlan"></span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="monitor-screen__meta-card speedtest-monitor__meta-card">
+                                <div class="monitor-screen__meta-label"><i class="bi bi-cloud-upload me-1"></i><span id="iperf3MonitorLastUploadLabel">Upload</span></div>
+                                <div class="speedtest-monitor__speed-row">
+                                    <div class="monitor-screen__meta-value speedtest-monitor__speed-val text-break mb-0" id="iperf3MonitorLastUpload">—</div>
+                                    <div class="speedtest-monitor__last-dev d-none" id="iperf3MonitorLastUploadDevWrap" aria-hidden="true">
+                                        <span class="speedtest-monitor__last-dev-pct" id="iperf3MonitorLastUploadDevPct"></span><span class="speedtest-monitor__last-dev-plan" id="iperf3MonitorLastUploadDevPlan"></span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="monitor-screen__meta-card speedtest-monitor__meta-card">
+                                <div class="monitor-screen__meta-label"><i class="bi bi-activity me-1"></i><span id="iperf3MonitorLastPingLabel">Ping</span></div>
+                                <div class="monitor-screen__meta-value speedtest-monitor__speed-val text-break" id="iperf3MonitorLastPing">—</div>
+                            </div>
+                        </div>
+                        <div class="monitor-screen__meta-label mb-1" id="iperf3MonitorTodayDownloadSectionTitle"></div>
+                        <div class="monitor-screen__meta-grid speedtest-monitor__today-grid">
+                            <div class="monitor-screen__meta-card speedtest-monitor__meta-card">
+                                <div class="monitor-screen__meta-label"><i class="bi bi-graph-up-arrow me-1"></i><span id="iperf3MonitorAvgLabel">Average speed (today)</span></div>
+                                <div class="monitor-screen__meta-value speedtest-monitor__speed-val" id="iperf3MonitorAvg">—</div>
+                                <div class="progress mt-2 hm-progress hm-progress--cluster">
+                                    <div class="progress-bar bg-success" id="iperf3MonitorAvgBar" style="width: 0%"></div>
+                                </div>
+                            </div>
+                            <div class="monitor-screen__meta-card speedtest-monitor__meta-card">
+                                <div class="monitor-screen__meta-label"><i class="bi bi-arrow-down-circle me-1"></i><span id="iperf3MonitorMinLabel">Minimum</span></div>
+                                <div class="monitor-screen__meta-value speedtest-monitor__speed-val" id="iperf3MonitorMin">—</div>
+                                <div class="progress mt-2 hm-progress hm-progress--cluster">
+                                    <div class="progress-bar bg-success" id="iperf3MonitorMinBar" style="width: 0%"></div>
+                                </div>
+                            </div>
+                            <div class="monitor-screen__meta-card speedtest-monitor__meta-card">
+                                <div class="monitor-screen__meta-label"><i class="bi bi-arrow-up-circle me-1"></i><span id="iperf3MonitorMaxLabel">Maximum</span></div>
+                                <div class="monitor-screen__meta-value speedtest-monitor__speed-val" id="iperf3MonitorMax">—</div>
+                                <div class="progress mt-2 hm-progress hm-progress--cluster">
+                                    <div class="progress-bar bg-success" id="iperf3MonitorMaxBar" style="width: 0%"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="monitor-screen__meta-extra small text-muted speedtest-monitor__extra" id="iperf3MonitorExtra"></div>
+                        <div class="speedtest-monitor__table-block d-flex flex-column min-h-0 flex-grow-1">
+                            <div class="monitor-screen__meta-label mb-2 flex-shrink-0" id="iperf3MonitorLast24hTitle">Today's measurements</div>
+                            <div id="iperf3MonitorLast24hTableWrap" class="table-responsive speedtest-monitor__table-scroll d-none flex-grow-1 min-h-0">
+                                <table class="speedtest-monitor__table mb-0" id="iperf3MonitorRunsTable">
+                                    <thead>
+                                        <tr>
+                                            <th scope="col" id="iperf3Monitor24hColTime">Time</th>
+                                            <th scope="col" class="text-end" id="iperf3Monitor24hColDownload">Download</th>
+                                            <th scope="col" class="text-end d-none" id="iperf3Monitor24hColDevDownload">Δ ↓</th>
+                                            <th scope="col" class="text-end" id="iperf3Monitor24hColUpload">Upload</th>
+                                            <th scope="col" class="text-end d-none" id="iperf3Monitor24hColDevUpload">Δ ↑</th>
+                                            <th scope="col" class="text-end" id="iperf3Monitor24hColPing">Ping</th>
+                                            <th scope="col" id="iperf3Monitor24hColServer">Server / note</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="iperf3MonitorLast24hBody"></tbody>
+                                </table>
+                            </div>
+                            <p class="small text-muted mb-0 flex-shrink-0 d-none" id="iperf3MonitorLast24hEmpty">No measurements today yet.</p>
+                        </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Monitor: Smart home sensors (REST / BLE) -->
         <div id="smartSensorsMonitorSection" class="mb-4 monitor-screen" style="display: none;">
             <div class="card">

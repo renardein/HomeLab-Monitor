@@ -134,6 +134,15 @@ const SETTING_KEYS = [
     'speedtest_http_proxy',
     'speedtest_https_proxy',
     'speedtest_no_proxy',
+    // iperf3 (LAN throughput)
+    'iperf3_enabled',
+    'iperf3_host',
+    'iperf3_port',
+    'iperf3_duration_sec',
+    'iperf3_parallel',
+    'iperf3_per_day',
+    'iperf3_provider_download_mbps',
+    'iperf3_provider_upload_mbps',
     // Telegram alerts (server-side)
     'telegram_notify_enabled',
     'telegram_notify_interval_sec',
@@ -177,13 +186,31 @@ router.get('/', (req, res) => {
                     if (key === 'thresholds' && payload.thresholds && typeof payload.thresholds === 'object') {
                         payload.thresholds = normalizeThresholdsObject(payload.thresholds);
                     }
-                } else if (key === 'speedtest_per_day') {
+                } else if (key === 'speedtest_per_day' || key === 'iperf3_per_day') {
                     const n = parseInt(value, 10);
                     let perDay = Number.isFinite(n) ? n : 4;
                     if (perDay < 1) perDay = 4;
                     if (perDay > 6) perDay = 6;
                     payload[key] = perDay;
+                } else if (key === 'iperf3_port' || key === 'iperf3_duration_sec' || key === 'iperf3_parallel') {
+                    const n = parseInt(value, 10);
+                    if (key === 'iperf3_port') {
+                        payload[key] = Number.isFinite(n) && n >= 1 && n <= 65535 ? n : 5201;
+                    } else if (key === 'iperf3_duration_sec') {
+                        let d = Number.isFinite(n) ? n : 8;
+                        if (d < 1) d = 8;
+                        if (d > 120) d = 120;
+                        payload[key] = d;
+                    } else {
+                        let p = Number.isFinite(n) ? n : 1;
+                        if (p < 1) p = 1;
+                        if (p > 32) p = 32;
+                        payload[key] = p;
+                    }
                 } else if (key === 'speedtest_provider_download_mbps' || key === 'speedtest_provider_upload_mbps') {
+                    const n = parseFloat(String(value).trim().replace(',', '.'));
+                    if (Number.isFinite(n) && n > 0) payload[key] = Math.min(n, 1_000_000);
+                } else if (key === 'iperf3_provider_download_mbps' || key === 'iperf3_provider_upload_mbps') {
                     const n = parseFloat(String(value).trim().replace(',', '.'));
                     if (Number.isFinite(n) && n > 0) payload[key] = Math.min(n, 1_000_000);
                 } else if (key === 'refresh_interval' || key === 'current_server_index' || key === 'current_truenas_index' || key === 'session_ttl_minutes' || key === 'telegram_notify_interval_sec') {
@@ -360,6 +387,56 @@ router.post('/', (req, res) => {
             ),
             speedtest_no_proxy: normalizeSpeedtestProxyField(
                 body.speedtest_no_proxy ?? body.speedtestNoProxy
+            ),
+            iperf3_enabled: (() => {
+                const v = body.iperf3_enabled ?? body.iperf3Enabled;
+                if (v === undefined) return undefined;
+                return v === true || v === '1' || v === 1 || v === 'true' ? '1' : '0';
+            })(),
+            iperf3_host: (() => {
+                const v = body.iperf3_host ?? body.iperf3Host;
+                if (v === undefined) return undefined;
+                let s = String(v).trim();
+                if (s.length > 512) s = s.slice(0, 512);
+                if (/[\r\n\0]/.test(s)) return '';
+                return s;
+            })(),
+            iperf3_port: (() => {
+                const v = body.iperf3_port ?? body.iperf3Port;
+                if (v === undefined) return undefined;
+                let n = parseInt(v, 10);
+                if (!Number.isFinite(n) || n < 1 || n > 65535) n = 5201;
+                return n;
+            })(),
+            iperf3_duration_sec: (() => {
+                const v = body.iperf3_duration_sec ?? body.iperf3DurationSec;
+                if (v === undefined) return undefined;
+                let n = parseInt(v, 10);
+                if (!Number.isFinite(n) || n < 1) n = 8;
+                if (n > 120) n = 120;
+                return n;
+            })(),
+            iperf3_parallel: (() => {
+                const v = body.iperf3_parallel ?? body.iperf3Parallel;
+                if (v === undefined) return undefined;
+                let n = parseInt(v, 10);
+                if (!Number.isFinite(n) || n < 1) n = 1;
+                if (n > 32) n = 32;
+                return n;
+            })(),
+            iperf3_per_day: (() => {
+                const v = body.iperf3_per_day ?? body.iperf3PerDay;
+                if (v === undefined) return undefined;
+                let n = parseInt(v, 10);
+                if (!Number.isFinite(n) || n < 1) n = 4;
+                if (n > 6) n = 6;
+                return n;
+            })(),
+            iperf3_provider_download_mbps: normalizeSpeedtestProviderMbpsField(
+                body.iperf3_provider_download_mbps ?? body.iperf3ProviderDownloadMbps
+            ),
+            iperf3_provider_upload_mbps: normalizeSpeedtestProviderMbpsField(
+                body.iperf3_provider_upload_mbps ?? body.iperf3ProviderUploadMbps
             ),
             telegram_notify_enabled: (() => {
                 const v = body.telegram_notify_enabled ?? body.telegramNotifyEnabled;

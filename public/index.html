@@ -87,6 +87,11 @@
                                     </button>
                                 </li>
                                 <li>
+                                    <button class="dropdown-item" type="button" onclick="openIperf3MonitorFromMenu()">
+                                        <i class="bi bi-arrow-left-right me-2"></i><span id="menuIperf3MonitorText">iperf3</span>
+                                    </button>
+                                </li>
+                                <li>
                                     <button class="dropdown-item" type="button" onclick="openUpsMonitorFromMenu()">
                                         <i class="bi bi-lightning-charge me-2"></i><span id="menuUpsMonitorText">UPS</span>
                                     </button>
@@ -163,6 +168,9 @@
                             </button>
                             <button class="nav-link" id="settings-nav-speedtest" data-bs-toggle="pill" data-bs-target="#settings-tab-speedtest" type="button" role="tab">
                                 <i class="bi bi-wifi me-2"></i><span id="settingsNavSpeedtest">Speedtest</span>
+                            </button>
+                            <button class="nav-link" id="settings-nav-iperf3" data-bs-toggle="pill" data-bs-target="#settings-tab-iperf3" type="button" role="tab">
+                                <i class="bi bi-arrow-left-right me-2"></i><span id="settingsNavIperf3">iperf3</span>
                             </button>
                             <div class="settings-nav-category" role="presentation"><span id="settingsNavCategoryAlerts"></span></div>
                             <button class="nav-link" id="settings-nav-telegram" data-bs-toggle="pill" data-bs-target="#settings-tab-telegram" type="button" role="tab">
@@ -420,7 +428,7 @@
                             <div class="tab-pane fade settings-display-subtab" id="settings-tab-display-cluster-tiles" role="tabpanel">
                                 <div class="settings-section">
                                     <h5 class="mb-3 settings-display-tab-title"><i class="bi bi-grid-3x2-gap me-2"></i><span id="settingsClusterTilesTitle">Плитки экрана Cluster</span></h5>
-                                    <p class="text-muted small mb-2" id="settingsClusterTilesHint">Соберите до 12 плиток для экрана Cluster из VM/CT, сервисов, SNMP, UPS и Speedtest. На экране они листаются горизонтально.</p>
+                                    <p class="text-muted small mb-2" id="settingsClusterTilesHint">Соберите до 12 плиток для экрана Cluster из VM/CT, сервисов, SNMP, UPS, Speedtest и iperf3. На экране они листаются горизонтально.</p>
                                     <div id="settingsClusterTilesList"></div>
                                     <div class="d-flex gap-2 flex-wrap mt-3">
                                         <button class="btn btn-outline-primary btn-sm" type="button" onclick="addClusterDashboardTile()" id="settingsClusterTilesAddBtn">
@@ -1227,6 +1235,69 @@
                                         <div class="small" id="speedtestCliStatus"></div>
                                 </div>
                             </div>
+                            <div class="tab-pane fade" id="settings-tab-iperf3" role="tabpanel">
+                                <div class="settings-section">
+                                        <h5 class="mb-3"><i class="bi bi-arrow-left-right me-2"></i><span id="iperf3SettingsTitle">iperf3</span></h5>
+                                        <p class="text-muted small mb-3" id="iperf3SettingsHint"></p>
+                                        <div class="row g-3 align-items-end mb-3">
+                                            <div class="col-md-3">
+                                                <label class="form-label fw-bold" for="iperf3EnabledSelect" id="iperf3EnabledLabel">Замер</label>
+                                                <select class="form-select" id="iperf3EnabledSelect" onchange="saveIperf3Settings()">
+                                                    <option value="0" selected>Выключено</option>
+                                                    <option value="1">Включено</option>
+                                                </select>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <label class="form-label fw-bold" for="iperf3HostInput" id="iperf3HostLabel">Хост</label>
+                                                <input type="text" class="form-control" id="iperf3HostInput" placeholder="" autocomplete="off" onchange="saveIperf3Settings()" onblur="saveIperf3Settings()">
+                                                <div class="form-text" id="iperf3HostHint"></div>
+                                            </div>
+                                            <div class="col-md-2">
+                                                <label class="form-label fw-bold" for="iperf3PortInput" id="iperf3PortLabel">Порт</label>
+                                                <input type="number" class="form-control" id="iperf3PortInput" min="1" max="65535" value="5201" onchange="saveIperf3Settings()" onblur="saveIperf3Settings()">
+                                                <div class="form-text" id="iperf3PortHint"></div>
+                                            </div>
+                                            <div class="col-md-3 d-grid">
+                                                <button type="button" class="btn btn-outline-primary" id="iperf3RunNowBtn" onclick="runIperf3Now()">
+                                                    <i class="bi bi-play-fill me-1"></i><span id="iperf3RunNowText">Сейчас</span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div class="row g-3 align-items-end mb-3">
+                                            <div class="col-md-3">
+                                                <label class="form-label fw-bold" for="iperf3DurationInput" id="iperf3DurationLabel">Длительность (с)</label>
+                                                <input type="number" class="form-control" id="iperf3DurationInput" min="1" max="120" value="8" onchange="saveIperf3Settings()" onblur="saveIperf3Settings()">
+                                                <div class="form-text" id="iperf3DurationHint"></div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <label class="form-label fw-bold" for="iperf3ParallelInput" id="iperf3ParallelLabel">Потоки</label>
+                                                <input type="number" class="form-control" id="iperf3ParallelInput" min="1" max="32" value="1" onchange="saveIperf3Settings()" onblur="saveIperf3Settings()">
+                                                <div class="form-text" id="iperf3ParallelHint"></div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <label class="form-label fw-bold" for="iperf3PerDayInput" id="iperf3PerDayLabel">Замеров в сутки</label>
+                                                <input type="number" class="form-control" id="iperf3PerDayInput" min="1" max="6" value="4" onchange="saveIperf3Settings()">
+                                            </div>
+                                        </div>
+                                        <div class="row g-3 mb-2">
+                                            <div class="col-md-6">
+                                                <label class="form-label fw-bold" for="iperf3ProviderDownloadMbpsInput" id="iperf3ProviderDownloadLabel">Эталон — приём (Мбит/с)</label>
+                                                <input type="number" class="form-control" id="iperf3ProviderDownloadMbpsInput" min="0" step="0.1" placeholder="" onchange="saveIperf3Settings()" onblur="saveIperf3Settings()">
+                                            </div>
+                                            <div class="col-md-6">
+                                                <label class="form-label fw-bold" for="iperf3ProviderUploadMbpsInput" id="iperf3ProviderUploadLabel">Эталон — отдача (Мбит/с)</label>
+                                                <input type="number" class="form-control" id="iperf3ProviderUploadMbpsInput" min="0" step="0.1" placeholder="" onchange="saveIperf3Settings()" onblur="saveIperf3Settings()">
+                                            </div>
+                                        </div>
+                                        <p class="form-text mb-3" id="iperf3ProviderHint"></p>
+                                        <div class="mb-2">
+                                            <button type="button" class="btn btn-outline-danger btn-sm" id="iperf3ClearHistoryBtn" onclick="clearIperf3History()">
+                                                <i class="bi bi-trash me-1"></i><span id="iperf3ClearHistoryText">Очистить историю</span>
+                                            </button>
+                                        </div>
+                                        <div class="small" id="iperf3CliStatus"></div>
+                                </div>
+                            </div>
                             <div class="tab-pane fade" id="settings-tab-telegram" role="tabpanel">
                                 <div class="settings-section mb-4">
                                     <h5 class="mb-2"><i class="bi bi-send me-2"></i><span id="settingsTelegramTitle">Интеграция Telegram</span></h5>
@@ -1852,6 +1923,90 @@
                                 </table>
                             </div>
                             <p class="small text-muted mb-0 flex-shrink-0 d-none" id="speedtestMonitorLast24hEmpty">Сегодня замеров пока нет.</p>
+                        </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Режим монитора: iperf3 -->
+        <div id="iperf3MonitorSection" class="mb-4 monitor-screen" style="display: none;">
+            <div class="card speedtest-monitor__shell">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-arrow-left-right me-2"></i><span id="iperf3DashboardSectionTitle">iperf3</span></h5>
+                </div>
+                <div class="card-body monitor-screen__panel-body speedtest-monitor__body">
+                        <div class="monitor-screen__meta-grid speedtest-monitor__kpi-grid">
+                            <div class="monitor-screen__meta-card speedtest-monitor__meta-card">
+                                <div class="monitor-screen__meta-label"><i class="bi bi-clock-history me-1"></i><span id="iperf3MonitorLastRunLabel">Последний замер</span></div>
+                                <div class="monitor-screen__meta-value hm-speedtest-last-run text-break" id="iperf3MonitorLastRun">—</div>
+                            </div>
+                            <div class="monitor-screen__meta-card speedtest-monitor__meta-card">
+                                <div class="monitor-screen__meta-label"><i class="bi bi-arrow-down-circle me-1"></i><span id="iperf3MonitorLastDownloadLabel">Приём</span></div>
+                                <div class="speedtest-monitor__speed-row">
+                                    <div class="monitor-screen__meta-value speedtest-monitor__speed-val text-break mb-0" id="iperf3MonitorLastDownload">—</div>
+                                    <div class="speedtest-monitor__last-dev d-none" id="iperf3MonitorLastDownloadDevWrap" aria-hidden="true">
+                                        <span class="speedtest-monitor__last-dev-pct" id="iperf3MonitorLastDownloadDevPct"></span><span class="speedtest-monitor__last-dev-plan" id="iperf3MonitorLastDownloadDevPlan"></span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="monitor-screen__meta-card speedtest-monitor__meta-card">
+                                <div class="monitor-screen__meta-label"><i class="bi bi-cloud-upload me-1"></i><span id="iperf3MonitorLastUploadLabel">Отдача</span></div>
+                                <div class="speedtest-monitor__speed-row">
+                                    <div class="monitor-screen__meta-value speedtest-monitor__speed-val text-break mb-0" id="iperf3MonitorLastUpload">—</div>
+                                    <div class="speedtest-monitor__last-dev d-none" id="iperf3MonitorLastUploadDevWrap" aria-hidden="true">
+                                        <span class="speedtest-monitor__last-dev-pct" id="iperf3MonitorLastUploadDevPct"></span><span class="speedtest-monitor__last-dev-plan" id="iperf3MonitorLastUploadDevPlan"></span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="monitor-screen__meta-card speedtest-monitor__meta-card">
+                                <div class="monitor-screen__meta-label"><i class="bi bi-activity me-1"></i><span id="iperf3MonitorLastPingLabel">Пинг</span></div>
+                                <div class="monitor-screen__meta-value speedtest-monitor__speed-val text-break" id="iperf3MonitorLastPing">—</div>
+                            </div>
+                        </div>
+                        <div class="monitor-screen__meta-label mb-1" id="iperf3MonitorTodayDownloadSectionTitle"></div>
+                        <div class="monitor-screen__meta-grid speedtest-monitor__today-grid">
+                            <div class="monitor-screen__meta-card speedtest-monitor__meta-card">
+                                <div class="monitor-screen__meta-label"><i class="bi bi-graph-up-arrow me-1"></i><span id="iperf3MonitorAvgLabel">Средняя скорость (сегодня)</span></div>
+                                <div class="monitor-screen__meta-value speedtest-monitor__speed-val" id="iperf3MonitorAvg">—</div>
+                                <div class="progress mt-2 hm-progress hm-progress--cluster">
+                                    <div class="progress-bar bg-success" id="iperf3MonitorAvgBar" style="width: 0%"></div>
+                                </div>
+                            </div>
+                            <div class="monitor-screen__meta-card speedtest-monitor__meta-card">
+                                <div class="monitor-screen__meta-label"><i class="bi bi-arrow-down-circle me-1"></i><span id="iperf3MonitorMinLabel">Минимум</span></div>
+                                <div class="monitor-screen__meta-value speedtest-monitor__speed-val" id="iperf3MonitorMin">—</div>
+                                <div class="progress mt-2 hm-progress hm-progress--cluster">
+                                    <div class="progress-bar bg-success" id="iperf3MonitorMinBar" style="width: 0%"></div>
+                                </div>
+                            </div>
+                            <div class="monitor-screen__meta-card speedtest-monitor__meta-card">
+                                <div class="monitor-screen__meta-label"><i class="bi bi-arrow-up-circle me-1"></i><span id="iperf3MonitorMaxLabel">Максимум</span></div>
+                                <div class="monitor-screen__meta-value speedtest-monitor__speed-val" id="iperf3MonitorMax">—</div>
+                                <div class="progress mt-2 hm-progress hm-progress--cluster">
+                                    <div class="progress-bar bg-success" id="iperf3MonitorMaxBar" style="width: 0%"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="monitor-screen__meta-extra small text-muted speedtest-monitor__extra" id="iperf3MonitorExtra"></div>
+                        <div class="speedtest-monitor__table-block d-flex flex-column min-h-0 flex-grow-1">
+                            <div class="monitor-screen__meta-label mb-2 flex-shrink-0" id="iperf3MonitorLast24hTitle">Замеры за сегодня</div>
+                            <div id="iperf3MonitorLast24hTableWrap" class="table-responsive speedtest-monitor__table-scroll d-none flex-grow-1 min-h-0">
+                                <table class="speedtest-monitor__table mb-0" id="iperf3MonitorRunsTable">
+                                    <thead>
+                                        <tr>
+                                            <th scope="col" id="iperf3Monitor24hColTime">Время</th>
+                                            <th scope="col" class="text-end" id="iperf3Monitor24hColDownload">Приём</th>
+                                            <th scope="col" class="text-end d-none" id="iperf3Monitor24hColDevDownload">Δ ↓</th>
+                                            <th scope="col" class="text-end" id="iperf3Monitor24hColUpload">Отдача</th>
+                                            <th scope="col" class="text-end d-none" id="iperf3Monitor24hColDevUpload">Δ ↑</th>
+                                            <th scope="col" class="text-end" id="iperf3Monitor24hColPing">Пинг</th>
+                                            <th scope="col" id="iperf3Monitor24hColServer">Сервер / примечание</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="iperf3MonitorLast24hBody"></tbody>
+                                </table>
+                            </div>
+                            <p class="small text-muted mb-0 flex-shrink-0 d-none" id="iperf3MonitorLast24hEmpty">Сегодня замеров пока нет.</p>
                         </div>
                 </div>
             </div>
