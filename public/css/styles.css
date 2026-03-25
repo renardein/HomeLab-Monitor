@@ -1994,6 +1994,7 @@
         body.monitor-mode #upsMonitorSection .card-header,
         body.monitor-mode #netdevMonitorSection .card-header,
         body.monitor-mode #speedtestMonitorSection .card-header,
+        body.monitor-mode #smartSensorsMonitorSection .card-header,
         body.monitor-mode #backupsMonitorSection .card-header {
             display: none !important;
         }
@@ -2001,6 +2002,7 @@
         body.monitor-mode #vmsMonitorSection #vmsMonitorHint,
         body.monitor-mode #upsMonitorSection #upsUpdatedAt,
         body.monitor-mode #netdevMonitorSection #netdevUpdatedAt,
+        body.monitor-mode #smartSensorsMonitorSection #smartSensorsUpdatedAt,
         body.monitor-mode #speedtestMonitorSection #speedtestMonitorExtra {
             display: none !important;
         }
@@ -2015,6 +2017,7 @@
         body.monitor-mode #upsMonitorSection > .card,
         body.monitor-mode #netdevMonitorSection > .card,
         body.monitor-mode #speedtestMonitorSection > .card,
+        body.monitor-mode #smartSensorsMonitorSection > .card,
         body.monitor-mode #backupsMonitorSection > .card {
             background: transparent !important;
             border: 0 !important;
@@ -2026,6 +2029,7 @@
         body.monitor-mode #upsMonitorSection > .card > .card-body,
         body.monitor-mode #netdevMonitorSection > .card > .card-body,
         body.monitor-mode #speedtestMonitorSection > .card > .card-body,
+        body.monitor-mode #smartSensorsMonitorSection > .card > .card-body,
         body.monitor-mode #backupsMonitorSection > .card > .card-body {
             padding: 0 !important;
         }

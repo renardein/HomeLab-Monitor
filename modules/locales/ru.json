@@ -243,6 +243,7 @@
     "settingsDebugClearCacheText": "Очистить кэш",
     "settingsDebugCacheCleared": "Кэш очищен",
     "settingsDebugExportText": "Скачать отчёт",
+    "settingsDebugReloadPageText": "Обновить страницу",
     "settingsDebugReloadText": "Перезагрузить приложение",
     "settingsDebugRestarting": "Перезапуск сервера…",
     "settingsDebugRestartError": "Ошибка перезапуска",

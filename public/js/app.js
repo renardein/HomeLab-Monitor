@@ -2082,26 +2082,18 @@ function buildSmartSensorsCardsHtml(data) {
         const vals = it.values && typeof it.values === 'object' ? it.values : {};
         const keys = Object.keys(vals);
         const tiles = keys.length
-            ? keys.map((k) => `
-                <div class="col-6 col-md-4">
-                    <div class="border rounded p-2 h-100 bg-body-tertiary">
-                        <div class="small text-muted text-truncate" title="${escapeHtml(k)}">${escapeHtml(k)}</div>
-                        <div class="fw-semibold">${escapeHtml(formatSmartSensorMetricEntry(vals[k]))}</div>
-                    </div>
-                </div>`).join('')
+            ? keys.map((k) => buildClusterDashboardMetricCell(k, formatSmartSensorMetricEntry(vals[k]), null, null, 'col-6 col-md-4')).join('')
             : '<div class="col-12"><span class="text-muted small">—</span></div>';
         const typeBadge = escapeHtml(it.type || '');
         return `
             <div class="col-12 col-md-6">
-                <div class="card h-100 shadow-sm">
-                    <div class="card-header py-2 d-flex justify-content-between align-items-center gap-2">
-                        <span class="text-truncate" title="${escapeHtml(name)}">${escapeHtml(name)}</span>
+                <div class="node-card ups-node-card h-100">
+                    <div class="d-flex justify-content-between align-items-center mb-2 gap-2">
+                        <h5 class="mb-0 text-truncate d-inline-flex align-items-center gap-2" title="${escapeHtml(name)}">${escapeHtml(name)}</h5>
                         <span class="badge bg-secondary flex-shrink-0">${typeBadge}</span>
                     </div>
-                    <div class="card-body py-2">
-                        <div class="row g-2 small">${tiles}</div>
-                        ${errBlock}
-                    </div>
+                    <div class="row g-2 small">${tiles}</div>
+                    ${errBlock}
                 </div>
             </div>`;
     }).join('');
@@ -2552,6 +2544,7 @@ function updateUILanguage() {
     setText('settingsDebugClearCacheText', t('settingsDebugClearCacheText') || 'Clear cache');
     setText('settingsDebugResetAllText', t('settingsDebugResetAllText') || 'Reset all settings');
     setText('settingsDebugExportText', t('settingsDebugExportText') || 'Download report');
+    setText('settingsDebugReloadPageText', t('settingsDebugReloadPageText') || 'Reload page');
     setText('settingsDebugReloadText', t('settingsDebugReloadText') || 'Reload application');
     setText('settingsDebugResetAllConfirmLabel', t('settingsDebugResetAllConfirmLabel') || 'Confirm by checkbox to reset all settings');
     setText('settingsNavSecurity', t('settingsNavSecurity'));
@@ -7984,6 +7977,10 @@ function exportDebugReport() {
     a.download = 'debug-report-' + new Date().toISOString().slice(0, 19).replace(/:/g, '-') + '.json';
     a.click();
     URL.revokeObjectURL(a.href);
+}
+
+function reloadPage() {
+    window.location.reload();
 }
 
 function reloadApplication() {

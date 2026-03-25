@@ -243,6 +243,7 @@
     "settingsDebugClearCacheText": "Clear cache",
     "settingsDebugCacheCleared": "Cache cleared",
     "settingsDebugExportText": "Download report",
+    "settingsDebugReloadPageText": "Reload page",
     "settingsDebugReloadText": "Reload application",
     "settingsDebugRestarting": "Restarting server…",
     "settingsDebugRestartError": "Restart error",
