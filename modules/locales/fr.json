@@ -643,6 +643,7 @@
     "settingsClusterTileTypeVmct": "VM / CT",
     "settingsClusterTileTypeNetdev": "Périphérique SNMP",
     "settingsClusterTileTypeSpeedtest": "Speedtest",
+    "settingsClusterTileTypeSmartSensor": "Capteur connecté",
     "dashboardClusterTilesTitle": "Tuiles Cluster",
     "toastHostMetricsSaved": "Paramètres des métriques hôte enregistrés",
     "toastHostMetricsSaveError": "Impossible d’enregistrer les métriques hôte : {msg}",

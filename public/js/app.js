@@ -95,10 +95,12 @@ let setupWizardServerType = 'proxmox';
 let setupWizardListenersBound = false;
 let telegramRuleMessageModalBound = false;
 let setupWizardFinishMode = 'success';
-let clusterDashboardTiles = []; // [{ type: 'service'|'vmct'|'netdev'|'ups'|'speedtest'|'truenas_server'|'truenas_pool'|'truenas_disk'|'truenas_service'|'truenas_app', sourceId: 'type:id' }]
+let clusterDashboardTiles = []; // [{ type: 'service'|'vmct'|'netdev'|'ups'|'speedtest'|'smart_sensor'|'truenas_server'|…, sourceId: 'type:id' }]
 let clusterDashboardTilesDirty = false;
 let clusterDashboardTilesSettingPresent = false;
-const CLUSTER_DASHBOARD_TILE_TYPES = ['service', 'vmct', 'netdev', 'ups', 'speedtest', 'truenas_server', 'truenas_pool', 'truenas_disk', 'truenas_service', 'truenas_app'];
+const CLUSTER_DASHBOARD_TILE_TYPES = ['service', 'vmct', 'netdev', 'ups', 'speedtest', 'truenas_server', 'truenas_pool', 'truenas_disk', 'truenas_service', 'truenas_app', 'smart_sensor'];
+/** Кэш конфигов для выпадающего списка плиток «датчик» (не только открытый редактор). */
+let smartSensorsConfigsForTiles = [];
 const MAX_CLUSTER_DASHBOARD_TILES = 12;
 const DEFAULT_DASHBOARD_TIMEZONE = (() => {
     try {
@@ -1980,6 +1982,7 @@ async function loadSmartSensorsSettings() {
         const data = await res.json();
         if (!res.ok || !data.success) throw new Error(data.error || 'load failed');
         const list = Array.isArray(data.configs) ? data.configs : [];
+        smartSensorsConfigsForTiles = list;
         smartSensorsEditorRows = list.map((c) => {
             if (c.type === 'ble') {
                 return {
@@ -2031,8 +2034,14 @@ async function saveSmartSensorsSettings() {
         const data = await res.json();
         if (!res.ok || !data.success) throw new Error(data.error || 'save failed');
         showToast(t('toastSmartSensorsSaved'), 'success');
+        await loadSmartSensorsConfigsForTiles();
+        renderClusterDashboardTilesSettings();
         await refreshMonitorScreensAvailability();
         updateSmartSensorsDashboard().catch(() => {});
+        renderTilesMonitorScreen('tilesNormalGrid').catch(() => {});
+        if (!monitorMode || monitorCurrentView === 'tiles') {
+            renderTilesMonitorScreen().catch(() => {});
+        }
         if (monitorMode && monitorCurrentView === 'smartSensors' && smartSensorsMonitorConfigured === false) {
             applyMonitorView('cluster');
         }
@@ -4446,8 +4455,19 @@ async function loadSettingsPanelData() {
     await ensureNetdevDisplaySlotsLoaded();
     await loadHostMetricsSettings();
     await loadAboutContent();
+    await loadSmartSensorsConfigsForTiles();
     renderClusterDashboardTilesSettings();
     renderServerList();
+}
+
+async function loadSmartSensorsConfigsForTiles() {
+    try {
+        const res = await fetch('/api/smart-sensors/settings');
+        const data = await res.json();
+        smartSensorsConfigsForTiles = (res.ok && data.success && Array.isArray(data.configs)) ? data.configs : [];
+    } catch (_) {
+        smartSensorsConfigsForTiles = [];
+    }
 }
 
 function normalizeClusterDashboardTile(raw) {
@@ -4462,6 +4482,12 @@ function normalizeClusterDashboardTile(raw) {
         const slot = parseInt(m[1], 10);
         if (!Number.isFinite(slot) || slot < 1 || slot > 4) return null;
         sourceId = `ups:${slot}`;
+    }
+    if (type === 'smart_sensor') {
+        if (!sourceId.startsWith('smart_sensor:')) return null;
+        const idPart = sourceId.slice('smart_sensor:'.length).trim();
+        if (!idPart) return null;
+        sourceId = `smart_sensor:${idPart}`;
     }
     if (!sourceId) return null;
     const hasExplicitCluster = Object.prototype.hasOwnProperty.call(tile, 'showOnCluster');
@@ -4494,6 +4520,7 @@ function getClusterDashboardTileTypeLabel(type) {
     if (type === 'netdev') return t('settingsClusterTileTypeNetdev');
     if (type === 'ups') return t('settingsClusterTileTypeUps');
     if (type === 'speedtest') return t('settingsClusterTileTypeSpeedtest');
+    if (type === 'smart_sensor') return t('settingsClusterTileTypeSmartSensor');
     if (type === 'truenas_server') return 'TrueNAS Server';
     if (type === 'truenas_pool') return 'TrueNAS Pool';
     if (type === 'truenas_disk') return 'TrueNAS Disk';
@@ -4576,6 +4603,20 @@ function getClusterDashboardTileSourceOptions(type) {
             value: 'speedtest:default',
             label: t('dashboardSpeedtestTitle') || 'Speedtest'
         }];
+    }
+
+    if (type === 'smart_sensor') {
+        const list = Array.isArray(smartSensorsConfigsForTiles) ? smartSensorsConfigsForTiles : [];
+        return list
+            .filter((c) => c && c.id != null && String(c.id).trim() !== '' && c.enabled !== false)
+            .map((c) => {
+                const id = String(c.id).trim();
+                const kind = c.type === 'ble' ? 'BLE' : 'REST';
+                return {
+                    value: `smart_sensor:${id}`,
+                    label: `${c.name || id} (${kind})`
+                };
+            });
     }
 
     if (type === 'truenas_pool') {
@@ -4748,7 +4789,8 @@ function addClusterDashboardTile() {
         truenas_pool: 'truenas_pool:default',
         truenas_disk: 'truenas_disk:default',
         truenas_service: 'truenas_service:default',
-        truenas_app: 'truenas_app:default'
+        truenas_app: 'truenas_app:default',
+        smart_sensor: 'smart_sensor:__missing__'
     };
     clusterDashboardTiles = clusterDashboardTiles.concat([{
         type: selectedType,
@@ -4776,7 +4818,8 @@ function updateClusterDashboardTileType(index, nextType) {
         truenas_pool: 'truenas_pool:default',
         truenas_disk: 'truenas_disk:default',
         truenas_service: 'truenas_service:default',
-        truenas_app: 'truenas_app:default'
+        truenas_app: 'truenas_app:default',
+        smart_sensor: 'smart_sensor:__missing__'
     };
     clusterDashboardTiles[index] = {
         type,
@@ -6954,6 +6997,37 @@ function buildClusterNetdevTileHtml(tile, payload) {
     );
 }
 
+function buildClusterSmartSensorTileHtml(tile, payload) {
+    const sensorId = clusterTileSourceValue(tile, 'smart_sensor');
+    const items = Array.isArray(payload?.items) ? payload.items : [];
+    const item = items.find((it) => String(it?.id || '') === sensorId);
+    if (!item) {
+        return buildClusterDashboardUnavailableTile(
+            t('settingsClusterTileTypeSmartSensor') || 'Sensor',
+            t('smartSensorsNotConfigured') || 'Sensor not found'
+        );
+    }
+    if (item.error) {
+        return buildClusterDashboardUnavailableTile(item.name || sensorId, String(item.error));
+    }
+    const vals = item.values && typeof item.values === 'object' ? item.values : {};
+    const keys = Object.keys(vals).slice(0, 4);
+    const bodyHtml = (keys.length
+        ? keys.map((k, index) => {
+            const cls = index >= 2 ? 'col-6 mt-2' : 'col-6';
+            return buildClusterDashboardMetricCell(k, formatSmartSensorMetricEntry(vals[k]), null, null, cls);
+        })
+        : [buildClusterDashboardMetricCell(t('backupNoData') || '—', '—', null, null, 'col-6')]
+    ).join('');
+    const typeLabel = (item.type || '').toLowerCase() === 'ble' ? 'BLE' : 'REST';
+    return buildClusterDashboardTileShell(
+        `<i class="bi bi-broadcast-pin me-2 text-info"></i><span class="text-truncate">${escapeHtml(item.name || sensorId)}</span>`,
+        `<span class="badge bg-info text-dark">${escapeHtml(typeLabel)}</span>`,
+        bodyHtml,
+        escapeHtml(t('monitorScreenSmartSensors') || '')
+    );
+}
+
 function buildClusterUpsTileHtml(tile, payload) {
     const slot = clusterTileSourceNumericId(tile, 'ups');
     const item = Array.isArray(payload?.items) ? payload.items.find((entry) => Number(entry.slot) === slot) : null;
@@ -7253,6 +7327,7 @@ async function renderTilesMonitorScreen(targetGridId = 'tilesMonitorGrid') {
     const needNetdev = tiles.some((tile) => tile.type === 'netdev');
     const needUps = tiles.some((tile) => tile.type === 'ups');
     const needSpeedtest = tiles.some((tile) => tile.type === 'speedtest');
+    const needSmartSensors = tiles.some((tile) => tile.type === 'smart_sensor');
     const needTrueNASOverview = tiles.some((tile) => ['truenas_server', 'truenas_pool', 'truenas_disk', 'truenas_service', 'truenas_app'].includes(tile.type));
 
     const fetchJson = async (url) => {
@@ -7265,10 +7340,11 @@ async function renderTilesMonitorScreen(targetGridId = 'tilesMonitorGrid') {
         }
     };
 
-    const [netdevPayload, upsPayload, speedtestSummary, truenasOverview] = await Promise.all([
+    const [netdevPayload, upsPayload, speedtestSummary, smartSensorsPayload, truenasOverview] = await Promise.all([
         needNetdev ? fetchJson('/api/netdevices/current') : Promise.resolve(null),
         needUps ? fetchJson('/api/ups/current') : Promise.resolve(null),
         needSpeedtest ? fetchJson('/api/speedtest/summary') : Promise.resolve(null),
+        needSmartSensors ? fetchJson('/api/smart-sensors/current') : Promise.resolve(null),
         needTrueNASOverview ? fetchJson('/api/truenas/overview') : Promise.resolve(null)
     ]);
     if (truenasOverview && !truenasOverview.error) lastTrueNASOverviewData = truenasOverview;
@@ -7280,6 +7356,7 @@ async function renderTilesMonitorScreen(targetGridId = 'tilesMonitorGrid') {
         else if (tile.type === 'netdev') tileHtml = buildClusterNetdevTileHtml(tile, netdevPayload);
         else if (tile.type === 'ups') tileHtml = buildClusterUpsTileHtml(tile, upsPayload);
         else if (tile.type === 'speedtest') tileHtml = buildClusterSpeedtestTileHtml(speedtestSummary);
+        else if (tile.type === 'smart_sensor') tileHtml = buildClusterSmartSensorTileHtml(tile, smartSensorsPayload);
         else if (tile.type === 'truenas_server') tileHtml = buildClusterTrueNASServerTileHtml(tile);
         else if (tile.type === 'truenas_pool') tileHtml = buildClusterTrueNASPoolTileHtml(tile);
         else if (tile.type === 'truenas_disk') tileHtml = buildClusterTrueNASDiskTileHtml(tile);

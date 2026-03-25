@@ -643,6 +643,7 @@
     "settingsClusterTileTypeVmct": "VM / CT",
     "settingsClusterTileTypeNetdev": "SNMP 機器",
     "settingsClusterTileTypeSpeedtest": "Speedtest",
+    "settingsClusterTileTypeSmartSensor": "スマートセンサー",
     "dashboardClusterTilesTitle": "Cluster タイル",
     "toastHostMetricsSaved": "ホストメトリクスを保存しました",
     "toastHostMetricsSaveError": "ホストメトリクスを保存できません: {msg}",

@@ -643,6 +643,7 @@
     "settingsClusterTileTypeVmct": "VM / CT",
     "settingsClusterTileTypeNetdev": "SNMP-прылада",
     "settingsClusterTileTypeSpeedtest": "Speedtest",
+    "settingsClusterTileTypeSmartSensor": "Разумны датчык",
     "dashboardClusterTilesTitle": "Пліткі Cluster",
     "toastHostMetricsSaved": "Налады метрык хастоў захаваны",
     "toastHostMetricsSaveError": "Не ўдалося захаваць метрыкі хастоў: {msg}",

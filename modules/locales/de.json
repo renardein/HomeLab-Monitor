@@ -643,6 +643,7 @@
     "settingsClusterTileTypeVmct": "VM / CT",
     "settingsClusterTileTypeNetdev": "SNMP-Gerät",
     "settingsClusterTileTypeSpeedtest": "Speedtest",
+    "settingsClusterTileTypeSmartSensor": "Smarter Sensor",
     "dashboardClusterTilesTitle": "Cluster-Kacheln",
     "toastHostMetricsSaved": "Host-Metriken gespeichert",
     "toastHostMetricsSaveError": "Host-Metriken konnten nicht gespeichert werden: {msg}",
