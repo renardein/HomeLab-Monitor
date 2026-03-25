@@ -471,6 +471,41 @@
             </div>
         </div>
 
+        <!-- Monitor: sketch / whiteboard -->
+        <div id="drawMonitorSection" class="mb-4 monitor-screen monitor-draw-screen" style="display: none;">
+            <div class="monitor-draw">
+                <div class="monitor-draw__toolbar d-flex flex-wrap align-items-center gap-2 mb-2">
+                    <span class="small text-muted" id="monitorDrawHint"></span>
+                    <label class="small text-muted mb-0 d-inline-flex align-items-center gap-1">
+                        <span id="monitorDrawColorLabel">Color</span>
+                        <input type="color" class="form-control form-control-color" id="monitorDrawColor" value="#4ade80" title="">
+                    </label>
+                    <label class="small text-muted mb-0 d-inline-flex align-items-center gap-2">
+                        <span id="monitorDrawWidthLabel">Brush</span>
+                        <input type="range" class="form-range monitor-draw__range" id="monitorDrawWidth" min="2" max="48" value="8" aria-label="Brush width">
+                    </label>
+                    <div class="btn-group btn-group-sm" role="group" aria-label="Draw tool">
+                        <button type="button" class="btn btn-primary" id="monitorDrawPenBtn" onclick="setMonitorDrawEraser(false)">
+                            <i class="bi bi-pencil me-1" aria-hidden="true"></i><span id="monitorDrawPenText">Pen</span>
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" id="monitorDrawEraserBtn" onclick="setMonitorDrawEraser(true)">
+                            <i class="bi bi-eraser me-1" aria-hidden="true"></i><span id="monitorDrawEraserText">Eraser</span>
+                        </button>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline-danger" id="monitorDrawClearBtn" onclick="clearMonitorDrawCanvas()">
+                        <i class="bi bi-trash me-1" aria-hidden="true"></i><span id="monitorDrawClearText">Clear</span>
+                    </button>
+                    <div class="form-check form-check-inline ms-1 mb-0 d-flex align-items-center">
+                        <input class="form-check-input mt-0" type="checkbox" id="monitorDrawDisableSwipesChk">
+                        <label class="form-check-label small text-muted ms-1 mb-0" for="monitorDrawDisableSwipesChk" id="monitorDrawDisableSwipesLabel"></label>
+                    </div>
+                </div>
+                <div class="monitor-draw__canvas-wrap flex-grow-1 min-h-0" id="monitorDrawCanvasWrap">
+                    <canvas id="monitorDrawCanvas" width="4" height="4" aria-label="Drawing canvas"></canvas>
+                </div>
+            </div>
+        </div>
+
         <!-- Monitor: Tiles screen -->
         <div id="tilesMonitorSection" class="mb-4 monitor-screen" style="display: none;">
             <div class="row g-3" id="tilesMonitorGrid"></div>

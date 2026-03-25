@@ -2034,6 +2034,40 @@
             padding: 0 !important;
         }
 
+        /* Рисование: холст на весь экран монитора */
+        body.monitor-mode #drawMonitorSection.monitor-draw-screen {
+            flex-direction: column;
+        }
+        body.monitor-mode #drawMonitorSection .monitor-draw {
+            flex: 1 1 auto;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+        }
+        body.monitor-mode #drawMonitorSection .monitor-draw__canvas-wrap {
+            flex: 1 1 auto;
+            min-height: 0;
+            position: relative;
+            border-radius: var(--hm-radius);
+            overflow: hidden;
+            border: 1px solid rgba(148, 163, 184, 0.35);
+        }
+        body.monitor-mode.monitor-theme-dark #drawMonitorSection .monitor-draw__canvas-wrap {
+            border-color: rgba(255, 255, 255, 0.12);
+        }
+        body.monitor-mode #drawMonitorSection .monitor-draw__canvas-wrap canvas {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            display: block;
+            touch-action: none;
+            cursor: crosshair;
+        }
+        body.monitor-mode #drawMonitorSection .monitor-draw__range {
+            width: min(220px, 28vw);
+        }
+
         body.monitor-mode .monitor-screen__panel-body {
             flex: 1 1 auto;
             min-height: 0;

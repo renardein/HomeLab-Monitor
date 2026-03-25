@@ -2435,6 +2435,13 @@ function updateUILanguage() {
     setText('smartSensorsAddRestBtn', t('smartSensorsAddRest') || 'REST');
     setText('smartSensorsAddBleBtn', t('smartSensorsAddBle') || 'Bluetooth');
     setText('smartSensorsSaveButtonText', t('smartSensorsSaveButton') || 'Save');
+    setText('monitorDrawHint', t('monitorDrawHint') || '');
+    setText('monitorDrawColorLabel', t('monitorDrawColorLabel') || 'Color');
+    setText('monitorDrawWidthLabel', t('monitorDrawWidthLabel') || 'Brush');
+    setText('monitorDrawPenText', t('monitorDrawPen') || 'Pen');
+    setText('monitorDrawEraserText', t('monitorDrawEraser') || 'Eraser');
+    setText('monitorDrawClearText', t('monitorDrawClear') || 'Clear');
+    setText('monitorDrawDisableSwipesLabel', t('monitorDrawDisableSwipes') || '');
     setText('upsLabelInputVoltage', t('upsLabelInputVoltage') || 'Вход U');
     setText('upsLabelOutputVoltage', t('upsLabelOutputVoltage') || 'Выход U');
     setText('upsLabelPower', t('upsLabelPower') || 'Мощность');
@@ -3153,6 +3160,8 @@ function showConfigSectionOnly() {
     if (upsMonSection) upsMonSection.style.display = 'none';
     if (smartSensorsSection) smartSensorsSection.style.display = 'none';
     if (backupsMon) backupsMon.style.display = 'none';
+    const drawMonCfg = document.getElementById('drawMonitorSection');
+    if (drawMonCfg) drawMonCfg.style.display = 'none';
     hideAllTrueNASMonitorSections();
     if (monitorView) monitorView.style.display = 'none';
 }
@@ -8186,6 +8195,8 @@ async function toggleMonitorMode() {
         if (speedtestExit) speedtestExit.style.display = 'none';
         const backupsMonExit = document.getElementById('backupsMonitorSection');
         if (backupsMonExit) backupsMonExit.style.display = 'none';
+        const drawMonExit = document.getElementById('drawMonitorSection');
+        if (drawMonExit) drawMonExit.style.display = 'none';
         if (monitorView) monitorView.style.display = 'none';
         document.body.classList.remove('monitor-toolbar-hidden', 'monitor-dots-hidden');
         syncMonitorToolbarRevealButton();
@@ -8222,7 +8233,7 @@ let monitorCurrentView = 'cluster';
 let lastBackupsDataForMonitor = null;
 
 /** Полный порядок экранов монитора (в БД). */
-const MONITOR_SCREEN_IDS_ALL = ['cluster', 'tiles', 'truenasPools', 'truenasDisks', 'truenasServices', 'truenasApps', 'ups', 'netdev', 'speedtest', 'smartSensors', 'vms', 'services', 'backupRuns'];
+const MONITOR_SCREEN_IDS_ALL = ['cluster', 'tiles', 'truenasPools', 'truenasDisks', 'truenasServices', 'truenasApps', 'ups', 'netdev', 'speedtest', 'smartSensors', 'vms', 'services', 'backupRuns', 'draw'];
 let monitorScreensOrder = MONITOR_SCREEN_IDS_ALL.slice();
 let monitorScreensEnabled = {};
 /** Speedtest включён в настройках (для скрытия экрана в режиме монитора) */
@@ -8406,7 +8417,8 @@ function monitorScreenSettingsLabel(id) {
         smartSensors: t('monitorScreenSmartSensors'),
         vms: t('monitorScreenVms'),
         services: t('monitorScreenServices'),
-        backupRuns: t('monitorScreenBackupRuns')
+        backupRuns: t('monitorScreenBackupRuns'),
+        draw: t('monitorScreenDraw')
     };
     return map[id] || id;
 }
@@ -8471,7 +8483,8 @@ function updateMonitorToolbarTitleForView() {
         smartSensors: t('monitorScreenSmartSensors'),
         vms: t('monitorScreenVms'),
         services: t('monitorScreenServices'),
-        backupRuns: t('monitorScreenBackupRuns')
+        backupRuns: t('monitorScreenBackupRuns'),
+        draw: t('monitorScreenDraw')
     };
     el.textContent = titles[monitorCurrentView] || t('monitorMode');
     renderMonitorScreenDots();
@@ -8564,6 +8577,7 @@ function applyMonitorView(view) {
     const truenasDisksMonSection = document.getElementById('truenasDisksMonitorSection');
     const truenasServicesMonSection = document.getElementById('truenasServicesMonitorSection');
     const truenasAppsMonSection = document.getElementById('truenasAppsMonitorSection');
+    const drawMonSection = document.getElementById('drawMonitorSection');
     const monitorView = document.getElementById('monitorView');
 
     if (!monitorMode) {
@@ -8581,6 +8595,7 @@ function applyMonitorView(view) {
         if (truenasDisksMonSection) truenasDisksMonSection.style.display = 'none';
         if (truenasServicesMonSection) truenasServicesMonSection.style.display = 'none';
         if (truenasAppsMonSection) truenasAppsMonSection.style.display = 'none';
+        if (drawMonSection) drawMonSection.style.display = 'none';
         if (monitorView) monitorView.style.display = 'none';
         renderMonitorScreenDots();
         return;
@@ -8601,6 +8616,7 @@ function applyMonitorView(view) {
     if (truenasDisksMonSection) truenasDisksMonSection.style.display = 'none';
     if (truenasServicesMonSection) truenasServicesMonSection.style.display = 'none';
     if (truenasAppsMonSection) truenasAppsMonSection.style.display = 'none';
+    if (drawMonSection) drawMonSection.style.display = 'none';
     if (monitorView) monitorView.style.display = 'none';
 
     if (view === 'backupRuns' && currentServerType !== 'proxmox') {
@@ -8658,10 +8674,189 @@ function applyMonitorView(view) {
         /* flex, не block — иначе .monitor-backups-main-card не растягивается и card-body с flex:1 схлопывается в 0 */
         if (backupsMon) backupsMon.style.display = 'flex';
         renderMonitorBackupRuns(lastBackupsDataForMonitor);
+    } else if (view === 'draw') {
+        if (drawMonSection) drawMonSection.style.display = 'flex';
+        initMonitorDrawScreen();
+        requestAnimationFrame(() => {
+            resizeMonitorDrawCanvas();
+        });
     }
 
     updateMonitorToolbarTitleForView();
     requestAnimationFrame(() => updateHomeLabFontScale());
+}
+
+let monitorDrawPointerBound = false;
+let monitorDrawResizeObserver = null;
+let monitorDrawIsEraser = false;
+
+function getMonitorDrawCanvasBg() {
+    return document.body.classList.contains('monitor-theme-dark') ? '#0f1117' : '#f1f5f9';
+}
+
+function fillMonitorDrawCanvasBackground(ctx, w, h) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = getMonitorDrawCanvasBg();
+    ctx.fillRect(0, 0, w, h);
+    ctx.restore();
+}
+
+function resizeMonitorDrawCanvas() {
+    const canvas = document.getElementById('monitorDrawCanvas');
+    const wrap = document.getElementById('monitorDrawCanvasWrap');
+    if (!canvas || !wrap) return;
+    const w = Math.max(1, Math.floor(wrap.clientWidth));
+    const h = Math.max(1, Math.floor(wrap.clientHeight));
+    if (canvas.width === w && canvas.height === h) return;
+
+    const prev = document.createElement('canvas');
+    prev.width = canvas.width;
+    prev.height = canvas.height;
+    const had = canvas.width > 0 && canvas.height > 0;
+    if (had) prev.getContext('2d').drawImage(canvas, 0, 0);
+
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (had) {
+        ctx.drawImage(prev, 0, 0);
+    } else {
+        fillMonitorDrawCanvasBackground(ctx, w, h);
+    }
+}
+
+function clearMonitorDrawCanvas() {
+    const canvas = document.getElementById('monitorDrawCanvas');
+    if (!canvas || !canvas.getContext) return;
+    const ctx = canvas.getContext('2d');
+    fillMonitorDrawCanvasBackground(ctx, canvas.width, canvas.height);
+}
+
+function setMonitorDrawEraser(on) {
+    monitorDrawIsEraser = !!on;
+    const pen = document.getElementById('monitorDrawPenBtn');
+    const er = document.getElementById('monitorDrawEraserBtn');
+    if (pen) {
+        pen.classList.toggle('btn-primary', !monitorDrawIsEraser);
+        pen.classList.toggle('btn-outline-secondary', monitorDrawIsEraser);
+    }
+    if (er) {
+        er.classList.toggle('btn-primary', monitorDrawIsEraser);
+        er.classList.toggle('btn-outline-secondary', !monitorDrawIsEraser);
+    }
+}
+
+function initMonitorDrawScreen() {
+    const canvas = document.getElementById('monitorDrawCanvas');
+    const wrap = document.getElementById('monitorDrawCanvasWrap');
+    if (!canvas || !wrap) return;
+
+    if (!monitorDrawResizeObserver) {
+        monitorDrawResizeObserver = new ResizeObserver(() => {
+            if (monitorMode && monitorCurrentView === 'draw') resizeMonitorDrawCanvas();
+        });
+        monitorDrawResizeObserver.observe(wrap);
+    }
+
+    if (!monitorDrawPointerBound) {
+        monitorDrawPointerBound = true;
+        let drawing = false;
+
+        function linePrefs() {
+            const colorEl = document.getElementById('monitorDrawColor');
+            const widthEl = document.getElementById('monitorDrawWidth');
+            const color = colorEl && colorEl.value ? colorEl.value : '#4ade80';
+            const lw = widthEl ? parseInt(widthEl.value, 10) : 8;
+            return { color, lineWidth: Number.isFinite(lw) ? lw : 8 };
+        }
+
+        function applyStrokeStyle(ctx) {
+            const p = linePrefs();
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.lineWidth = p.lineWidth;
+            if (monitorDrawIsEraser) {
+                ctx.globalCompositeOperation = 'destination-out';
+                ctx.strokeStyle = 'rgba(0,0,0,1)';
+            } else {
+                ctx.globalCompositeOperation = 'source-over';
+                ctx.strokeStyle = p.color;
+            }
+        }
+
+        function pos(e) {
+            const r = canvas.getBoundingClientRect();
+            const sx = r.width > 0 ? canvas.width / r.width : 1;
+            const sy = r.height > 0 ? canvas.height / r.height : 1;
+            return {
+                x: (e.clientX - r.left) * sx,
+                y: (e.clientY - r.top) * sy
+            };
+        }
+
+        function onDown(e) {
+            if (!monitorMode || monitorCurrentView !== 'draw') return;
+            if (e.button != null && e.button !== 0) return;
+            e.preventDefault();
+            drawing = true;
+            try {
+                canvas.setPointerCapture(e.pointerId);
+            } catch (_) {}
+            const ctx = canvas.getContext('2d');
+            applyStrokeStyle(ctx);
+            const { x, y } = pos(e);
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+        }
+
+        function onMove(e) {
+            if (!drawing) return;
+            e.preventDefault();
+            const ctx = canvas.getContext('2d');
+            applyStrokeStyle(ctx);
+            const { x, y } = pos(e);
+            ctx.lineTo(x, y);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+        }
+
+        function onUp(e) {
+            if (!drawing) return;
+            drawing = false;
+            try {
+                canvas.releasePointerCapture(e.pointerId);
+            } catch (_) {}
+        }
+
+        canvas.addEventListener('pointerdown', onDown);
+        canvas.addEventListener('pointermove', onMove);
+        canvas.addEventListener('pointerup', onUp);
+        canvas.addEventListener('pointercancel', onUp);
+
+        window.addEventListener('resize', () => {
+            if (monitorMode && monitorCurrentView === 'draw') resizeMonitorDrawCanvas();
+        });
+    }
+
+    setMonitorDrawEraser(monitorDrawIsEraser);
+
+    const swipeChk = document.getElementById('monitorDrawDisableSwipesChk');
+    if (swipeChk) {
+        try {
+            const v = localStorage.getItem('monitorDrawDisableSwipes');
+            if (v !== null) swipeChk.checked = v === '1';
+        } catch (_) {}
+        if (!swipeChk._monitorDrawSwipePersistBound) {
+            swipeChk._monitorDrawSwipePersistBound = true;
+            swipeChk.addEventListener('change', () => {
+                try {
+                    localStorage.setItem('monitorDrawDisableSwipes', swipeChk.checked ? '1' : '0');
+                } catch (_) {}
+            });
+        }
+    }
 }
 
 function setMonitorTheme(theme) {
@@ -9267,6 +9462,13 @@ function goMonitorView(direction) {
     applyMonitorView(views[nextIndex]);
 }
 
+/** На экране рисования: при включённой галочке не обрабатывать свайпы смены экрана (touch / мышь по body). */
+function monitorDrawSwipesBlocked() {
+    if (!monitorMode || monitorCurrentView !== 'draw') return false;
+    const chk = document.getElementById('monitorDrawDisableSwipesChk');
+    return !!(chk && chk.checked);
+}
+
 function destroyMonitorSwipes() {
     monitorSwipeStartX = null;
     monitorSwipeHandlersAttached = false;
@@ -9325,11 +9527,16 @@ function initMonitorSwipes() {
     const minDist = 80;
     function onStart(e) {
         if (!monitorMode) return;
+        if (monitorDrawSwipesBlocked()) return;
         const x = e.touches ? e.touches[0].clientX : e.clientX;
         monitorSwipeStartX = x;
     }
     function onEnd(e) {
         if (!monitorMode) return;
+        if (monitorDrawSwipesBlocked()) {
+            monitorSwipeStartX = null;
+            return;
+        }
         if (monitorSwipeStartX == null) return;
         const x = e.changedTouches ? e.changedTouches[0].clientX : e.clientX;
         const delta = x - monitorSwipeStartX;
@@ -9339,8 +9546,13 @@ function initMonitorSwipes() {
     }
     function mouseStart(e) {
         if (!monitorMode) return;
+        if (monitorDrawSwipesBlocked()) return;
         monitorSwipeStartX = e.clientX;
         function mouseEnd(ev) {
+            if (monitorDrawSwipesBlocked()) {
+                monitorSwipeStartX = null;
+                return;
+            }
             const d = ev.clientX - monitorSwipeStartX;
             if (Math.abs(d) > minDist) goMonitorView(d < 0 ? 'next' : 'prev');
             document.body.removeEventListener('mouseup', mouseEnd);
@@ -9384,6 +9596,8 @@ function showDashboard() {
     const backupsMon = document.getElementById('backupsMonitorSection');
     if (servicesSection) servicesSection.style.display = 'none';
     if (backupsMon) backupsMon.style.display = 'none';
+    const drawMonDash = document.getElementById('drawMonitorSection');
+    if (drawMonDash) drawMonDash.style.display = 'none';
     const netdevMonSection = document.getElementById('netdevMonitorSection');
     if (netdevMonSection) netdevMonSection.style.display = 'none';
     requestAnimationFrame(() => updateHomeLabFontScale());
