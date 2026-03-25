@@ -15,7 +15,9 @@ const RULE_TYPES = new Set([
     'ups_on_battery',
     'ups_back_to_mains',
     'ups_charge_low',
-    'ups_charge_full'
+    'ups_charge_full',
+    'smart_sensor_error',
+    'smart_sensor_threshold'
 ]);
 
 function safeStr(v) {
@@ -241,6 +243,33 @@ function normalizeRule(raw) {
         if (!upsSlots.length && !Number.isFinite(fallback)) return null;
         const uniq = upsSlots.length ? Array.from(new Set(upsSlots)) : [fallback];
         return { ...base, upsSlot: uniq[0], upsSlots: uniq };
+    }
+    if (type === 'smart_sensor_error') {
+        const smartSensorIds = normalizeNonEmptyStringList(raw.smartSensorIds);
+        const fallback = safeStr(raw.smartSensorId);
+        if (!smartSensorIds.length && !fallback) return null;
+        const uniq = smartSensorIds.length ? Array.from(new Set(smartSensorIds)) : [fallback];
+        return { ...base, smartSensorId: uniq[0], smartSensorIds: uniq };
+    }
+    if (type === 'smart_sensor_threshold') {
+        const smartSensorIds = normalizeNonEmptyStringList(raw.smartSensorIds);
+        const fallback = safeStr(raw.smartSensorId);
+        if (!smartSensorIds.length && !fallback) return null;
+        const uniq = smartSensorIds.length ? Array.from(new Set(smartSensorIds)) : [fallback];
+        const fieldKey = safeStr(raw.smartSensorFieldKey);
+        if (!fieldKey) return null;
+        let cmp = safeStr(raw.smartSensorCompare).toLowerCase();
+        if (!['gt', 'gte', 'lt', 'lte'].includes(cmp)) cmp = 'gte';
+        let thr = parseFloat(raw.smartSensorThreshold);
+        if (!Number.isFinite(thr)) thr = 0;
+        return {
+            ...base,
+            smartSensorId: uniq[0],
+            smartSensorIds: uniq,
+            smartSensorFieldKey: fieldKey.slice(0, 128),
+            smartSensorCompare: cmp,
+            smartSensorThreshold: thr
+        };
     }
     return null;
 }

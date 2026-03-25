@@ -211,6 +211,29 @@ function buildSampleVarsForTelegramRule(rule) {
                 state: 'full',
                 stateRu: 'Полный'
             };
+        case 'smart_sensor_error': {
+            const sid = String(r.smartSensorId || 'sensor-id');
+            return {
+                sensorName: 'Sensor',
+                sensorId: sid,
+                sensorType: 'REST',
+                state: 'error',
+                stateRu: 'Ошибка',
+                error: 'timeout'
+            };
+        }
+        case 'smart_sensor_threshold':
+            return {
+                sensorName: 'Sensor',
+                sensorId: String(r.smartSensorId || 'sensor-id'),
+                sensorType: 'REST',
+                field: String(r.smartSensorFieldKey || 'temperature'),
+                value: '28.5',
+                thr: String(r.smartSensorThreshold != null ? r.smartSensorThreshold : 30),
+                op: String(r.smartSensorCompare || 'gte'),
+                state: 'high',
+                stateRu: 'Порог превышен'
+            };
         default:
             return {};
     }
@@ -343,6 +366,14 @@ function buildTelegramTestRuleMessage(rule) {
         case 'ups_charge_full':
             lines.push(escapeMarkdownV2(`Target: UPS slot ${r.upsSlot != null ? r.upsSlot : '—'}`));
             lines.push(escapeMarkdownV2('Event: battery fully charged'));
+            break;
+        case 'smart_sensor_error':
+            lines.push(escapeMarkdownV2(`Target: smart sensor id ${r.smartSensorId != null ? r.smartSensorId : '—'}`));
+            break;
+        case 'smart_sensor_threshold':
+            lines.push(escapeMarkdownV2(`Target: smart sensor id ${r.smartSensorId != null ? r.smartSensorId : '—'}`));
+            lines.push(escapeMarkdownV2(`Field: ${r.smartSensorFieldKey != null ? r.smartSensorFieldKey : '—'}`));
+            lines.push(escapeMarkdownV2(`Compare: ${r.smartSensorCompare != null ? r.smartSensorCompare : 'gte'} ${r.smartSensorThreshold != null ? r.smartSensorThreshold : '—'}`));
             break;
         default:
             lines.push(escapeMarkdownV2('Target: —'));

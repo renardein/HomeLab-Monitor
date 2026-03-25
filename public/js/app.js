@@ -3061,7 +3061,9 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
     const telegramNav = document.getElementById('settings-nav-telegram');
     if (telegramNav) {
-        telegramNav.addEventListener('shown.bs.tab', () => renderTelegramRulesTable());
+        telegramNav.addEventListener('shown.bs.tab', () => {
+            loadSmartSensorsConfigsForTiles().finally(() => renderTelegramRulesTable());
+        });
     }
     const hostMetricsNav = document.getElementById('settings-nav-hostmetrics');
     if (hostMetricsNav) {
@@ -3266,6 +3268,9 @@ function normalizeTelegramNotificationRules(raw) {
             const truenasServiceIds = Array.isArray(r.truenasServiceIds)
                 ? Array.from(new Set(r.truenasServiceIds.map((x) => String(x || '').trim()).filter(Boolean)))
                 : [];
+            const smartSensorIds = Array.isArray(r.smartSensorIds)
+                ? Array.from(new Set(r.smartSensorIds.map((x) => String(x || '').trim()).filter(Boolean)))
+                : [];
             const fallbackServiceId = Number(r.serviceId);
             const fallbackVmid = Number(r.vmid);
             const fallbackUpsSlot = Number(r.upsSlot);
@@ -3273,6 +3278,7 @@ function normalizeTelegramNotificationRules(raw) {
             const fallbackDiskId = String(r.diskId || '').trim();
             const fallbackPoolId = String(r.poolId || '').trim();
             const fallbackTrueNASServiceId = String(r.truenasServiceId || '').trim();
+            const fallbackSmartSensorId = String(r.smartSensorId || '').trim();
             const normalizedNodeNames = nodeNames.length ? nodeNames : (fallbackNode ? [fallbackNode] : []);
             const out = {
                 ...r,
@@ -3311,6 +3317,11 @@ function normalizeTelegramNotificationRules(raw) {
             if (normalizedTrueNASServiceIds.length) {
                 out.truenasServiceIds = normalizedTrueNASServiceIds;
                 out.truenasServiceId = normalizedTrueNASServiceIds[0];
+            }
+            const normalizedSmartSensorIds = smartSensorIds.length ? smartSensorIds : (fallbackSmartSensorId ? [fallbackSmartSensorId] : []);
+            if (normalizedSmartSensorIds.length) {
+                out.smartSensorIds = normalizedSmartSensorIds;
+                out.smartSensorId = normalizedSmartSensorIds[0];
             }
             return out;
         });
@@ -3358,6 +3369,84 @@ function getRuleNumberTargetsClient(rule, pluralKey, singleKey) {
     return Number.isFinite(one) ? [one] : [];
 }
 
+function getSmartSensorOptionsForTelegramRules() {
+    const list = Array.isArray(smartSensorsConfigsForTiles) ? smartSensorsConfigsForTiles : [];
+    return list
+        .filter((c) => c && c.id != null && String(c.id).trim() !== '' && c.enabled !== false)
+        .map((c) => ({
+            id: String(c.id).trim(),
+            label: `${c.name || c.id} (${c.type === 'ble' ? 'BLE' : 'REST'})`
+        }));
+}
+
+/** Фактические ключи `values` для REST, в том же порядке и с суффиксами `_2`, … как в `pollOneRest`. */
+function collectRestValueKeysForTelegram(restFields) {
+    if (!Array.isArray(restFields)) return [];
+    const usedKeys = new Set();
+    const out = [];
+    for (const f of restFields) {
+        if (!f || typeof f !== 'object' || f.enabled === false) continue;
+        const p = f.path != null ? String(f.path).trim() : '';
+        if (!p) continue;
+        let baseKey = f.label != null ? String(f.label).trim() : '';
+        if (!baseKey) {
+            const parts = p.split('.').filter(Boolean);
+            baseKey = (parts.length ? parts[parts.length - 1] : 'value') || 'value';
+        }
+        baseKey = baseKey.slice(0, 64);
+        let outKey = baseKey;
+        let n = 2;
+        while (usedKeys.has(outKey)) {
+            outKey = `${baseKey}_${n++}`;
+        }
+        usedKeys.add(outKey);
+        out.push(outKey);
+    }
+    return out;
+}
+
+function bleChannelValueKeyForTelegram(ch) {
+    if (!ch || typeof ch !== 'object') return '';
+    const metric = String(ch.metric || '').toLowerCase();
+    if (metric === 'custom') {
+        const lab = ch.label != null ? String(ch.label).trim() : '';
+        return lab || 'custom';
+    }
+    return metric || '';
+}
+
+/** Подсказки для порога: объединение полей выбранных датчиков (или всех включённых, если датчики не выбраны). */
+function getConfiguredSmartSensorFieldKeysForRule(rule) {
+    const configs = Array.isArray(smartSensorsConfigsForTiles) ? smartSensorsConfigsForTiles : [];
+    const selected = (Array.isArray(rule.smartSensorIds) ? rule.smartSensorIds : [rule.smartSensorId])
+        .map((x) => String(x || '').trim())
+        .filter(Boolean);
+    const filterBySelection = selected.length > 0;
+    const keys = new Set();
+    for (const c of configs) {
+        if (!c || c.id == null || c.enabled === false) continue;
+        const cid = String(c.id).trim();
+        if (filterBySelection && !selected.includes(cid)) continue;
+        const typ = String(c.type || 'rest').toLowerCase();
+        if (typ === 'ble' && Array.isArray(c.bleChannels)) {
+            for (const ch of c.bleChannels) {
+                const k = bleChannelValueKeyForTelegram(ch);
+                if (k) keys.add(k);
+            }
+        } else if (Array.isArray(c.restFields)) {
+            for (const k of collectRestValueKeysForTelegram(c.restFields)) {
+                if (k) keys.add(k);
+            }
+        }
+    }
+    return Array.from(keys).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+}
+
+function telegramSmartSensorDatalistId(ruleId) {
+    const raw = String(ruleId || 'x').replace(/[^a-zA-Z0-9_-]/g, '_');
+    return `telegramSsFields_${raw}`;
+}
+
 function getUpsRuleTargetOptions(rule) {
     const active = (Array.isArray(upsConfigs) ? upsConfigs : [])
         .map((cfg, idx) => ({ cfg, slot: idx + 1 }))
@@ -3393,7 +3482,9 @@ function getTelegramRuleTypeLabel(type) {
         ups_on_battery: 'telegramRuleTypeUpsBattery',
         ups_back_to_mains: 'telegramRuleTypeUpsMains',
         ups_charge_low: 'telegramRuleTypeUpsChargeLow',
-        ups_charge_full: 'telegramRuleTypeUpsChargeFull'
+        ups_charge_full: 'telegramRuleTypeUpsChargeFull',
+        smart_sensor_error: 'telegramRuleTypeSmartSensorError',
+        smart_sensor_threshold: 'telegramRuleTypeSmartSensorThreshold'
     };
     return t(m[type] || type);
 }
@@ -3569,7 +3660,28 @@ function buildTelegramRuleTargetSelectHtml(rule) {
         }).join('');
         return `<select class="form-select form-select-sm" data-tr-field="targetTrueNASPools" data-rule-id="${escapeHtml(rule.id)}" multiple size="4">${opts || '<option value="">—</option>'}</select>`;
     }
+    if (typ === 'smart_sensor_error' || typ === 'smart_sensor_threshold') {
+        const selected = new Set((Array.isArray(rule.smartSensorIds) ? rule.smartSensorIds : [rule.smartSensorId]).map((x) => String(x || '').trim()).filter(Boolean));
+        const optsList = getSmartSensorOptionsForTelegramRules();
+        const opts = optsList.map((it) => {
+            const sel = selected.has(it.id) ? ' selected' : '';
+            return `<option value="${escapeHtml(it.id)}"${sel}>${escapeHtml(it.label)}</option>`;
+        }).join('');
+        const emptyHint = t('telegramRuleSmartSensorListEmpty') || 'Настройте датчики в разделе умного дома';
+        return `<select class="form-select form-select-sm" data-tr-field="targetSmartSensors" data-rule-id="${escapeHtml(rule.id)}" multiple size="4">${opts || `<option value="" disabled>${escapeHtml(emptyHint)}</option>`}</select>`;
+    }
     return '—';
+}
+
+function telegramSmartSensorCompareLabel(op) {
+    const key = {
+        gt: 'telegramSmartSensorOpGt',
+        gte: 'telegramSmartSensorOpGte',
+        lt: 'telegramSmartSensorOpLt',
+        lte: 'telegramSmartSensorOpLte'
+    }[String(op)] || 'telegramSmartSensorOpGte';
+    const s = t(key);
+    return s && s !== key ? s : String(op);
 }
 
 function buildTelegramRuleExtraHtml(rule) {
@@ -3590,6 +3702,30 @@ function buildTelegramRuleExtraHtml(rule) {
         const v = rule.poolUsageThresholdPct != null && rule.poolUsageThresholdPct !== '' ? String(rule.poolUsageThresholdPct) : '85';
         return `<input type="number" class="form-control form-control-sm" min="0" max="100" step="1" value="${escapeHtml(v)}" data-tr-field="extraTrueNASPoolUsage" data-rule-id="${escapeHtml(rule.id)}" title="${escapeHtml(t('telegramRuleTrueNASPoolUsageHint') || '%')}">`;
     }
+    if (typ === 'smart_sensor_threshold') {
+        const fk = rule.smartSensorFieldKey != null ? String(rule.smartSensorFieldKey) : 'temperature';
+        const thr = rule.smartSensorThreshold != null && rule.smartSensorThreshold !== '' ? String(rule.smartSensorThreshold) : '30';
+        const op = String(rule.smartSensorCompare || 'gte');
+        const opOpts = ['gt', 'gte', 'lt', 'lte'].map((o) => {
+            const sel = op === o ? ' selected' : '';
+            return `<option value="${o}"${sel}>${escapeHtml(telegramSmartSensorCompareLabel(o))}</option>`;
+        }).join('');
+        const fieldKeys = getConfiguredSmartSensorFieldKeysForRule(rule);
+        const fkTrim = String(fk || '').trim();
+        const dlKeys = [...fieldKeys];
+        if (fkTrim && !dlKeys.includes(fkTrim)) dlKeys.push(fkTrim);
+        dlKeys.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+        const dlId = telegramSmartSensorDatalistId(rule.id);
+        const dlOpts = dlKeys.map((k) => `<option value="${escapeHtml(k)}"></option>`).join('');
+        const ph = t('telegramRuleSmartSensorFieldPickOrType') || t('telegramRuleSmartSensorFieldPlaceholder') || '';
+        return `
+            <div class="d-flex flex-column gap-1">
+                <datalist id="${escapeHtml(dlId)}">${dlOpts}</datalist>
+                <input type="text" class="form-control form-control-sm font-monospace" list="${escapeHtml(dlId)}" value="${escapeHtml(fk)}" data-tr-field="extraSmartSensorField" data-rule-id="${escapeHtml(rule.id)}" placeholder="${escapeHtml(ph)}" title="${escapeHtml(t('telegramRuleSmartSensorFieldHint') || '')}" autocomplete="off">
+                <select class="form-select form-select-sm" data-tr-field="extraSmartSensorCompare" data-rule-id="${escapeHtml(rule.id)}">${opOpts}</select>
+                <input type="number" class="form-control form-control-sm" step="any" value="${escapeHtml(thr)}" data-tr-field="extraSmartSensorThr" data-rule-id="${escapeHtml(rule.id)}" title="${escapeHtml(t('telegramRuleSmartSensorThrHint') || 'Порог')}">
+            </div>`;
+    }
     return `<span class="text-muted small">—</span>`;
 }
 
@@ -3603,7 +3739,7 @@ function renderTelegramRulesTable() {
         return;
     }
     body.innerHTML = rules.map((rule) => {
-        const typeOpts = ['service_updown', 'vm_state', 'node_online', 'netdev_updown', 'host_temp', 'host_link_speed', 'truenas_disk_state', 'truenas_pool_usage', 'truenas_service_state', 'truenas_pool_state', 'ups_load_high', 'ups_on_battery', 'ups_back_to_mains', 'ups_charge_low', 'ups_charge_full'].map((tp) => {
+        const typeOpts = ['service_updown', 'vm_state', 'node_online', 'netdev_updown', 'host_temp', 'host_link_speed', 'truenas_disk_state', 'truenas_pool_usage', 'truenas_service_state', 'truenas_pool_state', 'ups_load_high', 'ups_on_battery', 'ups_back_to_mains', 'ups_charge_low', 'ups_charge_full', 'smart_sensor_error', 'smart_sensor_threshold'].map((tp) => {
             const sel = String(rule.type) === tp ? ' selected' : '';
             return `<option value="${tp}"${sel}>${escapeHtml(getTelegramRuleTypeLabel(tp))}</option>`;
         }).join('');
@@ -3735,6 +3871,11 @@ function onTelegramRuleTypeChange(ev) {
     delete rule.upsSlots;
     delete rule.loadThresholdPct;
     delete rule.chargeThresholdPct;
+    delete rule.smartSensorId;
+    delete rule.smartSensorIds;
+    delete rule.smartSensorFieldKey;
+    delete rule.smartSensorCompare;
+    delete rule.smartSensorThreshold;
     const nn = getClusterNodeNamesForTelegramRules()[0] || 'pve';
     if (rule.type === 'service_updown') {
         const list = Array.isArray(monitoredServices) ? monitoredServices : [];
@@ -3789,12 +3930,32 @@ function onTelegramRuleTypeChange(ev) {
         rule.upsSlot = 1;
         rule.upsSlots = [1];
         rule.chargeThresholdPct = 20;
+    } else if (rule.type === 'smart_sensor_error' || rule.type === 'smart_sensor_threshold') {
+        const opts = getSmartSensorOptionsForTelegramRules();
+        const first = opts[0];
+        const sid = first ? first.id : 'sensor';
+        rule.smartSensorId = sid;
+        rule.smartSensorIds = [sid];
+        if (rule.type === 'smart_sensor_threshold') {
+            rule.smartSensorFieldKey = 'temperature';
+            rule.smartSensorCompare = 'gte';
+            rule.smartSensorThreshold = 30;
+        }
     }
     renderTelegramRulesTable();
 }
 
-function onTelegramRuleFieldChange() {
+function onTelegramRuleFieldChange(ev) {
     syncTelegramRulesFromDom();
+    const el = ev && ev.target;
+    const field = el && el.getAttribute('data-tr-field');
+    if (field === 'targetSmartSensors') {
+        const rid = el.getAttribute('data-rule-id');
+        const rule = rid && findTelegramRuleById(rid);
+        if (rule && rule.type === 'smart_sensor_threshold') {
+            renderTelegramRulesTable();
+        }
+    }
 }
 
 function syncTelegramRulesFromDom() {
@@ -3839,6 +4000,11 @@ function syncTelegramRulesFromDom() {
             delete rule.upsSlots;
             delete rule.loadThresholdPct;
             delete rule.chargeThresholdPct;
+            delete rule.smartSensorId;
+            delete rule.smartSensorIds;
+            delete rule.smartSensorFieldKey;
+            delete rule.smartSensorCompare;
+            delete rule.smartSensorThreshold;
             if (typ === 'service_updown') rule.serviceId = parseInt(v, 10);
             else if (typ === 'vm_state') rule.vmid = parseInt(v, 10);
             else if (typ === 'node_online' || typ === 'host_temp' || typ === 'host_link_speed') {
@@ -3922,6 +4088,15 @@ function syncTelegramRulesFromDom() {
                 rule.truenasServiceId = uniq[0];
             }
         }
+        const tgtSmart = tr.querySelector('[data-tr-field="targetSmartSensors"]');
+        if (tgtSmart && (String(rule.type) === 'smart_sensor_error' || String(rule.type) === 'smart_sensor_threshold')) {
+            const vals = Array.from(tgtSmart.selectedOptions || []).map((o) => String(o.value || '').trim()).filter(Boolean);
+            const uniq = Array.from(new Set(vals));
+            if (uniq.length) {
+                rule.smartSensorIds = uniq;
+                rule.smartSensorId = uniq[0];
+            }
+        }
         const ex = tr.querySelector('[data-tr-field="extraTemp"]');
         if (ex && String(rule.type) === 'host_temp') {
             const n = parseFloat(ex.value);
@@ -3941,6 +4116,21 @@ function syncTelegramRulesFromDom() {
         if (exTnPoolUsage && String(rule.type) === 'truenas_pool_usage') {
             const n = parseFloat(exTnPoolUsage.value);
             rule.poolUsageThresholdPct = Number.isFinite(n) ? n : 85;
+        }
+        const exSsField = tr.querySelector('[data-tr-field="extraSmartSensorField"]');
+        if (exSsField && String(rule.type) === 'smart_sensor_threshold') {
+            const fk = String(exSsField.value || '').trim();
+            rule.smartSensorFieldKey = fk || 'temperature';
+        }
+        const exSsCmp = tr.querySelector('[data-tr-field="extraSmartSensorCompare"]');
+        if (exSsCmp && String(rule.type) === 'smart_sensor_threshold') {
+            const c = String(exSsCmp.value || 'gte').toLowerCase();
+            rule.smartSensorCompare = ['gt', 'gte', 'lt', 'lte'].includes(c) ? c : 'gte';
+        }
+        const exSsThr = tr.querySelector('[data-tr-field="extraSmartSensorThr"]');
+        if (exSsThr && String(rule.type) === 'smart_sensor_threshold') {
+            const n = parseFloat(exSsThr.value);
+            rule.smartSensorThreshold = Number.isFinite(n) ? n : 0;
         }
         map.set(rid, rule);
     });

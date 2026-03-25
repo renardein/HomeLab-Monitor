@@ -11,6 +11,7 @@ const { pollNetdevMonitoringItems } = require('./routes/netdevices-snmp');
 const { getEffectiveRules } = require('./telegram-rules');
 const hostMetricsRoute = require('./routes/host-metrics');
 const upsRoute = require('./routes/ups');
+const smartSensorsRoute = require('./routes/smart-sensors');
 
 function normalizeUrl(u) {
     try {
@@ -142,7 +143,9 @@ function parseNotifyState() {
             truenasDisk: {},
             truenasPoolUsage: {},
             truenasService: {},
-            truenasPoolState: {}
+            truenasPoolState: {},
+            smartSensorError: {},
+            smartSensorThreshold: {}
         };
     }
     try {
@@ -154,7 +157,9 @@ function parseNotifyState() {
                 node: {},
                 netdev: {},
                 hostTemp: {},
-                hostLink: {}
+                hostLink: {},
+                smartSensorError: {},
+                smartSensorThreshold: {}
             };
         }
         return {
@@ -170,7 +175,9 @@ function parseNotifyState() {
             truenasDisk: p.truenasDisk && typeof p.truenasDisk === 'object' ? p.truenasDisk : {},
             truenasPoolUsage: p.truenasPoolUsage && typeof p.truenasPoolUsage === 'object' ? p.truenasPoolUsage : {},
             truenasService: p.truenasService && typeof p.truenasService === 'object' ? p.truenasService : {},
-            truenasPoolState: p.truenasPoolState && typeof p.truenasPoolState === 'object' ? p.truenasPoolState : {}
+            truenasPoolState: p.truenasPoolState && typeof p.truenasPoolState === 'object' ? p.truenasPoolState : {},
+            smartSensorError: p.smartSensorError && typeof p.smartSensorError === 'object' ? p.smartSensorError : {},
+            smartSensorThreshold: p.smartSensorThreshold && typeof p.smartSensorThreshold === 'object' ? p.smartSensorThreshold : {}
         };
     } catch {
         return {
@@ -186,7 +193,9 @@ function parseNotifyState() {
             truenasDisk: {},
             truenasPoolUsage: {},
             truenasService: {},
-            truenasPoolState: {}
+            truenasPoolState: {},
+            smartSensorError: {},
+            smartSensorThreshold: {}
         };
     }
 }
@@ -212,6 +221,27 @@ function buildServiceTarget(s) {
         host: String(s.host || '').trim(),
         port: s.port != null ? parseInt(s.port, 10) : null
     };
+}
+
+function smartSensorNumericFromEntry(entry) {
+    if (!entry || typeof entry !== 'object') return null;
+    if (entry.value != null && Number.isFinite(Number(entry.value))) return Number(entry.value);
+    const raw = entry.raw;
+    if (raw != null && typeof raw !== 'object') {
+        const n = parseFloat(String(raw).replace(',', '.').trim());
+        if (Number.isFinite(n)) return n;
+    }
+    return null;
+}
+
+function smartSensorThresholdCompare(op, value, thr) {
+    switch (String(op || '').toLowerCase()) {
+        case 'gt': return value > thr;
+        case 'gte': return value >= thr;
+        case 'lt': return value < thr;
+        case 'lte': return value <= thr;
+        default: return value >= thr;
+    }
 }
 
 function routeChat(rule) {
@@ -330,6 +360,20 @@ async function runNotifyTick() {
             trueNASOverview = { pools: [], disks: [], services: [] };
         }
         return trueNASOverview;
+    }
+
+    let smartSensorsNotifyPromise = null;
+    async function loadSmartSensorsForNotify() {
+        if (smartSensorsNotifyPromise) return smartSensorsNotifyPromise;
+        smartSensorsNotifyPromise = (async () => {
+            try {
+                return await smartSensorsRoute.fetchSmartSensorsCurrent();
+            } catch (e) {
+                log('warn', `[MonitorNotify] smart sensors: ${e.message}`);
+                return { configured: false, items: [] };
+            }
+        })();
+        return smartSensorsNotifyPromise;
     }
 
     function getUpsPowerState(upsItem) {
@@ -676,6 +720,148 @@ async function runNotifyTick() {
                         await sendTelegramMessage(token, chatId, msg, threadId, { proxyUrl: telegramProxyUrl });
                     }
                     state.truenasPoolUsage[key] = nowLevel;
+                }
+                continue;
+            }
+
+            if (rule.type === 'smart_sensor_error') {
+                const snap = await loadSmartSensorsForNotify();
+                const items = Array.isArray(snap.items) ? snap.items : [];
+                const selected = Array.isArray(rule.smartSensorIds) && rule.smartSensorIds.length
+                    ? rule.smartSensorIds.map((x) => String(x || '').trim()).filter(Boolean)
+                    : (rule.smartSensorId ? [String(rule.smartSensorId).trim()] : []);
+                const { chatId, threadId } = routeChat(rule);
+                if (!chatId) continue;
+                for (const sid of selected) {
+                    if (!sid) continue;
+                    const item = items.find((it) => String(it?.id || '') === sid);
+                    const nowSig = !item ? 'absent' : (item.error ? `err:${String(item.error)}` : 'ok');
+                    const key = `${String(rule.id || 'rule')}|${sid}`;
+                    const prev = state.smartSensorError[key];
+                    if (prev === undefined) {
+                        state.smartSensorError[key] = nowSig;
+                        continue;
+                    }
+                    if (prev === nowSig) {
+                        state.smartSensorError[key] = nowSig;
+                        continue;
+                    }
+                    const name = item ? String(item.name || sid) : sid;
+                    const typeLabel = item && item.type === 'ble' ? 'BLE' : 'REST';
+                    if (nowSig === 'ok') {
+                        const msg = formatTelegramNotifyMessage(
+                            rule,
+                            {
+                                sensorName: name,
+                                sensorId: sid,
+                                sensorType: typeLabel,
+                                state: 'ok',
+                                stateRu: 'Ок',
+                                error: ''
+                            },
+                            `Датчик «${name}» (${typeLabel}): снова в норме`
+                        );
+                        await sendTelegramMessage(token, chatId, msg, threadId, { proxyUrl: telegramProxyUrl });
+                    } else if (nowSig.startsWith('err:')) {
+                        const errText = nowSig.slice(4);
+                        const msg = formatTelegramNotifyMessage(
+                            rule,
+                            {
+                                sensorName: name,
+                                sensorId: sid,
+                                sensorType: typeLabel,
+                                state: 'error',
+                                stateRu: 'Ошибка',
+                                error: errText
+                            },
+                            `Датчик «${name}» (${typeLabel}): ${errText}`
+                        );
+                        await sendTelegramMessage(token, chatId, msg, threadId, { proxyUrl: telegramProxyUrl });
+                    } else if (nowSig === 'absent') {
+                        const msg = formatTelegramNotifyMessage(
+                            rule,
+                            {
+                                sensorName: name,
+                                sensorId: sid,
+                                sensorType: '—',
+                                state: 'absent',
+                                stateRu: 'Нет в опросе',
+                                error: ''
+                            },
+                            `Датчик id=${sid} не найден в текущем опросе (выключен или удалён)`
+                        );
+                        await sendTelegramMessage(token, chatId, msg, threadId, { proxyUrl: telegramProxyUrl });
+                    }
+                    state.smartSensorError[key] = nowSig;
+                }
+                continue;
+            }
+
+            if (rule.type === 'smart_sensor_threshold') {
+                const snap = await loadSmartSensorsForNotify();
+                const items = Array.isArray(snap.items) ? snap.items : [];
+                const fieldKey = String(rule.smartSensorFieldKey || '').trim();
+                const op = String(rule.smartSensorCompare || 'gte').toLowerCase();
+                const thr = Number(rule.smartSensorThreshold);
+                const { chatId, threadId } = routeChat(rule);
+                if (!fieldKey || !Number.isFinite(thr) || !chatId) continue;
+                const selected = Array.isArray(rule.smartSensorIds) && rule.smartSensorIds.length
+                    ? rule.smartSensorIds.map((x) => String(x || '').trim()).filter(Boolean)
+                    : (rule.smartSensorId ? [String(rule.smartSensorId).trim()] : []);
+                for (const sid of selected) {
+                    if (!sid) continue;
+                    const item = items.find((it) => String(it?.id || '') === sid);
+                    if (!item || item.error) continue;
+                    const entry = item.values && typeof item.values === 'object' ? item.values[fieldKey] : null;
+                    const num = smartSensorNumericFromEntry(entry);
+                    if (num == null || !Number.isFinite(num)) continue;
+                    const nowHigh = smartSensorThresholdCompare(op, num, thr);
+                    const nowLevel = nowHigh ? 'high' : 'ok';
+                    const key = `${String(rule.id || 'rule')}|${sid}|${fieldKey}|${op}|${thr}`;
+                    const prev = state.smartSensorThreshold[key];
+                    if (prev === undefined) {
+                        state.smartSensorThreshold[key] = nowLevel;
+                        continue;
+                    }
+                    const prevLevel = prev === 'high' ? 'high' : 'ok';
+                    const name = String(item.name || sid);
+                    const typeLabel = item.type === 'ble' ? 'BLE' : 'REST';
+                    if (prevLevel === 'ok' && nowLevel === 'high') {
+                        const msg = formatTelegramNotifyMessage(
+                            rule,
+                            {
+                                sensorName: name,
+                                sensorId: sid,
+                                sensorType: typeLabel,
+                                field: fieldKey,
+                                value: String(num),
+                                thr: String(thr),
+                                op: op,
+                                state: 'high',
+                                stateRu: 'Порог превышен'
+                            },
+                            `Датчик «${name}» (${typeLabel}): ${fieldKey} = ${num} (условие ${op} ${thr})`
+                        );
+                        await sendTelegramMessage(token, chatId, msg, threadId, { proxyUrl: telegramProxyUrl });
+                    } else if (prevLevel === 'high' && nowLevel === 'ok') {
+                        const msg = formatTelegramNotifyMessage(
+                            rule,
+                            {
+                                sensorName: name,
+                                sensorId: sid,
+                                sensorType: typeLabel,
+                                field: fieldKey,
+                                value: String(num),
+                                thr: String(thr),
+                                op: op,
+                                state: 'ok',
+                                stateRu: 'Норма'
+                            },
+                            `Датчик «${name}» (${typeLabel}): ${fieldKey} = ${num} — ниже порога (${op} ${thr})`
+                        );
+                        await sendTelegramMessage(token, chatId, msg, threadId, { proxyUrl: telegramProxyUrl });
+                    }
+                    state.smartSensorThreshold[key] = nowLevel;
                 }
                 continue;
             }

@@ -579,4 +579,7 @@ router.get('/current', async (req, res) => {
     }
 });
 
+/** Для monitor-notify / Telegram (без HTTP-кэша маршрута). */
+router.fetchSmartSensorsCurrent = fetchSmartSensorsCurrent;
+
 module.exports = router;
