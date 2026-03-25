@@ -68,6 +68,7 @@ app.use('/api/truenas/auth', require('./modules/routes/truenas-auth'));
 app.use('/api/truenas', require('./modules/routes/truenas-status'));
 app.use('/api/connections', require('./modules/routes/connections'));
 app.use('/api/settings', require('./modules/routes/settings'));
+app.use('/api/weather', require('./modules/routes/weather'));
 app.use('/api/about', require('./modules/routes/about'));
 app.use('/api/updates', require('./modules/routes/updates'));
 app.use('/api/ups', require('./modules/routes/ups'));

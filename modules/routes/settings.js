@@ -100,6 +100,7 @@ const SETTING_KEYS = [
     'monitor_screens_enabled',
     'cluster_dashboard_tiles',
     'dashboard_weather_city',
+    'dashboard_weather_provider',
     'dashboard_timezone',
     'dashboard_show_time',
     'dashboard_show_weather',
@@ -203,6 +204,11 @@ router.get('/', (req, res) => {
         payload.monitor_service_icon_colors = iconMaps.monitor_service_icon_colors;
         payload.monitor_vm_icons = iconMaps.monitor_vm_icons;
         payload.monitor_vm_icon_colors = iconMaps.monitor_vm_icon_colors;
+        if (!payload.dashboard_weather_provider) payload.dashboard_weather_provider = 'open_meteo';
+        const wk = (k) => !!(store.getSetting(k) && String(store.getSetting(k)).trim());
+        payload.weather_openweathermap_api_key_set = wk('weather_openweathermap_api_key');
+        payload.weather_yandex_api_key_set = wk('weather_yandex_api_key');
+        payload.weather_gismeteo_api_key_set = wk('weather_gismeteo_api_key');
         res.json(payload);
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -259,6 +265,13 @@ router.post('/', (req, res) => {
             monitor_screens_enabled: body.monitor_screens_enabled ?? body.monitorScreensEnabled,
             cluster_dashboard_tiles: body.cluster_dashboard_tiles ?? body.clusterDashboardTiles,
             dashboard_weather_city: body.dashboard_weather_city ?? body.dashboardWeatherCity,
+            dashboard_weather_provider: (() => {
+                const v = body.dashboard_weather_provider ?? body.dashboardWeatherProvider;
+                if (v === undefined) return undefined;
+                const s = String(v).trim().toLowerCase().replace(/-/g, '_');
+                const allowed = ['open_meteo', 'openweathermap', 'yandex', 'gismeteo'];
+                return allowed.includes(s) ? s : 'open_meteo';
+            })(),
             dashboard_timezone: body.dashboard_timezone ?? body.dashboardTimezone,
             dashboard_show_time: (() => {
                 const v = body.dashboard_show_time ?? body.dashboardShowTime;
@@ -321,12 +334,24 @@ router.post('/', (req, res) => {
         if (clearTg) {
             store.setSetting('telegram_bot_token', '');
             map._telegram_cleared = true;
-        } else         if (newTgTok !== undefined && newTgTok !== null && String(newTgTok).trim() !== '') {
+        } else if (newTgTok !== undefined && newTgTok !== null && String(newTgTok).trim() !== '') {
             const t = String(newTgTok).trim();
             if (isValidTelegramBotTokenFormat(t)) {
                 store.setSetting('telegram_bot_token', t);
                 map._telegram_token_set = true;
             }
+        }
+        const wOwm = body.weather_openweathermap_api_key ?? body.weatherOpenweathermapApiKey;
+        if (wOwm !== undefined && String(wOwm).trim() !== '') {
+            store.setSetting('weather_openweathermap_api_key', String(wOwm).trim());
+        }
+        const wYandex = body.weather_yandex_api_key ?? body.weatherYandexApiKey;
+        if (wYandex !== undefined && String(wYandex).trim() !== '') {
+            store.setSetting('weather_yandex_api_key', String(wYandex).trim());
+        }
+        const wGis = body.weather_gismeteo_api_key ?? body.weatherGismeteoApiKey;
+        if (wGis !== undefined && String(wGis).trim() !== '') {
+            store.setSetting('weather_gismeteo_api_key', String(wGis).trim());
         }
         if (map.monitor_service_icons !== undefined || map.monitor_service_icon_colors !== undefined) {
             store.replaceMonitorIconScope('service', map.monitor_service_icons, map.monitor_service_icon_colors);

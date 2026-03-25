@@ -220,6 +220,31 @@
                                 <div class="form-text" id="settingsDashboardWeatherCityHint">Используется для получения текущей погоды.</div>
                             </div>
                             <div class="col-md-6">
+                                <label class="form-label fw-bold" id="settingsDashboardWeatherProviderLabel">Источник погоды</label>
+                                <select class="form-select" id="settingsDashboardWeatherProviderSelect" onchange="onDashboardWeatherProviderChange()">
+                                    <option value="open_meteo">Open-Meteo</option>
+                                    <option value="openweathermap">OpenWeatherMap</option>
+                                    <option value="yandex">Яндекс.Погода</option>
+                                    <option value="gismeteo">Gismeteo</option>
+                                </select>
+                                <div class="form-text" id="settingsDashboardWeatherProviderHint"></div>
+                            </div>
+                            <div class="col-12 weather-provider-keys weather-provider-keys--owm" style="display: none;">
+                                <label class="form-label fw-bold" id="settingsWeatherOwmKeyLabel">OpenWeatherMap API key</label>
+                                <input type="password" class="form-control" id="settingsWeatherOwmKeyInput" autocomplete="off" placeholder="">
+                                <div class="form-text" id="settingsWeatherOwmKeyHint"></div>
+                            </div>
+                            <div class="col-12 weather-provider-keys weather-provider-keys--yandex" style="display: none;">
+                                <label class="form-label fw-bold" id="settingsWeatherYandexKeyLabel">Яндекс.Погода API key</label>
+                                <input type="password" class="form-control" id="settingsWeatherYandexKeyInput" autocomplete="off" placeholder="">
+                                <div class="form-text" id="settingsWeatherYandexKeyHint"></div>
+                            </div>
+                            <div class="col-12 weather-provider-keys weather-provider-keys--gismeteo" style="display: none;">
+                                <label class="form-label fw-bold" id="settingsWeatherGismeteoKeyLabel">Gismeteo API token</label>
+                                <input type="password" class="form-control" id="settingsWeatherGismeteoKeyInput" autocomplete="off" placeholder="">
+                                <div class="form-text" id="settingsWeatherGismeteoKeyHint"></div>
+                            </div>
+                            <div class="col-md-6">
                                 <label class="form-label fw-bold" id="settingsDashboardTimezoneLabel">Часовой пояс</label>
                                 <input type="text" class="form-control" id="settingsDashboardTimezoneInput" placeholder="Europe/Moscow">
                                 <div class="form-text" id="settingsDashboardTimezoneHint">Используйте IANA-формат, например Europe/Berlin.</div>

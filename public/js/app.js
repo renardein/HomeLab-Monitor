@@ -113,6 +113,11 @@ const DEFAULT_DASHBOARD_TIMEZONE = (() => {
 })();
 const DASHBOARD_WEATHER_REFRESH_MS = 10 * 60 * 1000;
 let dashboardWeatherCity = '';
+/** open_meteo | openweathermap | yandex | gismeteo */
+let dashboardWeatherProvider = 'open_meteo';
+let weatherOpenweathermapApiKeySet = false;
+let weatherYandexApiKeySet = false;
+let weatherGismeteoApiKeySet = false;
 let dashboardTimezone = DEFAULT_DASHBOARD_TIMEZONE;
 let dashboardWeatherData = null;
 let dashboardWeatherDisplayName = '';
@@ -600,6 +605,12 @@ function normalizeDashboardWeatherCity(value) {
     return String(value || '').trim();
 }
 
+function normalizeDashboardWeatherProvider(value) {
+    const s = String(value || '').trim().toLowerCase().replace(/-/g, '_');
+    const allowed = ['open_meteo', 'openweathermap', 'yandex', 'gismeteo'];
+    return allowed.includes(s) ? s : 'open_meteo';
+}
+
 function isValidDashboardTimezone(value) {
     const tz = String(value || '').trim();
     if (!tz) return false;
@@ -673,8 +684,11 @@ function renderDashboardTimeWeatherCard() {
     } catch (_) {}
 
     let weatherValue = escapeHtml(t('dashboardWeatherUnavailable') || 'Weather unavailable');
-    const cityValue = dashboardWeatherCity
-        ? escapeHtml(dashboardWeatherCity)
+    const metaLine =
+        dashboardWeatherDisplayName ||
+        (dashboardWeatherCity ? dashboardWeatherCity : '');
+    const cityValue = metaLine
+        ? escapeHtml(metaLine)
         : escapeHtml(t('dashboardWeatherCityMissing') || 'Set a city in settings');
 
     if (dashboardWeatherCity) {
@@ -715,7 +729,7 @@ async function refreshDashboardWeather(force = false) {
         return null;
     }
 
-    const requestedTimezone = normalizeDashboardTimezone(dashboardTimezone);
+    const requestedProvider = dashboardWeatherProvider;
     const now = Date.now();
     if (!force && dashboardWeatherFetchPromise) return dashboardWeatherFetchPromise;
     if (!force && dashboardWeatherLastFetchMs && (now - dashboardWeatherLastFetchMs) < DASHBOARD_WEATHER_REFRESH_MS) {
@@ -727,47 +741,26 @@ async function refreshDashboardWeather(force = false) {
     let requestPromise = null;
     requestPromise = (async () => {
         try {
-            const geocodeUrl = new URL('https://geocoding-api.open-meteo.com/v1/search');
-            geocodeUrl.searchParams.set('name', requestedCity);
-            geocodeUrl.searchParams.set('count', '1');
-            geocodeUrl.searchParams.set('language', currentLanguage === 'ru' ? 'ru' : 'en');
-            geocodeUrl.searchParams.set('format', 'json');
-
-            const geocodeRes = await fetch(geocodeUrl.toString());
-            if (!geocodeRes.ok) throw new Error(`Geocoding failed: ${geocodeRes.status}`);
-            const geocodeData = await geocodeRes.json();
-            const result = Array.isArray(geocodeData?.results) ? geocodeData.results[0] : null;
-            if (!result || result.latitude == null || result.longitude == null) {
-                throw new Error('City not found');
+            const lang = currentLanguage === 'ru' ? 'ru' : 'en';
+            const qs = new URLSearchParams({ city: requestedCity, lang });
+            const weatherRes = await fetch(`/api/weather/dashboard?${qs.toString()}`);
+            const j = await weatherRes.json().catch(() => ({}));
+            if (!j || j.success !== true) {
+                throw new Error(j?.error || t('dashboardWeatherUnavailable') || 'Weather unavailable');
             }
-
-            const weatherUrl = new URL('https://api.open-meteo.com/v1/forecast');
-            weatherUrl.searchParams.set('latitude', String(result.latitude));
-            weatherUrl.searchParams.set('longitude', String(result.longitude));
-            weatherUrl.searchParams.set('current', 'temperature_2m,weather_code,is_day');
-            weatherUrl.searchParams.set('timezone', requestedTimezone);
-
-            const weatherRes = await fetch(weatherUrl.toString());
-            if (!weatherRes.ok) throw new Error(`Weather failed: ${weatherRes.status}`);
-            const weatherData = await weatherRes.json();
-            const current = weatherData?.current;
-            if (!current || current.temperature_2m == null) {
-                throw new Error('Weather unavailable');
-            }
-
-            if (requestedCity !== dashboardWeatherCity || requestedTimezone !== dashboardTimezone) return null;
+            if (requestedCity !== dashboardWeatherCity || requestedProvider !== dashboardWeatherProvider) return null;
 
             dashboardWeatherData = {
-                temperature: Number(current.temperature_2m),
-                weatherCode: Number(current.weather_code),
-                isDay: Number(current.is_day) !== 0
+                temperature: Number(j.temperature),
+                weatherCode: Number(j.weatherCode),
+                isDay: !!j.isDay
             };
-            dashboardWeatherDisplayName = [result.name, result.admin1, result.country].filter(Boolean).join(', ');
+            dashboardWeatherDisplayName = j.displayName ? String(j.displayName) : '';
             dashboardWeatherError = '';
             dashboardWeatherLastFetchMs = Date.now();
             return dashboardWeatherData;
         } catch (error) {
-            if (requestedCity === dashboardWeatherCity && requestedTimezone === dashboardTimezone) {
+            if (requestedCity === dashboardWeatherCity && requestedProvider === dashboardWeatherProvider) {
                 dashboardWeatherData = null;
                 dashboardWeatherDisplayName = '';
                 dashboardWeatherError = error?.message || 'Weather unavailable';
@@ -802,6 +795,33 @@ function startDashboardClockTimer() {
     }, 1000);
 }
 
+function onDashboardWeatherProviderChange() {
+    const sel = el('settingsDashboardWeatherProviderSelect');
+    if (!sel) return;
+    const v = normalizeDashboardWeatherProvider(sel.value);
+    const show = (cls, on) => {
+        document.querySelectorAll(cls).forEach((node) => {
+            node.style.display = on ? '' : 'none';
+        });
+    };
+    show('.weather-provider-keys--owm', v === 'openweathermap');
+    show('.weather-provider-keys--yandex', v === 'yandex');
+    show('.weather-provider-keys--gismeteo', v === 'gismeteo');
+    const phSet = t('settingsWeatherApiKeyPlaceholderSet') || '••••••••';
+    const owm = el('settingsWeatherOwmKeyInput');
+    if (owm) {
+        owm.placeholder = weatherOpenweathermapApiKeySet ? phSet : '';
+    }
+    const ya = el('settingsWeatherYandexKeyInput');
+    if (ya) {
+        ya.placeholder = weatherYandexApiKeySet ? phSet : '';
+    }
+    const gis = el('settingsWeatherGismeteoKeyInput');
+    if (gis) {
+        gis.placeholder = weatherGismeteoApiKeySet ? phSet : '';
+    }
+}
+
 async function saveDashboardTimeWeatherSettings() {
     const cityInput = el('settingsDashboardWeatherCityInput');
     const timezoneInput = el('settingsDashboardTimezoneInput');
@@ -814,8 +834,11 @@ async function saveDashboardTimeWeatherSettings() {
     }
 
     const nextTimezone = normalizeDashboardTimezone(rawTimezone);
+    const provSel = el('settingsDashboardWeatherProviderSelect');
+    const nextProvider = provSel ? normalizeDashboardWeatherProvider(provSel.value) : dashboardWeatherProvider;
     const cityChanged = nextCity !== dashboardWeatherCity;
     const timezoneChanged = nextTimezone !== dashboardTimezone;
+    const providerChanged = nextProvider !== dashboardWeatherProvider;
 
     dashboardShowTime = !!(el('settingsDashboardShowTimeCheckbox') && el('settingsDashboardShowTimeCheckbox').checked);
     dashboardShowWeather = !!(el('settingsDashboardShowWeatherCheckbox') && el('settingsDashboardShowWeatherCheckbox').checked);
@@ -825,21 +848,40 @@ async function saveDashboardTimeWeatherSettings() {
 
     dashboardWeatherCity = nextCity;
     dashboardTimezone = nextTimezone;
-    if (cityChanged || timezoneChanged) resetDashboardWeatherState();
+    dashboardWeatherProvider = nextProvider;
+    if (cityChanged || timezoneChanged || providerChanged) resetDashboardWeatherState();
     setValue('settingsDashboardWeatherCityInput', dashboardWeatherCity);
     setValue('settingsDashboardTimezoneInput', dashboardTimezone);
+    if (provSel) provSel.value = dashboardWeatherProvider;
+    onDashboardWeatherProviderChange();
     startDashboardClockTimer();
 
+    const saveBody = {
+        dashboardWeatherCity: dashboardWeatherCity,
+        dashboardWeatherProvider: dashboardWeatherProvider,
+        dashboardTimezone: dashboardTimezone,
+        dashboardShowTime,
+        dashboardShowWeather,
+        monitorShowTime,
+        monitorShowWeather,
+        monitorDisableChromeGestures
+    };
+    const owmIn = el('settingsWeatherOwmKeyInput');
+    const yaIn = el('settingsWeatherYandexKeyInput');
+    const gisIn = el('settingsWeatherGismeteoKeyInput');
+    if (owmIn && owmIn.value.trim()) saveBody.weatherOpenweathermapApiKey = owmIn.value.trim();
+    if (yaIn && yaIn.value.trim()) saveBody.weatherYandexApiKey = yaIn.value.trim();
+    if (gisIn && gisIn.value.trim()) saveBody.weatherGismeteoApiKey = gisIn.value.trim();
+
     try {
-        await saveSettingsToServer({
-            dashboardWeatherCity: dashboardWeatherCity,
-            dashboardTimezone: dashboardTimezone,
-            dashboardShowTime,
-            dashboardShowWeather,
-            monitorShowTime,
-            monitorShowWeather,
-            monitorDisableChromeGestures
-        });
+        await saveSettingsToServer(saveBody);
+        if (saveBody.weatherOpenweathermapApiKey) weatherOpenweathermapApiKeySet = true;
+        if (saveBody.weatherYandexApiKey) weatherYandexApiKeySet = true;
+        if (saveBody.weatherGismeteoApiKey) weatherGismeteoApiKeySet = true;
+        if (owmIn) owmIn.value = '';
+        if (yaIn) yaIn.value = '';
+        if (gisIn) gisIn.value = '';
+        onDashboardWeatherProviderChange();
         applyMonitorChromeGestureGuards();
         refreshDashboardWeather(true).catch(() => {});
         showToast(t('dataUpdated') || 'Настройки сохранены', 'success');
@@ -1368,7 +1410,11 @@ async function saveSettingsToServer(payload) {
     if (payload.monitorScreensEnabled !== undefined) body.monitorScreensEnabled = payload.monitorScreensEnabled;
     if (payload.clusterDashboardTiles !== undefined) body.clusterDashboardTiles = payload.clusterDashboardTiles;
     if (payload.dashboardWeatherCity !== undefined) body.dashboardWeatherCity = payload.dashboardWeatherCity;
+    if (payload.dashboardWeatherProvider !== undefined) body.dashboardWeatherProvider = payload.dashboardWeatherProvider;
     if (payload.dashboardTimezone !== undefined) body.dashboardTimezone = payload.dashboardTimezone;
+    if (payload.weatherOpenweathermapApiKey !== undefined) body.weatherOpenweathermapApiKey = payload.weatherOpenweathermapApiKey;
+    if (payload.weatherYandexApiKey !== undefined) body.weatherYandexApiKey = payload.weatherYandexApiKey;
+    if (payload.weatherGismeteoApiKey !== undefined) body.weatherGismeteoApiKey = payload.weatherGismeteoApiKey;
     if (payload.dashboardShowTime !== undefined) body.dashboardShowTime = !!payload.dashboardShowTime;
     if (payload.dashboardShowWeather !== undefined) body.dashboardShowWeather = !!payload.dashboardShowWeather;
     if (payload.monitorShowTime !== undefined) body.monitorShowTime = !!payload.monitorShowTime;
@@ -2599,6 +2645,14 @@ function updateUILanguage() {
     setText('settingsDashboardTimeWeatherHint', t('settingsDashboardTimeWeatherHint'));
     setText('settingsDashboardWeatherCityLabel', t('settingsDashboardWeatherCityLabel'));
     setText('settingsDashboardWeatherCityHint', t('settingsDashboardWeatherCityHint'));
+    setText('settingsDashboardWeatherProviderLabel', t('settingsDashboardWeatherProviderLabel'));
+    setText('settingsDashboardWeatherProviderHint', t('settingsDashboardWeatherProviderHint'));
+    setText('settingsWeatherOwmKeyLabel', t('settingsWeatherOwmKeyLabel'));
+    setText('settingsWeatherOwmKeyHint', t('settingsWeatherOwmKeyHint'));
+    setText('settingsWeatherYandexKeyLabel', t('settingsWeatherYandexKeyLabel'));
+    setText('settingsWeatherYandexKeyHint', t('settingsWeatherYandexKeyHint'));
+    setText('settingsWeatherGismeteoKeyLabel', t('settingsWeatherGismeteoKeyLabel'));
+    setText('settingsWeatherGismeteoKeyHint', t('settingsWeatherGismeteoKeyHint'));
     setText('settingsDashboardTimezoneLabel', t('settingsDashboardTimezoneLabel'));
     setText('settingsDashboardTimezoneHint', t('settingsDashboardTimezoneHint'));
     setText('settingsDashboardTimeWeatherSaveBtnLabel', t('settingsDashboardTimeWeatherSaveBtn'));
@@ -2611,6 +2665,7 @@ function updateUILanguage() {
     setText('settingsMonitorDisableChromeGesturesLabel', t('settingsMonitorDisableChromeGesturesLabel'));
     setPlaceholder('settingsDashboardWeatherCityInput', t('settingsDashboardWeatherCityPlaceholder') || 'Berlin');
     setPlaceholder('settingsDashboardTimezoneInput', t('settingsDashboardTimezonePlaceholder') || 'Europe/Berlin');
+    onDashboardWeatherProviderChange();
     setText('settingsClusterTilesTitle', t('settingsClusterTilesTitle'));
     setText('settingsClusterTilesHint', t('settingsClusterTilesHint'));
     setText('settingsClusterTilesAddBtnLabel', t('settingsClusterTilesAddBtn'));
@@ -12109,6 +12164,10 @@ async function loadSettings() {
     clusterDashboardTiles = normalizeClusterDashboardTiles(data.cluster_dashboard_tiles);
     clusterDashboardTilesDirty = false;
     dashboardWeatherCity = normalizeDashboardWeatherCity(data.dashboard_weather_city);
+    dashboardWeatherProvider = normalizeDashboardWeatherProvider(data.dashboard_weather_provider);
+    weatherOpenweathermapApiKeySet = !!data.weather_openweathermap_api_key_set;
+    weatherYandexApiKeySet = !!data.weather_yandex_api_key_set;
+    weatherGismeteoApiKeySet = !!data.weather_gismeteo_api_key_set;
     dashboardTimezone = normalizeDashboardTimezone(data.dashboard_timezone);
     dashboardShowTime = parseBoolSettingClient(data.dashboard_show_time, true);
     dashboardShowWeather = parseBoolSettingClient(data.dashboard_show_weather, true);
@@ -12117,6 +12176,9 @@ async function loadSettings() {
     monitorDisableChromeGestures = parseBoolSettingClient(data.monitor_disable_chrome_gestures, true);
     setValue('settingsDashboardWeatherCityInput', dashboardWeatherCity);
     setValue('settingsDashboardTimezoneInput', dashboardTimezone);
+    const pSel = el('settingsDashboardWeatherProviderSelect');
+    if (pSel) pSel.value = dashboardWeatherProvider;
+    onDashboardWeatherProviderChange();
     const cDashT = el('settingsDashboardShowTimeCheckbox');
     if (cDashT) cDashT.checked = dashboardShowTime;
     const cDashW = el('settingsDashboardShowWeatherCheckbox');
