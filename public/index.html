@@ -1184,7 +1184,7 @@
                                             </div>
                                             <div class="col-md-3">
                                                 <label class="form-label fw-bold" for="speedtestPerDayInput" id="speedtestPerDayLabel">Замеров в сутки</label>
-                                                <input type="number" class="form-control" id="speedtestPerDayInput" min="1" max="48" value="4" onchange="saveSpeedtestSettings()">
+                                                <input type="number" class="form-control" id="speedtestPerDayInput" min="1" max="6" value="4" onchange="saveSpeedtestSettings()">
                                             </div>
                                             <div class="col-md-2 d-grid">
                                                 <button type="button" class="btn btn-outline-primary" id="speedtestRunNowBtn" onclick="runSpeedtestNow()">
@@ -1192,6 +1192,33 @@
                                                 </button>
                                             </div>
                                         </div>
+                                        <div class="row g-3 mb-2">
+                                            <div class="col-md-6">
+                                                <label class="form-label fw-bold" for="speedtestProviderDownloadMbpsInput" id="speedtestProviderDownloadLabel">Скорость провайдера — приём (Мбит/с)</label>
+                                                <input type="number" class="form-control" id="speedtestProviderDownloadMbpsInput" min="0" step="0.1" placeholder="" onchange="saveSpeedtestSettings()" onblur="saveSpeedtestSettings()">
+                                            </div>
+                                            <div class="col-md-6">
+                                                <label class="form-label fw-bold" for="speedtestProviderUploadMbpsInput" id="speedtestProviderUploadLabel">Скорость провайдера — отдача (Мбит/с)</label>
+                                                <input type="number" class="form-control" id="speedtestProviderUploadMbpsInput" min="0" step="0.1" placeholder="" onchange="saveSpeedtestSettings()" onblur="saveSpeedtestSettings()">
+                                            </div>
+                                        </div>
+                                        <p class="form-text mb-3" id="speedtestProviderHint">Необязательно: для сравнения с замерами и шкалы прогресс-баров скачивания. Пусто — шкала по фактическим значениям за сегодня.</p>
+                                        <h6 class="text-muted small text-uppercase mb-2" id="speedtestProxySectionTitle">Прокси для CLI</h6>
+                                        <div class="row g-3 mb-2">
+                                            <div class="col-md-6">
+                                                <label class="form-label fw-bold" for="speedtestHttpProxyInput" id="speedtestHttpProxyLabel">HTTP_PROXY</label>
+                                                <input type="text" class="form-control font-monospace" id="speedtestHttpProxyInput" autocomplete="off" placeholder="http://host:port" onchange="saveSpeedtestSettings()" onblur="saveSpeedtestSettings()">
+                                            </div>
+                                            <div class="col-md-6">
+                                                <label class="form-label fw-bold" for="speedtestHttpsProxyInput" id="speedtestHttpsProxyLabel">HTTPS_PROXY</label>
+                                                <input type="text" class="form-control font-monospace" id="speedtestHttpsProxyInput" autocomplete="off" placeholder="http://host:port" onchange="saveSpeedtestSettings()" onblur="saveSpeedtestSettings()">
+                                            </div>
+                                            <div class="col-12">
+                                                <label class="form-label fw-bold" for="speedtestNoProxyInput" id="speedtestNoProxyLabel">NO_PROXY</label>
+                                                <input type="text" class="form-control font-monospace" id="speedtestNoProxyInput" autocomplete="off" placeholder="localhost,127.0.0.1,.local" onchange="saveSpeedtestSettings()" onblur="saveSpeedtestSettings()">
+                                            </div>
+                                        </div>
+                                        <p class="form-text mb-3" id="speedtestProxyHint">Передаются в процесс Ookla Speedtest как переменные окружения. Для HTTPS-API часто нужен отдельный HTTPS_PROXY. Пустые поля — без прокси (кроме системных переменных среды Node).</p>
                                         <div class="mb-2">
                                             <button type="button" class="btn btn-outline-danger btn-sm" id="speedtestClearHistoryBtn" onclick="clearSpeedtestHistory()">
                                                 <i class="bi bi-trash me-1"></i><span id="speedtestClearHistoryText">Очистить историю замеров</span>
@@ -1755,13 +1782,41 @@
                     </div>
                     <div class="monitor-screen__panel-body">
                         <div class="row g-2 hm-cluster-metric-panel">
-                            <div class="col-md-3 col-6">
+                            <div class="col-6 col-xl-3">
                                 <div class="text-center p-3 hm-cluster-metric-cell">
                                     <h6><i class="bi bi-clock-history me-2"></i><span id="speedtestMonitorLastRunLabel">Последний замер</span></h6>
                                     <div class="hm-speedtest-last-run text-break" id="speedtestMonitorLastRun">—</div>
                                 </div>
                             </div>
-                            <div class="col-md-3 col-6">
+                            <div class="col-6 col-xl-3">
+                                <div class="text-center p-3 hm-cluster-metric-cell">
+                                    <h6><i class="bi bi-arrow-down-circle me-2"></i><span id="speedtestMonitorLastDownloadLabel">Приём</span></h6>
+                                    <div class="display-6 text-break" id="speedtestMonitorLastDownload">—</div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-xl-3">
+                                <div class="text-center p-3 hm-cluster-metric-cell">
+                                    <h6><i class="bi bi-cloud-upload me-2"></i><span id="speedtestMonitorLastUploadLabel">Отдача</span></h6>
+                                    <div class="display-6 text-break" id="speedtestMonitorLastUpload">—</div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-xl-3">
+                                <div class="text-center p-3 hm-cluster-metric-cell">
+                                    <h6><i class="bi bi-activity me-2"></i><span id="speedtestMonitorLastPingLabel">Пинг</span></h6>
+                                    <div class="display-6 text-break" id="speedtestMonitorLastPing">—</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="speedtestMonitorPlanBlock" class="mt-3 p-2 rounded border bg-body-secondary d-none">
+                            <h6 class="small fw-semibold mb-0 pb-2 border-bottom border-secondary border-opacity-25" id="speedtestMonitorPlanTitle">Тариф и отклонения</h6>
+                            <div class="small mt-2 mb-1" id="speedtestMonitorPlanEtalon"></div>
+                            <div class="small mb-1" id="speedtestMonitorPlanDevLast"></div>
+                            <div class="small mb-1" id="speedtestMonitorPlanDevToday"></div>
+                            <div class="small d-none" id="speedtestMonitorPlanDevMinMax"></div>
+                        </div>
+                        <div class="mt-3 mb-1 small text-muted text-center text-xl-start" id="speedtestMonitorTodayDownloadSectionTitle"></div>
+                        <div class="row g-2 hm-cluster-metric-panel">
+                            <div class="col-md-4 col-6">
                                 <div class="text-center p-3 hm-cluster-metric-cell">
                                     <h6><i class="bi bi-graph-up-arrow me-2"></i><span id="speedtestMonitorAvgLabel">Средняя скорость (сегодня)</span></h6>
                                     <div class="display-6" id="speedtestMonitorAvg">—</div>
@@ -1770,7 +1825,7 @@
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-3 col-6">
+                            <div class="col-md-4 col-6">
                                 <div class="text-center p-3 hm-cluster-metric-cell">
                                     <h6><i class="bi bi-arrow-down-circle me-2"></i><span id="speedtestMonitorMinLabel">Минимум</span></h6>
                                     <div class="display-6" id="speedtestMonitorMin">—</div>
@@ -1779,7 +1834,7 @@
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-3 col-6">
+                            <div class="col-md-4 col-12">
                                 <div class="text-center p-3 hm-cluster-metric-cell">
                                     <h6><i class="bi bi-arrow-up-circle me-2"></i><span id="speedtestMonitorMaxLabel">Максимум</span></h6>
                                     <div class="display-6" id="speedtestMonitorMax">—</div>
@@ -1790,6 +1845,26 @@
                             </div>
                         </div>
                         <div class="mt-2 small text-muted monitor-screen__meta-extra" id="speedtestMonitorExtra"></div>
+                        <div class="mt-4">
+                            <h6 class="mb-2" id="speedtestMonitorLast24hTitle">Замеры за сегодня</h6>
+                            <div id="speedtestMonitorLast24hTableWrap" class="table-responsive d-none">
+                                <table class="table table-sm table-striped table-hover align-middle mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th scope="col" id="speedtestMonitor24hColTime">Время</th>
+                                            <th scope="col" class="text-end" id="speedtestMonitor24hColDownload">Приём</th>
+                                            <th scope="col" class="text-end d-none" id="speedtestMonitor24hColDevDownload">Δ ↓</th>
+                                            <th scope="col" class="text-end" id="speedtestMonitor24hColUpload">Отдача</th>
+                                            <th scope="col" class="text-end d-none" id="speedtestMonitor24hColDevUpload">Δ ↑</th>
+                                            <th scope="col" class="text-end" id="speedtestMonitor24hColPing">Пинг</th>
+                                            <th scope="col" id="speedtestMonitor24hColServer">Сервер / примечание</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="speedtestMonitorLast24hBody"></tbody>
+                                </table>
+                            </div>
+                            <p class="small text-muted mb-0 d-none" id="speedtestMonitorLast24hEmpty">Сегодня замеров пока нет.</p>
+                        </div>
                     </div>
                 </div>
             </div>

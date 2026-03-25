@@ -993,7 +993,7 @@
                                             </div>
                                             <div class="col-md-3">
                                                 <label class="form-label fw-bold" for="speedtestPerDayInput" id="speedtestPerDayLabel">Замеров в сутки</label>
-                                                <input type="number" class="form-control" id="speedtestPerDayInput" min="1" max="48" value="4" onchange="saveSpeedtestSettings()">
+                                                <input type="number" class="form-control" id="speedtestPerDayInput" min="1" max="6" value="4" onchange="saveSpeedtestSettings()">
                                             </div>
                                             <div class="col-md-2 d-grid">
                                                 <button type="button" class="btn btn-outline-primary" id="speedtestRunNowBtn" onclick="runSpeedtestNow()">
@@ -1001,6 +1001,33 @@
                                                 </button>
                                             </div>
                                         </div>
+                                        <div class="row g-3 mb-2">
+                                            <div class="col-md-6">
+                                                <label class="form-label fw-bold" for="speedtestProviderDownloadMbpsInput" id="speedtestProviderDownloadLabel">Скорость провайдера — приём (Мбит/с)</label>
+                                                <input type="number" class="form-control" id="speedtestProviderDownloadMbpsInput" min="0" step="0.1" placeholder="" onchange="saveSpeedtestSettings()" onblur="saveSpeedtestSettings()">
+                                            </div>
+                                            <div class="col-md-6">
+                                                <label class="form-label fw-bold" for="speedtestProviderUploadMbpsInput" id="speedtestProviderUploadLabel">Скорость провайдера — отдача (Мбит/с)</label>
+                                                <input type="number" class="form-control" id="speedtestProviderUploadMbpsInput" min="0" step="0.1" placeholder="" onchange="saveSpeedtestSettings()" onblur="saveSpeedtestSettings()">
+                                            </div>
+                                        </div>
+                                        <p class="form-text mb-3" id="speedtestProviderHint">Необязательно: для сравнения с замерами и шкалы прогресс-баров скачивания. Пусто — шкала по фактическим значениям за сегодня.</p>
+                                        <h6 class="text-muted small text-uppercase mb-2" id="speedtestProxySectionTitle">Прокси для CLI</h6>
+                                        <div class="row g-3 mb-2">
+                                            <div class="col-md-6">
+                                                <label class="form-label fw-bold" for="speedtestHttpProxyInput" id="speedtestHttpProxyLabel">HTTP_PROXY</label>
+                                                <input type="text" class="form-control font-monospace" id="speedtestHttpProxyInput" autocomplete="off" placeholder="http://host:port" onchange="saveSpeedtestSettings()" onblur="saveSpeedtestSettings()">
+                                            </div>
+                                            <div class="col-md-6">
+                                                <label class="form-label fw-bold" for="speedtestHttpsProxyInput" id="speedtestHttpsProxyLabel">HTTPS_PROXY</label>
+                                                <input type="text" class="form-control font-monospace" id="speedtestHttpsProxyInput" autocomplete="off" placeholder="http://host:port" onchange="saveSpeedtestSettings()" onblur="saveSpeedtestSettings()">
+                                            </div>
+                                            <div class="col-12">
+                                                <label class="form-label fw-bold" for="speedtestNoProxyInput" id="speedtestNoProxyLabel">NO_PROXY</label>
+                                                <input type="text" class="form-control font-monospace" id="speedtestNoProxyInput" autocomplete="off" placeholder="localhost,127.0.0.1,.local" onchange="saveSpeedtestSettings()" onblur="saveSpeedtestSettings()">
+                                            </div>
+                                        </div>
+                                        <p class="form-text mb-3" id="speedtestProxyHint">Передаются в процесс Ookla Speedtest как переменные окружения. Для HTTPS-API часто нужен отдельный HTTPS_PROXY. Пустые поля — без прокси (кроме системных переменных среды Node).</p>
                                         <div class="mb-2">
                                             <button type="button" class="btn btn-outline-danger btn-sm" id="speedtestClearHistoryBtn" onclick="clearSpeedtestHistory()">
                                                 <i class="bi bi-trash me-1"></i><span id="speedtestClearHistoryText">Очистить историю замеров</span>

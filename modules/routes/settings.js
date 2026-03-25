@@ -45,6 +45,25 @@ function normalizeThresholdsObject(raw) {
  * Первый запуск / сброс: setup_completed отсутствует или '0' → показать мастер.
  * Обновление с существующими серверами/подключениями: миграция в '1' без мастера.
  */
+function normalizeSpeedtestProviderMbpsField(v) {
+    if (v === undefined) return undefined;
+    const s = String(v).trim().replace(',', '.');
+    if (s === '') return '';
+    const n = parseFloat(s);
+    if (!Number.isFinite(n) || n < 0) return '';
+    const capped = Math.min(n, 1_000_000);
+    return String(Math.round(capped * 1000) / 1000);
+}
+
+function normalizeSpeedtestProxyField(v) {
+    if (v === undefined) return undefined;
+    let s = String(v).trim();
+    if (s === '') return '';
+    if (/[\r\n\0]/.test(s)) return '';
+    if (s.length > 2048) s = s.slice(0, 2048);
+    return s;
+}
+
 function computeSetupCompleted(st) {
     const raw = st.getSetting('setup_completed');
     if (raw === '0' || raw === 'false') return false;
@@ -110,6 +129,11 @@ const SETTING_KEYS = [
     'speedtest_enabled',
     'speedtest_server',
     'speedtest_per_day',
+    'speedtest_provider_download_mbps',
+    'speedtest_provider_upload_mbps',
+    'speedtest_http_proxy',
+    'speedtest_https_proxy',
+    'speedtest_no_proxy',
     // Telegram alerts (server-side)
     'telegram_notify_enabled',
     'telegram_notify_interval_sec',
@@ -155,7 +179,13 @@ router.get('/', (req, res) => {
                     }
                 } else if (key === 'speedtest_per_day') {
                     const n = parseInt(value, 10);
-                    payload[key] = Number.isFinite(n) ? n : 4;
+                    let perDay = Number.isFinite(n) ? n : 4;
+                    if (perDay < 1) perDay = 4;
+                    if (perDay > 6) perDay = 6;
+                    payload[key] = perDay;
+                } else if (key === 'speedtest_provider_download_mbps' || key === 'speedtest_provider_upload_mbps') {
+                    const n = parseFloat(String(value).trim().replace(',', '.'));
+                    if (Number.isFinite(n) && n > 0) payload[key] = Math.min(n, 1_000_000);
                 } else if (key === 'refresh_interval' || key === 'current_server_index' || key === 'current_truenas_index' || key === 'session_ttl_minutes' || key === 'telegram_notify_interval_sec') {
                     payload[key] = parseInt(value, 10);
                 } else if (key === 'telegram_notify_enabled') {
@@ -308,7 +338,29 @@ router.post('/', (req, res) => {
                 if (v === undefined) return undefined;
                 return String(v).trim();
             })(),
-            speedtest_per_day: body.speedtest_per_day ?? body.speedtestPerDay,
+            speedtest_per_day: (() => {
+                const v = body.speedtest_per_day ?? body.speedtestPerDay;
+                if (v === undefined) return undefined;
+                let n = parseInt(v, 10);
+                if (!Number.isFinite(n) || n < 1) n = 4;
+                if (n > 6) n = 6;
+                return n;
+            })(),
+            speedtest_provider_download_mbps: normalizeSpeedtestProviderMbpsField(
+                body.speedtest_provider_download_mbps ?? body.speedtestProviderDownloadMbps
+            ),
+            speedtest_provider_upload_mbps: normalizeSpeedtestProviderMbpsField(
+                body.speedtest_provider_upload_mbps ?? body.speedtestProviderUploadMbps
+            ),
+            speedtest_http_proxy: normalizeSpeedtestProxyField(
+                body.speedtest_http_proxy ?? body.speedtestHttpProxy
+            ),
+            speedtest_https_proxy: normalizeSpeedtestProxyField(
+                body.speedtest_https_proxy ?? body.speedtestHttpsProxy
+            ),
+            speedtest_no_proxy: normalizeSpeedtestProxyField(
+                body.speedtest_no_proxy ?? body.speedtestNoProxy
+            ),
             telegram_notify_enabled: (() => {
                 const v = body.telegram_notify_enabled ?? body.telegramNotifyEnabled;
                 if (v === undefined) return undefined;

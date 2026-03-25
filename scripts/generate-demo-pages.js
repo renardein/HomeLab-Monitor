@@ -769,7 +769,7 @@ const settingsContent = {
         <div class="row g-3 align-items-end mb-3">
             <div class="col-md-3"><label class="form-label fw-bold">Measurement</label><select class="form-select"><option>Disabled</option><option selected>Enabled</option></select></div>
             <div class="col-md-4"><label class="form-label fw-bold">Measurement Server</label><input type="text" class="form-control" value="48614"><div class="form-text">Numeric Ookla server ID, empty for auto.</div></div>
-            <div class="col-md-3"><label class="form-label fw-bold">Runs Per Day</label><input type="number" class="form-control" value="4"></div>
+            <div class="col-md-3"><label class="form-label fw-bold">Runs Per Day</label><input type="number" class="form-control" min="1" max="6" value="4"></div>
             <div class="col-md-2 d-grid"><button type="button" class="btn btn-outline-primary"><i class="bi bi-play-fill me-1"></i>Run Now</button></div>
         </div>
         <div class="small text-muted">CLI status: detected, ready to run.</div>
@@ -1335,12 +1335,37 @@ const speedtestPanel = `
     <div class="card-header"><h5 class="mb-0"><i class="bi bi-speedometer2 me-2"></i>Speedtest</h5></div>
     <div class="card-body">
         <div class="row g-2 hm-cluster-metric-panel">
-            <div class="col-md-3 col-6"><div class="text-center p-3 hm-cluster-metric-cell"><h6><i class="bi bi-clock-history me-2"></i><span>Last run</span></h6><div class="hm-speedtest-last-run text-break">2026-03-21 09:12 · 951 Mbps ↓</div></div></div>
-            <div class="col-md-3 col-6"><div class="text-center p-3 hm-cluster-metric-cell"><h6><i class="bi bi-graph-up-arrow me-2"></i><span>Average (today)</span></h6><div class="display-6">940 Mbps</div><div class="progress mt-2 hm-progress hm-progress--cluster"><div class="progress-bar bg-success" style="width: 99%"></div></div></div></div>
-            <div class="col-md-3 col-6"><div class="text-center p-3 hm-cluster-metric-cell"><h6><i class="bi bi-arrow-down-circle me-2"></i><span>Minimum</span></h6><div class="display-6">902 Mbps</div><div class="progress mt-2 hm-progress hm-progress--cluster"><div class="progress-bar bg-success" style="width: 96%"></div></div></div></div>
-            <div class="col-md-3 col-6"><div class="text-center p-3 hm-cluster-metric-cell"><h6><i class="bi bi-arrow-up-circle me-2"></i><span>Maximum</span></h6><div class="display-6">951 Mbps</div><div class="progress mt-2 hm-progress hm-progress--cluster"><div class="progress-bar bg-success" style="width: 100%"></div></div></div></div>
+            <div class="col-6 col-xl-3"><div class="text-center p-3 hm-cluster-metric-cell"><h6><i class="bi bi-clock-history me-2"></i><span>Last run</span></h6><div class="hm-speedtest-last-run text-break">2026-03-21 09:12</div></div></div>
+            <div class="col-6 col-xl-3"><div class="text-center p-3 hm-cluster-metric-cell"><h6><i class="bi bi-arrow-down-circle me-2"></i><span>Download</span></h6><div class="display-6 text-break">951 Mbps</div></div></div>
+            <div class="col-6 col-xl-3"><div class="text-center p-3 hm-cluster-metric-cell"><h6><i class="bi bi-cloud-upload me-2"></i><span>Upload</span></h6><div class="display-6 text-break">512 Mbps</div></div></div>
+            <div class="col-6 col-xl-3"><div class="text-center p-3 hm-cluster-metric-cell"><h6><i class="bi bi-activity me-2"></i><span>Ping</span></h6><div class="display-6 text-break">4 ms</div></div></div>
         </div>
-        <div class="mt-2 small text-muted">Ping 4 ms · server Frankfurt · Upload avg today: 511 Mbps</div>
+        <div class="mt-3 p-2 rounded border bg-body-secondary">
+            <h6 class="small fw-semibold mb-0 pb-2 border-bottom border-secondary border-opacity-25">ISP plan (reference) and deviations</h6>
+            <div class="small mt-2 mb-1">Plan ↓: 1000 Mbps · Plan ↑: 600 Mbps</div>
+            <div class="small mb-1">Last run vs plan: Plan ↓: −4.9% · Plan ↑: −14.7%</div>
+            <div class="small mb-1">Today's average vs plan: Plan ↓: −6% · Plan ↑: −15%</div>
+            <div class="small">Today's download min / max vs plan: Minimum: −9.8% · Maximum: −4.9%</div>
+        </div>
+        <div class="mt-3 mb-1 small text-muted text-center text-xl-start">Download today (average / min / max)</div>
+        <div class="row g-2 hm-cluster-metric-panel">
+            <div class="col-md-4 col-6"><div class="text-center p-3 hm-cluster-metric-cell"><h6><i class="bi bi-graph-up-arrow me-2"></i><span>Average (today)</span></h6><div class="display-6">940 Mbps</div><div class="progress mt-2 hm-progress hm-progress--cluster"><div class="progress-bar bg-success" style="width: 99%"></div></div></div></div>
+            <div class="col-md-4 col-6"><div class="text-center p-3 hm-cluster-metric-cell"><h6><i class="bi bi-arrow-down-circle me-2"></i><span>Minimum</span></h6><div class="display-6">902 Mbps</div><div class="progress mt-2 hm-progress hm-progress--cluster"><div class="progress-bar bg-success" style="width: 96%"></div></div></div></div>
+            <div class="col-md-4 col-12"><div class="text-center p-3 hm-cluster-metric-cell"><h6><i class="bi bi-arrow-up-circle me-2"></i><span>Maximum</span></h6><div class="display-6">951 Mbps</div><div class="progress mt-2 hm-progress hm-progress--cluster"><div class="progress-bar bg-success" style="width: 100%"></div></div></div></div>
+        </div>
+        <div class="mt-2 small text-muted">Frankfurt · Upload avg today: 511 Mbps</div>
+        <div class="mt-4">
+            <h6 class="mb-2">Today's measurements</h6>
+            <div class="table-responsive">
+                <table class="table table-sm table-striped table-hover align-middle mb-0">
+                    <thead><tr><th>Time</th><th class="text-end">Download</th><th class="text-end">Δ ↓ %</th><th class="text-end">Upload</th><th class="text-end">Δ ↑ %</th><th class="text-end">Ping</th><th>Server</th></tr></thead>
+                    <tbody>
+                        <tr><td class="text-nowrap">2026-03-21 09:12</td><td class="text-end">951 Mbps</td><td class="text-end text-danger">−4.9%</td><td class="text-end">512 Mbps</td><td class="text-end text-danger">−14.7%</td><td class="text-end">4 ms</td><td class="small">Frankfurt</td></tr>
+                        <tr><td class="text-nowrap">2026-03-21 03:12</td><td class="text-end">920 Mbps</td><td class="text-end text-danger">−8%</td><td class="text-end">498 Mbps</td><td class="text-end text-danger">−17%</td><td class="text-end">5.2 ms</td><td class="small">Frankfurt</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
 </div>`;
 
@@ -1485,12 +1510,37 @@ const monitorPageContent = {
                     </div>
                     <div class="monitor-screen__panel-body">
                         <div class="row g-2 hm-cluster-metric-panel">
-                            <div class="col-md-3 col-6"><div class="text-center p-3 hm-cluster-metric-cell"><h6><i class="bi bi-clock-history me-2"></i><span>Last run</span></h6><div class="hm-speedtest-last-run text-break">2026-03-21 09:12 · 951 Mbps ↓</div></div></div>
-                            <div class="col-md-3 col-6"><div class="text-center p-3 hm-cluster-metric-cell"><h6><i class="bi bi-graph-up-arrow me-2"></i><span>Average (today)</span></h6><div class="display-6">940 Mbps</div><div class="progress mt-2 hm-progress hm-progress--cluster"><div class="progress-bar bg-success" style="width: 99%"></div></div></div></div>
-                            <div class="col-md-3 col-6"><div class="text-center p-3 hm-cluster-metric-cell"><h6><i class="bi bi-arrow-down-circle me-2"></i><span>Minimum</span></h6><div class="display-6">902 Mbps</div><div class="progress mt-2 hm-progress hm-progress--cluster"><div class="progress-bar bg-success" style="width: 96%"></div></div></div></div>
-                            <div class="col-md-3 col-6"><div class="text-center p-3 hm-cluster-metric-cell"><h6><i class="bi bi-arrow-up-circle me-2"></i><span>Maximum</span></h6><div class="display-6">951 Mbps</div><div class="progress mt-2 hm-progress hm-progress--cluster"><div class="progress-bar bg-success" style="width: 100%"></div></div></div></div>
+                            <div class="col-6 col-xl-3"><div class="text-center p-3 hm-cluster-metric-cell"><h6><i class="bi bi-clock-history me-2"></i><span>Last run</span></h6><div class="hm-speedtest-last-run text-break">2026-03-21 09:12</div></div></div>
+                            <div class="col-6 col-xl-3"><div class="text-center p-3 hm-cluster-metric-cell"><h6><i class="bi bi-arrow-down-circle me-2"></i><span>Download</span></h6><div class="display-6 text-break">951 Mbps</div></div></div>
+                            <div class="col-6 col-xl-3"><div class="text-center p-3 hm-cluster-metric-cell"><h6><i class="bi bi-cloud-upload me-2"></i><span>Upload</span></h6><div class="display-6 text-break">512 Mbps</div></div></div>
+                            <div class="col-6 col-xl-3"><div class="text-center p-3 hm-cluster-metric-cell"><h6><i class="bi bi-activity me-2"></i><span>Ping</span></h6><div class="display-6 text-break">4 ms</div></div></div>
                         </div>
-                        <div class="mt-2 small text-muted monitor-screen__meta-extra">Ping 4 ms · server Frankfurt · Upload avg today: 511 Mbps</div>
+                        <div class="mt-3 p-2 rounded border bg-body-secondary">
+                            <h6 class="small fw-semibold mb-0 pb-2 border-bottom border-secondary border-opacity-25">ISP plan (reference) and deviations</h6>
+                            <div class="small mt-2 mb-1">Plan ↓: 1000 Mbps · Plan ↑: 600 Mbps</div>
+                            <div class="small mb-1">Last run vs plan: Plan ↓: −4.9% · Plan ↑: −14.7%</div>
+                            <div class="small mb-1">Today's average vs plan: Plan ↓: −6% · Plan ↑: −15%</div>
+                            <div class="small">Today's download min / max vs plan: Minimum: −9.8% · Maximum: −4.9%</div>
+                        </div>
+                        <div class="mt-3 mb-1 small text-muted text-center text-xl-start">Download today (average / min / max)</div>
+                        <div class="row g-2 hm-cluster-metric-panel">
+                            <div class="col-md-4 col-6"><div class="text-center p-3 hm-cluster-metric-cell"><h6><i class="bi bi-graph-up-arrow me-2"></i><span>Average (today)</span></h6><div class="display-6">940 Mbps</div><div class="progress mt-2 hm-progress hm-progress--cluster"><div class="progress-bar bg-success" style="width: 99%"></div></div></div></div>
+                            <div class="col-md-4 col-6"><div class="text-center p-3 hm-cluster-metric-cell"><h6><i class="bi bi-arrow-down-circle me-2"></i><span>Minimum</span></h6><div class="display-6">902 Mbps</div><div class="progress mt-2 hm-progress hm-progress--cluster"><div class="progress-bar bg-success" style="width: 96%"></div></div></div></div>
+                            <div class="col-md-4 col-12"><div class="text-center p-3 hm-cluster-metric-cell"><h6><i class="bi bi-arrow-up-circle me-2"></i><span>Maximum</span></h6><div class="display-6">951 Mbps</div><div class="progress mt-2 hm-progress hm-progress--cluster"><div class="progress-bar bg-success" style="width: 100%"></div></div></div></div>
+                        </div>
+                        <div class="mt-2 small text-muted monitor-screen__meta-extra">Frankfurt · Upload avg today: 511 Mbps</div>
+                        <div class="mt-4">
+                            <h6 class="mb-2">Today's measurements</h6>
+                            <div class="table-responsive">
+                                <table class="table table-sm table-striped table-hover align-middle mb-0">
+                                    <thead><tr><th>Time</th><th class="text-end">Download</th><th class="text-end">Δ ↓ %</th><th class="text-end">Upload</th><th class="text-end">Δ ↑ %</th><th class="text-end">Ping</th><th>Server</th></tr></thead>
+                                    <tbody>
+                                        <tr><td class="text-nowrap">2026-03-21 09:12</td><td class="text-end">951 Mbps</td><td class="text-end text-danger">−4.9%</td><td class="text-end">512 Mbps</td><td class="text-end text-danger">−14.7%</td><td class="text-end">4 ms</td><td class="small">Frankfurt</td></tr>
+                                        <tr><td class="text-nowrap">2026-03-21 03:12</td><td class="text-end">920 Mbps</td><td class="text-end text-danger">−8%</td><td class="text-end">498 Mbps</td><td class="text-end text-danger">−17%</td><td class="text-end">5.2 ms</td><td class="small">Frankfurt</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

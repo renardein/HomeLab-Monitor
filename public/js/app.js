@@ -1423,6 +1423,11 @@ async function saveSettingsToServer(payload) {
     if (payload.speedtestEnabled !== undefined) body.speedtestEnabled = !!payload.speedtestEnabled;
     if (payload.speedtestServer !== undefined) body.speedtestServer = payload.speedtestServer;
     if (payload.speedtestPerDay !== undefined) body.speedtestPerDay = payload.speedtestPerDay;
+    if (payload.speedtestProviderDownloadMbps !== undefined) body.speedtestProviderDownloadMbps = payload.speedtestProviderDownloadMbps;
+    if (payload.speedtestProviderUploadMbps !== undefined) body.speedtestProviderUploadMbps = payload.speedtestProviderUploadMbps;
+    if (payload.speedtestHttpProxy !== undefined) body.speedtestHttpProxy = payload.speedtestHttpProxy;
+    if (payload.speedtestHttpsProxy !== undefined) body.speedtestHttpsProxy = payload.speedtestHttpsProxy;
+    if (payload.speedtestNoProxy !== undefined) body.speedtestNoProxy = payload.speedtestNoProxy;
     if (payload.telegramNotifyEnabled !== undefined) body.telegramNotifyEnabled = !!payload.telegramNotifyEnabled;
     if (payload.telegramNotifyIntervalSec !== undefined) body.telegramNotifyIntervalSec = payload.telegramNotifyIntervalSec;
     if (payload.telegramRoutes !== undefined) body.telegramRoutes = payload.telegramRoutes;
@@ -2745,6 +2750,14 @@ function updateUILanguage() {
     setText('speedtestServerLabel', t('speedtestServerLabel'));
     setText('speedtestServerHint', t('speedtestServerHint'));
     setText('speedtestPerDayLabel', t('speedtestPerDayLabel'));
+    setText('speedtestProviderDownloadLabel', t('speedtestProviderDownloadLabel'));
+    setText('speedtestProviderUploadLabel', t('speedtestProviderUploadLabel'));
+    setText('speedtestProviderHint', t('speedtestProviderHint'));
+    setText('speedtestProxySectionTitle', t('speedtestProxySectionTitle'));
+    setText('speedtestHttpProxyLabel', t('speedtestHttpProxyLabel'));
+    setText('speedtestHttpsProxyLabel', t('speedtestHttpsProxyLabel'));
+    setText('speedtestNoProxyLabel', t('speedtestNoProxyLabel'));
+    setText('speedtestProxyHint', t('speedtestProxyHint'));
     setText('speedtestRunNowText', t('speedtestRunNowText'));
     setText('speedtestClearHistoryText', t('speedtestClearHistoryText'));
     setText('dashboardClusterTilesTitle', t('dashboardClusterTilesTitle'));
@@ -2754,6 +2767,20 @@ function updateUILanguage() {
     setText('speedtestMinLabel', t('speedtestMinLabel'));
     setText('speedtestMaxLabel', t('speedtestMaxLabel'));
     setText('speedtestMonitorLastRunLabel', t('speedtestLastRunLabel'));
+    setText('speedtestMonitorLastDownloadLabel', t('speedtestDownloadShort'));
+    setText('speedtestMonitorLastUploadLabel', t('speedtestUploadShort'));
+    setText('speedtestMonitorLastPingLabel', t('speedtestPingLabel'));
+    setText('speedtestMonitorTodayDownloadSectionTitle', t('speedtestTodayDownloadSectionTitle'));
+    setText('speedtestMonitorLast24hTitle', t('speedtestRunsTodaySectionTitle'));
+    setText('speedtestMonitor24hColTime', t('speedtest24hColTime'));
+    setText('speedtestMonitor24hColDownload', t('speedtestDownloadShort'));
+    setText('speedtestMonitor24hColUpload', t('speedtestUploadShort'));
+    setText('speedtestMonitor24hColPing', t('speedtestPingLabel'));
+    setText('speedtestMonitor24hColServer', t('speedtest24hColServer'));
+    setText('speedtestMonitor24hColDevDownload', t('speedtest24hColDevDownload'));
+    setText('speedtestMonitor24hColDevUpload', t('speedtest24hColDevUpload'));
+    setText('speedtestMonitorPlanTitle', t('speedtestReferenceSectionTitle'));
+    setText('speedtestMonitorLast24hEmpty', t('speedtestRunsTodayEmpty'));
     setText('speedtestMonitorAvgLabel', t('speedtestAvgLabel'));
     setText('speedtestMonitorMinLabel', t('speedtestMinLabel'));
     setText('speedtestMonitorMaxLabel', t('speedtestMaxLabel'));
@@ -7107,6 +7134,210 @@ function formatSpeedtestMbps(v) {
     return `${n} Mbps`;
 }
 
+function formatSpeedtestPing(ms) {
+    if (ms == null || !Number.isFinite(Number(ms))) return '—';
+    return `${Math.round(Number(ms) * 10) / 10} ms`;
+}
+
+/** Отклонение от эталона (тарифа): +% быстрее плана, −% медленнее. null — эталон для оси не задан. */
+function formatSpeedtestDeviationPct(measuredMbps, planMbps) {
+    if (!Number.isFinite(Number(planMbps)) || Number(planMbps) <= 0) return null;
+    if (!Number.isFinite(Number(measuredMbps))) return '—';
+    const pct = ((Number(measuredMbps) / Number(planMbps)) - 1) * 100;
+    const r = Math.round(pct * 10) / 10;
+    const sign = r > 0 ? '+' : '';
+    return `${sign}${r}%`;
+}
+
+function speedtestDeviationTextClass(measuredMbps, planMbps, pctStr) {
+    if (pctStr === '—' || pctStr == null) return 'text-muted';
+    if (!Number.isFinite(Number(measuredMbps)) || !Number.isFinite(Number(planMbps)) || Number(planMbps) <= 0) {
+        return '';
+    }
+    return Number(measuredMbps) >= Number(planMbps) ? 'text-success' : 'text-danger';
+}
+
+function buildSpeedtestEtalonLine(pDl, pUl) {
+    const bits = [];
+    if (Number.isFinite(pDl) && pDl > 0) {
+        bits.push(`${t('speedtestPlanDownloadShort')}: ${formatSpeedtestMbps(pDl)}`);
+    }
+    if (Number.isFinite(pUl) && pUl > 0) {
+        bits.push(`${t('speedtestPlanUploadShort')}: ${formatSpeedtestMbps(pUl)}`);
+    }
+    return bits.join(' · ');
+}
+
+function buildSpeedtestDeviationLabeledLine(labelKey, measuredDl, measuredUl, pDl, pUl) {
+    const bits = [];
+    const dd = formatSpeedtestDeviationPct(measuredDl, pDl);
+    if (dd != null) bits.push(`${t('speedtestPlanDownloadShort')}: ${dd}`);
+    const du = formatSpeedtestDeviationPct(measuredUl, pUl);
+    if (du != null) bits.push(`${t('speedtestPlanUploadShort')}: ${du}`);
+    if (!bits.length) return '';
+    return `${t(labelKey)}: ${bits.join(' · ')}`;
+}
+
+function buildSpeedtestMinMaxDownloadDevLine(dlMin, dlMax, pDl) {
+    const minPct = formatSpeedtestDeviationPct(dlMin, pDl);
+    const maxPct = formatSpeedtestDeviationPct(dlMax, pDl);
+    if (minPct == null && maxPct == null) return '';
+    const bits = [];
+    if (minPct != null) bits.push(`${t('speedtestMinLabel')}: ${minPct}`);
+    if (maxPct != null) bits.push(`${t('speedtestMaxLabel')}: ${maxPct}`);
+    return `${t('speedtestDeviationTodayMinMaxLabel')}: ${bits.join(' · ')}`;
+}
+
+function updateSpeedtestPlanBlock(last, lastOk, dl, ul, pDl, pUl) {
+    const block = document.getElementById('speedtestMonitorPlanBlock');
+    const minMaxEl = document.getElementById('speedtestMonitorPlanDevMinMax');
+    const setLine = (id, text) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const s = String(text || '').trim();
+        el.textContent = s;
+        el.classList.toggle('d-none', !s);
+    };
+    if (!block) return;
+    const hasPlan = (Number.isFinite(pDl) && pDl > 0) || (Number.isFinite(pUl) && pUl > 0);
+    if (!hasPlan) {
+        block.classList.add('d-none');
+        if (minMaxEl) {
+            minMaxEl.textContent = '';
+            minMaxEl.classList.add('d-none');
+        }
+        ['speedtestMonitorPlanEtalon', 'speedtestMonitorPlanDevLast', 'speedtestMonitorPlanDevToday'].forEach((id) => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.textContent = '';
+                el.classList.add('d-none');
+            }
+        });
+        return;
+    }
+    block.classList.remove('d-none');
+    setLine('speedtestMonitorPlanEtalon', buildSpeedtestEtalonLine(pDl, pUl));
+    setLine(
+        'speedtestMonitorPlanDevLast',
+        buildSpeedtestDeviationLabeledLine(
+            'speedtestDeviationLastRunLabel',
+            lastOk && last ? last.downloadMbps : null,
+            lastOk && last ? last.uploadMbps : null,
+            pDl,
+            pUl
+        )
+    );
+    setLine(
+        'speedtestMonitorPlanDevToday',
+        buildSpeedtestDeviationLabeledLine(
+            'speedtestDeviationTodayAvgLabel',
+            dl.avg != null ? dl.avg : null,
+            ul.avg != null ? ul.avg : null,
+            pDl,
+            pUl
+        )
+    );
+    const minMaxLine = buildSpeedtestMinMaxDownloadDevLine(
+        dl.min != null ? dl.min : null,
+        dl.max != null ? dl.max : null,
+        pDl
+    );
+    if (minMaxEl) {
+        minMaxEl.textContent = minMaxLine;
+        minMaxEl.classList.toggle('d-none', !minMaxLine);
+    }
+}
+
+function renderSpeedtestRunsTodayTable(runs, options = {}) {
+    const tbody = document.getElementById('speedtestMonitorLast24hBody');
+    const tableWrap = document.getElementById('speedtestMonitorLast24hTableWrap');
+    const emptyEl = document.getElementById('speedtestMonitorLast24hEmpty');
+    if (!tbody || !tableWrap || !emptyEl) return;
+    tbody.replaceChildren();
+    const hidePlanCols = () => {
+        const thDevDl = document.getElementById('speedtestMonitor24hColDevDownload');
+        const thDevUl = document.getElementById('speedtestMonitor24hColDevUpload');
+        if (thDevDl) thDevDl.classList.add('d-none');
+        if (thDevUl) thDevUl.classList.add('d-none');
+    };
+    if (options.loadFailed) {
+        hidePlanCols();
+        tableWrap.classList.add('d-none');
+        emptyEl.classList.remove('d-none');
+        emptyEl.textContent = t('speedtestSummaryLoadError') || 'Could not load speedtest data';
+        return;
+    }
+    const list = Array.isArray(runs) ? runs : [];
+    if (!list.length) {
+        hidePlanCols();
+        tableWrap.classList.add('d-none');
+        emptyEl.classList.remove('d-none');
+        emptyEl.textContent = t('speedtestRunsTodayEmpty') || 'No measurements today yet.';
+        return;
+    }
+    tableWrap.classList.remove('d-none');
+    emptyEl.classList.add('d-none');
+    const planDl = Number(options.planDl);
+    const planUl = Number(options.planUl);
+    const showDevDl = Number.isFinite(planDl) && planDl > 0;
+    const showDevUl = Number.isFinite(planUl) && planUl > 0;
+    const thDevDl = document.getElementById('speedtestMonitor24hColDevDownload');
+    const thDevUl = document.getElementById('speedtestMonitor24hColDevUpload');
+    if (thDevDl) thDevDl.classList.toggle('d-none', !showDevDl);
+    if (thDevUl) thDevUl.classList.toggle('d-none', !showDevUl);
+    const frag = document.createDocumentFragment();
+    for (const r of list) {
+        const tr = document.createElement('tr');
+        const tdTime = document.createElement('td');
+        const tdDl = document.createElement('td');
+        const tdUl = document.createElement('td');
+        const tdPing = document.createElement('td');
+        const tdSrv = document.createElement('td');
+        tdTime.className = 'text-nowrap';
+        tdDl.className = 'text-end';
+        tdUl.className = 'text-end';
+        tdPing.className = 'text-end';
+        tdSrv.className = 'small text-break';
+        const runAt = r && r.runAt;
+        tdTime.textContent = runAt ? new Date(runAt).toLocaleString() : '—';
+        const err = r && r.error;
+        if (err) {
+            tdDl.textContent = '—';
+            tdUl.textContent = '—';
+            tdPing.textContent = '—';
+            tdSrv.textContent = String(err).slice(0, 200);
+            tdSrv.classList.add('text-danger');
+        } else {
+            tdDl.textContent = formatSpeedtestMbps(r.downloadMbps);
+            tdUl.textContent = formatSpeedtestMbps(r.uploadMbps);
+            tdPing.textContent = formatSpeedtestPing(r.pingMs);
+            const sn = r.serverName;
+            tdSrv.textContent = sn ? String(sn) : '—';
+        }
+        tr.appendChild(tdTime);
+        tr.appendChild(tdDl);
+        if (showDevDl) {
+            const td = document.createElement('td');
+            const pct = err ? '—' : formatSpeedtestDeviationPct(r.downloadMbps, planDl);
+            td.className = `text-end ${speedtestDeviationTextClass(r && r.downloadMbps, planDl, pct)}`;
+            td.textContent = pct == null ? '—' : pct;
+            tr.appendChild(td);
+        }
+        tr.appendChild(tdUl);
+        if (showDevUl) {
+            const td = document.createElement('td');
+            const pct = err ? '—' : formatSpeedtestDeviationPct(r.uploadMbps, planUl);
+            td.className = `text-end ${speedtestDeviationTextClass(r && r.uploadMbps, planUl, pct)}`;
+            td.textContent = pct == null ? '—' : pct;
+            tr.appendChild(td);
+        }
+        tr.appendChild(tdPing);
+        tr.appendChild(tdSrv);
+        frag.appendChild(tr);
+    }
+    tbody.appendChild(frag);
+}
+
 function setSpeedtestDownloadBarPercent(barId, mbpsValue, scaleMax) {
     const bar = document.getElementById(barId);
     if (!bar) return;
@@ -7158,6 +7389,9 @@ async function updateSpeedtestDashboard() {
         // Выключенный «Замер» не должен стирать уже сохранённые в БД результаты.
         if (!enabled && !hasHistory) {
             setEl('speedtestMonitorLastRun', '—');
+            setEl('speedtestMonitorLastDownload', '—');
+            setEl('speedtestMonitorLastUpload', '—');
+            setEl('speedtestMonitorLastPing', '—');
             setEl('speedtestMonitorAvg', '—');
             setEl('speedtestMonitorMin', '—');
             setEl('speedtestMonitorMax', '—');
@@ -7165,36 +7399,47 @@ async function updateSpeedtestDashboard() {
             setSpeedtestDownloadBarPercent('speedtestMonitorAvgBar', null, 1);
             setSpeedtestDownloadBarPercent('speedtestMonitorMinBar', null, 1);
             setSpeedtestDownloadBarPercent('speedtestMonitorMaxBar', null, 1);
+            updateSpeedtestPlanBlock(null, false, {}, {}, NaN, NaN);
+            renderSpeedtestRunsTodayTable([]);
             return;
         }
 
         const lastTime = last && last.runAt ? new Date(last.runAt).toLocaleString() : '—';
-        let lastMain = lastTime;
+        const lastOk = !!(last && !last.error);
+        let lastRunDisplay = lastTime;
         if (last && last.error) {
-            lastMain = `${lastTime}: ${last.error}`;
-        } else if (last && last.downloadMbps != null) {
-            lastMain = `${lastTime} · ${formatSpeedtestMbps(last.downloadMbps)} ↓`;
+            lastRunDisplay = lastTime !== '—' ? `${lastTime} · ${last.error}` : String(last.error);
         }
 
         const td = summary.today || {};
         const dl = td.download || {};
         const ul = td.upload || {};
+        const pDl = summary.providerDownloadMbps != null ? Number(summary.providerDownloadMbps) : NaN;
+        const pUl = summary.providerUploadMbps != null ? Number(summary.providerUploadMbps) : NaN;
 
         let extra = '';
-        if (last && !last.error && last.uploadMbps != null) {
-            extra += `${t('speedtestUploadShort')}: ${formatSpeedtestMbps(last.uploadMbps)}`;
-        }
-        if (last && last.pingMs != null) {
-            extra += (extra ? ' · ' : '') + `Ping: ${Math.round(Number(last.pingMs) * 10) / 10} ms`;
-        }
         if (last && last.serverName) {
-            extra += (extra ? ' · ' : '') + String(last.serverName);
+            extra = String(last.serverName);
         }
         if (ul.avg != null) {
             extra += (extra ? ' · ' : '') + `${t('speedtestUploadAvgToday')}: ${formatSpeedtestMbps(ul.avg)}`;
         }
 
-        setEl('speedtestMonitorLastRun', lastMain);
+        updateSpeedtestPlanBlock(last, lastOk, dl, ul, pDl, pUl);
+
+        setEl('speedtestMonitorLastRun', lastRunDisplay);
+        setEl(
+            'speedtestMonitorLastDownload',
+            lastOk && last.downloadMbps != null ? formatSpeedtestMbps(last.downloadMbps) : '—'
+        );
+        setEl(
+            'speedtestMonitorLastUpload',
+            lastOk && last.uploadMbps != null ? formatSpeedtestMbps(last.uploadMbps) : '—'
+        );
+        setEl(
+            'speedtestMonitorLastPing',
+            lastOk && last.pingMs != null ? formatSpeedtestPing(last.pingMs) : '—'
+        );
         setEl('speedtestMonitorAvg', dl.avg != null ? formatSpeedtestMbps(dl.avg) : '—');
         setEl('speedtestMonitorMin', dl.min != null ? formatSpeedtestMbps(dl.min) : '—');
         setEl('speedtestMonitorMax', dl.max != null ? formatSpeedtestMbps(dl.max) : '—');
@@ -7207,21 +7452,37 @@ async function updateSpeedtestDashboard() {
             Number.isFinite(dlAvg) ? dlAvg : 0,
             Number.isFinite(dlMin) ? dlMin : 0,
             Number.isFinite(dlMax) ? dlMax : 0,
+            Number.isFinite(pDl) && pDl > 0 ? pDl : 0,
             1
         );
         setSpeedtestDownloadBarPercent('speedtestMonitorAvgBar', dl.avg, scaleMax);
         setSpeedtestDownloadBarPercent('speedtestMonitorMinBar', dl.min, scaleMax);
         setSpeedtestDownloadBarPercent('speedtestMonitorMaxBar', dl.max, scaleMax);
 
+        renderSpeedtestRunsTodayTable(summary.runsToday, { planDl: pDl, planUl: pUl });
+
         const cliEl = document.getElementById('speedtestCliStatus');
         if (cliEl) {
-            cliEl.textContent = summary.cliAvailable
+            let cliText = summary.cliAvailable
                 ? (t('speedtestCliOk') || 'CLI: OK')
                 : (t('speedtestCliMissing') || 'CLI: not found');
+            const px = summary.proxy;
+            if (px && (px.http || px.https)) {
+                const bits = [];
+                if (px.http) bits.push('HTTP');
+                if (px.https) bits.push('HTTPS');
+                cliText += ` · ${t('speedtestProxyActiveShort') || 'Proxy'}: ${bits.join('/')}`;
+            } else if (px && px.noProxy) {
+                cliText += ` · ${t('speedtestNoProxyActiveShort') || 'NO_PROXY set'}`;
+            }
+            cliEl.textContent = cliText;
             cliEl.className = 'small ' + (summary.cliAvailable ? 'text-success' : 'text-warning');
         }
     } catch (e) {
         setEl('speedtestMonitorLastRun', '—');
+        setEl('speedtestMonitorLastDownload', '—');
+        setEl('speedtestMonitorLastUpload', '—');
+        setEl('speedtestMonitorLastPing', '—');
         setEl('speedtestMonitorAvg', '—');
         setEl('speedtestMonitorMin', '—');
         setEl('speedtestMonitorMax', '—');
@@ -7232,6 +7493,8 @@ async function updateSpeedtestDashboard() {
         setSpeedtestDownloadBarPercent('speedtestMonitorAvgBar', null, 1);
         setSpeedtestDownloadBarPercent('speedtestMonitorMinBar', null, 1);
         setSpeedtestDownloadBarPercent('speedtestMonitorMaxBar', null, 1);
+        updateSpeedtestPlanBlock(null, false, {}, {}, NaN, NaN);
+        renderSpeedtestRunsTodayTable(null, { loadFailed: true });
         const cliEl = document.getElementById('speedtestCliStatus');
         if (cliEl) {
             cliEl.textContent = msg;
@@ -7537,14 +7800,47 @@ function buildClusterSpeedtestTileHtml(summary) {
     const badgeClass = last.error ? 'bg-warning text-dark' : 'bg-success';
     const badgeText = last.error ? (t('serverError') || 'Ошибка') : (t('statusOkShort') || 'OK');
     const lastRun = last.runAt ? new Date(last.runAt).toLocaleString() : '—';
-    const pingText = last.pingMs != null ? `${Math.round(Number(last.pingMs) * 10) / 10} ms` : '—';
+    const lastOk = !last.error;
+    const lastDl = lastOk ? formatSpeedtestMbps(last.downloadMbps) : '—';
+    const lastUl = lastOk ? formatSpeedtestMbps(last.uploadMbps) : '—';
+    const pingText = lastOk ? formatSpeedtestPing(last.pingMs) : '—';
     const bodyHtml = [
         buildClusterDashboardMetricCell(t('speedtestLastRunLabel') || 'Last run', lastRun, null, null, 'col-6'),
-        buildClusterDashboardMetricCell(t('speedtestAvgLabel') || 'Average', formatSpeedtestMbps(download.avg), null, null, 'col-6'),
-        buildClusterDashboardMetricCell(t('speedtestUploadShort') || 'Upload', formatSpeedtestMbps(upload.avg), null, null, 'col-6 mt-2'),
-        buildClusterDashboardMetricCell('Ping', pingText, null, null, 'col-6 mt-2')
+        buildClusterDashboardMetricCell(t('speedtestDownloadShort') || 'Download', lastDl, null, null, 'col-6'),
+        buildClusterDashboardMetricCell(t('speedtestUploadShort') || 'Upload', lastUl, null, null, 'col-6 mt-2'),
+        buildClusterDashboardMetricCell(t('speedtestPingLabel') || 'Ping', pingText, null, null, 'col-6 mt-2'),
+        buildClusterDashboardMetricCell(t('speedtestAvgLabel') || 'Average', formatSpeedtestMbps(download.avg), null, null, 'col-6 mt-2'),
+        buildClusterDashboardMetricCell(t('speedtestUploadAvgToday') || 'Upload avg', formatSpeedtestMbps(upload.avg), null, null, 'col-6 mt-2')
     ].join('');
-    const footer = last.serverName ? escapeHtml(String(last.serverName)) : '';
+    const planBits = [];
+    if (summary.providerDownloadMbps != null) {
+        const v = Number(summary.providerDownloadMbps);
+        if (Number.isFinite(v) && v > 0) {
+            planBits.push(`${t('speedtestPlanDownloadShort')}: ${formatSpeedtestMbps(v)}`);
+        }
+    }
+    if (summary.providerUploadMbps != null) {
+        const v = Number(summary.providerUploadMbps);
+        if (Number.isFinite(v) && v > 0) {
+            planBits.push(`${t('speedtestPlanUploadShort')}: ${formatSpeedtestMbps(v)}`);
+        }
+    }
+    const planLine = planBits.join(' · ');
+    const devLastBits = [];
+    if (lastOk) {
+        const pDlv = summary.providerDownloadMbps != null ? Number(summary.providerDownloadMbps) : NaN;
+        const pUlv = summary.providerUploadMbps != null ? Number(summary.providerUploadMbps) : NaN;
+        const dd = formatSpeedtestDeviationPct(last.downloadMbps, pDlv);
+        if (dd != null) devLastBits.push(`${t('speedtestPlanDownloadShort')} ${dd}`);
+        const du = formatSpeedtestDeviationPct(last.uploadMbps, pUlv);
+        if (du != null) devLastBits.push(`${t('speedtestPlanUploadShort')} ${du}`);
+    }
+    const devLastLine = devLastBits.length
+        ? `${t('speedtestDeviationLastRunShort')}: ${devLastBits.join(' · ')}`
+        : '';
+    const footer = [planLine, devLastLine, last.serverName ? escapeHtml(String(last.serverName)) : '']
+        .filter(Boolean)
+        .join(' · ');
     return buildClusterDashboardTileShell(
         `<i class="bi bi-speedometer2 text-primary me-2 flex-shrink-0" aria-hidden="true"></i><span class="text-truncate">${escapeHtml(t('dashboardSpeedtestTitle') || 'Speedtest')}</span>`,
         `<span class="badge ${badgeClass}">${escapeHtml(badgeText)}</span>`,
@@ -7860,17 +8156,28 @@ async function saveSpeedtestSettings() {
     const server = (document.getElementById('speedtestServerInput')?.value || '').trim();
     let perDay = parseInt(document.getElementById('speedtestPerDayInput')?.value, 10);
     if (!Number.isFinite(perDay) || perDay < 1) perDay = 4;
-    if (perDay > 48) perDay = 48;
+    if (perDay > 6) perDay = 6;
     const dayInput = document.getElementById('speedtestPerDayInput');
     if (dayInput) dayInput.value = String(perDay);
+    const provDlRaw = (document.getElementById('speedtestProviderDownloadMbpsInput')?.value || '').trim().replace(',', '.');
+    const provUlRaw = (document.getElementById('speedtestProviderUploadMbpsInput')?.value || '').trim().replace(',', '.');
+    const httpPx = (document.getElementById('speedtestHttpProxyInput')?.value || '').trim();
+    const httpsPx = (document.getElementById('speedtestHttpsProxyInput')?.value || '').trim();
+    const noPx = (document.getElementById('speedtestNoProxyInput')?.value || '').trim();
     await saveSettingsToServer({
         speedtestEnabled: en,
         speedtestServer: server,
-        speedtestPerDay: perDay
+        speedtestPerDay: perDay,
+        speedtestProviderDownloadMbps: provDlRaw === '' ? '' : provDlRaw,
+        speedtestProviderUploadMbps: provUlRaw === '' ? '' : provUlRaw,
+        speedtestHttpProxy: httpPx,
+        speedtestHttpsProxy: httpsPx,
+        speedtestNoProxy: noPx
     });
     renderSettingsMonitorScreensOrderList();
     showToast(t('speedtestSaved') || t('dataUpdated'), 'success');
     updateSpeedtestDashboard().catch(() => {});
+    renderClusterDashboardTiles().catch(() => {});
 
     // После изменения включения refresh'им доступность экрана в monitor-mode.
     await refreshMonitorScreensAvailability();
@@ -12315,9 +12622,25 @@ async function loadSettings() {
     if (spDay) {
         let n = parseInt(data.speedtest_per_day, 10);
         if (!Number.isFinite(n) || n < 1) n = 4;
-        if (n > 48) n = 48;
+        if (n > 6) n = 6;
         spDay.value = String(n);
     }
+    const spProvDl = document.getElementById('speedtestProviderDownloadMbpsInput');
+    if (spProvDl) {
+        const v = data.speedtest_provider_download_mbps;
+        spProvDl.value = v != null && v !== '' && Number.isFinite(Number(v)) ? String(v) : '';
+    }
+    const spProvUl = document.getElementById('speedtestProviderUploadMbpsInput');
+    if (spProvUl) {
+        const v = data.speedtest_provider_upload_mbps;
+        spProvUl.value = v != null && v !== '' && Number.isFinite(Number(v)) ? String(v) : '';
+    }
+    const spHttpPx = document.getElementById('speedtestHttpProxyInput');
+    if (spHttpPx) spHttpPx.value = data.speedtest_http_proxy != null ? String(data.speedtest_http_proxy) : '';
+    const spHttpsPx = document.getElementById('speedtestHttpsProxyInput');
+    if (spHttpsPx) spHttpsPx.value = data.speedtest_https_proxy != null ? String(data.speedtest_https_proxy) : '';
+    const spNoPx = document.getElementById('speedtestNoProxyInput');
+    if (spNoPx) spNoPx.value = data.speedtest_no_proxy != null ? String(data.speedtest_no_proxy) : '';
     telegramNotificationRules = normalizeTelegramNotificationRules(data.telegram_notification_rules);
     if (!telegramNotificationRules.length && data.telegram_routes) {
         telegramNotificationRules = migrateLegacyTelegramRoutesToRulesClient(normalizeTelegramRoutes(data.telegram_routes));

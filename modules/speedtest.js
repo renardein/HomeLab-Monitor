@@ -6,7 +6,10 @@ const store = require('./settings-store');
 const { log } = require('./utils');
 
 let runLock = false;
-let cliCache = { ok: false, checkedAt: 0 };
+let cliCache = { ok: false, checkedAt: 0, proxyKey: '' };
+
+/** Максимум автоматических замеров за сутки и строк в списке «за сегодня» в summary. */
+const SPEEDTEST_MAX_RUNS_PER_DAY = 6;
 
 /** Исполняемый файл Ookla CLI: иначе ищется `speedtest` в PATH процесса Node (может отличаться от интерактивной оболочки). */
 function speedtestExecutable() {
@@ -15,12 +18,76 @@ function speedtestExecutable() {
     return s || 'speedtest';
 }
 
+function readSpeedtestProxyFromStore() {
+    const http = String(store.getSetting('speedtest_http_proxy') || '').trim();
+    const https = String(store.getSetting('speedtest_https_proxy') || '').trim();
+    const noProxy = String(store.getSetting('speedtest_no_proxy') || '').trim();
+    return { http, https, noProxy };
+}
+
+function speedtestProxyCacheKey() {
+    const { http, https, noProxy } = readSpeedtestProxyFromStore();
+    return `${http}\n${https}\n${noProxy}`;
+}
+
+/** Ключи прокси в окружении — при явной настройке в БД сбрасываем наследование от Node/системы (частая причина «не работает»). */
+const SPEEDTEST_PROXY_ENV_KEYS = [
+    'HTTP_PROXY',
+    'http_proxy',
+    'HTTPS_PROXY',
+    'https_proxy',
+    'NO_PROXY',
+    'no_proxy',
+    'ALL_PROXY',
+    'all_proxy',
+    'FTP_PROXY',
+    'ftp_proxy'
+];
+
+/**
+ * Переменные окружения для дочернего процесса.
+ * Go http.ProxyFromEnvironment (часто у Ookla CLI): HTTPS без отдельного URL подхватывает HTTP_PROXY,
+ * но смешение с устаревшим HTTPS_PROXY из среды Node даёт сбои — поэтому при заполненном HTTP(S) в настройках чистим прокси-переменные и задаём заново.
+ */
+function speedtestSpawnEnv() {
+    const env = { ...process.env };
+    const { http, https, noProxy } = readSpeedtestProxyFromStore();
+    const setPair = (upper, lower, val) => {
+        if (!val || val.length > 2048) return;
+        env[upper] = val;
+        env[lower] = val;
+    };
+
+    const hasHttpOrHttps = !!(http || https);
+    if (hasHttpOrHttps) {
+        for (const k of SPEEDTEST_PROXY_ENV_KEYS) {
+            delete env[k];
+        }
+        setPair('HTTP_PROXY', 'http_proxy', http);
+        const httpsEffective = https || http;
+        setPair('HTTPS_PROXY', 'https_proxy', httpsEffective);
+        setPair('NO_PROXY', 'no_proxy', noProxy);
+    } else if (noProxy) {
+        setPair('NO_PROXY', 'no_proxy', noProxy);
+    }
+
+    return env;
+}
+
 function speedtestSpawnOptions() {
     return {
         windowsHide: true,
         stdio: ['ignore', 'pipe', 'pipe'],
-        env: { ...process.env }
+        env: speedtestSpawnEnv()
     };
+}
+
+function parseStoredProviderMbps(settingKey) {
+    const raw = store.getSetting(settingKey);
+    if (raw == null || raw === '') return null;
+    const n = parseFloat(String(raw).trim().replace(',', '.'));
+    if (!Number.isFinite(n) || n <= 0) return null;
+    return Math.min(Math.round(n * 1000) / 1000, 1_000_000);
 }
 
 function readSettings() {
@@ -29,7 +96,7 @@ function readSettings() {
     const server = String(store.getSetting('speedtest_server') || '').trim();
     let perDay = parseInt(store.getSetting('speedtest_per_day'), 10);
     if (!Number.isFinite(perDay) || perDay < 1) perDay = 4;
-    if (perDay > 48) perDay = 48;
+    if (perDay > SPEEDTEST_MAX_RUNS_PER_DAY) perDay = SPEEDTEST_MAX_RUNS_PER_DAY;
     return { enabled, server, perDay };
 }
 
@@ -116,9 +183,11 @@ function probeCli() {
 }
 
 async function checkCliAvailable() {
+    const pKey = speedtestProxyCacheKey();
     const now = Date.now();
-    if (now - cliCache.checkedAt < 120000) return cliCache.ok;
+    if (now - cliCache.checkedAt < 120000 && cliCache.proxyKey === pKey) return cliCache.ok;
     cliCache.checkedAt = now;
+    cliCache.proxyKey = pKey;
     cliCache.ok = await probeCli();
     return cliCache.ok;
 }
@@ -291,17 +360,59 @@ function getLastRow() {
     };
 }
 
+/** Все замеры за локальный календарный день [startIso, endIso), как у агрегатов «сегодня». */
+function listRunsForLocalDay(startIso, endIso, limit = SPEEDTEST_MAX_RUNS_PER_DAY) {
+    const cap = Number(limit);
+    const lim = Number.isFinite(cap) && cap > 0
+        ? Math.min(Math.floor(cap), SPEEDTEST_MAX_RUNS_PER_DAY)
+        : SPEEDTEST_MAX_RUNS_PER_DAY;
+    const db = getDbSync();
+    const stmt = db.prepare(
+        `SELECT run_at, download_mbps, upload_mbps, ping_ms, server_id, server_name, error
+         FROM speedtest_results
+         WHERE datetime(run_at) >= datetime(?) AND datetime(run_at) < datetime(?)
+         ORDER BY datetime(run_at) DESC
+         LIMIT ?`
+    );
+    stmt.bind([startIso, endIso, lim]);
+    const out = [];
+    while (stmt.step()) {
+        const row = stmt.get();
+        out.push({
+            runAt: row[0],
+            downloadMbps: row[1],
+            uploadMbps: row[2],
+            pingMs: row[3],
+            serverId: row[4],
+            serverName: row[5],
+            error: row[6]
+        });
+    }
+    stmt.free();
+    return out;
+}
+
 function getSummaryPayload() {
     const { enabled, server, perDay } = readSettings();
     const cliOk = cliCache.ok;
     const { startIso, endIso } = localDayBoundsIso();
     const today = statsForTodayOk(startIso, endIso);
     const last = getLastRow();
+    const providerDownloadMbps = parseStoredProviderMbps('speedtest_provider_download_mbps');
+    const providerUploadMbps = parseStoredProviderMbps('speedtest_provider_upload_mbps');
+    const px = readSpeedtestProxyFromStore();
     return {
         enabled,
         cliAvailable: cliOk,
         serverId: server || null,
         perDay,
+        providerDownloadMbps,
+        providerUploadMbps,
+        proxy: {
+            http: !!px.http,
+            https: !!px.https,
+            noProxy: !!px.noProxy
+        },
         last: last
             ? {
                 runAt: last.runAt,
@@ -313,6 +424,7 @@ function getSummaryPayload() {
                 error: last.error
             }
             : null,
+        runsToday: listRunsForLocalDay(startIso, endIso),
         today
     };
 }

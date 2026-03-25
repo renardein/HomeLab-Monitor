@@ -31,6 +31,8 @@
             --hm-label-tracking: 0.04em;
             --hm-progress-h: 10px;
             --hm-progress-h-monitor: 8px;
+            --homelab-font-scale: 1;
+            --homelab-content-scale: 1;
         }
 
         /* KPI-блоки (Speedtest и др.): одна шкала подпись / значение */
@@ -44,6 +46,10 @@
             font-size: var(--hm-text-base);
             font-weight: 600;
             line-height: var(--hm-line-snug);
+        }
+
+        .host-problem-trigger {
+            cursor: pointer;
         }
         .hm-speedtest-last-run {
             max-height: 7.5rem;
@@ -75,93 +81,113 @@
             padding: var(--hm-app-padding);
             transition: background-color 0.3s, color 0.3s;
         }
+        /* Обычная тёмная тема — та же палитра «midnight», что и у тёмного режима монитора */
         body.dark-mode {
-            background: #1a1a2e;
-            color: #eee;
+            --hm-monitor-bg: #121212;
+            --hm-monitor-surface: #1e1e1e;
+            --hm-monitor-raised: #1c1c1c;
+            --hm-monitor-border: rgba(255, 255, 255, 0.09);
+            --hm-monitor-muted: #9e9e9e;
+            --hm-monitor-blue: #42a5f5;
+            --hm-monitor-purple: #7e57c2;
+            --hm-monitor-pink: #d81b60;
+            --hm-monitor-amber: #ffa000;
+            background: var(--hm-monitor-bg);
+            color: #fff;
         }
         body.dark-mode .card {
-            background: #16213e;
-            color: #eee;
+            background: var(--hm-monitor-surface);
+            color: #fff;
+            border: 1px solid var(--hm-monitor-border);
         }
         body.dark-mode .card-header {
-            background: linear-gradient(135deg, #0f3460 0%, #533483 100%);
+            background: linear-gradient(135deg, rgba(66, 165, 245, 0.22) 0%, rgba(126, 87, 194, 0.24) 52%, rgba(216, 27, 96, 0.16) 100%);
+            color: #fff;
+            border-bottom: 1px solid var(--hm-monitor-border);
         }
         body.dark-mode .stat-card {
-            background: #16213e;
+            background: var(--hm-monitor-surface);
+            border: 1px solid var(--hm-monitor-border);
         }
         body.dark-mode .stat-value {
-            color: #eee;
+            color: #fff;
         }
         body.dark-mode .stat-label {
-            color: #aaa;
+            color: var(--hm-monitor-muted);
         }
         body.dark-mode .stat-card-meta {
-            color: #aaa;
+            color: var(--hm-monitor-muted);
         }
         body.dark-mode .node-card {
-            background: #16213e;
+            background: var(--hm-monitor-raised);
+            border: 1px solid var(--hm-monitor-border);
         }
         body.dark-mode .table {
-            color: #e2e8f0;
-            border-color: #2d3748;
+            color: #e8e8e8;
+            border-color: var(--hm-monitor-border);
         }
         body.dark-mode .table thead th {
-            background-color: #0f3460;
+            background: linear-gradient(135deg, #2a3f5c 0%, #4a3478 100%);
             color: #fff;
-            border-color: #2d3748;
+            border-color: var(--hm-monitor-border);
         }
         body.dark-mode .table tbody td {
-            background-color: #16213e;
-            color: #e2e8f0;
-            border-color: #2d3748;
+            background-color: var(--hm-monitor-surface);
+            color: #e8e8e8;
+            border-color: var(--hm-monitor-border);
         }
         body.dark-mode .table tbody tr:hover td {
-            background-color: rgba(255, 255, 255, 0.06);
+            background-color: rgba(66, 165, 245, 0.08);
         }
         body.dark-mode .table .text-muted,
         body.dark-mode .table small {
-            color: #a0aec0 !important;
+            color: var(--hm-monitor-muted) !important;
         }
         body.dark-mode .table code {
-            background: rgba(0, 0, 0, 0.25);
-            color: #e2e8f0;
-            border-color: #2d3748;
+            background: rgba(0, 0, 0, 0.35);
+            color: #e8e8e8;
+            border-color: var(--hm-monitor-border);
         }
         body.dark-mode .table .badge {
             color: #fff;
         }
-        body.dark-mode .table-success { background-color: rgba(40, 167, 69, 0.2) !important; color: #e2e8f0; }
-        body.dark-mode .table-danger { background-color: rgba(220, 53, 69, 0.2) !important; color: #e2e8f0; }
-        body.dark-mode .table-warning { background-color: rgba(255, 193, 7, 0.15) !important; color: #e2e8f0; }
+        body.dark-mode .table-success { background-color: rgba(40, 167, 69, 0.18) !important; color: #e8e8e8; }
+        body.dark-mode .table-danger { background-color: rgba(216, 27, 96, 0.2) !important; color: #e8e8e8; }
+        body.dark-mode .table-warning { background-color: rgba(255, 160, 0, 0.16) !important; color: #e8e8e8; }
         body.dark-mode .navbar {
-            background: #0f3460 !important;
-            color: #eee;
+            background: var(--hm-monitor-raised) !important;
+            color: #fff;
+            border-bottom: 1px solid var(--hm-monitor-border);
         }
         body.dark-mode .form-control {
-            background: #0f3460;
-            border-color: #533483;
-            color: #eee;
+            background: var(--hm-monitor-surface);
+            border-color: rgba(66, 165, 245, 0.35);
+            color: #fff;
         }
         body.dark-mode .form-control:focus {
-            background: #1a1a2e;
-            color: #eee;
+            background: var(--hm-monitor-bg);
+            color: #fff;
+            border-color: rgba(126, 87, 194, 0.5);
         }
         body.dark-mode .nav-tabs .nav-link {
-            color: #aaa;
+            color: var(--hm-monitor-muted);
         }
         body.dark-mode .nav-tabs .nav-link.active {
-            background: #16213e;
-            color: #eee;
-            border-color: #533483 #533483 transparent;
+            background: var(--hm-monitor-surface);
+            color: #fff;
+            border-color: rgba(126, 87, 194, 0.45) rgba(126, 87, 194, 0.45) transparent;
         }
         body.dark-mode .nav-tabs {
-            border-color: #533483;
+            border-color: rgba(126, 87, 194, 0.35);
         }
         body.dark-mode .btn-group .btn {
-            border-color: #533483;
+            border-color: rgba(126, 87, 194, 0.35);
         }
         body.dark-mode .progress {
-            background: #0f3460;
+            background: rgba(255, 255, 255, 0.08);
+        }
+        body.dark-mode .progress-bar.bg-primary {
+            background: linear-gradient(90deg, var(--hm-monitor-blue), var(--hm-monitor-purple)) !important;
         }
         .container {
             max-width: 1600px;
@@ -194,6 +220,11 @@
             font-weight: 600;
             letter-spacing: -0.02em;
             color: #1e293b;
+            cursor: pointer;
+            text-decoration: none;
+        }
+        .app-topbar-brand:hover {
+            color: #334155;
         }
         .app-topbar-brand-icon {
             display: inline-flex;
@@ -304,36 +335,64 @@
             padding-left: 0.85rem !important;
             padding-right: 0.85rem !important;
         }
+        .app-topbar-update-available {
+            display: none;
+            flex-shrink: 0;
+            align-items: center;
+            gap: 0.35rem;
+            white-space: nowrap;
+            font-weight: 600;
+            border-radius: 8px !important;
+            padding-left: 0.75rem !important;
+            padding-right: 0.75rem !important;
+        }
+        body.dark-mode .app-topbar-update-available.btn-warning {
+            color: #1a1000;
+            border-color: rgba(255, 160, 0, 0.55);
+            background: linear-gradient(180deg, #ffca28 0%, #ffa000 100%);
+        }
+        body.dark-mode .app-topbar-update-available.btn-warning:hover {
+            filter: brightness(1.08);
+            color: #1a1000;
+        }
         body.dark-mode .app-topbar {
-            background: linear-gradient(180deg, #0f3460 0%, #16213e 100%);
-            border-color: rgba(102, 126, 234, 0.35);
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+            background: rgba(28, 28, 28, 0.96);
+            border-color: rgba(66, 165, 245, 0.22);
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.45);
         }
         body.dark-mode .app-topbar-brand {
             color: #f1f5f9 !important;
+        }
+        body.dark-mode .app-topbar-brand:hover {
+            color: #fff !important;
+        }
+        body.dark-mode .app-topbar-brand-icon {
+            background: linear-gradient(135deg, #42a5f5 0%, #7e57c2 100%);
+            box-shadow: 0 2px 12px rgba(66, 165, 245, 0.35);
         }
         body.dark-mode .app-topbar-actions {
             background: rgba(255, 255, 255, 0.06);
             border-color: rgba(255, 255, 255, 0.12);
         }
         body.dark-mode .app-topbar-btn {
-            background: rgba(15, 52, 96, 0.65) !important;
-            color: #e2e8f0 !important;
+            background: rgba(30, 30, 30, 0.95) !important;
+            color: #e8e8e8 !important;
             font-weight: 400 !important;
+            border-color: rgba(66, 165, 245, 0.2) !important;
         }
         body.dark-mode .app-topbar-btn:hover,
         body.dark-mode .app-topbar-btn:focus,
         body.dark-mode .app-topbar-btn:focus-visible,
         body.dark-mode .app-topbar-btn:active,
         body.dark-mode .app-topbar-actions .dropdown-toggle.show {
-            background: rgba(15, 52, 96, 0.95) !important;
+            background: rgba(66, 165, 245, 0.18) !important;
             color: #fff !important;
             font-weight: 400 !important;
         }
         body.dark-mode .app-topbar-pill {
-            background: rgba(15, 52, 96, 0.5);
-            border-color: rgba(255, 255, 255, 0.15);
-            color: #e2e8f0;
+            background: rgba(30, 30, 30, 0.9);
+            border-color: rgba(255, 255, 255, 0.12);
+            color: #e8e8e8;
         }
         body.dark-mode .app-topbar-pill--server.app-topbar-pill--ok {
             background: rgba(34, 197, 94, 0.15);
@@ -346,13 +405,13 @@
             color: #fecaca;
         }
         body.dark-mode .app-topbar-pill--conn {
-            background: rgba(15, 52, 96, 0.45);
-            color: #cbd5e1;
+            background: rgba(30, 30, 30, 0.85);
+            color: #9e9e9e;
         }
         body.dark-mode .app-topbar-pill--host {
-            background: rgba(59, 130, 246, 0.15);
-            border-color: rgba(96, 165, 250, 0.35);
-            color: #bfdbfe;
+            background: rgba(66, 165, 245, 0.14);
+            border-color: rgba(66, 165, 245, 0.4);
+            color: #90caf9;
         }
         .card {
             border-radius: var(--hm-radius-card);
@@ -361,10 +420,10 @@
             margin-bottom: var(--hm-space-5);
         }
         body.dark-mode .card-body {
-            color: #eee;
+            color: #fff;
         }
         body.dark-mode .navbar-brand {
-            color: #eee !important;
+            color: #fff !important;
         }
         .card-header {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -387,12 +446,41 @@
             padding: var(--hm-stat-pad);
             text-align: center;
             box-shadow: var(--hm-shadow-card);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            min-height: 116px;
         }
         .stat-value {
             font-size: var(--hm-text-stat);
             font-weight: 700;
             line-height: var(--hm-line-tight);
             color: #333;
+        }
+
+        /* HomeLab: increase typography with free space (set by JS). */
+        #dashboardContent .stat-value {
+            font-size: calc(var(--hm-text-stat) * var(--homelab-font-scale));
+        }
+        #dashboardContent .card .display-6 {
+            font-size: calc(var(--hm-text-metric) * var(--homelab-font-scale)) !important;
+        }
+        #dashboardContent .card-header h5,
+        #dashboardContent .cluster-scroll-item .node-card h5 {
+            font-size: calc(var(--hm-text-lg) * var(--homelab-font-scale));
+        }
+        #dashboardContent .nav-tabs .nav-link {
+            font-size: calc(var(--hm-text-base) * var(--homelab-font-scale));
+        }
+        #dashboardContent .cluster-scroll-item .node-card .small {
+            font-size: calc(var(--hm-text-sm) * var(--homelab-font-scale));
+        }
+        #dashboardContent {
+            transform-origin: top center;
+            transform: scale(var(--homelab-content-scale));
+            width: calc(100% / var(--homelab-content-scale));
+            margin-left: auto;
+            margin-right: auto;
         }
         .stat-label {
             color: #666;
@@ -453,19 +541,44 @@
             padding-bottom: 0.35rem;
             scrollbar-width: thin;
             scroll-snap-type: x proximity;
+            align-items: stretch;
         }
         .cluster-scroll-item {
             flex: 0 0 calc((100% - 2.25rem) / 4);
             min-width: 280px;
             scroll-snap-align: start;
+            display: flex;
         }
         .cluster-scroll-item > .node-card {
             margin-bottom: 0;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
         }
         .cluster-scroll-item .node-card h5 {
             font-size: var(--hm-text-lg);
             font-weight: 600;
             line-height: var(--hm-line-tight);
+        }
+        .cluster-scroll-item .node-card {
+            font-size: calc(var(--hm-text-sm) * 1.2);
+        }
+        .cluster-scroll-item .node-card .small {
+            font-size: calc(var(--hm-text-sm) * 1.14);
+        }
+        .cluster-scroll-item .node-card .fw-bold {
+            font-size: calc(var(--hm-text-base) * 1.18);
+        }
+        .cluster-scroll-item .node-card code {
+            font-size: calc(var(--hm-text-sm) * 1.14);
+        }
+        /* Keep top KPI cards aligned to one baseline. */
+        body.monitor-mode #dashboardContent > .row.g-4.mb-4 > [class*="col-"] {
+            display: flex;
+        }
+        body.monitor-mode #dashboardContent > .row.g-4.mb-4 .stat-card {
+            width: 100%;
+            align-items: center;
         }
         @media (max-width: 1199.98px) {
             .cluster-scroll-item {
@@ -511,10 +624,10 @@
         }
 
         body.dark-mode:not(.monitor-mode) #vmsMonitorSection #vmsMonitorCards .node-card {
-            background: #16213e;
-            border: 1px solid rgba(83, 52, 131, 0.8);
-            box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
-            color: #e2e8f0;
+            background: var(--hm-monitor-surface);
+            border: 1px solid rgba(126, 87, 194, 0.45);
+            box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+            color: #e8e8e8;
         }
 
         .vm-icon {
@@ -655,6 +768,16 @@
             min-height: 2rem;
         }
 
+        /* Превью в настройках: фон = выбранный тинт, глиф контрастный (Iconify + Bootstrap Icons). */
+        .icon-picker-trigger--tinted {
+            border: none !important;
+            border-radius: 0.4rem;
+            box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.12);
+        }
+        body.dark-mode .icon-picker-trigger--tinted {
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+        }
+
         .icon-picker-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
@@ -753,10 +876,10 @@
         }
 
         body.dark-mode:not(.monitor-mode) #servicesMonitorSection #servicesCards .node-card {
-            background: #16213e;
-            border: 1px solid rgba(83, 52, 131, 0.85);
-            box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
-            color: #e2e8f0;
+            background: var(--hm-monitor-surface);
+            border: 1px solid rgba(126, 87, 194, 0.45);
+            box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+            color: #e8e8e8;
         }
 
         body:not(.monitor-mode) #servicesMonitorSection #servicesCards .node-card h6 {
@@ -793,10 +916,10 @@
             height: 3rem;
         }
         body.dark-mode .spinner-border {
-            border-color: #667eea;
+            border-color: #42a5f5;
         }
         body.dark-mode .spinner-border.text-primary {
-            border-color: #667eea !important;
+            border-color: #42a5f5 !important;
         }
         .nav-tabs {
             margin-bottom: var(--hm-space-6) !important;
@@ -840,8 +963,8 @@
         }
 
         body.dark-mode #upsSettingsCardWrap > .card {
-            background: #0f3460;
-            border-color: #533483;
+            background: var(--hm-monitor-surface);
+            border-color: var(--hm-monitor-border);
         }
 
         body.dark-mode #upsSettingsCardWrap > .card .card-header {
@@ -900,6 +1023,13 @@
             background-color: #667eea;
             color: white;
         }
+        body.dark-mode .language-switcher:hover {
+            background-color: rgba(255, 255, 255, 0.08);
+        }
+        body.dark-mode .language-switcher.active {
+            background: linear-gradient(135deg, #42a5f5 0%, #7e57c2 100%);
+            color: white;
+        }
         #settingsNav .nav-link {
             text-align: left;
             border-radius: 8px;
@@ -950,8 +1080,13 @@
             background: rgba(0, 0, 0, 0.02);
         }
         body.dark-mode .settings-section {
-            background: #0f3460;
-            border-color: #533483;
+            background: var(--hm-monitor-surface);
+            border-color: var(--hm-monitor-border);
+        }
+        .settings-display-subtab .settings-display-tab-title {
+            font-size: var(--hm-text-xl);
+            font-weight: 600;
+            line-height: var(--hm-line-tight);
         }
         body.dark-mode #upsDisplayTabsContent,
         body.dark-mode #netdevDisplayTabsContent {
@@ -959,73 +1094,75 @@
             background: rgba(0, 0, 0, 0.15);
         }
         body.dark-mode .toast {
-            background: #16213e;
-            color: #eee;
+            background: var(--hm-monitor-surface);
+            color: #fff;
+            border: 1px solid var(--hm-monitor-border);
         }
         body.dark-mode .btn-close {
             filter: invert(1) grayscale(100%) brightness(200%);
         }
         body.dark-mode .form-select {
-            background: #0f3460;
-            border-color: #533483;
-            color: #eee;
+            background: var(--hm-monitor-surface);
+            border-color: rgba(66, 165, 245, 0.35);
+            color: #fff;
         }
         body.dark-mode .form-select:focus {
-            background: #1a1a2e;
-            color: #eee;
+            background: var(--hm-monitor-bg);
+            color: #fff;
+            border-color: rgba(126, 87, 194, 0.5);
         }
         body.dark-mode .form-check-input {
-            background-color: #0f3460;
-            border-color: #533483;
+            background-color: var(--hm-monitor-surface);
+            border-color: rgba(126, 87, 194, 0.45);
         }
         body.dark-mode .form-check-input:checked {
-            background-color: #667eea;
-            border-color: #667eea;
+            background-color: #42a5f5;
+            border-color: #7e57c2;
         }
         body.dark-mode .form-check-label {
-            color: #eee;
+            color: #fff;
         }
         body.dark-mode .form-label {
-            color: #eee;
+            color: #fff;
         }
         body.dark-mode .form-text {
-            color: #aaa;
+            color: var(--hm-monitor-muted);
         }
         body.dark-mode .bg-white {
-            background-color: #16213e !important;
+            background-color: var(--hm-monitor-surface) !important;
         }
         body.dark-mode .bg-light {
-            background-color: #0f3460 !important;
+            background-color: var(--hm-monitor-raised) !important;
         }
         body.dark-mode .text-muted {
-            color: #aaa !important;
+            color: var(--hm-monitor-muted) !important;
         }
         body.dark-mode .text-dark {
-            color: #eee !important;
+            color: #fff !important;
         }
         body.dark-mode .btn-outline-primary {
-            border-color: #667eea;
-            color: #667eea;
+            border-color: #42a5f5;
+            color: #42a5f5;
         }
         body.dark-mode .btn-outline-primary:hover {
-            background-color: #667eea;
+            background-color: #42a5f5;
             color: white;
         }
         body.dark-mode .btn-outline-dark {
-            border-color: #aaa;
-            color: #aaa;
+            border-color: #9e9e9e;
+            color: #9e9e9e;
         }
         body.dark-mode .btn-outline-dark:hover {
-            background-color: #aaa;
-            color: #1a1a2e;
+            background-color: #9e9e9e;
+            color: #121212;
         }
         body.dark-mode .btn-outline-secondary {
-            border-color: #aaa;
-            color: #aaa;
+            border-color: #9e9e9e;
+            color: #9e9e9e;
         }
         body.dark-mode .btn-outline-secondary:hover {
-            background-color: #aaa;
-            color: #1a1a2e;
+            background-color: #9e9e9e;
+            color: #121212;
         }
         body.dark-mode .btn-outline-danger {
             border-color: #dc3545;
@@ -1036,12 +1173,13 @@
             color: white;
         }
         body.dark-mode .btn-primary {
-            background-color: #667eea;
-            border-color: #667eea;
+            background: linear-gradient(135deg, #42a5f5 0%, #7e57c2 100%);
+            border-color: transparent;
         }
         body.dark-mode .btn-primary:hover {
-            background-color: #5a6fd6;
-            border-color: #5a6fd6;
+            background: linear-gradient(135deg, #389ce9 0%, #6d48b0 100%);
+            border-color: transparent;
+            filter: brightness(1.05);
         }
         body.dark-mode .btn-outline-info {
             border-color: #17a2b8;
@@ -1074,16 +1212,16 @@
             opacity: 0.9;
         }
         body.dark-mode .btn {
-            color: #eee;
+            color: #fff;
         }
         body.dark-mode .text-center {
-            color: #eee;
+            color: #fff;
         }
         body.dark-mode .form-range::-webkit-slider-thumb {
-            background: #667eea;
+            background: #42a5f5;
         }
         body.dark-mode .form-range::-moz-range-thumb {
-            background: #667eea;
+            background: #42a5f5;
         }
         body.dark-mode .navbar-toggler {
             border-color: rgba(255,255,255,0.5);
@@ -1104,7 +1242,8 @@
             }
             body.dark-mode .navbar-collapse,
             body.dark-mode .app-topbar-collapse {
-                background: #16213e;
+                background: var(--hm-monitor-surface);
+                border: 1px solid var(--hm-monitor-border);
             }
             .app-topbar-toolbar {
                 flex-direction: column;
@@ -1147,29 +1286,29 @@
         }
         
         body.dark-mode .input-group-text {
-            background: #0f3460;
-            border-color: #533483;
-            color: #eee;
+            background: var(--hm-monitor-surface);
+            border-color: rgba(66, 165, 245, 0.3);
+            color: #fff;
         }
         body.dark-mode .input-group > .form-control {
-            background: #0f3460;
-            border-color: #533483;
-            color: #eee;
+            background: var(--hm-monitor-surface);
+            border-color: rgba(66, 165, 245, 0.3);
+            color: #fff;
         }
         body.dark-mode .alert-info {
-            background: #0f3460;
-            border-color: #533483;
-            color: #eee;
+            background: rgba(66, 165, 245, 0.12);
+            border-color: rgba(66, 165, 245, 0.35);
+            color: #e8e8e8;
         }
         body.dark-mode .alert-warning {
-            background: #3d340f;
-            border-color: #837a34;
-            color: #eee;
+            background: rgba(255, 160, 0, 0.12);
+            border-color: rgba(255, 160, 0, 0.35);
+            color: #e8e8e8;
         }
         body.dark-mode .alert-danger {
-            background: #3d0f0f;
-            border-color: #833434;
-            color: #eee;
+            background: rgba(216, 27, 96, 0.14);
+            border-color: rgba(216, 27, 96, 0.4);
+            color: #e8e8e8;
         }
         body.dark-mode .alert-success {
             background: #0f3d1f;
@@ -1189,7 +1328,7 @@
             color: white;
         }
         body.dark-mode .bg-primary {
-            background-color: #667eea !important;
+            background: linear-gradient(135deg, #42a5f5 0%, #7e57c2 100%) !important;
             color: white;
         }
         body.dark-mode .bg-secondary {
@@ -1201,19 +1340,19 @@
             color: white;
         }
         body.dark-mode .text-primary {
-            color: #667eea !important;
+            color: #42a5f5 !important;
         }
         body.dark-mode .text-success {
             color: #28a745 !important;
         }
         body.dark-mode .text-warning {
-            color: #ffc107 !important;
+            color: #ffa000 !important;
         }
         body.dark-mode .text-danger {
             color: #dc3545 !important;
         }
         body.dark-mode .progress-bar.bg-primary {
-            background-color: #667eea !important;
+            background: linear-gradient(90deg, #42a5f5, #7e57c2) !important;
         }
         body.dark-mode .progress-bar.bg-success {
             background-color: #28a745 !important;
@@ -1228,8 +1367,8 @@
             color: white;
         }
         body.dark-mode .badge.bg-light {
-            background-color: #0f3460 !important;
-            color: #eee;
+            background-color: var(--hm-monitor-raised) !important;
+            color: #fff;
         }
         body.dark-mode .badge.bg-success {
             background-color: #28a745 !important;
@@ -1248,10 +1387,10 @@
             color: white;
         }
         body.dark-mode .table-responsive {
-            border-color: #2d3748;
+            border-color: var(--hm-monitor-border);
         }
         body.dark-mode .card .table {
-            background-color: #16213e;
+            background-color: var(--hm-monitor-surface);
         }
         .threshold-input {
             width: 5.5rem;
@@ -1277,12 +1416,31 @@
         .color-red { background: #dc3545; }
         
         /* Режим монитора: полный дашборд с крупными блоками, переключение свайпами */
+        /* Жесты «назад/вперёд» и rubber-band завязаны на <html> — без класса на корне overscroll часто не срабатывает */
+        html.monitor-mode-root {
+            height: 100%;
+            overscroll-behavior: none;
+            overscroll-behavior-x: none;
+            touch-action: pan-y;
+        }
         body.monitor-mode {
             padding: 0;
             overflow: hidden;
+            min-height: 100%;
+            overscroll-behavior: none;
+            overscroll-behavior-x: none;
+            touch-action: manipulation;
+            -webkit-text-size-adjust: 100%;
+            text-size-adjust: 100%;
             --monitor-toolbar-h: 52px;
             --monitor-toolbar-top: var(--monitor-toolbar-h);
             --monitor-dock-h: 52px;
+        }
+        body.monitor-mode #dashboardSection,
+        body.monitor-mode .monitor-screen,
+        body.monitor-mode .monitor-view {
+            overscroll-behavior: none;
+            overscroll-behavior-x: none;
         }
         body.monitor-mode.monitor-toolbar-hidden {
             --monitor-toolbar-top: 0px;
@@ -1341,7 +1499,9 @@
         body.monitor-mode #nodesContainer {
             height: 100%;
             min-height: 0;
-            overflow: hidden;
+            overflow-x: auto;
+            overflow-y: hidden;
+            touch-action: pan-x pan-y;
         }
 
         /* Вкладки Nodes / Storage / Backups / Quorum — только вне режима монитора */
@@ -1353,6 +1513,7 @@
         body.monitor-mode .stat-card {
             padding: var(--hm-stat-pad);
             border-radius: var(--hm-radius);
+            min-height: 126px;
         }
         body.monitor-mode .stat-value {
             font-size: var(--hm-text-stat);
@@ -1403,82 +1564,105 @@
             font-size: var(--hm-text-base);
         }
 
-        /* Тёмная тема режима монитора (выбор в панели) */
+        /* Тёмная тема режима монитора — палитра «midnight» (сине-фиолетово-малиновые акценты) */
         body.monitor-mode.monitor-theme-dark {
-            background: #1a1a2e;
+            --hm-monitor-bg: #121212;
+            --hm-monitor-surface: #1e1e1e;
+            --hm-monitor-raised: #1c1c1c;
+            --hm-monitor-border: rgba(255, 255, 255, 0.09);
+            --hm-monitor-muted: #9e9e9e;
+            --hm-monitor-blue: #42a5f5;
+            --hm-monitor-purple: #7e57c2;
+            --hm-monitor-pink: #d81b60;
+            --hm-monitor-amber: #ffa000;
+            background: var(--hm-monitor-bg);
+            color: #fff;
         }
         body.monitor-mode.monitor-theme-dark .stat-card {
-            background: #16213e;
-            color: #eee;
-            border: none;
-        }
-        body.monitor-mode.monitor-theme-dark .stat-label { color: #aaa; }
-        body.monitor-mode.monitor-theme-dark .card {
-            background: #16213e;
+            background: var(--hm-monitor-surface);
             color: #fff;
-            border: none;
+            border: 1px solid var(--hm-monitor-border);
+        }
+        body.monitor-mode.monitor-theme-dark .stat-label { color: var(--hm-monitor-muted); }
+        body.monitor-mode.monitor-theme-dark .card {
+            background: var(--hm-monitor-surface);
+            color: #fff;
+            border: 1px solid var(--hm-monitor-border);
         }
         body.monitor-mode.monitor-theme-dark .card-header {
-            background: linear-gradient(135deg, #0f3460 0%, #533483 100%);
+            background: linear-gradient(135deg, rgba(66, 165, 245, 0.22) 0%, rgba(126, 87, 194, 0.24) 52%, rgba(216, 27, 96, 0.16) 100%);
             color: #fff;
+            border-bottom: 1px solid var(--hm-monitor-border);
         }
         body.monitor-mode.monitor-theme-dark .node-card {
-            background: #16213e;
+            background: var(--hm-monitor-raised);
             color: #fff;
-            border: none;
+            border: 1px solid var(--hm-monitor-border);
         }
         body.monitor-mode.monitor-theme-dark .table {
-            color: #e2e8f0;
-            border-color: #2d3748;
-            background-color: #16213e;
+            color: #e8e8e8;
+            border-color: var(--hm-monitor-border);
+            background-color: var(--hm-monitor-surface);
         }
         body.monitor-mode.monitor-theme-dark .table thead th {
-            background-color: #0f3460;
+            background: linear-gradient(135deg, #2a3f5c 0%, #4a3478 100%);
             color: #fff;
-            border-color: #2d3748;
+            border-color: var(--hm-monitor-border);
         }
         body.monitor-mode.monitor-theme-dark .table tbody td {
-            background-color: #16213e;
-            color: #e2e8f0;
-            border-color: #2d3748;
+            background-color: var(--hm-monitor-surface);
+            color: #e8e8e8;
+            border-color: var(--hm-monitor-border);
         }
         body.monitor-mode.monitor-theme-dark .table tbody tr:hover td {
-            background-color: rgba(255, 255, 255, 0.06);
+            background-color: rgba(66, 165, 245, 0.08);
         }
         body.monitor-mode.monitor-theme-dark .table .text-muted,
         body.monitor-mode.monitor-theme-dark .table small {
-            color: #a0aec0 !important;
+            color: var(--hm-monitor-muted) !important;
         }
         body.monitor-mode.monitor-theme-dark .table code {
-            background: rgba(0, 0, 0, 0.25);
-            color: #e2e8f0;
-            border-color: #2d3748;
+            background: rgba(0, 0, 0, 0.35);
+            color: #e8e8e8;
+            border-color: var(--hm-monitor-border);
         }
         body.monitor-mode.monitor-theme-dark .table .badge {
             color: #fff;
         }
-        body.monitor-mode.monitor-theme-dark .progress { background: #2d3748; }
-        body.monitor-mode.monitor-theme-dark .text-muted { color: #a0aec0 !important; }
+        body.monitor-mode.monitor-theme-dark .progress {
+            background: rgba(255, 255, 255, 0.08);
+        }
+        body.monitor-mode.monitor-theme-dark .progress-bar.bg-primary {
+            background: linear-gradient(90deg, var(--hm-monitor-blue), var(--hm-monitor-purple)) !important;
+        }
+        body.monitor-mode.monitor-theme-dark .text-muted { color: var(--hm-monitor-muted) !important; }
         body.monitor-mode.monitor-theme-dark #servicesMonitorSection .card,
-        body.monitor-mode.monitor-theme-dark #vmsMonitorSection .card { background: #16213e; color: #fff; border-color: #2d3748; }
+        body.monitor-mode.monitor-theme-dark #vmsMonitorSection .card {
+            background: var(--hm-monitor-surface);
+            color: #fff;
+            border-color: var(--hm-monitor-border);
+        }
         body.monitor-mode.monitor-theme-dark #servicesMonitorSection .card-header,
-        body.monitor-mode.monitor-theme-dark #vmsMonitorSection .card-header { background: #0f3460; color: #fff; }
+        body.monitor-mode.monitor-theme-dark #vmsMonitorSection .card-header {
+            background: linear-gradient(135deg, #2a3f5c 0%, #4a3478 100%);
+            color: #fff;
+        }
         body.monitor-mode.monitor-theme-dark #servicesMonitorSection .node-card,
         body.monitor-mode.monitor-theme-dark #vmsMonitorSection .node-card,
         body.monitor-mode.monitor-theme-dark .monitor-view__card {
-            background-color: #1a2740;
-            border-color: #2d3748;
-            color: #e2e8f0;
+            background-color: var(--hm-monitor-raised);
+            border-color: var(--hm-monitor-border);
+            color: #e8e8e8;
             box-shadow: none;
         }
         body.monitor-mode.monitor-theme-dark .monitor-view__stat-value,
         body.monitor-mode.monitor-theme-dark .monitor-view__res-value,
         body.monitor-mode.monitor-theme-dark .monitor-view__panel-title { color: #fff; }
         body.monitor-mode.monitor-theme-dark .monitor-view__stat-label,
-        body.monitor-mode.monitor-theme-dark .monitor-view__res-label { color: #a0aec0; }
+        body.monitor-mode.monitor-theme-dark .monitor-view__res-label { color: var(--hm-monitor-muted); }
         body.monitor-mode.monitor-theme-dark #servicesMonitorSection code {
-            background: rgba(0, 0, 0, 0.25);
-            color: #e2e8f0;
+            background: rgba(0, 0, 0, 0.35);
+            color: #e8e8e8;
         }
         body.monitor-mode.monitor-theme-dark #servicesMonitorSection .badge,
         body.monitor-mode.monitor-theme-dark #vmsMonitorSection .badge,
@@ -1487,16 +1671,96 @@
         }
         body.monitor-mode.monitor-theme-dark #backupsMonitorSection .card,
         body.monitor-mode.monitor-theme-dark #backupsMonitorSection .card-header {
-            background: #16213e;
+            background: var(--hm-monitor-surface);
             color: #fff;
-            border-color: #2d3748;
+            border-color: var(--hm-monitor-border);
         }
         body.monitor-mode.monitor-theme-dark #backupsMonitorSection .card-header {
-            background: #0f3460;
+            background: linear-gradient(135deg, #2a3f5c 0%, #4a3478 100%);
         }
         .min-h-0 {
             min-height: 0 !important;
         }
+
+.noc-panel {
+    border: 1px solid rgba(108, 117, 125, 0.25);
+}
+
+.noc-kpi {
+    border: 1px solid rgba(108, 117, 125, 0.22);
+    border-radius: 0.6rem;
+    padding: 0.55rem 0.65rem;
+    min-height: 84px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.noc-kpi__value {
+    font-size: 1.35rem;
+    font-weight: 700;
+    line-height: 1.1;
+}
+
+.noc-kpi__label {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    opacity: 0.75;
+}
+
+.noc-list-wrap {
+    border: 1px solid rgba(108, 117, 125, 0.2);
+    border-radius: 0.65rem;
+    padding: 0.7rem;
+    min-height: 100%;
+}
+
+.noc-list-title {
+    font-size: 0.82rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 700;
+    opacity: 0.8;
+    margin-bottom: 0.55rem;
+}
+
+.noc-incident-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+}
+
+.noc-incident {
+    border: 1px solid rgba(108, 117, 125, 0.2);
+    border-radius: 0.55rem;
+    padding: 0.45rem 0.55rem;
+}
+
+.noc-incident--critical {
+    border-color: rgba(220, 53, 69, 0.45);
+}
+
+.noc-incident--warning {
+    border-color: rgba(255, 193, 7, 0.5);
+}
+
+.noc-domain {
+    border: 1px solid rgba(108, 117, 125, 0.2);
+    border-radius: 0.55rem;
+    padding: 0.45rem 0.55rem;
+}
+
+.noc-domain__label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    opacity: 0.75;
+}
+
+.noc-domain__value {
+    font-size: 1.1rem;
+    font-weight: 700;
+}
 
         /* Экран бэкапов: весь viewport под тулбар, без скролла */
         body.monitor-mode #backupsMonitorSection.monitor-backups-screen {
@@ -1641,9 +1905,9 @@
             vertical-align: bottom;
         }
         body.monitor-mode.monitor-theme-dark .monitor-backup-node-table thead th {
-            background: #0f3460;
-            color: #e2e8f0;
-            border-bottom-color: #2d3748;
+            background: linear-gradient(135deg, #2a3f5c 0%, #4a3478 100%);
+            color: #fff;
+            border-bottom-color: rgba(255, 255, 255, 0.12);
         }
         .monitor-backup-col-vm {
             width: 20%;
@@ -1676,17 +1940,17 @@
             border-bottom: 1px solid rgba(0, 0, 0, 0.08);
         }
         body.monitor-mode.monitor-theme-dark .monitor-backup-tr td {
-            border-bottom-color: #2d3748;
-            color: #e2e8f0;
+            border-bottom-color: rgba(255, 255, 255, 0.09);
+            color: #e8e8e8;
         }
         .monitor-backup-tr--ok { background: rgba(25, 135, 84, 0.06); }
         .monitor-backup-tr--err { background: rgba(220, 53, 69, 0.08); }
         .monitor-backup-tr--run { background: rgba(13, 110, 253, 0.07); }
         .monitor-backup-tr--warn { background: rgba(255, 193, 7, 0.1); }
-        body.monitor-mode.monitor-theme-dark .monitor-backup-tr--ok { background: rgba(25, 135, 84, 0.12); }
-        body.monitor-mode.monitor-theme-dark .monitor-backup-tr--err { background: rgba(220, 53, 69, 0.15); }
-        body.monitor-mode.monitor-theme-dark .monitor-backup-tr--run { background: rgba(13, 110, 253, 0.12); }
-        body.monitor-mode.monitor-theme-dark .monitor-backup-tr--warn { background: rgba(255, 193, 7, 0.08); }
+        body.monitor-mode.monitor-theme-dark .monitor-backup-tr--ok { background: rgba(25, 135, 84, 0.14); }
+        body.monitor-mode.monitor-theme-dark .monitor-backup-tr--err { background: rgba(216, 27, 96, 0.18); }
+        body.monitor-mode.monitor-theme-dark .monitor-backup-tr--run { background: rgba(66, 165, 245, 0.14); }
+        body.monitor-mode.monitor-theme-dark .monitor-backup-tr--warn { background: rgba(255, 160, 0, 0.12); }
         .monitor-backups-nodes-row .badge {
             font-size: var(--hm-text-xs);
             padding: 0.2em 0.45em;
@@ -1738,6 +2002,86 @@
 
         body.monitor-mode .monitor-screen__panel-title {
             display: none;
+        }
+
+        /* Monitor screens (except Homelab): show only data cards, no title bars/hints */
+        body.monitor-mode #servicesMonitorSection .card-header,
+        body.monitor-mode #vmsMonitorSection .card-header,
+        body.monitor-mode #upsMonitorSection .card-header,
+        body.monitor-mode #netdevMonitorSection .card-header,
+        body.monitor-mode #speedtestMonitorSection .card-header,
+        body.monitor-mode #smartSensorsMonitorSection .card-header,
+        body.monitor-mode #backupsMonitorSection .card-header {
+            display: none !important;
+        }
+        body.monitor-mode #servicesMonitorSection #servicesMonitorHint,
+        body.monitor-mode #vmsMonitorSection #vmsMonitorHint,
+        body.monitor-mode #upsMonitorSection #upsUpdatedAt,
+        body.monitor-mode #netdevMonitorSection #netdevUpdatedAt,
+        body.monitor-mode #smartSensorsMonitorSection #smartSensorsUpdatedAt,
+        body.monitor-mode #speedtestMonitorSection #speedtestMonitorExtra {
+            display: none !important;
+        }
+        body.monitor-mode #upsMonitorSection .card-body > .d-flex.align-items-center.mb-3,
+        body.monitor-mode #netdevMonitorSection .card-body > .d-flex.align-items-center.mb-3 {
+            display: none !important;
+        }
+
+        /* Remove remaining outer "background plates": monitor screens should look like uniform tiles */
+        body.monitor-mode #servicesMonitorSection > .card,
+        body.monitor-mode #vmsMonitorSection > .card,
+        body.monitor-mode #upsMonitorSection > .card,
+        body.monitor-mode #netdevMonitorSection > .card,
+        body.monitor-mode #speedtestMonitorSection > .card,
+        body.monitor-mode #smartSensorsMonitorSection > .card,
+        body.monitor-mode #backupsMonitorSection > .card {
+            background: transparent !important;
+            border: 0 !important;
+            box-shadow: none !important;
+            margin: 0 !important;
+        }
+        body.monitor-mode #servicesMonitorSection > .card > .card-body,
+        body.monitor-mode #vmsMonitorSection > .card > .card-body,
+        body.monitor-mode #upsMonitorSection > .card > .card-body,
+        body.monitor-mode #netdevMonitorSection > .card > .card-body,
+        body.monitor-mode #speedtestMonitorSection > .card > .card-body,
+        body.monitor-mode #smartSensorsMonitorSection > .card > .card-body,
+        body.monitor-mode #backupsMonitorSection > .card > .card-body {
+            padding: 0 !important;
+        }
+
+        /* Рисование: холст на весь экран монитора */
+        body.monitor-mode #drawMonitorSection.monitor-draw-screen {
+            flex-direction: column;
+        }
+        body.monitor-mode #drawMonitorSection .monitor-draw {
+            flex: 1 1 auto;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+        }
+        body.monitor-mode #drawMonitorSection .monitor-draw__canvas-wrap {
+            flex: 1 1 auto;
+            min-height: 0;
+            position: relative;
+            border-radius: var(--hm-radius);
+            overflow: hidden;
+            border: 1px solid rgba(148, 163, 184, 0.35);
+        }
+        body.monitor-mode.monitor-theme-dark #drawMonitorSection .monitor-draw__canvas-wrap {
+            border-color: rgba(255, 255, 255, 0.12);
+        }
+        body.monitor-mode #drawMonitorSection .monitor-draw__canvas-wrap canvas {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            display: block;
+            touch-action: none;
+            cursor: crosshair;
+        }
+        body.monitor-mode #drawMonitorSection .monitor-draw__range {
+            width: min(220px, 28vw);
         }
 
         body.monitor-mode .monitor-screen__panel-body {
@@ -1878,9 +2222,9 @@
         }
 
         body.monitor-mode.monitor-theme-dark .monitor-view__stat {
-            background: #16213e;
-            color: #e2e8f0;
-            border-color: #2d3748;
+            background: var(--hm-monitor-surface);
+            color: #e8e8e8;
+            border-color: var(--hm-monitor-border);
             box-shadow: none;
         }
 
@@ -1919,9 +2263,9 @@
         }
 
         body.monitor-mode.monitor-theme-dark .monitor-view__res {
-            background: #16213e;
-            color: #e2e8f0;
-            border-color: #2d3748;
+            background: var(--hm-monitor-surface);
+            color: #e8e8e8;
+            border-color: var(--hm-monitor-border);
             box-shadow: none;
         }
 
@@ -1945,7 +2289,7 @@
             border-radius: 4px;
             overflow: hidden;
         }
-        body.monitor-mode.monitor-theme-dark .monitor-view__res-bar { background: rgba(255,255,255,0.2); }
+        body.monitor-mode.monitor-theme-dark .monitor-view__res-bar { background: rgba(255, 255, 255, 0.1); }
         .monitor-view__res-fill {
             height: 100%;
             border-radius: 4px;
@@ -2010,6 +2354,17 @@
             height: 100%;
         }
 
+#tilesMonitorGrid .cluster-scroll-item {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: 100%;
+}
+
+#tilesMonitorGrid .tiles-monitor-cell .node-card {
+    height: 100%;
+    margin-bottom: 0;
+}
+
         .monitor-view__panel-title {
             flex: 0 0 auto;
             font-size: var(--hm-text-lg);
@@ -2020,6 +2375,12 @@
             padding: var(--hm-space-2) var(--hm-space-3);
             margin-bottom: var(--hm-space-3);
             line-height: var(--hm-line-tight);
+        }
+
+        body.monitor-mode.monitor-theme-dark .monitor-view__panel-title {
+            background: linear-gradient(135deg, #42a5f5 0%, #7e57c2 52%, #d81b60 100%);
+            color: #fff;
+            box-shadow: 0 0 28px rgba(66, 165, 245, 0.14);
         }
 
         .monitor-view__list {
@@ -2058,8 +2419,8 @@
         }
 
         body.monitor-mode.monitor-theme-dark .monitor-view__node-row {
-            background: #16213e;
-            border-color: #2d3748;
+            background: var(--hm-monitor-surface);
+            border-color: var(--hm-monitor-border);
             box-shadow: none;
         }
 
@@ -2105,13 +2466,14 @@
             color: #1a202c;
         }
         body.monitor-mode.monitor-theme-dark .monitor-toolbar-nav-btn {
-            background: rgba(255, 255, 255, 0.1);
+            background: rgba(30, 30, 30, 0.9);
             color: #fff;
-            border-color: rgba(255, 255, 255, 0.2);
+            border-color: rgba(66, 165, 245, 0.28);
         }
         body.monitor-mode.monitor-theme-dark .monitor-toolbar-nav-btn:hover {
-            background: rgba(255, 255, 255, 0.18);
+            background: rgba(66, 165, 245, 0.16);
             color: #fff;
+            border-color: rgba(126, 87, 194, 0.35);
         }
         .monitor-toolbar-dots {
             display: flex;
@@ -2145,10 +2507,11 @@
             opacity: 1;
         }
         body.monitor-mode.monitor-theme-dark .monitor-toolbar-dot {
-            background: rgba(203, 213, 225, 0.45);
+            background: rgba(158, 158, 158, 0.4);
         }
         body.monitor-mode.monitor-theme-dark .monitor-toolbar-dot.is-active {
-            background: #60a5fa;
+            background: linear-gradient(135deg, #42a5f5, #7e57c2);
+            box-shadow: 0 0 10px rgba(66, 165, 245, 0.45);
         }
 
         .monitor-view__nav-btn:hover {
@@ -2170,9 +2533,9 @@
         body.monitor-mode .cluster-scroll-row::-webkit-scrollbar {
             display: none;
         }
-        body.monitor-mode.monitor-theme-dark .table-success { background-color: rgba(40, 167, 69, 0.2) !important; color: #e2e8f0; }
-        body.monitor-mode.monitor-theme-dark .table-danger { background-color: rgba(220, 53, 69, 0.2) !important; color: #e2e8f0; }
-        body.monitor-mode.monitor-theme-dark .table-warning { background-color: rgba(255, 193, 7, 0.15) !important; color: #e2e8f0; }
+        body.monitor-mode.monitor-theme-dark .table-success { background-color: rgba(40, 167, 69, 0.18) !important; color: #e8e8e8; }
+        body.monitor-mode.monitor-theme-dark .table-danger { background-color: rgba(216, 27, 96, 0.2) !important; color: #e8e8e8; }
+        body.monitor-mode.monitor-theme-dark .table-warning { background-color: rgba(255, 160, 0, 0.16) !important; color: #e8e8e8; }
 
         /* Светлая тема режима монитора */
         body.monitor-mode:not(.monitor-theme-dark) {
@@ -2198,9 +2561,9 @@
 
         body.monitor-mode.monitor-theme-dark .monitor-screen__meta-card,
         body.monitor-mode.monitor-theme-dark .monitor-screen__meta-extra {
-            background: #16213e;
-            color: #e2e8f0;
-            border-color: #2d3748;
+            background: var(--hm-monitor-surface);
+            color: #e8e8e8;
+            border-color: var(--hm-monitor-border);
             box-shadow: none;
         }
         body.monitor-mode:not(.monitor-theme-dark) .node-card {
@@ -2247,9 +2610,9 @@
         }
 
         body.monitor-mode.monitor-theme-dark .monitor-toolbar {
-            background: linear-gradient(180deg, rgba(15, 52, 96, 0.98) 0%, rgba(26, 33, 62, 0.98) 100%);
-            border-bottom: 1px solid rgba(102, 126, 234, 0.4);
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            background: rgba(28, 28, 28, 0.96);
+            border-bottom: 1px solid rgba(66, 165, 245, 0.22);
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.45);
         }
 
         body.monitor-mode:not(.monitor-theme-dark) .monitor-toolbar {
@@ -2275,11 +2638,47 @@
             text-overflow: ellipsis;
             max-width: min(40vw, 280px);
         }
+        .monitor-toolbar-title--home {
+            cursor: pointer;
+        }
+        .monitor-toolbar-title--home:hover {
+            opacity: 0.88;
+        }
+        .monitor-toolbar-title--home:focus-visible {
+            outline: 2px solid rgba(102, 126, 234, 0.7);
+            outline-offset: 2px;
+            border-radius: 4px;
+        }
+        body.monitor-mode.monitor-theme-dark .monitor-toolbar-title--home:focus-visible {
+            outline-color: rgba(66, 165, 245, 0.75);
+        }
         .monitor-toolbar-update {
             white-space: nowrap;
             flex-shrink: 0;
             margin-right: 0.25rem;
             font-size: 0.8125rem;
+        }
+        .monitor-toolbar-update-release-btn {
+            display: none;
+            color: inherit;
+        }
+        body.monitor-mode.monitor-theme-dark .monitor-toolbar-update-release-btn {
+            background: rgba(255, 160, 0, 0.28);
+            color: #fff;
+            border: 1px solid rgba(255, 160, 0, 0.55);
+        }
+        body.monitor-mode.monitor-theme-dark .monitor-toolbar-update-release-btn:hover {
+            background: rgba(255, 160, 0, 0.4);
+            color: #fff;
+        }
+        body.monitor-mode:not(.monitor-theme-dark) .monitor-toolbar-update-release-btn {
+            background: rgba(255, 193, 7, 0.4);
+            color: #5c4200;
+            border: 1px solid rgba(217, 119, 6, 0.45);
+        }
+        body.monitor-mode:not(.monitor-theme-dark) .monitor-toolbar-update-release-btn:hover {
+            background: rgba(255, 193, 7, 0.55);
+            color: #3d2d00;
         }
         .monitor-toolbar-theme {
             display: flex;
@@ -2304,12 +2703,13 @@
             opacity: 1;
         }
         body.monitor-mode.monitor-theme-dark .monitor-toolbar-theme-btn {
-            background: rgba(255,255,255,0.1);
+            background: rgba(30, 30, 30, 0.95);
             color: #fff;
-            border-color: rgba(255,255,255,0.2);
+            border-color: rgba(126, 87, 194, 0.25);
         }
         body.monitor-mode.monitor-theme-dark .monitor-toolbar-theme-btn.active {
-            background: rgba(255,255,255,0.25);
+            background: rgba(66, 165, 245, 0.22);
+            border-color: rgba(126, 87, 194, 0.45);
         }
         body.monitor-mode:not(.monitor-theme-dark) .monitor-toolbar-theme-btn {
             background: rgba(0,0,0,0.06);
@@ -2329,7 +2729,8 @@
         /* Одинаковая высота; иконки — квадрат, «Настройки»/«Выход» — общая ширина */
         body.monitor-mode .monitor-toolbar .monitor-toolbar-nav-btn,
         body.monitor-mode .monitor-toolbar .monitor-toolbar-theme-btn,
-        body.monitor-mode .monitor-toolbar .monitor-toolbar-hide-btn {
+        body.monitor-mode .monitor-toolbar .monitor-toolbar-hide-btn,
+        body.monitor-mode .monitor-toolbar .monitor-toolbar-update-release-btn {
             display: inline-flex;
             align-items: center;
             justify-content: center;
@@ -2375,11 +2776,11 @@
         .monitor-toolbar-title { font-size: 1rem; }
 
         body.monitor-mode.monitor-theme-dark .monitor-toolbar-select {
-            background: rgba(255,255,255,0.12) !important;
-            border: 1px solid rgba(102, 126, 234, 0.5);
+            background: rgba(30, 30, 30, 0.95) !important;
+            border: 1px solid rgba(66, 165, 245, 0.35);
             color: #fff !important;
         }
-        body.monitor-mode.monitor-theme-dark .monitor-toolbar-select option { background: #16213e; color: #fff; }
+        body.monitor-mode.monitor-theme-dark .monitor-toolbar-select option { background: #1e1e1e; color: #fff; }
 
         body.monitor-mode:not(.monitor-theme-dark) .monitor-toolbar-select {
             background: #fff !important;
@@ -2404,12 +2805,12 @@
             transition: background 0.2s, transform 0.2s, border-color 0.2s, color 0.2s;
         }
         body.monitor-mode.monitor-theme-dark .monitor-toolbar-hide-btn {
-            background: rgba(255, 255, 255, 0.08);
+            background: rgba(30, 30, 30, 0.95);
             color: #fff;
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(66, 165, 245, 0.25);
         }
         body.monitor-mode.monitor-theme-dark .monitor-toolbar-hide-btn:hover {
-            background: rgba(255, 255, 255, 0.16);
+            background: rgba(66, 165, 245, 0.14);
             color: #fff;
         }
         body.monitor-mode:not(.monitor-theme-dark) .monitor-toolbar-hide-btn {
@@ -2460,13 +2861,13 @@
             transition: background 0.2s, color 0.2s, transform 0.15s;
         }
         body.monitor-mode.monitor-theme-dark .monitor-toolbar-reveal {
-            background: linear-gradient(180deg, rgba(15, 52, 96, 0.98) 0%, rgba(26, 33, 62, 0.98) 100%);
-            color: #e2e8f0;
-            border: 1px solid rgba(102, 126, 234, 0.4);
+            background: rgba(28, 28, 28, 0.98);
+            color: #e8e8e8;
+            border: 1px solid rgba(66, 165, 245, 0.35);
             border-top: none;
         }
         body.monitor-mode.monitor-theme-dark .monitor-toolbar-reveal:hover {
-            background: rgba(26, 33, 62, 0.98);
+            background: rgba(40, 40, 40, 0.99);
             color: #fff;
         }
         body.monitor-mode:not(.monitor-theme-dark) .monitor-toolbar-reveal {
@@ -2488,12 +2889,12 @@
             transition: background 0.2s, transform 0.2s, border-color 0.2s, color 0.2s;
         }
         body.monitor-mode.monitor-theme-dark .monitor-toolbar-settings {
-            background: rgba(59, 130, 246, 0.18);
+            background: rgba(66, 165, 245, 0.2);
             color: #fff;
-            border: 1px solid rgba(96, 165, 250, 0.35);
+            border: 1px solid rgba(126, 87, 194, 0.4);
         }
         body.monitor-mode.monitor-theme-dark .monitor-toolbar-settings:hover {
-            background: rgba(59, 130, 246, 0.28);
+            background: rgba(66, 165, 245, 0.32);
             color: #fff;
             transform: scale(1.02);
         }
@@ -2545,7 +2946,11 @@
         }
 
         body.dark-mode #loadingIndicator {
-            background: rgba(26, 26, 46, 0.7);
+            background: rgba(18, 18, 18, 0.88);
+        }
+
+        body.monitor-mode.monitor-theme-dark #loadingIndicator {
+            background: rgba(18, 18, 18, 0.88);
         }
 
         #loadingIndicator.is-visible {
@@ -2556,13 +2961,6 @@
         body.monitor-mode.monitor-theme-dark .stat-value {
             color: #fff;
         }
-
-        body.monitor-mode.monitor-theme-dark #dashboardClusterTilesTitle {
-            color: #fff;
-        }
-
-
-        
 
         /* Режим монитора: подгонка под 1920×1200, без скролла */
         @media (min-width: 1920px) and (min-height: 1200px) {
@@ -2582,6 +2980,59 @@
             }
             .monitor-view__card {
                 padding: var(--hm-space-3) var(--hm-space-4);
+            }
+        }
+
+        /* Режим монитора: компактный профиль для 1280x800 и похожих экранов */
+        @media (max-width: 1366px) and (max-height: 840px) {
+            body.monitor-mode {
+                --monitor-toolbar-h: 44px;
+                --monitor-dock-h: 40px;
+                --monitor-toolbar-btn-h: 34px;
+                --monitor-toolbar-icon-w: 34px;
+                --monitor-toolbar-text-btn-w: 8.6rem;
+                --hm-text-label: 0.78rem;
+                --hm-text-base: 0.92rem;
+                --hm-text-lg: 1.02rem;
+                --hm-text-stat: 1.72rem;
+                --hm-text-metric: 2.1rem;
+                --hm-space-3: 0.55rem;
+                --hm-space-4: 0.75rem;
+                --hm-space-5: 0.95rem;
+                --hm-space-6: 1.15rem;
+                --hm-card-header-py: 0.6rem;
+                --hm-card-header-px: 0.95rem;
+                --hm-card-body-pad: 0.95rem;
+                --hm-stat-pad: 0.9rem;
+                --hm-node-pad: 0.8rem;
+                --hm-progress-h-monitor: 6px;
+            }
+
+            body.monitor-mode .monitor-toolbar {
+                min-height: 44px;
+                gap: 0.5rem;
+                padding: 0 clamp(0.5rem, 2vw, 0.9rem);
+            }
+
+            body.monitor-mode .monitor-dots-dock {
+                padding: 6px 10px calc(6px + env(safe-area-inset-bottom, 0px));
+            }
+
+            body.monitor-mode .stat-card {
+                min-height: 104px;
+            }
+
+            body.monitor-mode .monitor-screen {
+                padding: var(--hm-space-2) var(--hm-space-3) var(--hm-space-3);
+            }
+
+            body.monitor-mode .monitor-screen__meta-grid {
+                grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            }
+
+            body.monitor-mode .cluster-scroll-item {
+                flex: 0 0 calc((100% - 1.65rem) / 4);
+                min-width: 248px;
             }
         }
 

@@ -417,13 +417,41 @@
                 </div>
                 <div class="card-body">
                     <div class="row g-2 hm-cluster-metric-panel">
-                        <div class="col-md-3 col-6">
+                        <div class="col-6 col-xl-3">
                             <div class="text-center p-3 hm-cluster-metric-cell">
                                 <h6><i class="bi bi-clock-history me-2"></i><span id="speedtestMonitorLastRunLabel">Last run</span></h6>
                                 <div class="hm-speedtest-last-run text-break" id="speedtestMonitorLastRun">—</div>
                             </div>
                         </div>
-                        <div class="col-md-3 col-6">
+                        <div class="col-6 col-xl-3">
+                            <div class="text-center p-3 hm-cluster-metric-cell">
+                                <h6><i class="bi bi-arrow-down-circle me-2"></i><span id="speedtestMonitorLastDownloadLabel">Download</span></h6>
+                                <div class="display-6 text-break" id="speedtestMonitorLastDownload">—</div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-xl-3">
+                            <div class="text-center p-3 hm-cluster-metric-cell">
+                                <h6><i class="bi bi-cloud-upload me-2"></i><span id="speedtestMonitorLastUploadLabel">Upload</span></h6>
+                                <div class="display-6 text-break" id="speedtestMonitorLastUpload">—</div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-xl-3">
+                            <div class="text-center p-3 hm-cluster-metric-cell">
+                                <h6><i class="bi bi-activity me-2"></i><span id="speedtestMonitorLastPingLabel">Ping</span></h6>
+                                <div class="display-6 text-break" id="speedtestMonitorLastPing">—</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="speedtestMonitorPlanBlock" class="mt-3 p-2 rounded border bg-body-secondary d-none">
+                        <h6 class="small fw-semibold mb-0 pb-2 border-bottom border-secondary border-opacity-25" id="speedtestMonitorPlanTitle">Plan and deviations</h6>
+                        <div class="small mt-2 mb-1" id="speedtestMonitorPlanEtalon"></div>
+                        <div class="small mb-1" id="speedtestMonitorPlanDevLast"></div>
+                        <div class="small mb-1" id="speedtestMonitorPlanDevToday"></div>
+                        <div class="small d-none" id="speedtestMonitorPlanDevMinMax"></div>
+                    </div>
+                    <div class="mt-3 mb-1 small text-muted text-center text-xl-start" id="speedtestMonitorTodayDownloadSectionTitle"></div>
+                    <div class="row g-2 hm-cluster-metric-panel">
+                        <div class="col-md-4 col-6">
                             <div class="text-center p-3 hm-cluster-metric-cell">
                                 <h6><i class="bi bi-graph-up-arrow me-2"></i><span id="speedtestMonitorAvgLabel">Average speed (today)</span></h6>
                                 <div class="display-6" id="speedtestMonitorAvg">—</div>
@@ -432,7 +460,7 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="col-md-3 col-6">
+                        <div class="col-md-4 col-6">
                             <div class="text-center p-3 hm-cluster-metric-cell">
                                 <h6><i class="bi bi-arrow-down-circle me-2"></i><span id="speedtestMonitorMinLabel">Minimum</span></h6>
                                 <div class="display-6" id="speedtestMonitorMin">—</div>
@@ -441,7 +469,7 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="col-md-3 col-6">
+                        <div class="col-md-4 col-12">
                             <div class="text-center p-3 hm-cluster-metric-cell">
                                 <h6><i class="bi bi-arrow-up-circle me-2"></i><span id="speedtestMonitorMaxLabel">Maximum</span></h6>
                                 <div class="display-6" id="speedtestMonitorMax">—</div>
@@ -452,6 +480,26 @@
                         </div>
                     </div>
                     <div class="mt-2 small text-muted" id="speedtestMonitorExtra"></div>
+                    <div class="mt-4">
+                        <h6 class="mb-2" id="speedtestMonitorLast24hTitle">Today's measurements</h6>
+                        <div id="speedtestMonitorLast24hTableWrap" class="table-responsive d-none">
+                            <table class="table table-sm table-striped table-hover align-middle mb-0">
+                                <thead>
+                                    <tr>
+                                        <th scope="col" id="speedtestMonitor24hColTime">Time</th>
+                                        <th scope="col" class="text-end" id="speedtestMonitor24hColDownload">Download</th>
+                                        <th scope="col" class="text-end d-none" id="speedtestMonitor24hColDevDownload">Δ ↓</th>
+                                        <th scope="col" class="text-end" id="speedtestMonitor24hColUpload">Upload</th>
+                                        <th scope="col" class="text-end d-none" id="speedtestMonitor24hColDevUpload">Δ ↑</th>
+                                        <th scope="col" class="text-end" id="speedtestMonitor24hColPing">Ping</th>
+                                        <th scope="col" id="speedtestMonitor24hColServer">Server / note</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="speedtestMonitorLast24hBody"></tbody>
+                            </table>
+                        </div>
+                        <p class="small text-muted mb-0 d-none" id="speedtestMonitorLast24hEmpty">No measurements today yet.</p>
+                    </div>
                 </div>
             </div>
         </div>
