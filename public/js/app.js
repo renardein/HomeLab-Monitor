@@ -3274,8 +3274,11 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
     const homeTabs = document.getElementById('myTab');
     if (homeTabs) {
-        homeTabs.addEventListener('shown.bs.tab', () => {
+        homeTabs.addEventListener('shown.bs.tab', (e) => {
             requestAnimationFrame(() => updateHomeLabFontScale());
+            if (!monitorMode && e.target && e.target.id) {
+                persistDashboardHomeTab(e.target.id);
+            }
         });
     }
     window.addEventListener('resize', () => {
@@ -9212,6 +9215,7 @@ async function toggleMonitorMode() {
         document.body.classList.remove('monitor-toolbar-hidden', 'monitor-dots-hidden');
         syncMonitorToolbarRevealButton();
         renderMonitorScreenDots();
+        applyStoredDashboardHomeTab();
     }
 
     try {
@@ -9246,6 +9250,58 @@ let lastBackupsDataForMonitor = null;
 
 /** Полный порядок экранов монитора (в БД). */
 const MONITOR_SCREEN_IDS_ALL = ['cluster', 'tiles', 'truenasPools', 'truenasDisks', 'truenasServices', 'truenasApps', 'ups', 'netdev', 'speedtest', 'iperf3', 'smartSensors', 'vms', 'services', 'backupRuns', 'draw'];
+const MONITOR_VIEW_SESSION_KEY = 'hm_monitor_current_view';
+
+function readStoredMonitorCurrentView() {
+    try {
+        const v = sessionStorage.getItem(MONITOR_VIEW_SESSION_KEY);
+        if (v && MONITOR_SCREEN_IDS_ALL.includes(v)) return v;
+    } catch (_) {}
+    return null;
+}
+
+function persistMonitorCurrentView(view) {
+    try {
+        if (view && MONITOR_SCREEN_IDS_ALL.includes(view)) {
+            sessionStorage.setItem(MONITOR_VIEW_SESSION_KEY, view);
+        }
+    } catch (_) {}
+}
+
+/** Вкладки главного дашборда (Bootstrap #myTab) — запоминаем в обычном режиме между F5 и loadSettings */
+const DASHBOARD_HOME_TAB_IDS = ['nodes-tab', 'storage-tab', 'servers-tab', 'backups-tab', 'quorum-tab', 'tiles-tab'];
+const DASHBOARD_HOME_TAB_SESSION_KEY = 'hm_dashboard_home_tab';
+
+function readStoredDashboardHomeTab() {
+    try {
+        const v = sessionStorage.getItem(DASHBOARD_HOME_TAB_SESSION_KEY);
+        if (v && DASHBOARD_HOME_TAB_IDS.includes(v)) return v;
+    } catch (_) {}
+    return null;
+}
+
+function persistDashboardHomeTab(tabButtonId) {
+    try {
+        if (tabButtonId && DASHBOARD_HOME_TAB_IDS.includes(tabButtonId)) {
+            sessionStorage.setItem(DASHBOARD_HOME_TAB_SESSION_KEY, tabButtonId);
+        }
+    } catch (_) {}
+}
+
+function applyStoredDashboardHomeTab() {
+    if (monitorMode) return;
+    const myTabNav = document.getElementById('myTab');
+    if (!myTabNav || myTabNav.style.display === 'none') return;
+    const id = readStoredDashboardHomeTab();
+    if (!id) return;
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    const li = btn.closest('li');
+    if (li && li.style.display === 'none') return;
+    if (btn.classList.contains('active')) return;
+    btn.click();
+}
+
 let monitorScreensOrder = MONITOR_SCREEN_IDS_ALL.slice();
 let monitorScreensEnabled = {};
 /** Speedtest включён в настройках (для скрытия экрана в режиме монитора) */
@@ -9764,6 +9820,7 @@ function applyMonitorView(view) {
         });
     }
 
+    if (monitorMode) persistMonitorCurrentView(monitorCurrentView);
     updateMonitorToolbarTitleForView();
     requestAnimationFrame(() => updateHomeLabFontScale());
 }
@@ -13289,6 +13346,7 @@ async function loadSettings() {
         if (ttlSel.querySelector('option[value="' + v + '"]')) ttlSel.value = v;
         else ttlSel.value = '30';
     }
+    const wasMonitorActive = monitorMode;
     if (data.monitor_mode === true || data.monitor_mode === 'true') {
         monitorMode = true;
         document.body.classList.add('monitor-mode');
@@ -13299,8 +13357,9 @@ async function loadSettings() {
             monitorBtn.classList.add('btn-primary');
             monitorBtn.innerHTML = '<i class="bi bi-check-lg"></i><span id="monitorModeText">' + t('monitorModeOn') + '</span>';
         }
-        // По умолчанию после перезагрузки открываем экран кластера (без автозапуска fullscreen — только по клику пользователя)
-        monitorCurrentView = 'cluster';
+        if (!wasMonitorActive) {
+            monitorCurrentView = readStoredMonitorCurrentView() || 'cluster';
+        }
         applyMonitorView(monitorCurrentView);
         applyMonitorTheme();
         initMonitorSwipes();
@@ -13326,6 +13385,9 @@ async function loadSettings() {
     }
     updateSettingsSecurityUI();
     renderServerList();
+    if (!monitorMode) {
+        applyStoredDashboardHomeTab();
+    }
     return data;
 }
 

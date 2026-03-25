@@ -24,6 +24,7 @@ package-lock.json
 *.swp
 *.swo
 *.tmp
+package-lock.json
 
 # System files
 .DS_Store
@@ -38,3 +39,6 @@ certs/*.pem
 certs/*.key
 certs/*.crt
 certs/*.cer
+
+data/logs/*
+data/app.db-journal
