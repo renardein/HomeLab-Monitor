@@ -1083,6 +1083,11 @@
             background: var(--hm-monitor-surface);
             border-color: var(--hm-monitor-border);
         }
+        .settings-display-subtab .settings-display-tab-title {
+            font-size: var(--hm-text-xl);
+            font-weight: 600;
+            line-height: var(--hm-line-tight);
+        }
         body.dark-mode #upsDisplayTabsContent,
         body.dark-mode #netdevDisplayTabsContent {
             border-color: rgba(255, 255, 255, 0.12);

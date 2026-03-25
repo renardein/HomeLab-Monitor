@@ -2545,6 +2545,9 @@ function updateUILanguage() {
         setText('settingsNavCategoryAlerts', t('settingsNavCategoryAlerts'));
         setText('settingsNavCategorySystem', t('settingsNavCategorySystem'));
         setText('settingsNavDisplay', t('settingsNavDisplay'));
+        setText('settingsNavDisplayTimeWeather', t('settingsNavDisplayTimeWeather'));
+        setText('settingsNavDisplayMonitorScreens', t('settingsNavDisplayMonitorScreens'));
+        setText('settingsNavDisplayClusterTiles', t('settingsNavDisplayClusterTiles'));
         setText('settingsNavStyles', t('settingsNavStyles'));
         setText('settingsStylesTitle', t('settingsStylesTitle') || 'Стили');
         setText('settingsStylesVariantLabel', t('settingsStylesVariantLabel') || 'Вариант для редактирования');

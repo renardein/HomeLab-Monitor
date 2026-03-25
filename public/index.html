@@ -127,8 +127,17 @@
                                 <i class="bi bi-key me-2"></i><span id="settingsNavConnection">Подключение</span>
                             </button>
                             <div class="settings-nav-category" role="presentation"><span id="settingsNavCategoryInterface"></span></div>
-                            <button class="nav-link" id="settings-nav-display" data-bs-toggle="pill" data-bs-target="#settings-tab-display" type="button" role="tab">
-                                <i class="bi bi-eye me-2"></i><span id="settingsNavDisplay">Отображение</span>
+                            <button class="nav-link" id="settings-nav-display-general" data-bs-toggle="pill" data-bs-target="#settings-tab-display-general" type="button" role="tab">
+                                <i class="bi bi-sliders me-2"></i><span id="settingsNavDisplay">Общие</span>
+                            </button>
+                            <button class="nav-link" id="settings-nav-display-time-weather" data-bs-toggle="pill" data-bs-target="#settings-tab-display-time-weather" type="button" role="tab">
+                                <i class="bi bi-cloud-sun me-2"></i><span id="settingsNavDisplayTimeWeather">Время и погода</span>
+                            </button>
+                            <button class="nav-link" id="settings-nav-display-monitor-screens" data-bs-toggle="pill" data-bs-target="#settings-tab-display-monitor-screens" type="button" role="tab">
+                                <i class="bi bi-layout-three-columns me-2"></i><span id="settingsNavDisplayMonitorScreens">Экраны монитора</span>
+                            </button>
+                            <button class="nav-link" id="settings-nav-display-cluster-tiles" data-bs-toggle="pill" data-bs-target="#settings-tab-display-cluster-tiles" type="button" role="tab">
+                                <i class="bi bi-grid-3x2-gap me-2"></i><span id="settingsNavDisplayClusterTiles">Плитки Cluster</span>
                             </button>
                             <button class="nav-link" id="settings-nav-styles" data-bs-toggle="pill" data-bs-target="#settings-tab-styles" type="button" role="tab">
                                 <i class="bi bi-palette me-2"></i><span id="settingsNavStyles">Стили</span>
@@ -267,131 +276,160 @@
                                         </div>
                                 </div>
                             </div>
-                            <!-- Отображение -->
-                            <div class="tab-pane fade" id="settings-tab-display" role="tabpanel">
+                            <!-- Интерфейс: общие -->
+                            <div class="tab-pane fade settings-display-subtab" id="settings-tab-display-general" role="tabpanel">
                                 <div class="settings-section">
-                                    <h5 class="mb-3"><i class="bi bi-eye me-2"></i><span id="displaySettings">Отображение</span></h5>
-
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label class="form-label fw-bold" id="refreshIntervalLabel">Интервал обновления</label>
-                                <select class="form-select" id="refreshIntervalSelect"
-                                    onchange="updateRefreshInterval()">
-                                    <option value="5000">5 секунд</option>
-                                    <option value="10000">10 секунд</option>
-                                    <option value="30000" selected>30 секунд</option>
-                                    <option value="60000">1 минута</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label class="form-label fw-bold" id="themeLabel">Тема оформления</label>
-                                <div class="btn-group w-100" role="group">
-                                    <button class="btn btn-outline-primary" onclick="setTheme('light')" id="themeLight">
-                                        <i class="bi bi-sun me-1"></i> Светлая
-                                    </button>
-                                    <button class="btn btn-outline-dark" onclick="setTheme('dark')" id="themeDark">
-                                        <i class="bi bi-moon me-1"></i> Тёмная
-                                    </button>
+                                    <h5 class="mb-3 settings-display-tab-title"><i class="bi bi-sliders me-2"></i><span id="displaySettings">Отображение</span></h5>
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label class="form-label fw-bold" id="refreshIntervalLabel">Интервал обновления</label>
+                                                <select class="form-select" id="refreshIntervalSelect"
+                                                    onchange="updateRefreshInterval()">
+                                                    <option value="5000">5 секунд</option>
+                                                    <option value="10000">10 секунд</option>
+                                                    <option value="30000" selected>30 секунд</option>
+                                                    <option value="60000">1 минута</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label class="form-label fw-bold" id="themeLabel">Тема оформления</label>
+                                                <div class="btn-group w-100" role="group">
+                                                    <button class="btn btn-outline-primary" onclick="setTheme('light')" id="themeLight">
+                                                        <i class="bi bi-sun me-1"></i> Светлая
+                                                    </button>
+                                                    <button class="btn btn-outline-dark" onclick="setTheme('dark')" id="themeDark">
+                                                        <i class="bi bi-moon me-1"></i> Тёмная
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label class="form-label fw-bold" id="settingsPreferredLanguageLabel">Язык по умолчанию</label>
+                                                <select class="form-select" id="settingsPreferredLanguageSelect" onchange="updatePreferredLanguage()">
+                                                    <!-- options will be filled dynamically from availableLanguages -->
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="mb-0">
+                                        <label class="form-label fw-bold" id="unitsLabel">Единицы измерения</label>
+                                        <div class="btn-group w-100" role="group">
+                                            <button class="btn btn-outline-primary active" onclick="setUnits('decimal')"
+                                                id="unitsDecimal">
+                                                ГБ / ТБ (десятичные)
+                                            </button>
+                                            <button class="btn btn-outline-primary" onclick="setUnits('binary')" id="unitsBinary">
+                                                ГиБ / ТиБ (двоичные)
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    </div>
-
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label class="form-label fw-bold" id="settingsPreferredLanguageLabel">Язык по умолчанию</label>
-                                <select class="form-select" id="settingsPreferredLanguageSelect" onchange="updatePreferredLanguage()">
-                                    <!-- options will be filled dynamically from availableLanguages -->
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label fw-bold" id="unitsLabel">Единицы измерения</label>
-                        <div class="btn-group w-100" role="group">
-                            <button class="btn btn-outline-primary active" onclick="setUnits('decimal')"
-                                id="unitsDecimal">
-                                ГБ / ТБ (десятичные)
-                            </button>
-                            <button class="btn btn-outline-primary" onclick="setUnits('binary')" id="unitsBinary">
-                                ГиБ / ТиБ (двоичные)
-                            </button>
-                        </div>
-                    </div>
-
-                    <hr class="my-4">
-                    <div class="mb-2">
-                        <label class="form-label fw-bold" id="settingsDashboardTimeWeatherTitle">Время и погода</label>
-                        <p class="text-muted small mb-3" id="settingsDashboardTimeWeatherHint">Настройки для четвёртой карточки в верхней строке Cluster.</p>
-                        <div class="row g-3">
-                            <div class="col-md-6">
-                                <label class="form-label fw-bold" id="settingsDashboardWeatherCityLabel">Город</label>
-                                <input type="text" class="form-control" id="settingsDashboardWeatherCityInput" placeholder="Moscow">
-                                <div class="form-text" id="settingsDashboardWeatherCityHint">Используется для получения текущей погоды.</div>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label fw-bold" id="settingsDashboardTimezoneLabel">Часовой пояс</label>
-                                <input type="text" class="form-control" id="settingsDashboardTimezoneInput" placeholder="Europe/Moscow">
-                                <div class="form-text" id="settingsDashboardTimezoneHint">Используйте IANA-формат, например Europe/Berlin.</div>
-                            </div>
-                        </div>
-                        <div class="row g-3 mt-1">
-                            <div class="col-md-6">
-                                <div class="fw-semibold mb-2" id="settingsDashboardVisibilityNormalTitle">Обычный режим</div>
-                                <div class="form-check mb-2">
-                                    <input class="form-check-input" type="checkbox" id="settingsDashboardShowTimeCheckbox" checked>
-                                    <label class="form-check-label" for="settingsDashboardShowTimeCheckbox" id="settingsDashboardShowTimeLabel">Показывать дату и время</label>
+                            <!-- Время и погода -->
+                            <div class="tab-pane fade settings-display-subtab" id="settings-tab-display-time-weather" role="tabpanel">
+                                <div class="settings-section">
+                                    <h5 class="mb-3 settings-display-tab-title"><i class="bi bi-cloud-sun me-2"></i><span id="settingsDashboardTimeWeatherTitle">Время и погода</span></h5>
+                                    <p class="text-muted small mb-3" id="settingsDashboardTimeWeatherHint">Настройки верхней строки дашборда (время, погода, город).</p>
+                                    <div class="row g-3">
+                                        <div class="col-md-6">
+                                            <label class="form-label fw-bold" id="settingsDashboardWeatherCityLabel">Город</label>
+                                            <input type="text" class="form-control" id="settingsDashboardWeatherCityInput" placeholder="Moscow">
+                                            <div class="form-text" id="settingsDashboardWeatherCityHint">Используется для получения текущей погоды.</div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label fw-bold" id="settingsDashboardWeatherProviderLabel">Источник погоды</label>
+                                            <select class="form-select" id="settingsDashboardWeatherProviderSelect" onchange="onDashboardWeatherProviderChange()">
+                                                <option value="open_meteo">Open-Meteo</option>
+                                                <option value="openweathermap">OpenWeatherMap</option>
+                                                <option value="yandex">Яндекс.Погода</option>
+                                                <option value="gismeteo">Gismeteo</option>
+                                            </select>
+                                            <div class="form-text" id="settingsDashboardWeatherProviderHint"></div>
+                                        </div>
+                                        <div class="col-12 weather-provider-keys weather-provider-keys--owm" style="display: none;">
+                                            <label class="form-label fw-bold" id="settingsWeatherOwmKeyLabel">OpenWeatherMap API key</label>
+                                            <input type="password" class="form-control" id="settingsWeatherOwmKeyInput" autocomplete="off" placeholder="">
+                                            <div class="form-text" id="settingsWeatherOwmKeyHint"></div>
+                                        </div>
+                                        <div class="col-12 weather-provider-keys weather-provider-keys--yandex" style="display: none;">
+                                            <label class="form-label fw-bold" id="settingsWeatherYandexKeyLabel">Яндекс.Погода API key</label>
+                                            <input type="password" class="form-control" id="settingsWeatherYandexKeyInput" autocomplete="off" placeholder="">
+                                            <div class="form-text" id="settingsWeatherYandexKeyHint"></div>
+                                        </div>
+                                        <div class="col-12 weather-provider-keys weather-provider-keys--gismeteo" style="display: none;">
+                                            <label class="form-label fw-bold" id="settingsWeatherGismeteoKeyLabel">Gismeteo API token</label>
+                                            <input type="password" class="form-control" id="settingsWeatherGismeteoKeyInput" autocomplete="off" placeholder="">
+                                            <div class="form-text" id="settingsWeatherGismeteoKeyHint"></div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label fw-bold" id="settingsDashboardTimezoneLabel">Часовой пояс</label>
+                                            <input type="text" class="form-control" id="settingsDashboardTimezoneInput" placeholder="Europe/Moscow">
+                                            <div class="form-text" id="settingsDashboardTimezoneHint">Используйте IANA-формат, например Europe/Berlin.</div>
+                                        </div>
+                                    </div>
+                                    <div class="row g-3 mt-1">
+                                        <div class="col-md-6">
+                                            <div class="fw-semibold mb-2" id="settingsDashboardVisibilityNormalTitle">Обычный режим</div>
+                                            <div class="form-check mb-2">
+                                                <input class="form-check-input" type="checkbox" id="settingsDashboardShowTimeCheckbox" checked>
+                                                <label class="form-check-label" for="settingsDashboardShowTimeCheckbox" id="settingsDashboardShowTimeLabel">Показывать дату и время</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="settingsDashboardShowWeatherCheckbox" checked>
+                                                <label class="form-check-label" for="settingsDashboardShowWeatherCheckbox" id="settingsDashboardShowWeatherLabel">Показывать погоду</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="fw-semibold mb-2" id="settingsDashboardVisibilityMonitorTitle">Режим монитора</div>
+                                            <div class="form-check mb-2">
+                                                <input class="form-check-input" type="checkbox" id="settingsMonitorShowTimeCheckbox" checked>
+                                                <label class="form-check-label" for="settingsMonitorShowTimeCheckbox" id="settingsMonitorShowTimeLabel">Показывать дату и время</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="settingsMonitorShowWeatherCheckbox" checked>
+                                                <label class="form-check-label" for="settingsMonitorShowWeatherCheckbox" id="settingsMonitorShowWeatherLabel">Показывать погоду</label>
+                                            </div>
+                                            <div class="form-check mt-2">
+                                                <input class="form-check-input" type="checkbox" id="settingsMonitorDisableChromeGesturesCheckbox">
+                                                <label class="form-check-label" for="settingsMonitorDisableChromeGesturesCheckbox" id="settingsMonitorDisableChromeGesturesLabel">Отключать жесты Chrome в режиме монитора</label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex gap-2 flex-wrap mt-3">
+                                        <button class="btn btn-primary btn-sm" type="button" onclick="saveDashboardTimeWeatherSettings()" id="settingsDashboardTimeWeatherSaveBtn">
+                                            <i class="bi bi-save me-1"></i><span id="settingsDashboardTimeWeatherSaveBtnLabel">Сохранить время и погоду</span>
+                                        </button>
+                                    </div>
                                 </div>
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" id="settingsDashboardShowWeatherCheckbox" checked>
-                                    <label class="form-check-label" for="settingsDashboardShowWeatherCheckbox" id="settingsDashboardShowWeatherLabel">Показывать погоду</label>
+                            </div>
+                            <!-- Порядок экранов монитора -->
+                            <div class="tab-pane fade settings-display-subtab" id="settings-tab-display-monitor-screens" role="tabpanel">
+                                <div class="settings-section">
+                                    <h5 class="mb-3 settings-display-tab-title"><i class="bi bi-layout-three-columns me-2"></i><span id="settingsMonitorScreensOrderTitle">Порядок экранов монитора</span></h5>
+                                    <p class="text-muted small mb-2" id="settingsMonitorScreensOrderHint">Порядок при перелистывании (свайп, стрелки на панели). Экран бэкапов доступен только при подключении к Proxmox.</p>
+                                    <ul class="list-group list-group-flush border rounded overflow-hidden" id="settingsMonitorScreensOrderList"></ul>
                                 </div>
                             </div>
-                            <div class="col-md-6">
-                                <div class="fw-semibold mb-2" id="settingsDashboardVisibilityMonitorTitle">Режим монитора</div>
-                                <div class="form-check mb-2">
-                                    <input class="form-check-input" type="checkbox" id="settingsMonitorShowTimeCheckbox" checked>
-                                    <label class="form-check-label" for="settingsMonitorShowTimeCheckbox" id="settingsMonitorShowTimeLabel">Показывать дату и время</label>
-                                </div>
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" id="settingsMonitorShowWeatherCheckbox" checked>
-                                    <label class="form-check-label" for="settingsMonitorShowWeatherCheckbox" id="settingsMonitorShowWeatherLabel">Показывать погоду</label>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="d-flex gap-2 flex-wrap mt-3">
-                            <button class="btn btn-primary btn-sm" type="button" onclick="saveDashboardTimeWeatherSettings()" id="settingsDashboardTimeWeatherSaveBtn">
-                                <i class="bi bi-save me-1"></i><span id="settingsDashboardTimeWeatherSaveBtnLabel">Сохранить время и погоду</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    <hr class="my-4">
-                    <div class="mb-2">
-                        <label class="form-label fw-bold" id="settingsMonitorScreensOrderTitle">Порядок экранов монитора</label>
-                        <p class="text-muted small mb-2" id="settingsMonitorScreensOrderHint">Порядок при перелистывании (свайп, стрелки на панели). Экран бэкапов доступен только при подключении к Proxmox.</p>
-                        <ul class="list-group list-group-flush border rounded overflow-hidden" id="settingsMonitorScreensOrderList"></ul>
-                    </div>
-
-                    <hr class="my-4">
-                    <div class="mb-2">
-                        <label class="form-label fw-bold" id="settingsClusterTilesTitle">Плитки экрана Cluster</label>
-                        <p class="text-muted small mb-2" id="settingsClusterTilesHint">Соберите до 12 плиток для экрана Cluster из VM/CT, сервисов, SNMP, UPS и Speedtest. На экране они листаются горизонтально.</p>
-                        <div id="settingsClusterTilesList"></div>
-                        <div class="d-flex gap-2 flex-wrap mt-3">
-                            <button class="btn btn-outline-primary btn-sm" type="button" onclick="addClusterDashboardTile()" id="settingsClusterTilesAddBtn">
-                                <i class="bi bi-plus-lg me-1"></i><span id="settingsClusterTilesAddBtnLabel">Добавить плитку</span>
-                            </button>
-                            <button class="btn btn-primary btn-sm" type="button" onclick="saveClusterDashboardTilesSettings()" id="settingsClusterTilesSaveBtn" disabled>
-                                <i class="bi bi-save me-1"></i><span id="settingsClusterTilesSaveBtnLabel">Сохранить плитки</span>
-                            </button>
-                        </div>
-                    </div>
+                            <!-- Плитки Cluster -->
+                            <div class="tab-pane fade settings-display-subtab" id="settings-tab-display-cluster-tiles" role="tabpanel">
+                                <div class="settings-section">
+                                    <h5 class="mb-3 settings-display-tab-title"><i class="bi bi-grid-3x2-gap me-2"></i><span id="settingsClusterTilesTitle">Плитки экрана Cluster</span></h5>
+                                    <p class="text-muted small mb-2" id="settingsClusterTilesHint">Соберите до 12 плиток для экрана Cluster из VM/CT, сервисов, SNMP, UPS и Speedtest. На экране они листаются горизонтально.</p>
+                                    <div id="settingsClusterTilesList"></div>
+                                    <div class="d-flex gap-2 flex-wrap mt-3">
+                                        <button class="btn btn-outline-primary btn-sm" type="button" onclick="addClusterDashboardTile()" id="settingsClusterTilesAddBtn">
+                                            <i class="bi bi-plus-lg me-1"></i><span id="settingsClusterTilesAddBtnLabel">Добавить плитку</span>
+                                        </button>
+                                        <button class="btn btn-primary btn-sm" type="button" onclick="saveClusterDashboardTilesSettings()" id="settingsClusterTilesSaveBtn" disabled>
+                                            <i class="bi bi-save me-1"></i><span id="settingsClusterTilesSaveBtnLabel">Сохранить плитки</span>
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                             <!-- Стили -->
