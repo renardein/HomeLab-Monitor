@@ -905,6 +905,24 @@
             right: 20px;
             z-index: 9999;
         }
+        .backend-offline-banner {
+            position: fixed;
+            inset: 0;
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+            background: rgba(127, 29, 29, 0.45);
+            backdrop-filter: blur(1px);
+        }
+        .backend-offline-banner__text {
+            font-size: clamp(2rem, 9vw, 7rem);
+            font-weight: 900;
+            letter-spacing: 0.08em;
+            color: #fff;
+            text-shadow: 0 10px 26px rgba(0, 0, 0, 0.42);
+        }
         .toast {
             background: white;
             border-left: 4px solid;

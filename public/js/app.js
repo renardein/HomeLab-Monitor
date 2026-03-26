@@ -341,6 +341,12 @@ function escapeHtml(s) {
     return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+function setBackendOfflineBannerVisible(visible) {
+    const banner = document.getElementById('backendOfflineBanner');
+    if (!banner) return;
+    banner.classList.toggle('d-none', !visible);
+}
+
 function getSeenUpdateVersion() {
     try {
         return localStorage.getItem(UPDATE_NOTICE_STORAGE_KEY) || '';
@@ -4656,6 +4662,7 @@ async function checkServerStatus() {
     try {
         const response = await fetch('/api/status');
         const data = await response.json();
+        setBackendOfflineBannerVisible(false);
         setHTML('serverStatus', '<i class="bi bi-check-circle"></i><span id="serverStatusText">' + t('serverWorking') + '</span>');
         const ss = document.getElementById('serverStatus');
         if (ss) {
@@ -4665,6 +4672,7 @@ async function checkServerStatus() {
         const verEl = document.getElementById('footerVersion');
         if (verEl && data.version) verEl.textContent = 'v' + data.version;
     } catch (error) {
+        setBackendOfflineBannerVisible(true);
         setHTML('serverStatus', '<i class="bi bi-exclamation-circle"></i><span id="serverStatusText">' + t('serverError') + '</span>');
         const ss = document.getElementById('serverStatus');
         if (ss) {
@@ -9090,6 +9098,7 @@ async function backendRecoveryWatchTick() {
     try {
         const res = await fetch('/api/status', { cache: 'no-store' });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        setBackendOfflineBannerVisible(false);
         if (backendWasUnavailable) {
             backendRecoveryReloadDone = true;
             window.location.reload();
@@ -9097,6 +9106,7 @@ async function backendRecoveryWatchTick() {
         }
         backendWasUnavailable = false;
     } catch (_) {
+        setBackendOfflineBannerVisible(true);
         backendWasUnavailable = true;
     }
 }
