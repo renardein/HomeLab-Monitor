@@ -1,6 +1,6 @@
 {
   "name": "homelab-monitor",
-  "version": "1.2.3-release",
+  "version": "1.2.4-release",
   "description": "HomeLab Monitor",
   "main": "server.js",
   "scripts": {
