@@ -161,6 +161,9 @@ function applyDashboardTimeWeatherVisibility() {
 const UPDATE_NOTICE_STORAGE_KEY = 'update_notice_seen_version';
 let updateCheckPromise = null;
 let latestUpdateInfo = null;
+let backendRecoveryWatchTimer = null;
+let backendWasUnavailable = false;
+let backendRecoveryReloadDone = false;
 let lastClusterData = null;   // for monitor view (Proxmox)
 let lastTrueNASData = null;   // { system, pools } for monitor view (TrueNAS)
 let lastHostMetricsData = null; // { configured, items } for Proxmox host metrics
@@ -3319,6 +3322,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
 
     checkServerStatus();
+    startBackendRecoveryWatcher();
     checkForAppUpdates().catch(() => {});
     updateCurrentServerBadge();
 
@@ -9081,25 +9085,38 @@ function reloadPage() {
     window.location.reload();
 }
 
+async function backendRecoveryWatchTick() {
+    if (backendRecoveryReloadDone) return;
+    try {
+        const res = await fetch('/api/status', { cache: 'no-store' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (backendWasUnavailable) {
+            backendRecoveryReloadDone = true;
+            window.location.reload();
+            return;
+        }
+        backendWasUnavailable = false;
+    } catch (_) {
+        backendWasUnavailable = true;
+    }
+}
+
+function startBackendRecoveryWatcher() {
+    if (backendRecoveryWatchTimer) return;
+    backendRecoveryWatchTick().catch(() => {});
+    backendRecoveryWatchTimer = setInterval(() => {
+        backendRecoveryWatchTick().catch(() => {});
+    }, 3000);
+}
+
 function reloadApplication() {
-    // Перезапуск Node.js-сервера через API; после ответа сервер завершится (PM2/nodemon перезапустят)
-    var url = window.location.href;
+    // Перезапуск Node.js-сервера через API; авто-watcher перезагрузит страницу после восстановления /api/status.
     fetch('/api/restart', { method: 'POST' })
         .then(function () {
             showToast(t('settingsDebugRestarting') || 'Перезапуск сервера…', 'info');
-            // Ждём завершения сервера и пробуем перезагрузить страницу, когда он поднимется
-            var attempts = 0;
-            var maxAttempts = 30;
-            function poll() {
-                attempts++;
-                fetch(url, { method: 'HEAD', mode: 'same-origin' }).then(function () {
-                    window.location.reload();
-                }).catch(function () {
-                    if (attempts < maxAttempts) setTimeout(poll, 1000);
-                    else window.location.href = url;
-                });
-            }
-            setTimeout(poll, 2000);
+            backendWasUnavailable = true;
+            backendRecoveryReloadDone = false;
+            startBackendRecoveryWatcher();
         })
         .catch(function (err) {
             showToast((t('settingsDebugRestartError') || 'Ошибка перезапуска') + ': ' + (err.message || err), 'error');
