@@ -1185,6 +1185,13 @@
                                                     <option value="1">Включено</option>
                                                 </select>
                                             </div>
+                                            <div class="col-md-3">
+                                                <label class="form-label fw-bold" for="speedtestEngineSelect" id="speedtestEngineLabel">Движок</label>
+                                                <select class="form-select" id="speedtestEngineSelect" onchange="saveSpeedtestSettings()">
+                                                    <option value="ookla" id="speedtestEngineOoklaOption">Ookla CLI</option>
+                                                    <option value="librespeed" id="speedtestEngineLibrespeedOption">LibreSpeed CLI</option>
+                                                </select>
+                                            </div>
                                             <div class="col-md-4">
                                                 <label class="form-label fw-bold" for="speedtestServerInput" id="speedtestServerLabel">Сервер измерения</label>
                                                 <input type="text" class="form-control" id="speedtestServerInput" placeholder="" onchange="saveSpeedtestSettings()" onblur="saveSpeedtestSettings()">
@@ -1201,6 +1208,13 @@
                                             </div>
                                         </div>
                                         <div class="row g-3 mb-2">
+                                            <div class="col-12">
+                                                <label class="form-label fw-bold" for="speedtestLibrespeedServerInput" id="speedtestLibrespeedServerLabel">Сервер LibreSpeed</label>
+                                                <input type="text" class="form-control" id="speedtestLibrespeedServerInput" placeholder="" autocomplete="off" onchange="saveSpeedtestSettings()" onblur="saveSpeedtestSettings()">
+                                                <div class="form-text" id="speedtestLibrespeedServerHint">Необязательно: URL сервера для librespeed-cli (или ID, если поддерживается вашей сборкой).</div>
+                                            </div>
+                                        </div>
+                                        <div class="row g-3 mb-2">
                                             <div class="col-md-6">
                                                 <label class="form-label fw-bold" for="speedtestProviderDownloadMbpsInput" id="speedtestProviderDownloadLabel">Скорость провайдера — приём (Мбит/с)</label>
                                                 <input type="number" class="form-control" id="speedtestProviderDownloadMbpsInput" min="0" step="0.1" placeholder="" onchange="saveSpeedtestSettings()" onblur="saveSpeedtestSettings()">
@@ -1211,6 +1225,11 @@
                                             </div>
                                         </div>
                                         <p class="form-text mb-3" id="speedtestProviderHint">Необязательно: для сравнения с замерами и шкалы прогресс-баров скачивания. Пусто — шкала по фактическим значениям за сегодня.</p>
+                                        <div class="form-check mb-2">
+                                            <input class="form-check-input" type="checkbox" id="speedtestShowProxySettingsChk" onchange="updateSpeedtestProxySettingsUI()">
+                                            <label class="form-check-label small fw-semibold" for="speedtestShowProxySettingsChk" id="speedtestShowProxySettingsLabel">Показать настройки прокси</label>
+                                        </div>
+                                        <div id="speedtestProxySettingsWrap" class="d-none">
                                         <h6 class="text-muted small text-uppercase mb-2" id="speedtestProxySectionTitle">Прокси для CLI</h6>
                                         <div class="row g-3 mb-2">
                                             <div class="col-md-6">
@@ -1227,6 +1246,7 @@
                                             </div>
                                         </div>
                                         <p class="form-text mb-3" id="speedtestProxyHint">Передаются в процесс Ookla Speedtest как переменные окружения. Для HTTPS-API часто нужен отдельный HTTPS_PROXY. Пустые поля — без прокси (кроме системных переменных среды Node).</p>
+                                        </div>
                                         <div class="mb-2">
                                             <button type="button" class="btn btn-outline-danger btn-sm" id="speedtestClearHistoryBtn" onclick="clearSpeedtestHistory()">
                                                 <i class="bi bi-trash me-1"></i><span id="speedtestClearHistoryText">Очистить историю замеров</span>

@@ -2805,8 +2805,13 @@ function updateUILanguage() {
     setText('speedtestSettingsTitle', t('speedtestSettingsTitle'));
     setText('speedtestSettingsHint', t('speedtestSettingsHint'));
     setText('speedtestEnabledLabel', t('speedtestEnabledLabel'));
+    setText('speedtestEngineLabel', t('speedtestEngineLabel'));
+    setText('speedtestEngineOoklaOption', t('speedtestEngineOoklaOption'));
+    setText('speedtestEngineLibrespeedOption', t('speedtestEngineLibrespeedOption'));
     setText('speedtestServerLabel', t('speedtestServerLabel'));
     setText('speedtestServerHint', t('speedtestServerHint'));
+    setText('speedtestLibrespeedServerLabel', t('speedtestLibrespeedServerLabel'));
+    setText('speedtestLibrespeedServerHint', t('speedtestLibrespeedServerHint'));
     setText('speedtestPerDayLabel', t('speedtestPerDayLabel'));
     setText('speedtestProviderDownloadLabel', t('speedtestProviderDownloadLabel'));
     setText('speedtestProviderUploadLabel', t('speedtestProviderUploadLabel'));
@@ -2815,6 +2820,7 @@ function updateUILanguage() {
     setText('speedtestHttpProxyLabel', t('speedtestHttpProxyLabel'));
     setText('speedtestHttpsProxyLabel', t('speedtestHttpsProxyLabel'));
     setText('speedtestNoProxyLabel', t('speedtestNoProxyLabel'));
+    setText('speedtestShowProxySettingsLabel', t('speedtestShowProxySettingsLabel'));
     setText('speedtestProxyHint', t('speedtestProxyHint'));
     setText('speedtestRunNowText', t('speedtestRunNowText'));
     setText('speedtestClearHistoryText', t('speedtestClearHistoryText'));
@@ -2883,6 +2889,7 @@ function updateUILanguage() {
     setPlaceholder('upsHostInput', t('upsHostPlaceholder'));
     setPlaceholder('netdevHostInput', t('netdevHostPlaceholder'));
     setPlaceholder('speedtestServerInput', t('speedtestServerPlaceholder'));
+    setPlaceholder('speedtestLibrespeedServerInput', t('speedtestLibrespeedServerPlaceholder'));
     setPlaceholder('iperf3HostInput', t('iperf3HostPlaceholder'));
 
     [
@@ -2916,6 +2923,8 @@ function updateUILanguage() {
         }
     } catch (_) {}
 
+    updateSpeedtestSettingsEngineUI();
+    updateSpeedtestProxySettingsUI(false);
     localizeSetupWizard();
 }
 
@@ -7443,6 +7452,64 @@ function isSpeedtestSettingsTabActive() {
     return !!(pane && pane.classList.contains('show'));
 }
 
+function updateSpeedtestSettingsEngineUI() {
+    const engSel = document.getElementById('speedtestEngineSelect');
+    const serverLabel = document.getElementById('speedtestServerLabel');
+    const serverHint = document.getElementById('speedtestServerHint');
+    const serverInput = document.getElementById('speedtestServerInput');
+    const libreWrapInput = document.getElementById('speedtestLibrespeedServerInput');
+    const libreLabel = document.getElementById('speedtestLibrespeedServerLabel');
+    const libreHint = document.getElementById('speedtestLibrespeedServerHint');
+    const proxyTitle = document.getElementById('speedtestProxySectionTitle');
+    const useEngine = (engSel && String(engSel.value).trim().toLowerCase() === 'librespeed')
+        ? 'librespeed'
+        : 'ookla';
+    speedtestEngine = useEngine;
+    if (serverLabel) {
+        serverLabel.textContent = useEngine === 'librespeed'
+            ? (t('speedtestServerLabelLibrespeed') || (t('speedtestServerLabel') || 'Measurement server'))
+            : (t('speedtestServerLabel') || 'Measurement server');
+    }
+    if (serverHint) {
+        serverHint.textContent = useEngine === 'librespeed'
+            ? (t('speedtestServerHintLibrespeed') || 'Optional: LibreSpeed server ID (if your CLI supports it). Leave empty for auto.')
+            : (t('speedtestServerHint') || 'Ookla server ID (number). Leave empty for automatic server selection.');
+    }
+    if (serverInput) {
+        serverInput.placeholder = useEngine === 'librespeed'
+            ? (t('speedtestServerPlaceholderLibrespeed') || 'Server ID (optional)')
+            : (t('speedtestServerPlaceholder') || 'Server ID (optional)');
+    }
+    const showLibreInput = useEngine === 'librespeed';
+    for (const el of [libreWrapInput, libreLabel, libreHint]) {
+        if (!el) continue;
+        const row = el.closest('.row');
+        if (row && row.querySelector('#speedtestLibrespeedServerInput')) {
+            row.classList.toggle('d-none', !showLibreInput);
+            break;
+        }
+    }
+    if (proxyTitle) {
+        proxyTitle.textContent = useEngine === 'librespeed'
+            ? (t('speedtestProxySectionTitleLibrespeed') || (t('speedtestProxySectionTitle') || 'Proxy for Speedtest CLI'))
+            : (t('speedtestProxySectionTitle') || 'Proxy for Speedtest CLI');
+    }
+}
+
+function updateSpeedtestProxySettingsUI(autoShowIfConfigured = false) {
+    const chk = document.getElementById('speedtestShowProxySettingsChk');
+    const wrap = document.getElementById('speedtestProxySettingsWrap');
+    if (!chk || !wrap) return;
+    const httpPx = (document.getElementById('speedtestHttpProxyInput')?.value || '').trim();
+    const httpsPx = (document.getElementById('speedtestHttpsProxyInput')?.value || '').trim();
+    const noPx = (document.getElementById('speedtestNoProxyInput')?.value || '').trim();
+    const hasConfiguredProxy = !!(httpPx || httpsPx || noPx);
+    if (autoShowIfConfigured && hasConfiguredProxy && !chk.checked) {
+        chk.checked = true;
+    }
+    wrap.classList.toggle('d-none', !chk.checked);
+}
+
 async function updateSpeedtestDashboard() {
     const speedtestMonSection = document.getElementById('speedtestMonitorSection');
     /** Полноэкранный Speedtest в мониторе (или открыт из меню). */
@@ -7566,9 +7633,14 @@ async function updateSpeedtestDashboard() {
 
         const cliEl = document.getElementById('speedtestCliStatus');
         if (cliEl) {
+            const engine = summary && summary.cliEngine === 'librespeed' ? 'librespeed' : 'ookla';
+            const engineName = engine === 'librespeed'
+                ? (t('speedtestEngineLibrespeedOption') || 'LibreSpeed CLI')
+                : (t('speedtestEngineOoklaOption') || 'Ookla CLI');
             let cliText = summary.cliAvailable
                 ? (t('speedtestCliOk') || 'CLI: OK')
                 : (t('speedtestCliMissing') || 'CLI: not found');
+            cliText = `${engineName} · ${cliText}`;
             const px = summary.proxy;
             if (px && (px.http || px.https)) {
                 const bits = [];
@@ -8602,7 +8674,10 @@ async function renderTrueNASMonitorScreenTiles(targetGridId, type) {
 async function saveSpeedtestSettings() {
     const en = document.getElementById('speedtestEnabledSelect') && document.getElementById('speedtestEnabledSelect').value === '1';
     speedtestClientEnabled = en;
+    const engineRaw = (document.getElementById('speedtestEngineSelect')?.value || '').trim().toLowerCase();
+    speedtestEngine = engineRaw === 'librespeed' ? 'librespeed' : 'ookla';
     const server = (document.getElementById('speedtestServerInput')?.value || '').trim();
+    const librespeedServer = (document.getElementById('speedtestLibrespeedServerInput')?.value || '').trim();
     let perDay = parseInt(document.getElementById('speedtestPerDayInput')?.value, 10);
     if (!Number.isFinite(perDay) || perDay < 1) perDay = 4;
     if (perDay > 6) perDay = 6;
@@ -8613,9 +8688,13 @@ async function saveSpeedtestSettings() {
     const httpPx = (document.getElementById('speedtestHttpProxyInput')?.value || '').trim();
     const httpsPx = (document.getElementById('speedtestHttpsProxyInput')?.value || '').trim();
     const noPx = (document.getElementById('speedtestNoProxyInput')?.value || '').trim();
+    updateSpeedtestSettingsEngineUI();
+    updateSpeedtestProxySettingsUI(false);
     await saveSettingsToServer({
         speedtestEnabled: en,
+        speedtestEngine: speedtestEngine,
         speedtestServer: server,
+        speedtestLibrespeedServer: librespeedServer,
         speedtestPerDay: perDay,
         speedtestProviderDownloadMbps: provDlRaw === '' ? '' : provDlRaw,
         speedtestProviderUploadMbps: provUlRaw === '' ? '' : provUlRaw,
@@ -9306,6 +9385,8 @@ let monitorScreensOrder = MONITOR_SCREEN_IDS_ALL.slice();
 let monitorScreensEnabled = {};
 /** Speedtest включён в настройках (для скрытия экрана в режиме монитора) */
 let speedtestClientEnabled = false;
+/** Активный движок Speedtest: ookla | librespeed */
+let speedtestEngine = 'ookla';
 /** iperf3 включён в настройках */
 let iperf3ClientEnabled = false;
 
@@ -13251,10 +13332,17 @@ async function loadSettings() {
     monitorScreensEnabled = normalizeMonitorScreensEnabled(data.monitor_screens_enabled);
     speedtestClientEnabled = !!(data.speedtest_enabled === true || data.speedtest_enabled === '1'
         || data.speedtest_enabled === 1 || data.speedtest_enabled === 'true');
+    speedtestEngine = String(data.speedtest_engine || '').trim().toLowerCase() === 'librespeed'
+        ? 'librespeed'
+        : 'ookla';
     const spEn = document.getElementById('speedtestEnabledSelect');
     if (spEn) spEn.value = speedtestClientEnabled ? '1' : '0';
+    const spEngine = document.getElementById('speedtestEngineSelect');
+    if (spEngine) spEngine.value = speedtestEngine;
     const spSrv = document.getElementById('speedtestServerInput');
     if (spSrv) spSrv.value = data.speedtest_server != null ? String(data.speedtest_server) : '';
+    const spLibreSrv = document.getElementById('speedtestLibrespeedServerInput');
+    if (spLibreSrv) spLibreSrv.value = data.speedtest_librespeed_server != null ? String(data.speedtest_librespeed_server) : '';
     const spDay = document.getElementById('speedtestPerDayInput');
     if (spDay) {
         let n = parseInt(data.speedtest_per_day, 10);
@@ -13278,6 +13366,8 @@ async function loadSettings() {
     if (spHttpsPx) spHttpsPx.value = data.speedtest_https_proxy != null ? String(data.speedtest_https_proxy) : '';
     const spNoPx = document.getElementById('speedtestNoProxyInput');
     if (spNoPx) spNoPx.value = data.speedtest_no_proxy != null ? String(data.speedtest_no_proxy) : '';
+    updateSpeedtestSettingsEngineUI();
+    updateSpeedtestProxySettingsUI(true);
     iperf3ClientEnabled = !!(data.iperf3_enabled === true || data.iperf3_enabled === '1'
         || data.iperf3_enabled === 1 || data.iperf3_enabled === 'true');
     const ipEn = document.getElementById('iperf3EnabledSelect');

@@ -64,6 +64,12 @@ function normalizeSpeedtestProxyField(v) {
     return s;
 }
 
+function normalizeSpeedtestEngineField(v) {
+    if (v === undefined) return undefined;
+    const s = String(v).trim().toLowerCase();
+    return s === 'librespeed' ? 'librespeed' : 'ookla';
+}
+
 function computeSetupCompleted(st) {
     const raw = st.getSetting('setup_completed');
     if (raw === '0' || raw === 'false') return false;
@@ -127,7 +133,9 @@ const SETTING_KEYS = [
     'monitor_show_weather',
     // Speedtest (Ookla CLI)
     'speedtest_enabled',
+    'speedtest_engine',
     'speedtest_server',
+    'speedtest_librespeed_server',
     'speedtest_per_day',
     'speedtest_provider_download_mbps',
     'speedtest_provider_upload_mbps',
@@ -262,6 +270,7 @@ router.get('/', (req, res) => {
         payload.monitor_vm_icons = iconMaps.monitor_vm_icons;
         payload.monitor_vm_icon_colors = iconMaps.monitor_vm_icon_colors;
         if (!payload.dashboard_weather_provider) payload.dashboard_weather_provider = 'open_meteo';
+        if (!payload.speedtest_engine) payload.speedtest_engine = 'ookla';
         const wk = (k) => !!(store.getSetting(k) && String(store.getSetting(k)).trim());
         payload.weather_openweathermap_api_key_set = wk('weather_openweathermap_api_key');
         payload.weather_yandex_api_key_set = wk('weather_yandex_api_key');
@@ -360,10 +369,21 @@ router.post('/', (req, res) => {
                 if (v === undefined) return undefined;
                 return v === true || v === '1' || v === 1 || v === 'true' ? '1' : '0';
             })(),
+            speedtest_engine: normalizeSpeedtestEngineField(
+                body.speedtest_engine ?? body.speedtestEngine
+            ),
             speedtest_server: (() => {
                 const v = body.speedtest_server ?? body.speedtestServer;
                 if (v === undefined) return undefined;
                 return String(v).trim();
+            })(),
+            speedtest_librespeed_server: (() => {
+                const v = body.speedtest_librespeed_server ?? body.speedtestLibrespeedServer;
+                if (v === undefined) return undefined;
+                let s = String(v).trim();
+                if (s.length > 1024) s = s.slice(0, 1024);
+                if (/[\r\n\0]/.test(s)) return '';
+                return s;
             })(),
             speedtest_per_day: (() => {
                 const v = body.speedtest_per_day ?? body.speedtestPerDay;

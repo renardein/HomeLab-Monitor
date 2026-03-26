@@ -6,7 +6,7 @@ const store = require('./settings-store');
 const { log } = require('./utils');
 
 let runLock = false;
-let cliCache = { ok: false, checkedAt: 0, proxyKey: '' };
+let cliCache = { ok: false, checkedAt: 0, proxyKey: '', engine: '' };
 
 /** Максимум автоматических замеров за сутки и строк в списке «за сегодня» в summary. */
 const SPEEDTEST_MAX_RUNS_PER_DAY = 6;
@@ -16,6 +16,13 @@ function speedtestExecutable() {
     const p = process.env.SPEEDTEST_CLI || process.env.SPEEDTEST_PATH;
     const s = p != null ? String(p).trim() : '';
     return s || 'speedtest';
+}
+
+/** Исполняемый файл LibreSpeed CLI: иначе ищется `librespeed-cli` в PATH процесса Node. */
+function librespeedExecutable() {
+    const p = process.env.LIBRESPEED_CLI || process.env.LIBRESPEED_PATH;
+    const s = p != null ? String(p).trim() : '';
+    return s || 'librespeed-cli';
 }
 
 function readSpeedtestProxyFromStore() {
@@ -93,11 +100,14 @@ function parseStoredProviderMbps(settingKey) {
 function readSettings() {
     const rawEn = store.getSetting('speedtest_enabled');
     const enabled = rawEn === '1' || rawEn === 'true' || rawEn === true;
+    const rawEngine = String(store.getSetting('speedtest_engine') || '').trim().toLowerCase();
+    const engine = rawEngine === 'librespeed' ? 'librespeed' : 'ookla';
     const server = String(store.getSetting('speedtest_server') || '').trim();
+    const librespeedServer = String(store.getSetting('speedtest_librespeed_server') || '').trim();
     let perDay = parseInt(store.getSetting('speedtest_per_day'), 10);
     if (!Number.isFinite(perDay) || perDay < 1) perDay = 4;
     if (perDay > SPEEDTEST_MAX_RUNS_PER_DAY) perDay = SPEEDTEST_MAX_RUNS_PER_DAY;
-    return { enabled, server, perDay };
+    return { enabled, engine, server, librespeedServer, perDay };
 }
 
 function bandwidthToMbps(bw) {
@@ -159,10 +169,9 @@ function lastErrorMessagesFromSpeedtestJsonl(stdout, maxLines = 4) {
     return errors.slice(-maxLines);
 }
 
-function probeCli() {
+function probeExecutable(exe, args) {
     return new Promise((resolve) => {
-        const exe = speedtestExecutable();
-        const proc = spawn(exe, ['--version'], speedtestSpawnOptions());
+        const proc = spawn(exe, args, speedtestSpawnOptions());
         let done = false;
         const finish = (ok) => {
             if (done) return;
@@ -182,17 +191,30 @@ function probeCli() {
     });
 }
 
+async function probeCli(engine) {
+    const useEngine = engine === 'librespeed' ? 'librespeed' : 'ookla';
+    const exe = useEngine === 'librespeed' ? librespeedExecutable() : speedtestExecutable();
+    if (await probeExecutable(exe, ['--version'])) return true;
+    return probeExecutable(exe, ['--help']);
+}
+
 async function checkCliAvailable() {
+    const { engine } = readSettings();
     const pKey = speedtestProxyCacheKey();
     const now = Date.now();
-    if (now - cliCache.checkedAt < 120000 && cliCache.proxyKey === pKey) return cliCache.ok;
+    if (
+        now - cliCache.checkedAt < 120000
+        && cliCache.proxyKey === pKey
+        && cliCache.engine === engine
+    ) return cliCache.ok;
     cliCache.checkedAt = now;
     cliCache.proxyKey = pKey;
-    cliCache.ok = await probeCli();
+    cliCache.engine = engine;
+    cliCache.ok = await probeCli(engine);
     return cliCache.ok;
 }
 
-function runSpeedtestProcess(serverIdOrEmpty) {
+function runOoklaSpeedtestProcess(serverIdOrEmpty) {
     return new Promise((resolve, reject) => {
         const exe = speedtestExecutable();
         const args = ['--format=json', '--accept-license', '--accept-gdpr'];
@@ -240,6 +262,127 @@ function runSpeedtestProcess(serverIdOrEmpty) {
                 ? `Could not parse speedtest JSON output (${logHint})`
                 : 'Could not parse speedtest JSON output';
             reject(new Error(parseFailMsg));
+        });
+    });
+}
+
+function parseLibrespeedNumeric(v) {
+    const n = Number(v);
+    if (!Number.isFinite(n) || n < 0) return null;
+    // Heuristics for different possible units from various CLI builds.
+    if (n > 1_000_000) return Math.round((n / 1_000_000) * 10) / 10; // bits/s -> Mbps
+    if (n > 10_000) return Math.round((n / 1000) * 10) / 10; // Kbps -> Mbps
+    return Math.round(n * 10) / 10; // already Mbps
+}
+
+function getByPath(obj, path) {
+    let cur = obj;
+    for (const part of path) {
+        if (!cur || typeof cur !== 'object') return undefined;
+        cur = cur[part];
+    }
+    return cur;
+}
+
+function pickFirstNumeric(obj, paths) {
+    for (const p of paths) {
+        const v = getByPath(obj, p);
+        if (v && typeof v === 'object') {
+            if (Number.isFinite(Number(v.latency))) return Number(v.latency);
+            if (Number.isFinite(Number(v.value))) return Number(v.value);
+        }
+        const n = Number(v);
+        if (Number.isFinite(n)) return n;
+    }
+    return null;
+}
+
+function parseLibrespeedStdout(stdout) {
+    const raw = String(stdout || '').trim();
+    if (!raw) return null;
+    const lines = raw.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    let parsed = null;
+    for (const line of lines) {
+        if (!line.startsWith('{') && !line.startsWith('[')) continue;
+        try {
+            parsed = JSON.parse(line);
+        } catch (_) { /* skip */ }
+    }
+    if (!parsed) {
+        try {
+            parsed = JSON.parse(raw);
+        } catch (_) { /* skip */ }
+    }
+    if (!parsed || typeof parsed !== 'object') return null;
+    const dlRaw = pickFirstNumeric(parsed, [
+        ['download'], ['download_mbps'], ['downloadMbps'], ['dl'],
+        ['speeds', 'download'], ['speed', 'download']
+    ]);
+    const ulRaw = pickFirstNumeric(parsed, [
+        ['upload'], ['upload_mbps'], ['uploadMbps'], ['ul'],
+        ['speeds', 'upload'], ['speed', 'upload']
+    ]);
+    const pingRaw = pickFirstNumeric(parsed, [
+        ['ping'], ['latency'], ['pingMs'], ['ping_ms'], ['server', 'ping'], ['ping', 'latency']
+    ]);
+    const srvId = getByPath(parsed, ['server', 'id']) ?? getByPath(parsed, ['serverId']) ?? null;
+    const srvName = getByPath(parsed, ['server', 'name'])
+        ?? getByPath(parsed, ['serverName'])
+        ?? getByPath(parsed, ['server', 'host'])
+        ?? getByPath(parsed, ['server', 'url'])
+        ?? null;
+    const dl = parseLibrespeedNumeric(dlRaw);
+    const ul = parseLibrespeedNumeric(ulRaw);
+    const ping = pingRaw != null ? Math.round(Number(pingRaw) * 10) / 10 : null;
+    if (dl == null && ul == null && ping == null) return null;
+    return {
+        download_mbps: dl,
+        upload_mbps: ul,
+        ping_ms: ping,
+        server_id: srvId != null ? String(srvId) : null,
+        server_name: srvName != null ? String(srvName) : null
+    };
+}
+
+function runLibrespeedProcess(serverOpt) {
+    return new Promise((resolve, reject) => {
+        const exe = librespeedExecutable();
+        const args = ['--json'];
+        if (serverOpt) args.push('--server', String(serverOpt));
+        const proc = spawn(exe, args, speedtestSpawnOptions());
+        let out = '';
+        let err = '';
+        const t = setTimeout(() => {
+            try { proc.kill('SIGKILL'); } catch (_) { /* ignore */ }
+            reject(new Error('librespeed timeout'));
+        }, 180000);
+        proc.stdout.on('data', (d) => { out += d.toString(); });
+        proc.stderr.on('data', (d) => { err += d.toString(); });
+        proc.on('error', (e) => {
+            clearTimeout(t);
+            const code = e && e.code;
+            const base = e && e.message ? String(e.message) : String(e);
+            if (code === 'ENOENT') {
+                reject(new Error(`LibreSpeed executable not found (${exe}). Set LIBRESPEED_CLI to the full path or install librespeed-cli.`));
+            } else {
+                reject(new Error(base));
+            }
+        });
+        proc.on('close', (code) => {
+            clearTimeout(t);
+            const parsed = parseLibrespeedStdout(out);
+            if (parsed) {
+                resolve(parsed);
+                return;
+            }
+            const stderrHint = (err || '').trim();
+            const outHint = (out || '').trim();
+            if (code !== 0) {
+                const parts = [stderrHint, outHint].filter(Boolean);
+                reject(new Error(parts.length ? parts.join(' · ') : `librespeed exited with code ${code}`));
+                return;
+            }
+            reject(new Error('Could not parse librespeed JSON output'));
         });
     });
 }
@@ -393,7 +536,7 @@ function listRunsForLocalDay(startIso, endIso, limit = SPEEDTEST_MAX_RUNS_PER_DA
 }
 
 function getSummaryPayload() {
-    const { enabled, server, perDay } = readSettings();
+    const { enabled, engine, server, librespeedServer, perDay } = readSettings();
     const cliOk = cliCache.ok;
     const { startIso, endIso } = localDayBoundsIso();
     const today = statsForTodayOk(startIso, endIso);
@@ -403,8 +546,11 @@ function getSummaryPayload() {
     const px = readSpeedtestProxyFromStore();
     return {
         enabled,
+        engine,
         cliAvailable: cliOk,
+        cliEngine: engine,
         serverId: server || null,
+        librespeedServer: librespeedServer || null,
         perDay,
         providerDownloadMbps,
         providerUploadMbps,
@@ -436,7 +582,7 @@ async function executeRun(source) {
         throw err;
     }
     runLock = true;
-    const { server } = readSettings();
+    const { engine, server, librespeedServer } = readSettings();
     const runAt = new Date().toISOString();
     try {
         await checkCliAvailable();
@@ -448,11 +594,15 @@ async function executeRun(source) {
                 ping_ms: null,
                 server_id: null,
                 server_name: null,
-                error: 'Speedtest CLI not found (install Ookla speedtest and ensure it is in PATH)'
+                error: engine === 'librespeed'
+                    ? 'LibreSpeed CLI not found (install librespeed-cli and ensure it is in PATH)'
+                    : 'Speedtest CLI not found (install Ookla speedtest and ensure it is in PATH)'
             });
             return { ok: false, error: 'cli_missing', source };
         }
-        const r = await runSpeedtestProcess(server);
+        const r = engine === 'librespeed'
+            ? await runLibrespeedProcess(librespeedServer)
+            : await runOoklaSpeedtestProcess(server);
         insertResult({
             run_at: runAt,
             download_mbps: r.download_mbps,
@@ -487,7 +637,7 @@ async function runManual() {
 }
 
 async function schedulerTick() {
-    const { enabled, server, perDay } = readSettings();
+    const { enabled, perDay } = readSettings();
     if (!enabled || runLock) return;
     await checkCliAvailable();
     if (!cliCache.ok) return;
