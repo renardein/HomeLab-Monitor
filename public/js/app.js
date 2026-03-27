@@ -1529,7 +1529,7 @@ function setServerType(type) {
     const quorumTab = document.getElementById('quorum-tab')?.closest('li');
     const nodesTab = document.getElementById('nodes-tab')?.closest('li');
     const storageTab = document.getElementById('storage-tab')?.closest('li');
-    const serversTab = document.getElementById('servers-tab')?.closest('li');
+    //const serversTab = document.getElementById('servers-tab')?.closest('li');
     const tilesTab = document.getElementById('tiles-tab')?.closest('li');
     const myTab = document.getElementById('myTab');
     const tabNodesLabel = document.getElementById('tabNodes');
@@ -1539,7 +1539,7 @@ function setServerType(type) {
     if (quorumTab) quorumTab.style.display = isTrueNAS ? 'none' : '';
     if (nodesTab) nodesTab.style.display = '';
     if (storageTab) storageTab.style.display = '';
-    if (serversTab) serversTab.style.display = '';
+    //if (serversTab) serversTab.style.display = '';
     if (tilesTab) tilesTab.style.display = '';
     if (tabNodesLabel) tabNodesLabel.textContent = t('tabNodes');
     if (tabStorageLabel) tabStorageLabel.textContent = t('tabStorage');
