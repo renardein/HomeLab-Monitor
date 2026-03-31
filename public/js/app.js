@@ -10451,21 +10451,45 @@ function renderMonitorScreenDots() {
 // Переключение экранов в режиме монитора:
 // cluster/services/vms -> компактный #monitorView (без скролла/пустых зон)
 // ups/netdev/speedtest/smartSensors/backupRuns -> полноэкранные секции
-function applyMonitorView(view) {
-    monitorCurrentView = view;
-    const result = monitorViewRouterManager.applyView(view, {
-        monitorMode,
-        currentServerType,
-        lastBackupsDataForMonitor
-    });
-    if (result && result.redirectedTo) {
-        applyMonitorView(result.redirectedTo);
+// options.transition: 'next' | 'prev' — анимация смены (свайп / стрелки / кнопки prev|next)
+function applyMonitorView(view, options) {
+    const transition = monitorMode && options && (options.transition === 'next' || options.transition === 'prev')
+        ? options.transition
+        : null;
+    const reduceMotion = typeof window.matchMedia === 'function'
+        && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    function doApply() {
+        monitorCurrentView = view;
+        const result = monitorViewRouterManager.applyView(view, {
+            monitorMode,
+            currentServerType,
+            lastBackupsDataForMonitor
+        });
+        if (result && result.redirectedTo) {
+            applyMonitorView(result.redirectedTo);
+            return;
+        }
+
+        if (monitorMode) persistMonitorCurrentView(monitorCurrentView);
+        updateMonitorToolbarTitleForView();
+        requestAnimationFrame(() => updateHomeLabFontScale());
+    }
+
+    if (!transition || reduceMotion || typeof document.startViewTransition !== 'function') {
+        doApply();
         return;
     }
 
-    if (monitorMode) persistMonitorCurrentView(monitorCurrentView);
-    updateMonitorToolbarTitleForView();
-    requestAnimationFrame(() => updateHomeLabFontScale());
+    const root = document.documentElement;
+    root.classList.remove('monitor-vt-next', 'monitor-vt-prev');
+    root.classList.add(transition === 'next' ? 'monitor-vt-next' : 'monitor-vt-prev');
+    const vt = document.startViewTransition(() => {
+        doApply();
+    });
+    void vt.finished.finally(() => {
+        root.classList.remove('monitor-vt-next', 'monitor-vt-prev');
+    });
 }
 
 let monitorDrawIsEraser = false;
@@ -10622,7 +10646,7 @@ function goMonitorView(direction) {
     if (i < 0) i = 0;
     const delta = direction === 'next' ? 1 : -1;
     const nextIndex = (i + delta + views.length) % views.length;
-    applyMonitorView(views[nextIndex]);
+    applyMonitorView(views[nextIndex], { transition: direction === 'next' ? 'next' : 'prev' });
 }
 
 /** На экране рисования: при включённой галочке не обрабатывать свайпы смены экрана (touch / мышь по body). */
