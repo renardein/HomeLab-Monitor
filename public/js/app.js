@@ -2348,7 +2348,10 @@ function renderLanguageSwitchers() {
         btn.className = `btn btn-sm language-switcher${currentLanguage === langCode ? ' active' : ''}`;
         btn.dataset.lang = langCode;
         btn.textContent = langCode.toUpperCase();
-        btn.onclick = () => setLanguage(langCode);
+        btn.onclick = () => {
+            setLanguage(langCode);
+            saveSettingsToServer({ preferredLanguage: langCode }).catch(() => {});
+        };
         container.appendChild(btn);
     });
 }
@@ -3293,7 +3296,9 @@ document.addEventListener('DOMContentLoaded', async function() {
     const userLang = (storedLang && availableLanguages.includes(storedLang))
         ? storedLang
         : null;
-    const chosenLang = envLang || settingsLang || userLang || (availableLanguages[0] || 'ru');
+    // Язык из настроек (БД) и выбор в UI/localStorage важнее дефолта сервера (.env / i18n.getLanguage),
+    // иначе после F5 снова подставлялся только «серверный» язык.
+    const chosenLang = settingsLang || userLang || envLang || (availableLanguages[0] || 'ru');
     setLanguage(chosenLang);
     setServerType(currentServerType);
 
