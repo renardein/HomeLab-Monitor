@@ -332,7 +332,11 @@ router.post('/', (req, res) => {
             monitor_screens_order: body.monitor_screens_order ?? body.monitorScreensOrder,
             monitor_screens_enabled: body.monitor_screens_enabled ?? body.monitorScreensEnabled,
             monitor_hotkeys: body.monitor_hotkeys ?? body.monitorHotkeys,
-            cluster_dashboard_tiles: body.cluster_dashboard_tiles ?? body.clusterDashboardTiles,
+            cluster_dashboard_tiles: (() => {
+                const v = body.cluster_dashboard_tiles ?? body.clusterDashboardTiles;
+                if (v === undefined) return undefined;
+                return Array.isArray(v) ? v : [];
+            })(),
             dashboard_weather_city: body.dashboard_weather_city ?? body.dashboardWeatherCity,
             dashboard_weather_provider: (() => {
                 const v = body.dashboard_weather_provider ?? body.dashboardWeatherProvider;

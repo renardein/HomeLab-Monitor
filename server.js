@@ -38,8 +38,9 @@ app.use(cors({
 }));
 
 app.use(compression());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Large embed tiles (e.g. base64 images up to ~16 MB file → ~23 MB JSON field)
+app.use(express.json({ limit: '32mb' }));
+app.use(express.urlencoded({ extended: true, limit: '32mb' }));
 app.use(cookieParser());
 
 // Логирование запросов
@@ -244,11 +245,20 @@ app.use((err, req, res, next) => {
     const isJsonParseError =
         err?.type === 'entity.parse.failed' ||
         (err instanceof SyntaxError && Object.prototype.hasOwnProperty.call(err, 'body'));
-    
+    const isBodyTooLarge =
+        err?.type === 'entity.too.large' ||
+        err?.name === 'PayloadTooLargeError' ||
+        /too large|request entity too large/i.test(String(err?.message || ''));
+
     if (isJsonParseError) {
         return res.status(400).json({ error: 'Некорректный JSON в запросе' });
     }
-    
+    if (isBodyTooLarge) {
+        return res.status(413).json({
+            error: 'Тело запроса слишком большое (увеличьте limit в Express или client_max_body_size в nginx).'
+        });
+    }
+
     res.status(500).json({ error: 'Внутренняя ошибка сервера' });
 });
 

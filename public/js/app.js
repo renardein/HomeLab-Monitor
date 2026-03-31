@@ -106,10 +106,17 @@ let setupWizardServerType = 'proxmox';
 let setupWizardListenersBound = false;
 let telegramRuleMessageModalBound = false;
 let setupWizardFinishMode = 'success';
-let clusterDashboardTiles = []; // [{ type: 'service'|'vmct'|'netdev'|'ups'|'speedtest'|'iperf3'|'smart_sensor'|'truenas_server'|…, sourceId: 'type:id' }]
+let clusterDashboardTiles = []; // [{ type: 'service'|'vmct'|'netdev'|'ups'|'speedtest'|'iperf3'|'smart_sensor'|'embed'|'truenas_server'|…, sourceId: 'type:id' }]
 let clusterDashboardTilesDirty = false;
 let clusterDashboardTilesSettingPresent = false;
-const CLUSTER_DASHBOARD_TILE_TYPES = ['service', 'vmct', 'netdev', 'ups', 'speedtest', 'iperf3', 'truenas_server', 'truenas_pool', 'truenas_disk', 'truenas_service', 'truenas_app', 'smart_sensor'];
+/** Текст последней ошибки POST /api/settings (для сообщений пользователю). */
+let saveSettingsLastError = '';
+const CLUSTER_DASHBOARD_TILE_TYPES = ['service', 'vmct', 'netdev', 'ups', 'speedtest', 'iperf3', 'truenas_server', 'truenas_pool', 'truenas_disk', 'truenas_service', 'truenas_app', 'smart_sensor', 'embed'];
+const CLUSTER_EMBED_HTML_MAX = 100000;
+/** Макс. размер загружаемого файла изображения для плитки embed (байты). */
+const CLUSTER_EMBED_IMAGE_FILE_MAX_BYTES = 16 * 1024 * 1024;
+/** Макс. длина строки data URL (base64 длиннее исходного файла ~4/3). */
+const CLUSTER_EMBED_IMAGE_DATA_URL_MAX = Math.ceil(CLUSTER_EMBED_IMAGE_FILE_MAX_BYTES * 4 / 3) + 512;
 /** Кэш конфигов для выпадающего списка плиток «датчик» (не только открытый редактор). */
 let smartSensorsConfigsForTiles = [];
 const MAX_CLUSTER_DASHBOARD_TILES = 12;
@@ -419,6 +426,29 @@ function escapeHtml(s) {
     if (s == null) return '';
     const t = String(s);
     return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function escapeForIframeSrcdocAttr(html) {
+    return String(html)
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;');
+}
+
+function sanitizeEmbedImageUrl(raw) {
+    const s = String(raw || '').trim();
+    if (!s) return null;
+    if (s.length > CLUSTER_EMBED_IMAGE_DATA_URL_MAX) return null;
+    try {
+        if (/^https?:\/\//i.test(s)) {
+            const u = new URL(s);
+            if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+            return u.href;
+        }
+        if (/^data:image\/(png|jpeg|jpg|gif|webp);base64,/i.test(s)) {
+            return s;
+        }
+    } catch (_) {}
+    return null;
 }
 
 function setBackendOfflineBannerVisible(visible) {
@@ -1446,10 +1476,33 @@ async function saveSettingsToServer(payload) {
     if (payload.telegramProxyUrl !== undefined) body.telegramProxyUrl = payload.telegramProxyUrl;
     if (payload.telegramClearBotToken === true) body.telegramClearBotToken = true;
     if (payload.setupCompleted !== undefined) body.setupCompleted = !!payload.setupCompleted;
+    saveSettingsLastError = '';
     try {
-        await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        const res = await fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify(body)
+        });
+        const text = await res.text();
+        if (!res.ok) {
+            let message = `HTTP ${res.status}`;
+            try {
+                const j = JSON.parse(text);
+                if (j && typeof j.error === 'string' && j.error.trim()) message = j.error.trim();
+            } catch (_) {
+                if (text && text.trim()) message = text.trim().slice(0, 500);
+            }
+            saveSettingsLastError = message;
+            console.error('Failed to save settings:', message);
+            return false;
+        }
+        return true;
     } catch (e) {
+        const msg = e instanceof Error && e.message ? e.message : String(e);
+        saveSettingsLastError = msg;
         console.error('Failed to save settings:', e);
+        return false;
     }
 }
 
@@ -5007,6 +5060,59 @@ function normalizeClusterDashboardTile(raw) {
     const tile = raw && typeof raw === 'object' ? raw : {};
     const type = String(tile.type || '').trim().toLowerCase();
     if (!CLUSTER_DASHBOARD_TILE_TYPES.includes(type)) return null;
+
+    if (type === 'embed') {
+        const hasExplicitCluster = Object.prototype.hasOwnProperty.call(tile, 'showOnCluster');
+        const hasExplicitTiles = Object.prototype.hasOwnProperty.call(tile, 'showOnTiles');
+        const isLegacyTile = !hasExplicitCluster && !hasExplicitTiles;
+        const tilesSize = ['1x1', '2x1', '3x1', '4x1', '2x2', '3x2'].includes(String(tile.tilesSize || '').trim())
+            ? String(tile.tilesSize).trim()
+            : '1x1';
+        const fromSize = tilesSizeToGridWH(tilesSize);
+        let tilesGridW = parseInt(tile.tilesGridW, 10);
+        let tilesGridH = parseInt(tile.tilesGridH, 10);
+        if (!Number.isFinite(tilesGridW) || tilesGridW < 1) tilesGridW = fromSize.w;
+        if (!Number.isFinite(tilesGridH) || tilesGridH < 1) tilesGridH = fromSize.h;
+        tilesGridW = Math.min(Math.max(1, tilesGridW), TILES_MONITOR_GRID_COLS);
+        tilesGridH = Math.min(Math.max(1, tilesGridH), TILES_MONITOR_GRID_ROWS);
+        let tilesGridCol = parseInt(tile.tilesGridCol, 10);
+        let tilesGridRow = parseInt(tile.tilesGridRow, 10);
+        if (!Number.isFinite(tilesGridCol) || tilesGridCol < 0) tilesGridCol = 0;
+        if (!Number.isFinite(tilesGridRow) || tilesGridRow < 0) tilesGridRow = 0;
+        if (tilesGridCol > TILES_MONITOR_GRID_COLS) tilesGridCol = 0;
+        if (tilesGridRow > TILES_MONITOR_GRID_ROWS) tilesGridRow = 0;
+        const kind = String(tile.embedKind || '').trim().toLowerCase() === 'image' ? 'image' : 'html';
+        let payload = String(tile.embedPayload != null ? tile.embedPayload : '').trim();
+        if (kind === 'image') {
+            if (!payload) {
+                payload = '';
+            } else {
+                const url = sanitizeEmbedImageUrl(payload);
+                if (url) {
+                    payload = url;
+                } else if (payload.length > CLUSTER_EMBED_IMAGE_DATA_URL_MAX) {
+                    return null;
+                }
+                // else keep raw value so the tile stays editable while the URL is invalid
+            }
+        } else {
+            if (payload.length > CLUSTER_EMBED_HTML_MAX) payload = payload.slice(0, CLUSTER_EMBED_HTML_MAX);
+        }
+        return {
+            type,
+            sourceId: 'embed:custom',
+            embedKind: kind,
+            embedPayload: payload,
+            showOnCluster: true,
+            showOnTiles: tile.showOnTiles === true || isLegacyTile,
+            tilesSize,
+            tilesGridW,
+            tilesGridH,
+            tilesGridCol,
+            tilesGridRow
+        };
+    }
+
     let sourceId = String(tile.sourceId || '').trim();
     if (type === 'speedtest') sourceId = 'speedtest:default';
     if (type === 'iperf3') sourceId = 'iperf3:default';
@@ -5143,7 +5249,7 @@ function renderTilesVisualEditor() {
     const html = placements.map(({ tile, gridCol, gridRow }) => {
         const idx = tile.__idx;
         const title = getClusterDashboardTileTypeLabel(tile.type);
-        const src = String(tile.sourceId || '').replace(/^.+:/, '');
+        const src = getClusterDashboardTileSourceSummary(tile);
         const w = Math.max(1, Math.min(TILES_MONITOR_GRID_COLS, tile.tilesGridW || 1));
         const h = Math.max(1, Math.min(TILES_MONITOR_GRID_ROWS, tile.tilesGridH || 1));
         const selectedCls = idx === tilesEditorSelectedIndex ? ' is-selected' : '';
@@ -5337,12 +5443,22 @@ function getClusterDashboardTileTypeLabel(type) {
     if (type === 'speedtest') return t('settingsClusterTileTypeSpeedtest');
     if (type === 'iperf3') return t('settingsClusterTileTypeIperf3');
     if (type === 'smart_sensor') return t('settingsClusterTileTypeSmartSensor');
+    if (type === 'embed') return t('settingsClusterTileTypeEmbed');
     if (type === 'truenas_server') return 'TrueNAS Server';
     if (type === 'truenas_pool') return 'TrueNAS Pool';
     if (type === 'truenas_disk') return 'TrueNAS Disk';
     if (type === 'truenas_service') return 'TrueNAS Service';
     if (type === 'truenas_app') return 'TrueNAS App';
     return type || '—';
+}
+
+function getClusterDashboardTileSourceSummary(tile) {
+    if (!tile || tile.type !== 'embed') {
+        return String(tile && tile.sourceId ? tile.sourceId : '').replace(/^.+:/, '') || '—';
+    }
+    return tile.embedKind === 'image'
+        ? (t('settingsClusterTileEmbedKindImageShort') || 'IMG')
+        : (t('settingsClusterTileEmbedKindHtmlShort') || 'HTML');
 }
 
 function getAvailableClusterDashboardTileTypes() {
@@ -5474,6 +5590,13 @@ function getClusterDashboardTileSourceOptions(type) {
 
     if (type === 'truenas_server') return [{ value: 'truenas_server:current', label: 'Current TrueNAS server' }];
 
+    if (type === 'embed') {
+        return [{
+            value: 'embed:custom',
+            label: t('settingsClusterTileEmbedSourceLabel') || 'Custom embed'
+        }];
+    }
+
     if (type === 'truenas_app') {
         return (Array.isArray(lastTrueNASOverviewData?.apps) ? lastTrueNASOverviewData.apps : []).map((app, idx) => {
             const aid = String(app?.entityId || app?.id || app?.name || (idx + 1));
@@ -5515,7 +5638,7 @@ function buildClusterDashboardTilesSelectorHtml() {
                 const nt = normalizeClusterDashboardTiles([tile])[0] || tile;
                 const isSelected = index === tilesEditorSelectedIndex;
                 const typeText = getClusterDashboardTileTypeLabel(nt.type);
-                const srcText = String(nt.sourceId || '').replace(/^.+:/, '') || '—';
+                const srcText = getClusterDashboardTileSourceSummary(nt);
                 return `
                     <button type="button"
                         class="cluster-tiles-selector__item${isSelected ? ' is-selected' : ''}"
@@ -5573,6 +5696,51 @@ function buildClusterDashboardTileDetailHtml(index) {
     const gH = nt.tilesGridH || 1;
     const len = clusterDashboardTiles.length;
 
+    let embedFieldsHtml = '';
+    if (nt.type === 'embed') {
+        const embedKindUi = String(tile.embedKind || nt.embedKind || 'html').toLowerCase() === 'image' ? 'image' : 'html';
+        const embedPayloadStr = tile.embedPayload != null ? String(tile.embedPayload) : (nt.embedPayload != null ? String(nt.embedPayload) : '');
+        const imageLongData = embedKindUi === 'image' && embedPayloadStr.length > 4000 && /^data:image\//i.test(embedPayloadStr);
+        const imageUrlInputValue = embedKindUi === 'image' && !imageLongData ? embedPayloadStr : '';
+        const modeLabel = t('settingsClusterTileEmbedModeLabel') || 'Content';
+        const htmlLabel = t('settingsClusterTileEmbedHtmlLabel') || 'HTML';
+        const imageUrlLabel = t('settingsClusterTileEmbedImageUrlLabel') || 'Image URL';
+        const imageFileLabel = t('settingsClusterTileEmbedImageFileLabel') || 'Upload image';
+        const fileHint = t('settingsClusterTileEmbedFileHint') || 'PNG, JPEG, GIF, WebP. Files up to 16 MB; stored as a data URL in settings.';
+        const dataUrlStored = t('settingsClusterTileEmbedDataUrlStored') || 'Embedded image saved; paste a URL or choose a file to replace.';
+        embedFieldsHtml = `
+                <div class="col-12">
+                    <label class="form-label fw-bold small mb-1">${escapeHtml(modeLabel)}</label>
+                    <div class="d-flex flex-wrap gap-3 mb-2">
+                        <div class="form-check mb-0">
+                            <input class="form-check-input" type="radio" name="embedKind${index}" id="embedKindHtml${index}" ${embedKindUi === 'html' ? 'checked' : ''} onchange="updateClusterDashboardTileEmbedKind(${index}, 'html')">
+                            <label class="form-check-label small" for="embedKindHtml${index}">${escapeHtml(t('settingsClusterTileEmbedKindHtml') || 'HTML')}</label>
+                        </div>
+                        <div class="form-check mb-0">
+                            <input class="form-check-input" type="radio" name="embedKind${index}" id="embedKindImg${index}" ${embedKindUi === 'image' ? 'checked' : ''} onchange="updateClusterDashboardTileEmbedKind(${index}, 'image')">
+                            <label class="form-check-label small" for="embedKindImg${index}">${escapeHtml(t('settingsClusterTileEmbedKindImage') || 'Image')}</label>
+                        </div>
+                    </div>
+                    <div class="tiles-embed-settings-html${embedKindUi === 'html' ? '' : ' d-none'}">
+                        <label class="form-label small mb-1" for="embedHtmlTa${index}">${escapeHtml(htmlLabel)}</label>
+                        <textarea id="embedHtmlTa${index}" class="form-control form-control-sm font-monospace" rows="8" spellcheck="false"
+                            onchange="updateClusterDashboardTileFlags(${index}, { embedKind: 'html', embedPayload: this.value })">${escapeHtml(embedKindUi === 'html' ? embedPayloadStr : '')}</textarea>
+                    </div>
+                    <div class="tiles-embed-settings-image${embedKindUi === 'image' ? '' : ' d-none'}">
+                        <label class="form-label small mb-1" for="embedImgUrl${index}">${escapeHtml(imageUrlLabel)}</label>
+                        <input id="embedImgUrl${index}" type="url" class="form-control form-control-sm mb-2" placeholder="https://…"
+                            value="${escapeHtml(imageUrlInputValue)}"
+                            onchange="updateClusterDashboardTileFlags(${index}, { embedKind: 'image', embedPayload: this.value })">
+                        ${imageLongData ? `<div class="form-text small mb-2">${escapeHtml(dataUrlStored)}</div>` : ''}
+                        <label class="form-label small mb-1">${escapeHtml(imageFileLabel)}</label>
+                        <input type="file" class="form-control form-control-sm" accept="image/png,image/jpeg,image/gif,image/webp,image/*"
+                            onchange="onClusterEmbedTileImageFile(${index}, this)">
+                        <div class="form-text small">${escapeHtml(fileHint)}</div>
+                    </div>
+                </div>
+        `;
+    }
+
     return `
         <div class="border rounded p-3 cluster-tiles-detail-panel cluster-tiles-detail-panel--side">
             <div class="row g-2 align-items-end">
@@ -5588,6 +5756,7 @@ function buildClusterDashboardTileDetailHtml(index) {
                         ${sourceOptionsHtml}
                     </select>
                 </div>
+                ${embedFieldsHtml}
                 <div class="col-12">
                     <div class="d-flex gap-2 justify-content-end flex-wrap">
                         <button type="button" class="btn btn-outline-secondary btn-sm" onclick="moveClusterDashboardTile(${index}, -1)" title="${escapeHtml(moveUpTitle)}" ${index === 0 ? 'disabled' : ''}>
@@ -5714,9 +5883,10 @@ function addClusterDashboardTile() {
         truenas_disk: 'truenas_disk:default',
         truenas_service: 'truenas_service:default',
         truenas_app: 'truenas_app:default',
-        smart_sensor: 'smart_sensor:__missing__'
+        smart_sensor: 'smart_sensor:__missing__',
+        embed: 'embed:custom'
     };
-    clusterDashboardTiles = clusterDashboardTiles.concat([{
+    const newTile = {
         type: selectedType,
         sourceId: firstSource ? firstSource.value : (fallbackSourceByType[selectedType] || `${selectedType}:default`),
         showOnTiles: false,
@@ -5725,7 +5895,13 @@ function addClusterDashboardTile() {
         tilesGridH: 1,
         tilesGridCol: 0,
         tilesGridRow: 0
-    }]).slice(0, MAX_CLUSTER_DASHBOARD_TILES);
+    };
+    if (selectedType === 'embed') {
+        newTile.sourceId = 'embed:custom';
+        newTile.embedKind = 'html';
+        newTile.embedPayload = '';
+    }
+    clusterDashboardTiles = clusterDashboardTiles.concat([newTile]).slice(0, MAX_CLUSTER_DASHBOARD_TILES);
     tilesEditorSelectedIndex = clusterDashboardTiles.length - 1;
     markClusterDashboardTilesDirty(true);
     renderClusterDashboardTilesSettings();
@@ -5755,13 +5931,22 @@ function updateClusterDashboardTileType(index, nextType) {
         truenas_disk: 'truenas_disk:default',
         truenas_service: 'truenas_service:default',
         truenas_app: 'truenas_app:default',
-        smart_sensor: 'smart_sensor:__missing__'
+        smart_sensor: 'smart_sensor:__missing__',
+        embed: 'embed:custom'
     };
-    const merged = normalizeClusterDashboardTiles([{
+    let nextTile = {
         ...current,
         type,
         sourceId: firstSource ? firstSource.value : (fallbackSourceByType[type] || `${type}:default`)
-    }])[0];
+    };
+    if (type === 'embed') {
+        nextTile.sourceId = 'embed:custom';
+        nextTile.embedKind = current.type === 'embed' ? (current.embedKind === 'image' ? 'image' : 'html') : 'html';
+        nextTile.embedPayload = current.type === 'embed' && current.embedPayload != null
+            ? String(current.embedPayload)
+            : '';
+    }
+    const merged = normalizeClusterDashboardTiles([nextTile])[0];
     if (merged) clusterDashboardTiles[index] = merged;
     clusterDashboardTiles = normalizeClusterDashboardTiles(clusterDashboardTiles);
     markClusterDashboardTilesDirty(true);
@@ -5777,6 +5962,53 @@ function updateClusterDashboardTileSource(index, sourceId) {
     clusterDashboardTiles = normalizeClusterDashboardTiles(clusterDashboardTiles);
     markClusterDashboardTilesDirty(true);
     renderClusterDashboardTilesSettings();
+}
+
+function updateClusterDashboardTileEmbedKind(index, kind) {
+    if (!clusterDashboardTiles[index]) return;
+    const cur = clusterDashboardTiles[index];
+    const k = kind === 'image' ? 'image' : 'html';
+    let payload = cur.embedPayload != null ? String(cur.embedPayload) : '';
+    if (k === 'image') {
+        const url = sanitizeEmbedImageUrl(payload);
+        payload = url || '';
+    } else if (cur.embedKind === 'image') {
+        payload = '';
+    }
+    updateClusterDashboardTileFlags(index, { embedKind: k, embedPayload: payload });
+}
+
+function onClusterEmbedTileImageFile(index, inputEl) {
+    const file = inputEl && inputEl.files && inputEl.files[0];
+    if (!inputEl || !file) return;
+    if (!file.type || !file.type.startsWith('image/')) {
+        showToast(t('settingsClusterTileEmbedFileNotImage') || 'Please choose an image file', 'error');
+        inputEl.value = '';
+        return;
+    }
+    if (file.size > CLUSTER_EMBED_IMAGE_FILE_MAX_BYTES) {
+        showToast(t('settingsClusterTileEmbedFileTooLarge') || 'Image is too large (max 16 MB)', 'error');
+        inputEl.value = '';
+        return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+        const dataUrl = String(reader.result || '');
+        if (dataUrl.length > CLUSTER_EMBED_IMAGE_DATA_URL_MAX) {
+            showToast(t('settingsClusterTileEmbedFileTooLarge') || 'Image is too large (max 16 MB)', 'error');
+            return;
+        }
+        if (!sanitizeEmbedImageUrl(dataUrl)) {
+            showToast(t('settingsClusterTileEmbedInvalid') || 'Invalid image', 'error');
+            return;
+        }
+        updateClusterDashboardTileFlags(index, { embedKind: 'image', embedPayload: dataUrl });
+    };
+    reader.onerror = () => {
+        showToast(t('settingsClusterTileEmbedFileReadError') || 'Could not read file', 'error');
+    };
+    reader.readAsDataURL(file);
+    inputEl.value = '';
 }
 
 function updateClusterDashboardTileFlags(index, patch) {
@@ -5838,7 +6070,15 @@ function removeClusterDashboardTile(index) {
 
 async function saveClusterDashboardTilesSettings() {
     clusterDashboardTiles = normalizeClusterDashboardTiles(clusterDashboardTiles);
-    await saveSettingsToServer({ clusterDashboardTiles });
+    const ok = await saveSettingsToServer({ clusterDashboardTiles });
+    if (!ok) {
+        const detail = saveSettingsLastError || '—';
+        const msg = (t('settingsClusterTilesSaveError') || 'Could not save tiles: {msg}').replace('{msg}', detail);
+        showToast(msg, 'error');
+        markClusterDashboardTilesDirty(true);
+        return;
+    }
+    await loadSettings();
     clusterDashboardTilesSettingPresent = true;
     markClusterDashboardTilesDirty(false);
     renderClusterDashboardTilesSettings();
@@ -8442,6 +8682,43 @@ function buildClusterDashboardUnavailableTile(title, message) {
     );
 }
 
+function buildClusterEmbedTileHtml(tile) {
+    const kind = tile.embedKind === 'image' ? 'image' : 'html';
+    const payload = String(tile.embedPayload || '');
+    if (!payload) {
+        return buildClusterDashboardUnavailableTile(
+            t('settingsClusterTileTypeEmbed') || 'Embed',
+            t('settingsClusterTileEmbedInvalid') || 'Configure content in tile settings'
+        );
+    }
+    if (kind === 'image') {
+        const url = sanitizeEmbedImageUrl(payload);
+        if (!url) {
+            return buildClusterDashboardUnavailableTile(
+                t('settingsClusterTileTypeEmbed') || 'Embed',
+                t('settingsClusterTileEmbedInvalid') || 'Invalid image URL'
+            );
+        }
+        return `
+            <div class="cluster-scroll-item tiles-embed-tile tiles-embed-tile--image">
+                <div class="node-card tiles-embed-card h-100">
+                    <div class="tiles-embed-image-wrap">
+                        <img class="tiles-embed-img" src="${escapeHtml(url)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" />
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    const srcdoc = escapeForIframeSrcdocAttr(payload);
+    return `
+        <div class="cluster-scroll-item tiles-embed-tile tiles-embed-tile--html">
+            <div class="node-card tiles-embed-card tiles-embed-card--html h-100">
+                <iframe class="tiles-embed-iframe" title="embed" sandbox="" referrerpolicy="no-referrer" srcdoc="${srcdoc}"></iframe>
+            </div>
+        </div>
+    `;
+}
+
 function getClusterNetdevFieldValue(field) {
     const statusDisplay = field && field.statusDisplay;
     if (statusDisplay === 'connected') return t('netdevStatusConnected') || 'Подключён';
@@ -9069,6 +9346,7 @@ async function renderTilesMonitorScreen(targetGridId = 'tilesMonitorGrid') {
         else if (tile.type === 'truenas_disk') tileHtml = buildClusterTrueNASDiskTileHtml(tile);
         else if (tile.type === 'truenas_service') tileHtml = buildClusterTrueNASServiceTileHtml(tile);
         else if (tile.type === 'truenas_app') tileHtml = buildClusterTrueNASAppTileHtml(tile);
+        else if (tile.type === 'embed') tileHtml = buildClusterEmbedTileHtml(tile);
         const w = Math.max(1, Math.min(TILES_MONITOR_GRID_COLS, tile.tilesGridW || 1));
         const h = Math.max(1, Math.min(TILES_MONITOR_GRID_ROWS, tile.tilesGridH || 1));
         const gc = Math.max(1, Math.min(TILES_MONITOR_GRID_COLS, gridCol));
