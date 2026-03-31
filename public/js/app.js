@@ -142,6 +142,17 @@ let monitorShowTime = true;
 let monitorShowWeather = true;
 /** Блокировать системные gesture-навигации Chrome в monitor mode */
 let monitorDisableChromeGestures = true;
+const appNavigationManager = window.AppNavigationManagerModule.createManager({
+    getMonitorMode: () => monitorMode,
+    applyMonitorView: (view) => applyMonitorView(view),
+    renderMonitorScreenDots: () => renderMonitorScreenDots(),
+    hasAuth: () => !!apiToken,
+    refreshData: (options) => refreshData(options),
+    getAutoRefreshInterval: () => autoRefreshInterval,
+    setAutoRefreshInterval: (v) => { autoRefreshInterval = v; },
+    getRefreshIntervalMs: () => refreshIntervalMs,
+    updateHomeLabFontScale: () => updateHomeLabFontScale()
+});
 const dashboardTimeWeatherSettingsManager = window.DashboardTimeWeatherSettingsModule.createManager({
     el,
     t,
@@ -9736,177 +9747,36 @@ function applyMonitorView(view) {
     requestAnimationFrame(() => updateHomeLabFontScale());
 }
 
-let monitorDrawPointerBound = false;
-let monitorDrawResizeObserver = null;
 let monitorDrawIsEraser = false;
+const monitorDrawManager = window.MonitorDrawManagerModule.createManager({
+    getMonitorMode: () => monitorMode,
+    getMonitorCurrentView: () => monitorCurrentView,
+    getMonitorDrawIsEraser: () => monitorDrawIsEraser,
+    setMonitorDrawIsEraser: (v) => { monitorDrawIsEraser = !!v; }
+});
 
 function getMonitorDrawCanvasBg() {
-    return document.body.classList.contains('monitor-theme-dark') ? '#0f1117' : '#f1f5f9';
+    return monitorDrawManager.getCanvasBg();
 }
 
 function fillMonitorDrawCanvasBackground(ctx, w, h) {
-    ctx.save();
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.fillStyle = getMonitorDrawCanvasBg();
-    ctx.fillRect(0, 0, w, h);
-    ctx.restore();
+    monitorDrawManager.fillCanvasBackground(ctx, w, h);
 }
 
 function resizeMonitorDrawCanvas() {
-    const canvas = document.getElementById('monitorDrawCanvas');
-    const wrap = document.getElementById('monitorDrawCanvasWrap');
-    if (!canvas || !wrap) return;
-    const w = Math.max(1, Math.floor(wrap.clientWidth));
-    const h = Math.max(1, Math.floor(wrap.clientHeight));
-    if (canvas.width === w && canvas.height === h) return;
-
-    const prev = document.createElement('canvas');
-    prev.width = canvas.width;
-    prev.height = canvas.height;
-    const had = canvas.width > 0 && canvas.height > 0;
-    if (had) prev.getContext('2d').drawImage(canvas, 0, 0);
-
-    canvas.width = w;
-    canvas.height = h;
-    const ctx = canvas.getContext('2d');
-    if (had) {
-        ctx.drawImage(prev, 0, 0);
-    } else {
-        fillMonitorDrawCanvasBackground(ctx, w, h);
-    }
+    monitorDrawManager.resizeCanvas();
 }
 
 function clearMonitorDrawCanvas() {
-    const canvas = document.getElementById('monitorDrawCanvas');
-    if (!canvas || !canvas.getContext) return;
-    const ctx = canvas.getContext('2d');
-    fillMonitorDrawCanvasBackground(ctx, canvas.width, canvas.height);
+    monitorDrawManager.clearCanvas();
 }
 
 function setMonitorDrawEraser(on) {
-    monitorDrawIsEraser = !!on;
-    const pen = document.getElementById('monitorDrawPenBtn');
-    const er = document.getElementById('monitorDrawEraserBtn');
-    if (pen) {
-        pen.classList.toggle('btn-primary', !monitorDrawIsEraser);
-        pen.classList.toggle('btn-outline-secondary', monitorDrawIsEraser);
-    }
-    if (er) {
-        er.classList.toggle('btn-primary', monitorDrawIsEraser);
-        er.classList.toggle('btn-outline-secondary', !monitorDrawIsEraser);
-    }
+    monitorDrawManager.setEraser(on);
 }
 
 function initMonitorDrawScreen() {
-    const canvas = document.getElementById('monitorDrawCanvas');
-    const wrap = document.getElementById('monitorDrawCanvasWrap');
-    if (!canvas || !wrap) return;
-
-    if (!monitorDrawResizeObserver) {
-        monitorDrawResizeObserver = new ResizeObserver(() => {
-            if (monitorMode && monitorCurrentView === 'draw') resizeMonitorDrawCanvas();
-        });
-        monitorDrawResizeObserver.observe(wrap);
-    }
-
-    if (!monitorDrawPointerBound) {
-        monitorDrawPointerBound = true;
-        let drawing = false;
-
-        function linePrefs() {
-            const colorEl = document.getElementById('monitorDrawColor');
-            const widthEl = document.getElementById('monitorDrawWidth');
-            const color = colorEl && colorEl.value ? colorEl.value : '#4ade80';
-            const lw = widthEl ? parseInt(widthEl.value, 10) : 8;
-            return { color, lineWidth: Number.isFinite(lw) ? lw : 8 };
-        }
-
-        function applyStrokeStyle(ctx) {
-            const p = linePrefs();
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
-            ctx.lineWidth = p.lineWidth;
-            if (monitorDrawIsEraser) {
-                ctx.globalCompositeOperation = 'destination-out';
-                ctx.strokeStyle = 'rgba(0,0,0,1)';
-            } else {
-                ctx.globalCompositeOperation = 'source-over';
-                ctx.strokeStyle = p.color;
-            }
-        }
-
-        function pos(e) {
-            const r = canvas.getBoundingClientRect();
-            const sx = r.width > 0 ? canvas.width / r.width : 1;
-            const sy = r.height > 0 ? canvas.height / r.height : 1;
-            return {
-                x: (e.clientX - r.left) * sx,
-                y: (e.clientY - r.top) * sy
-            };
-        }
-
-        function onDown(e) {
-            if (!monitorMode || monitorCurrentView !== 'draw') return;
-            if (e.button != null && e.button !== 0) return;
-            e.preventDefault();
-            drawing = true;
-            try {
-                canvas.setPointerCapture(e.pointerId);
-            } catch (_) {}
-            const ctx = canvas.getContext('2d');
-            applyStrokeStyle(ctx);
-            const { x, y } = pos(e);
-            ctx.beginPath();
-            ctx.moveTo(x, y);
-        }
-
-        function onMove(e) {
-            if (!drawing) return;
-            e.preventDefault();
-            const ctx = canvas.getContext('2d');
-            applyStrokeStyle(ctx);
-            const { x, y } = pos(e);
-            ctx.lineTo(x, y);
-            ctx.stroke();
-            ctx.beginPath();
-            ctx.moveTo(x, y);
-        }
-
-        function onUp(e) {
-            if (!drawing) return;
-            drawing = false;
-            try {
-                canvas.releasePointerCapture(e.pointerId);
-            } catch (_) {}
-        }
-
-        canvas.addEventListener('pointerdown', onDown);
-        canvas.addEventListener('pointermove', onMove);
-        canvas.addEventListener('pointerup', onUp);
-        canvas.addEventListener('pointercancel', onUp);
-
-        window.addEventListener('resize', () => {
-            if (monitorMode && monitorCurrentView === 'draw') resizeMonitorDrawCanvas();
-        });
-    }
-
-    setMonitorDrawEraser(monitorDrawIsEraser);
-
-    const swipeChk = document.getElementById('monitorDrawDisableSwipesChk');
-    if (swipeChk) {
-        try {
-            const v = localStorage.getItem('monitorDrawDisableSwipes');
-            if (v !== null) swipeChk.checked = v === '1';
-        } catch (_) {}
-        if (!swipeChk._monitorDrawSwipePersistBound) {
-            swipeChk._monitorDrawSwipePersistBound = true;
-            swipeChk.addEventListener('change', () => {
-                try {
-                    localStorage.setItem('monitorDrawDisableSwipes', swipeChk.checked ? '1' : '0');
-                } catch (_) {}
-            });
-        }
-    }
+    monitorDrawManager.initScreen();
 }
 
 function setMonitorTheme(theme) {
@@ -10058,48 +9928,17 @@ function initMonitorSwipes() {
 
 /** Главная: закрыть настройки; в режиме монитора — экран кластера без выхода из fullscreen; иначе обычный дашборд. */
 function goToAppHome() {
-    const configSection = document.getElementById('configSection');
-    if (configSection) configSection.style.display = 'none';
-    if (monitorMode) {
-        applyMonitorView('cluster');
-        renderMonitorScreenDots();
-        if (apiToken) {
-            refreshData();
-            startAutoRefresh();
-        }
-        return;
-    }
-    showDashboard();
+    appNavigationManager.goToAppHome();
 }
 
 // Show dashboard
 function showDashboard() {
-    document.getElementById('configSection').style.display = 'none';
-    document.getElementById('dashboardSection').style.display = 'block';
-    const dashboardContent = document.getElementById('dashboardContent');
-    const monitorView = document.getElementById('monitorView');
-    if (dashboardContent) dashboardContent.style.display = 'block';
-    if (monitorView) monitorView.style.display = 'none';
-    const servicesSection = document.getElementById('servicesMonitorSection');
-    const backupsMon = document.getElementById('backupsMonitorSection');
-    if (servicesSection) servicesSection.style.display = 'none';
-    if (backupsMon) backupsMon.style.display = 'none';
-    const drawMonDash = document.getElementById('drawMonitorSection');
-    if (drawMonDash) drawMonDash.style.display = 'none';
-    const netdevMonSection = document.getElementById('netdevMonitorSection');
-    if (netdevMonSection) netdevMonSection.style.display = 'none';
-    requestAnimationFrame(() => updateHomeLabFontScale());
-    // Refresh only when authenticated
-    if (apiToken) {
-        refreshData();
-        startAutoRefresh();
-    }
+    appNavigationManager.showDashboard();
 }
 
 // Start auto refresh
 function startAutoRefresh() {
-    if (autoRefreshInterval) clearInterval(autoRefreshInterval);
-    autoRefreshInterval = setInterval(() => refreshData({ silent: true }), refreshIntervalMs);
+    appNavigationManager.startAutoRefresh();
 }
 
 // Connect (called after connectAs(type) sets currentServerType)
@@ -10141,142 +9980,36 @@ function formatUpsMetric(m, unitSuffix) {
     return m.raw != null && String(m.raw).trim() !== '' ? String(m.raw) : '—';
 }
 
+const refreshDataManager = window.RefreshDataModule.createManager({
+    getIsRefreshing: () => isRefreshing,
+    setIsRefreshing: (v) => { isRefreshing = v; },
+    getAuthHeadersForType,
+    showToast,
+    t,
+    showLoading,
+    getLastHostMetricsData: () => lastHostMetricsData,
+    setLastHostMetricsData: (v) => { lastHostMetricsData = v; },
+    getCurrentServerType: () => currentServerType,
+    updateDashboard,
+    setLastTrueNASOverviewData: (v) => { lastTrueNASOverviewData = v; },
+    updateTrueNASDashboard,
+    renderClusterDashboardTiles,
+    renderTilesMonitorScreen,
+    renderTrueNASMonitorScreenTiles,
+    getMonitorMode: () => monitorMode,
+    getMonitorCurrentView: () => monitorCurrentView,
+    updateUPSDashboard,
+    updateNetdevDashboard,
+    updateSpeedtestDashboard,
+    updateIperf3Dashboard,
+    updateSmartSensorsDashboard,
+    setLastRefreshTime: (ms) => { lastRefreshTime = ms; },
+    checkAllServices,
+    renderMonitorServicesList,
+    updateHomeLabFontScale
+});
 async function refreshData(options = {}) {
-    const silent = options === true ? true : !!options.silent;
-
-    if (isRefreshing) return;
-    isRefreshing = true;
-    const proxmoxHeaders = getAuthHeadersForType('proxmox');
-    const truenasHeaders = getAuthHeadersForType('truenas');
-    if (!proxmoxHeaders && !truenasHeaders) {
-        if (!silent) showToast(t('errorNoToken'), 'error');
-        isRefreshing = false;
-        return;
-    }
-
-    if (!silent) showLoading(true);
-
-    try {
-        const prevScrollY = window.scrollY;
-        const prevActiveId = document.activeElement && document.activeElement.id ? document.activeElement.id : null;
-
-        if (proxmoxHeaders) {
-            const [clusterRes, storageRes, backupsRes] = await Promise.all([
-                fetch('/api/cluster/full', { headers: proxmoxHeaders }),
-                fetch('/api/storage', { headers: proxmoxHeaders }),
-                fetch('/api/backups/jobs', { headers: proxmoxHeaders })
-            ]);
-
-            const clusterData = await clusterRes.json();
-            const storageData = await storageRes.json();
-            const backupsData = await backupsRes.json();
-            let hostMetricsData = lastHostMetricsData;
-
-            if (!clusterRes.ok) throw new Error(clusterData?.error || `cluster: HTTP ${clusterRes.status}`);
-            if (!storageRes.ok) throw new Error(storageData?.error || `storage: HTTP ${storageRes.status}`);
-            if (!backupsRes.ok) throw new Error(backupsData?.error || `backups: HTTP ${backupsRes.status}`);
-
-            try {
-                const hmRes = await fetch('/api/host-metrics/current', { headers: proxmoxHeaders });
-                if (hmRes.ok) {
-                    hostMetricsData = await hmRes.json();
-                    lastHostMetricsData = hostMetricsData;
-                }
-            } catch (hmErr) {
-                console.warn('Host metrics refresh failed:', hmErr);
-            }
-
-            if (currentServerType !== 'truenas') {
-                updateDashboard(clusterData, storageData, backupsData, hostMetricsData);
-            }
-        } else {
-            lastHostMetricsData = null;
-        }
-
-        if (truenasHeaders) {
-            const overviewRes = await fetch('/api/truenas/overview', { headers: truenasHeaders });
-            const overviewData = await overviewRes.json();
-            if (!overviewRes.ok) throw new Error(overviewData?.error || `overview: HTTP ${overviewRes.status}`);
-            lastTrueNASOverviewData = overviewData;
-            if (currentServerType === 'truenas') {
-                updateTrueNASDashboard(overviewData.system || {}, { all: (overviewData.pools || []).map((p) => ({
-                    node: 'truenas',
-                    name: p.name,
-                    type: 'pool',
-                    used: p.used || 0,
-                    total: p.total || 0,
-                    used_fmt: p.used || 0,
-                    total_fmt: p.total || 0,
-                    usage_percent: p.total > 0 ? Math.round(((p.used || 0) / p.total) * 100) : 0,
-                    active: p.healthy !== false,
-                    status: p.status || null
-                })), byType: { pool: { count: (overviewData.pools || []).length, total: (overviewData.pools || []).reduce((s, x) => s + (x.total || 0), 0), used: (overviewData.pools || []).reduce((s, x) => s + (x.used || 0), 0) } }, summary: { total: (overviewData.pools || []).length, active: (overviewData.pools || []).filter((p) => p.healthy !== false).length, total_space: (overviewData.pools || []).reduce((s, x) => s + (x.total || 0), 0), used_space: (overviewData.pools || []).reduce((s, x) => s + (x.used || 0), 0) } }, overviewData);
-            }
-        }
-
-        await renderClusterDashboardTiles();
-        renderTilesMonitorScreen('tilesNormalGrid').catch(() => {});
-        if (!monitorMode || monitorCurrentView === 'tiles') {
-            renderTilesMonitorScreen().catch(() => {});
-        }
-        if (monitorMode && monitorCurrentView === 'truenasPools') {
-            renderTrueNASMonitorScreenTiles('truenasPoolsMonitorGrid', 'truenas_pool').catch(() => {});
-        }
-        if (monitorMode && monitorCurrentView === 'truenasDisks') {
-            renderTrueNASMonitorScreenTiles('truenasDisksMonitorGrid', 'truenas_disk').catch(() => {});
-        }
-        if (monitorMode && monitorCurrentView === 'truenasServices') {
-            renderTrueNASMonitorScreenTiles('truenasServicesMonitorGrid', 'truenas_service').catch(() => {});
-        }
-        if (monitorMode && monitorCurrentView === 'truenasApps') {
-            renderTrueNASMonitorScreenTiles('truenasAppsMonitorGrid', 'truenas_app').catch(() => {});
-        }
-        if (!monitorMode || monitorCurrentView === 'cluster' || monitorCurrentView === 'ups') {
-            updateUPSDashboard().catch(() => {});
-        }
-        if (!monitorMode || monitorCurrentView === 'cluster' || monitorCurrentView === 'netdev') {
-            updateNetdevDashboard().catch(() => {});
-        }
-        if (!monitorMode || monitorCurrentView === 'cluster' || monitorCurrentView === 'speedtest') {
-            updateSpeedtestDashboard().catch(() => {});
-        }
-        if (!monitorMode || monitorCurrentView === 'cluster' || monitorCurrentView === 'iperf3') {
-            updateIperf3Dashboard().catch(() => {});
-        }
-        if (!monitorMode || monitorCurrentView === 'cluster' || monitorCurrentView === 'smartSensors') {
-            updateSmartSensorsDashboard().catch(() => {});
-        }
-
-        // Restore scroll/focus to avoid visible "jumps" on full re-render
-        requestAnimationFrame(() => {
-            window.scrollTo({ top: prevScrollY, left: 0, behavior: 'auto' });
-            if (prevActiveId) {
-                const a = document.getElementById(prevActiveId);
-                if (a && typeof a.focus === 'function') a.focus({ preventScroll: true });
-            }
-        });
-        lastRefreshTime = Date.now();
-        if (monitorMode) {
-            const toolbarEl = document.getElementById('monitorToolbarUpdate');
-            if (toolbarEl) {
-                const now = new Date();
-                const timeStr = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
-                toolbarEl.textContent = t('lastUpdated') + ' ' + timeStr;
-            }
-            checkAllServices().then(() => {
-                renderMonitorServicesList();
-                renderClusterDashboardTiles().catch(() => {});
-            });
-        }
-        if (!silent) showToast(t('dataUpdated'), 'success');
-        requestAnimationFrame(() => updateHomeLabFontScale());
-
-    } catch (error) {
-        if (!silent) showToast(t('errorUpdate') + ': ' + error.message, 'error');
-    } finally {
-        if (!silent) showLoading(false);
-        isRefreshing = false;
-    }
+    return refreshDataManager.refreshData(options);
 }
 
 function upsMetricCompactTile(iconBi, label, valueStr, progressPct, barClass, colClass) {
