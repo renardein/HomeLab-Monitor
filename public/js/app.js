@@ -18,6 +18,15 @@ let customThemeCss = {
 };
 let customThemeStyleSettings = null; // plain settings object (generated -> CSS)
 const CUSTOM_THEME_STYLE_EL_ID = 'customThemeCssStyle';
+const customThemeManager = window.CustomThemeManagerModule.createManager({
+    styleElId: CUSTOM_THEME_STYLE_EL_ID,
+    getCustomThemeCss: () => customThemeCss,
+    setCustomThemeCss: (v) => { customThemeCss = v; },
+    getCustomThemeStyleSettings: () => customThemeStyleSettings,
+    setCustomThemeStyleSettings: (v) => { customThemeStyleSettings = v; },
+    saveSettingsToServer: (payload) => saveSettingsToServer(payload),
+    showToast: (msg, type) => showToast(msg, type)
+});
 /** Разблокированы ли настройки в этой сессии (для защиты паролем) */
 let settingsUnlocked = false;
 /** Пароль настроек включён (из API) */
@@ -133,6 +142,63 @@ let monitorShowTime = true;
 let monitorShowWeather = true;
 /** Блокировать системные gesture-навигации Chrome в monitor mode */
 let monitorDisableChromeGestures = true;
+const dashboardTimeWeatherSettingsManager = window.DashboardTimeWeatherSettingsModule.createManager({
+    el,
+    t,
+    normalizeDashboardWeatherProvider,
+    normalizeDashboardWeatherCity,
+    normalizeDashboardTimezone,
+    isValidDashboardTimezone,
+    setValue,
+    normalizeMonitorHotkeys,
+    saveSettingsToServer,
+    startDashboardClockTimer,
+    resetDashboardWeatherState,
+    applyMonitorChromeGestureGuards,
+    refreshDashboardWeather,
+    showToast,
+    getState: () => ({
+        dashboardWeatherCity,
+        dashboardTimezone,
+        dashboardWeatherProvider,
+        dashboardShowTime,
+        dashboardShowWeather,
+        monitorShowTime,
+        monitorShowWeather,
+        monitorDisableChromeGestures,
+        monitorHotkeys,
+        weatherOpenweathermapApiKeySet,
+        weatherYandexApiKeySet,
+        weatherGismeteoApiKeySet
+    }),
+    setState: (next) => {
+        if (next.dashboardWeatherCity !== undefined) dashboardWeatherCity = next.dashboardWeatherCity;
+        if (next.dashboardTimezone !== undefined) dashboardTimezone = next.dashboardTimezone;
+        if (next.dashboardWeatherProvider !== undefined) dashboardWeatherProvider = next.dashboardWeatherProvider;
+        if (next.dashboardShowTime !== undefined) dashboardShowTime = next.dashboardShowTime;
+        if (next.dashboardShowWeather !== undefined) dashboardShowWeather = next.dashboardShowWeather;
+        if (next.monitorShowTime !== undefined) monitorShowTime = next.monitorShowTime;
+        if (next.monitorShowWeather !== undefined) monitorShowWeather = next.monitorShowWeather;
+        if (next.monitorDisableChromeGestures !== undefined) monitorDisableChromeGestures = next.monitorDisableChromeGestures;
+        if (next.monitorHotkeys !== undefined) monitorHotkeys = next.monitorHotkeys;
+        if (next.weatherOpenweathermapApiKeySet !== undefined) weatherOpenweathermapApiKeySet = next.weatherOpenweathermapApiKeySet;
+        if (next.weatherYandexApiKeySet !== undefined) weatherYandexApiKeySet = next.weatherYandexApiKeySet;
+        if (next.weatherGismeteoApiKeySet !== undefined) weatherGismeteoApiKeySet = next.weatherGismeteoApiKeySet;
+    }
+});
+const connectionManager = window.ConnectionManagerModule.createManager({
+    t,
+    showToast,
+    showDashboard,
+    getCurrentServerType: () => currentServerType,
+    getApiToken: () => apiToken,
+    setApiToken: (v) => { apiToken = v; },
+    getCurrentConnectionId: () => getCurrentConnectionId(),
+    syncProxmoxApiTokenFromParts: () => syncProxmoxApiTokenFromParts(),
+    getCurrentServerUrl: () => getCurrentServerUrl(),
+    saveConnectionId: (type, url, id) => saveConnectionId(type, url, id),
+    setDisplay: (id, value) => setDisplay(id, value)
+});
 
 function parseBoolSettingClient(v, defaultVal = true) {
     if (v === undefined || v === null || v === '') return defaultVal;
@@ -805,101 +871,11 @@ function startDashboardClockTimer() {
 }
 
 function onDashboardWeatherProviderChange() {
-    const sel = el('settingsDashboardWeatherProviderSelect');
-    if (!sel) return;
-    const v = normalizeDashboardWeatherProvider(sel.value);
-    const show = (cls, on) => {
-        document.querySelectorAll(cls).forEach((node) => {
-            node.style.display = on ? '' : 'none';
-        });
-    };
-    show('.weather-provider-keys--owm', v === 'openweathermap');
-    show('.weather-provider-keys--yandex', v === 'yandex');
-    show('.weather-provider-keys--gismeteo', v === 'gismeteo');
-    const phSet = t('settingsWeatherApiKeyPlaceholderSet') || '••••••••';
-    const owm = el('settingsWeatherOwmKeyInput');
-    if (owm) {
-        owm.placeholder = weatherOpenweathermapApiKeySet ? phSet : '';
-    }
-    const ya = el('settingsWeatherYandexKeyInput');
-    if (ya) {
-        ya.placeholder = weatherYandexApiKeySet ? phSet : '';
-    }
-    const gis = el('settingsWeatherGismeteoKeyInput');
-    if (gis) {
-        gis.placeholder = weatherGismeteoApiKeySet ? phSet : '';
-    }
+    dashboardTimeWeatherSettingsManager.applyProviderUI();
 }
 
 async function saveDashboardTimeWeatherSettings() {
-    const cityInput = el('settingsDashboardWeatherCityInput');
-    const timezoneInput = el('settingsDashboardTimezoneInput');
-    const nextCity = normalizeDashboardWeatherCity(cityInput ? cityInput.value : dashboardWeatherCity);
-    const rawTimezone = String(timezoneInput ? timezoneInput.value : dashboardTimezone).trim();
-
-    if (rawTimezone && !isValidDashboardTimezone(rawTimezone)) {
-        showToast(t('settingsDashboardTimezoneInvalid') || 'Invalid time zone', 'error');
-        return;
-    }
-
-    const nextTimezone = normalizeDashboardTimezone(rawTimezone);
-    const provSel = el('settingsDashboardWeatherProviderSelect');
-    const nextProvider = provSel ? normalizeDashboardWeatherProvider(provSel.value) : dashboardWeatherProvider;
-    const cityChanged = nextCity !== dashboardWeatherCity;
-    const timezoneChanged = nextTimezone !== dashboardTimezone;
-    const providerChanged = nextProvider !== dashboardWeatherProvider;
-
-    dashboardShowTime = !!(el('settingsDashboardShowTimeCheckbox') && el('settingsDashboardShowTimeCheckbox').checked);
-    dashboardShowWeather = !!(el('settingsDashboardShowWeatherCheckbox') && el('settingsDashboardShowWeatherCheckbox').checked);
-    monitorShowTime = !!(el('settingsMonitorShowTimeCheckbox') && el('settingsMonitorShowTimeCheckbox').checked);
-    monitorShowWeather = !!(el('settingsMonitorShowWeatherCheckbox') && el('settingsMonitorShowWeatherCheckbox').checked);
-    monitorDisableChromeGestures = !!(el('settingsMonitorDisableChromeGesturesCheckbox') && el('settingsMonitorDisableChromeGesturesCheckbox').checked);
-    monitorHotkeys = normalizeMonitorHotkeys(monitorHotkeys);
-
-    dashboardWeatherCity = nextCity;
-    dashboardTimezone = nextTimezone;
-    dashboardWeatherProvider = nextProvider;
-    if (cityChanged || timezoneChanged || providerChanged) resetDashboardWeatherState();
-    setValue('settingsDashboardWeatherCityInput', dashboardWeatherCity);
-    setValue('settingsDashboardTimezoneInput', dashboardTimezone);
-    if (provSel) provSel.value = dashboardWeatherProvider;
-    onDashboardWeatherProviderChange();
-    startDashboardClockTimer();
-
-    const saveBody = {
-        dashboardWeatherCity: dashboardWeatherCity,
-        dashboardWeatherProvider: dashboardWeatherProvider,
-        dashboardTimezone: dashboardTimezone,
-        dashboardShowTime,
-        dashboardShowWeather,
-        monitorShowTime,
-        monitorShowWeather,
-        monitorDisableChromeGestures,
-        monitorHotkeys
-    };
-    const owmIn = el('settingsWeatherOwmKeyInput');
-    const yaIn = el('settingsWeatherYandexKeyInput');
-    const gisIn = el('settingsWeatherGismeteoKeyInput');
-    if (owmIn && owmIn.value.trim()) saveBody.weatherOpenweathermapApiKey = owmIn.value.trim();
-    if (yaIn && yaIn.value.trim()) saveBody.weatherYandexApiKey = yaIn.value.trim();
-    if (gisIn && gisIn.value.trim()) saveBody.weatherGismeteoApiKey = gisIn.value.trim();
-
-    try {
-        await saveSettingsToServer(saveBody);
-        if (saveBody.weatherOpenweathermapApiKey) weatherOpenweathermapApiKeySet = true;
-        if (saveBody.weatherYandexApiKey) weatherYandexApiKeySet = true;
-        if (saveBody.weatherGismeteoApiKey) weatherGismeteoApiKeySet = true;
-        if (owmIn) owmIn.value = '';
-        if (yaIn) yaIn.value = '';
-        if (gisIn) gisIn.value = '';
-        onDashboardWeatherProviderChange();
-        applyMonitorChromeGestureGuards();
-        refreshDashboardWeather(true).catch(() => {});
-        showToast(t('dataUpdated') || 'Настройки сохранены', 'success');
-    } catch (error) {
-        console.error('Failed to save dashboard time/weather settings:', error);
-        showToast((t('connectError') || 'Connection error') + ': ' + error.message, 'error');
-    }
+    await dashboardTimeWeatherSettingsManager.saveSettings();
 }
 
 function renderInlineMarkdown(text) {
@@ -9352,13 +9328,6 @@ async function toggleMonitorMode() {
     renderDashboardTimeWeatherCard();
 }
 
-let monitorSwipeStartX = null;
-let monitorSwipeHandlersAttached = false;
-let monitorChromeGestureStartX = null;
-let monitorChromeGestureStartY = null;
-/** 'left' | 'right' | null — жест «назад/вперёд» Chrome начинается с края */
-let monitorChromeGestureEdge = null;
-let monitorChromeGestureListenersRegistered = false;
 /** Текущий экран режима монитора */
 let monitorCurrentView = 'cluster';
 /** Последние данные бэкапов для экрана монитора */
@@ -9420,14 +9389,68 @@ function applyStoredDashboardHomeTab() {
 
 let monitorScreensOrder = MONITOR_SCREEN_IDS_ALL.slice();
 let monitorScreensEnabled = {};
-const MONITOR_HOTKEY_ACTIONS = ['refreshData', 'reloadPage', 'home', 'closeBrowser'];
-const DEFAULT_MONITOR_HOTKEYS = [
-    { combo: 'Meta+R', clicks: 1, action: 'refreshData', enabled: true },
-    { combo: 'Meta+Shift+R', clicks: 1, action: 'reloadPage', enabled: true },
-    { combo: 'Meta+H', clicks: 1, action: 'home', enabled: true }
-];
+const monitorScreensManager = window.MonitorScreensModule.createManager({
+    screenIds: MONITOR_SCREEN_IDS_ALL,
+    t,
+    escapeHtml
+});
+const monitorViewRouterManager = window.MonitorViewRouterModule.createManager({
+    renderMonitoredServices: () => renderMonitoredServices(),
+    renderVmsMonitorCards: () => renderVmsMonitorCards(),
+    updateUPSDashboard: () => updateUPSDashboard(),
+    updateNetdevDashboard: () => updateNetdevDashboard(),
+    updateSpeedtestDashboard: () => updateSpeedtestDashboard(),
+    updateIperf3Dashboard: () => updateIperf3Dashboard(),
+    updateSmartSensorsDashboard: () => updateSmartSensorsDashboard(),
+    renderTilesMonitorScreen: () => renderTilesMonitorScreen(),
+    renderTrueNASMonitorScreenTiles: (gridId, type) => renderTrueNASMonitorScreenTiles(gridId, type),
+    renderMonitorBackupRuns: (data) => renderMonitorBackupRuns(data),
+    initMonitorDrawScreen: () => initMonitorDrawScreen(),
+    resizeMonitorDrawCanvas: () => resizeMonitorDrawCanvas()
+});
+const monitorInteractionsManager = window.MonitorInteractionsModule.createManager({
+    getMonitorMode: () => monitorMode,
+    getMonitorDisableChromeGestures: () => monitorDisableChromeGestures,
+    isDrawSwipesBlocked: () => monitorDrawSwipesBlocked(),
+    onPrev: () => goMonitorView('prev'),
+    onNext: () => goMonitorView('next'),
+    onHome: () => applyMonitorView('cluster'),
+    captureHotkeyCombo: (e) => {
+        const key = String(e.key || '').trim();
+        const parts = [];
+        if (e.metaKey) parts.push('Meta');
+        if (e.ctrlKey) parts.push('Ctrl');
+        if (e.altKey) parts.push('Alt');
+        if (e.shiftKey) parts.push('Shift');
+        if (key && !['Control', 'Shift', 'Alt', 'Meta'].includes(key)) parts.push(key.length === 1 ? key.toUpperCase() : key);
+        else if (!parts.length && key) {
+            if (key === 'Meta') parts.push('Meta');
+            else if (key === 'Control') parts.push('Ctrl');
+            else if (key === 'Alt') parts.push('Alt');
+            else if (key === 'Shift') parts.push('Shift');
+        }
+        return normalizeMonitorHotkeyCombo(parts.join('+'));
+    },
+    onHotkeyCombo: (combo) => queueMonitorHotkeyCombo(combo)
+});
+const monitorHotkeysManager = window.MonitorHotkeysModule.createManager({
+    t,
+    escapeHtml,
+    api: {
+        refreshData: () => refreshData(),
+        reloadPage: () => window.location.reload(),
+        goHome: () => applyMonitorView('cluster'),
+        closeBrowser: () => {
+            try { window.close(); } catch (_) {}
+            setTimeout(() => {
+                if (!document.hidden) window.location.href = 'about:blank';
+            }, 150);
+        }
+    }
+});
+const MONITOR_HOTKEY_ACTIONS = monitorHotkeysManager.actions;
+const DEFAULT_MONITOR_HOTKEYS = monitorHotkeysManager.defaultHotkeys;
 let monitorHotkeys = DEFAULT_MONITOR_HOTKEYS.map((x) => ({ ...x }));
-let monitorHotkeyClickState = { combo: '', clicks: 0, timer: null };
 /** Speedtest включён в настройках (для скрытия экрана в режиме монитора) */
 let speedtestClientEnabled = false;
 /** Активный движок Speedtest: ookla | librespeed */
@@ -9444,116 +9467,30 @@ let iperf3MonitorConfigured = null;
 let smartSensorsMonitorConfigured = null;
 
 function resetMonitorChromeGestureState() {
-    monitorChromeGestureStartX = null;
-    monitorChromeGestureStartY = null;
-    monitorChromeGestureEdge = null;
+    // delegated to monitorInteractionsManager state
 }
 
 /** Слушатели вешаются один раз; флаги monitorMode + monitorDisableChromeGestures включают блокировку. */
 function initMonitorChromeGestureGuards() {
-    if (monitorChromeGestureListenersRegistered) return;
-    monitorChromeGestureListenersRegistered = true;
-    function edgeWidthPx() {
-        const w = window.innerWidth || 0;
-        return Math.min(96, Math.max(44, Math.round(w * 0.14)));
-    }
-    function onStart(e) {
-        if (!monitorMode || !monitorDisableChromeGestures) return;
-        const t = e && e.touches && e.touches[0] ? e.touches[0] : null;
-        if (!t) return;
-        const x = Number(t.clientX) || 0;
-        const y = Number(t.clientY) || 0;
-        const w = window.innerWidth || 0;
-        const edge = edgeWidthPx();
-        monitorChromeGestureStartX = x;
-        monitorChromeGestureStartY = y;
-        monitorChromeGestureEdge = null;
-        if (x <= edge) monitorChromeGestureEdge = 'left';
-        else if (w > 0 && x >= w - edge) monitorChromeGestureEdge = 'right';
-    }
-    function onMove(e) {
-        if (!monitorMode || !monitorDisableChromeGestures) return;
-        if (!monitorChromeGestureEdge) return;
-        const t = e && e.touches && e.touches[0] ? e.touches[0] : null;
-        if (!t) return;
-        const dx = (Number(t.clientX) || 0) - (monitorChromeGestureStartX || 0);
-        const dy = (Number(t.clientY) || 0) - (monitorChromeGestureStartY || 0);
-        const absDx = Math.abs(dx);
-        const absDy = Math.abs(dy);
-        const horizontalIntent = absDx > 4 && absDx >= absDy * 0.85;
-        const backFromLeft = monitorChromeGestureEdge === 'left' && dx > 4 && horizontalIntent;
-        const forwardFromRight = monitorChromeGestureEdge === 'right' && dx < -4 && horizontalIntent;
-        if (backFromLeft || forwardFromRight) {
-            e.preventDefault();
-        }
-    }
-    function onEnd() {
-        resetMonitorChromeGestureState();
-    }
-    document.addEventListener('touchstart', onStart, { passive: true, capture: true });
-    document.addEventListener('touchmove', onMove, { passive: false, capture: true });
-    document.addEventListener('touchend', onEnd, { passive: true, capture: true });
-    document.addEventListener('touchcancel', onEnd, { passive: true, capture: true });
+    monitorInteractionsManager.initChromeGestureGuards();
 }
 
 function applyMonitorChromeGestureGuards() {
-    const enabled = monitorMode && monitorDisableChromeGestures;
-    document.body.classList.toggle('chrome-gestures-disabled', enabled);
-    if (!enabled) resetMonitorChromeGestureState();
+    monitorInteractionsManager.applyChromeGestureGuards();
 }
 
 /** Класс на <html>: overscroll / жесты браузера завязаны на корень документа */
 function applyMonitorRootLayoutClass(enabled) {
-    document.documentElement.classList.toggle('monitor-mode-root', !!enabled);
+    monitorInteractionsManager.applyRootLayoutClass(enabled);
 }
-
-/** content meta viewport до входа в monitor mode (восстанавливаем при выходе) */
-let monitorViewportMetaOriginalContent = null;
-let monitorPageZoomGuardsAttached = false;
 
 /** Запрет масштабирования страницы в режиме монитора (pinch / Ctrl+колесо / Safari gesture). */
 function applyMonitorViewportPageZoomLock(enabled) {
-    let meta = document.querySelector('meta[name="viewport"]');
-    if (!meta) {
-        meta = document.createElement('meta');
-        meta.setAttribute('name', 'viewport');
-        document.head.appendChild(meta);
-    }
-    if (enabled) {
-        if (monitorViewportMetaOriginalContent === null) {
-            monitorViewportMetaOriginalContent = meta.getAttribute('content') || 'width=device-width, initial-scale=1.0';
-        }
-        meta.setAttribute(
-            'content',
-            'width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover'
-        );
-    } else if (monitorViewportMetaOriginalContent !== null) {
-        meta.setAttribute('content', monitorViewportMetaOriginalContent);
-    }
+    monitorInteractionsManager.applyViewportPageZoomLock(enabled);
 }
 
 function initMonitorPageZoomGuards() {
-    if (monitorPageZoomGuardsAttached) return;
-    monitorPageZoomGuardsAttached = true;
-    function blockGestureIfMonitor(e) {
-        if (monitorMode) e.preventDefault();
-    }
-    document.addEventListener('gesturestart', blockGestureIfMonitor, { passive: false });
-    document.addEventListener('gesturechange', blockGestureIfMonitor, { passive: false });
-    document.addEventListener('gestureend', blockGestureIfMonitor, { passive: false });
-    window.addEventListener(
-        'wheel',
-        function (e) {
-            if (!monitorMode) return;
-            if (e.ctrlKey) e.preventDefault();
-        },
-        { passive: false }
-    );
-    function blockPinchTouchMove(e) {
-        if (!monitorMode) return;
-        if (e.touches && e.touches.length > 1) e.preventDefault();
-    }
-    document.addEventListener('touchmove', blockPinchTouchMove, { passive: false, capture: true });
+    monitorInteractionsManager.initPageZoomGuards();
 }
 
 async function refreshMonitorScreensAvailability() {
@@ -9614,285 +9551,95 @@ async function refreshMonitorScreensAvailability() {
 }
 
 function normalizeMonitorScreensOrder(arr) {
-    const valid = new Set(MONITOR_SCREEN_IDS_ALL);
-    if (!Array.isArray(arr)) return MONITOR_SCREEN_IDS_ALL.slice();
-    const seen = new Set();
-    const out = [];
-    for (const x of arr) {
-        const id = String(x || '').trim();
-        if (valid.has(id) && !seen.has(id)) {
-            seen.add(id);
-            out.push(id);
-        }
-    }
-    for (const id of MONITOR_SCREEN_IDS_ALL) {
-        if (!seen.has(id)) out.push(id);
-    }
-    return out;
+    return monitorScreensManager.normalizeOrder(arr);
 }
 
 function normalizeMonitorScreensEnabled(raw) {
-    const out = {};
-    for (const id of MONITOR_SCREEN_IDS_ALL) out[id] = true;
-    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
-    for (const id of MONITOR_SCREEN_IDS_ALL) {
-        if (Object.prototype.hasOwnProperty.call(raw, id)) {
-            out[id] = raw[id] !== false;
-        }
-    }
-    return out;
+    return monitorScreensManager.normalizeEnabled(raw);
 }
 
 function normalizeMonitorHotkeyCombo(raw) {
-    const s = String(raw || '').trim();
-    if (!s) return '';
-    const parts = s.split('+').map((x) => String(x || '').trim()).filter(Boolean);
-    const out = [];
-    const lower = parts.map((x) => x.toLowerCase());
-    if (lower.includes('meta') || lower.includes('super') || lower.includes('win') || lower.includes('windows')) out.push('Meta');
-    if (lower.includes('ctrl') || lower.includes('control')) out.push('Ctrl');
-    if (lower.includes('alt') || lower.includes('option')) out.push('Alt');
-    if (lower.includes('shift')) out.push('Shift');
-    let key = parts[parts.length - 1] || '';
-    const keyLower = key.toLowerCase();
-    if (['meta', 'super', 'win', 'windows', 'ctrl', 'control', 'alt', 'option', 'shift'].includes(keyLower)) key = '';
-    if (key.length === 1) key = key.toUpperCase();
-    if (key) out.push(key);
-    return out.join('+');
+    return monitorHotkeysManager.normalizeCombo(raw);
 }
 
 function normalizeMonitorHotkeys(raw) {
-    const list = Array.isArray(raw) ? raw : DEFAULT_MONITOR_HOTKEYS;
-    const out = [];
-    for (const item of list) {
-        if (!item || typeof item !== 'object') continue;
-        const action = MONITOR_HOTKEY_ACTIONS.includes(item.action) ? item.action : '';
-        const combo = normalizeMonitorHotkeyCombo(item.combo);
-        const clicks = Math.max(1, Math.min(3, parseInt(item.clicks, 10) || 1));
-        if (!action || !combo) continue;
-        out.push({ combo, clicks, action, enabled: item.enabled !== false });
-    }
-    if (!out.length) return DEFAULT_MONITOR_HOTKEYS.map((x) => ({ ...x }));
-    return out.slice(0, 6);
+    return monitorHotkeysManager.normalizeHotkeys(raw);
 }
 
 function monitorHotkeyActionLabel(action) {
-    if (action === 'refreshData') return t('monitorHotkeyActionRefreshData');
-    if (action === 'reloadPage') return t('monitorHotkeyActionReloadPage');
-    if (action === 'home') return t('monitorHotkeyActionHome');
-    if (action === 'closeBrowser') return t('monitorHotkeyActionCloseBrowser');
-    return action;
+    return monitorHotkeysManager.actionLabel(action);
 }
 
 function executeMonitorHotkeyAction(action) {
-    if (action === 'refreshData') return refreshData();
-    if (action === 'reloadPage') return window.location.reload();
-    if (action === 'home') return applyMonitorView('cluster');
-    if (action === 'closeBrowser') {
-        try { window.close(); } catch (_) {}
-        setTimeout(() => {
-            if (!document.hidden) window.location.href = 'about:blank';
-        }, 150);
-    }
+    return monitorHotkeysManager.executeAction(action);
 }
 
 function queueMonitorHotkeyCombo(combo) {
-    const clickWindowMs = 450;
-    const hotkeys = normalizeMonitorHotkeys(monitorHotkeys).filter((x) => x.enabled !== false && x.combo === combo);
-    if (!hotkeys.length) return false;
-    if (monitorHotkeyClickState.timer) clearTimeout(monitorHotkeyClickState.timer);
-    if (monitorHotkeyClickState.combo !== combo) {
-        monitorHotkeyClickState.combo = combo;
-        monitorHotkeyClickState.clicks = 1;
-    } else {
-        monitorHotkeyClickState.clicks = Math.min(3, monitorHotkeyClickState.clicks + 1);
-    }
-    if (monitorHotkeyClickState.clicks >= 3) {
-        const rule3 = hotkeys.find((x) => x.clicks === 3);
-        if (rule3) {
-            executeMonitorHotkeyAction(rule3.action);
-            monitorHotkeyClickState = { combo: '', clicks: 0, timer: null };
-            return true;
-        }
-    }
-    monitorHotkeyClickState.timer = setTimeout(() => {
-        const c = monitorHotkeyClickState.clicks;
-        const rule = hotkeys.find((x) => x.clicks === c) || hotkeys.find((x) => x.clicks === 1 && c >= 1);
-        if (rule) executeMonitorHotkeyAction(rule.action);
-        monitorHotkeyClickState = { combo: '', clicks: 0, timer: null };
-    }, clickWindowMs);
-    return true;
+    monitorHotkeys = normalizeMonitorHotkeys(monitorHotkeys);
+    return monitorHotkeysManager.queueCombo(combo, monitorHotkeys);
 }
 
 function renderMonitorHotkeysSettingsUI() {
     const wrap = el('monitorHotkeysList');
     if (!wrap) return;
-    const rows = normalizeMonitorHotkeys(monitorHotkeys);
-    monitorHotkeys = rows;
-    wrap.innerHTML = rows.map((row, idx) => {
-        const options = MONITOR_HOTKEY_ACTIONS
-            .map((a) => `<option value="${a}" ${row.action === a ? 'selected' : ''}>${escapeHtml(monitorHotkeyActionLabel(a))}</option>`)
-            .join('');
-        return `<div class="row g-2 align-items-center mb-2">
-          <div class="col-md-4">
-            <input class="form-control monitor-hotkey-combo-input" data-idx="${idx}" value="${escapeHtml(row.combo)}" readonly>
-          </div>
-          <div class="col-md-2">
-            <select class="form-select monitor-hotkey-clicks-select" data-idx="${idx}">
-              <option value="1" ${row.clicks === 1 ? 'selected' : ''}>1x</option>
-              <option value="2" ${row.clicks === 2 ? 'selected' : ''}>2x</option>
-              <option value="3" ${row.clicks === 3 ? 'selected' : ''}>3x</option>
-            </select>
-          </div>
-          <div class="col-md-3">
-            <select class="form-select monitor-hotkey-action-select" data-idx="${idx}">${options}</select>
-          </div>
-          <div class="col-md-3 d-flex align-items-center gap-2">
-            <div class="form-check m-0">
-              <input class="form-check-input monitor-hotkey-enabled-chk" type="checkbox" data-idx="${idx}" ${row.enabled !== false ? 'checked' : ''}>
-            </div>
-            <button class="btn btn-outline-secondary btn-sm monitor-hotkey-clear-btn" type="button" data-idx="${idx}">${escapeHtml(t('monitorHotkeyClearBtn'))}</button>
-          </div>
-        </div>`;
-    }).join('');
-
-    wrap.querySelectorAll('.monitor-hotkey-combo-input').forEach((inp) => {
-        inp.addEventListener('keydown', (e) => {
-            e.preventDefault();
-            const idx = parseInt(inp.dataset.idx, 10);
-            if (!Number.isFinite(idx) || idx < 0 || idx >= monitorHotkeys.length) return;
-            const key = String(e.key || '').trim();
-            if (!key) return;
-            const parts = [];
-            if (e.metaKey) parts.push('Meta');
-            if (e.ctrlKey) parts.push('Ctrl');
-            if (e.altKey) parts.push('Alt');
-            if (e.shiftKey) parts.push('Shift');
-            if (!['Control', 'Shift', 'Alt', 'Meta'].includes(key)) {
-                parts.push(key.length === 1 ? key.toUpperCase() : key);
-            } else if (!parts.length) {
-                // Allow single modifier hotkeys (e.g. Meta from touch keyboard button).
-                if (key === 'Meta') parts.push('Meta');
-                else if (key === 'Control') parts.push('Ctrl');
-                else if (key === 'Alt') parts.push('Alt');
-                else if (key === 'Shift') parts.push('Shift');
-            }
-            const combo = normalizeMonitorHotkeyCombo(parts.join('+'));
-            if (!combo) return;
-            monitorHotkeys[idx].combo = combo;
-            inp.value = combo;
-        });
-    });
-    wrap.querySelectorAll('.monitor-hotkey-action-select').forEach((sel) => {
-        sel.addEventListener('change', () => {
-            const idx = parseInt(sel.dataset.idx, 10);
-            if (!Number.isFinite(idx) || idx < 0 || idx >= monitorHotkeys.length) return;
-            const action = String(sel.value || '');
-            if (!MONITOR_HOTKEY_ACTIONS.includes(action)) return;
-            monitorHotkeys[idx].action = action;
-        });
-    });
-    wrap.querySelectorAll('.monitor-hotkey-clicks-select').forEach((sel) => {
-        sel.addEventListener('change', () => {
-            const idx = parseInt(sel.dataset.idx, 10);
-            if (!Number.isFinite(idx) || idx < 0 || idx >= monitorHotkeys.length) return;
-            monitorHotkeys[idx].clicks = Math.max(1, Math.min(3, parseInt(sel.value, 10) || 1));
-        });
-    });
-    wrap.querySelectorAll('.monitor-hotkey-enabled-chk').forEach((chk) => {
-        chk.addEventListener('change', () => {
-            const idx = parseInt(chk.dataset.idx, 10);
-            if (!Number.isFinite(idx) || idx < 0 || idx >= monitorHotkeys.length) return;
-            monitorHotkeys[idx].enabled = !!chk.checked;
-        });
-    });
-    wrap.querySelectorAll('.monitor-hotkey-clear-btn').forEach((btn) => {
-        btn.addEventListener('click', () => {
-            const idx = parseInt(btn.dataset.idx, 10);
-            if (!Number.isFinite(idx) || idx < 0 || idx >= monitorHotkeys.length) return;
-            monitorHotkeys[idx].combo = '';
-            const input = wrap.querySelector(`.monitor-hotkey-combo-input[data-idx="${idx}"]`);
-            if (input) input.value = '';
-        });
+    monitorHotkeys = normalizeMonitorHotkeys(monitorHotkeys);
+    monitorHotkeysManager.renderSettingsUI(wrap, monitorHotkeys, (next) => {
+        monitorHotkeys = normalizeMonitorHotkeys(next);
     });
 }
 
 function getMonitorViewsOrder() {
-    const order = normalizeMonitorScreensOrder(monitorScreensOrder);
-    return order.filter((id) => {
-        if (monitorScreensEnabled[id] === false) return false;
-        if (id === 'backupRuns' && currentServerType !== 'proxmox') return false;
-        if (id === 'speedtest' && !speedtestClientEnabled) return false;
-        if (id === 'iperf3' && !iperf3ClientEnabled) return false;
-        if (id === 'ups' && upsMonitorConfigured === false) return false;
-        if (id === 'netdev' && netdevMonitorConfigured === false) return false;
-        if (id === 'speedtest' && speedtestMonitorConfigured === false) return false;
-        if (id === 'iperf3' && iperf3MonitorConfigured === false) return false;
-        if (id === 'smartSensors' && smartSensorsMonitorConfigured === false) return false;
-        return true;
+    return monitorScreensManager.getViewsOrder({
+        order: monitorScreensOrder,
+        enabled: monitorScreensEnabled,
+        currentServerType,
+        speedtestClientEnabled,
+        iperf3ClientEnabled,
+        availability: {
+            ups: upsMonitorConfigured,
+            netdev: netdevMonitorConfigured,
+            speedtest: speedtestMonitorConfigured,
+            iperf3: iperf3MonitorConfigured,
+            smartSensors: smartSensorsMonitorConfigured
+        }
     });
 }
 
 function monitorScreenSettingsLabel(id) {
-    const map = {
-        cluster: t('monitorScreenCluster'),
-        tiles: 'Tiles',
-        truenasPools: t('monitorScreenTruenasPools'),
-        truenasDisks: t('monitorScreenTruenasDisks'),
-        truenasServices: t('monitorScreenTruenasServices'),
-        truenasApps: t('monitorScreenTruenasApps'),
-        ups: t('monitorScreenUps'),
-        netdev: t('monitorScreenNetdev'),
-        speedtest: t('monitorScreenSpeedtest'),
-        iperf3: t('monitorScreenIperf3'),
-        smartSensors: t('monitorScreenSmartSensors'),
-        vms: t('monitorScreenVms'),
-        services: t('monitorScreenServices'),
-        backupRuns: t('monitorScreenBackupRuns'),
-        draw: t('monitorScreenDraw')
-    };
-    return map[id] || id;
+    return monitorScreensManager.label(id);
 }
 
 function renderSettingsMonitorScreensOrderList() {
     const ul = document.getElementById('settingsMonitorScreensOrderList');
     if (!ul) return;
-    const order = normalizeMonitorScreensOrder(monitorScreensOrder);
-    ul.innerHTML = order
-        .map(
-            (id, i) => `<li class="list-group-item d-flex align-items-center justify-content-between gap-2 py-2">
-      <span class="text-truncate"><i class="bi bi-display me-2 text-muted"></i>${escapeHtml(monitorScreenSettingsLabel(id))}</span>
-      <span class="d-flex align-items-center gap-2">
-        <span class="form-check form-switch m-0">
-          <input class="form-check-input" type="checkbox" ${monitorScreensEnabled[id] !== false ? 'checked' : ''} onchange="toggleMonitorScreenEnabled('${id}', this.checked)">
-        </span>
-      <span class="btn-group btn-group-sm flex-shrink-0" role="group">
-        <button type="button" class="btn btn-outline-secondary" ${i === 0 ? 'disabled' : ''} onclick="moveMonitorScreenOrder(${i},-1)" aria-label="Up"><i class="bi bi-arrow-up"></i></button>
-        <button type="button" class="btn btn-outline-secondary" ${i === order.length - 1 ? 'disabled' : ''} onclick="moveMonitorScreenOrder(${i},1)" aria-label="Down"><i class="bi bi-arrow-down"></i></button>
-      </span>
-      </span>
-    </li>`
-        )
-        .join('');
+    monitorScreensOrder = monitorScreensManager.renderSettingsOrderList(ul, {
+        order: monitorScreensOrder,
+        enabled: monitorScreensEnabled
+    });
+    ul.querySelectorAll('.monitor-screen-enable-input').forEach((node) => {
+        node.addEventListener('change', () => {
+            const id = String(node.dataset.id || '');
+            toggleMonitorScreenEnabled(id, !!node.checked);
+        });
+    });
+    ul.querySelectorAll('.monitor-screen-up-btn').forEach((btn) => {
+        btn.addEventListener('click', () => moveMonitorScreenOrder(parseInt(btn.dataset.index, 10), -1));
+    });
+    ul.querySelectorAll('.monitor-screen-down-btn').forEach((btn) => {
+        btn.addEventListener('click', () => moveMonitorScreenOrder(parseInt(btn.dataset.index, 10), 1));
+    });
 }
 
 function toggleMonitorScreenEnabled(id, enabled) {
     if (!MONITOR_SCREEN_IDS_ALL.includes(id)) return;
-    monitorScreensEnabled = normalizeMonitorScreensEnabled({ ...monitorScreensEnabled, [id]: !!enabled });
+    monitorScreensEnabled = monitorScreensManager.toggleEnabled(monitorScreensEnabled, id, enabled);
     saveSettingsToServer({ monitorScreensEnabled });
     renderSettingsMonitorScreensOrderList();
     renderMonitorScreenDots();
 }
 
 function moveMonitorScreenOrder(index, delta) {
-    const order = normalizeMonitorScreensOrder(monitorScreensOrder);
-    const j = index + delta;
-    if (j < 0 || j >= order.length) return;
-    const next = order.slice();
-    const t0 = next[index];
-    next[index] = next[j];
-    next[j] = t0;
-    monitorScreensOrder = next;
+    monitorScreensOrder = monitorScreensManager.moveOrder(monitorScreensOrder, index, delta);
     saveSettingsToServer({ monitorScreensOrder: monitorScreensOrder });
     renderSettingsMonitorScreensOrderList();
     renderMonitorScreenDots();
@@ -9961,31 +9708,11 @@ function applyMonitorToolbarHiddenState() {
 function renderMonitorScreenDots() {
     const dotsEl = document.getElementById('monitorScreenDots');
     if (!dotsEl) return;
-
-    if (!monitorMode) {
-        dotsEl.innerHTML = '';
-        dotsEl.style.display = 'none';
-        syncMonitorDotsDock();
-        return;
-    }
-
-    let views = getMonitorViewsOrder();
-    if (!views.length) views = ['cluster'];
-
-    dotsEl.style.display = 'flex';
-    dotsEl.innerHTML = views.map((viewId) => {
-        const isActive = viewId === monitorCurrentView;
-        const label = monitorScreenSettingsLabel(viewId);
-        return `
-            <button
-                type="button"
-                class="monitor-toolbar-dot${isActive ? ' is-active' : ''}"
-                onclick="applyMonitorView('${escapeHtml(viewId)}')"
-                title="${escapeHtml(label)}"
-                aria-label="${escapeHtml(label)}"
-            ></button>
-        `;
-    }).join('');
+    monitorScreensManager.renderDots(dotsEl, {
+        monitorMode,
+        currentView: monitorCurrentView,
+        views: getMonitorViewsOrder()
+    });
     syncMonitorDotsDock();
 }
 
@@ -9994,130 +9721,14 @@ function renderMonitorScreenDots() {
 // ups/netdev/speedtest/smartSensors/backupRuns -> полноэкранные секции
 function applyMonitorView(view) {
     monitorCurrentView = view;
-
-    const dashboardSection = document.getElementById('dashboardSection');
-    const dashboardContent = document.getElementById('dashboardContent');
-    const servicesMonSection = document.getElementById('servicesMonitorSection');
-    const vmsMonSection = document.getElementById('vmsMonitorSection');
-    const upsMonSection = document.getElementById('upsMonitorSection');
-    const netdevMonSection = document.getElementById('netdevMonitorSection');
-    const speedtestMonSection = document.getElementById('speedtestMonitorSection');
-    const iperf3MonSection = document.getElementById('iperf3MonitorSection');
-    const smartSensorsMonSection = document.getElementById('smartSensorsMonitorSection');
-    const backupsMon = document.getElementById('backupsMonitorSection');
-    const tilesMonSection = document.getElementById('tilesMonitorSection');
-    const truenasPoolsMonSection = document.getElementById('truenasPoolsMonitorSection');
-    const truenasDisksMonSection = document.getElementById('truenasDisksMonitorSection');
-    const truenasServicesMonSection = document.getElementById('truenasServicesMonitorSection');
-    const truenasAppsMonSection = document.getElementById('truenasAppsMonitorSection');
-    const drawMonSection = document.getElementById('drawMonitorSection');
-    const monitorView = document.getElementById('monitorView');
-
-    if (!monitorMode) {
-        if (dashboardSection) dashboardSection.style.display = 'block';
-        if (dashboardContent) dashboardContent.style.display = 'block';
-        if (servicesMonSection) servicesMonSection.style.display = 'none';
-        if (vmsMonSection) vmsMonSection.style.display = 'none';
-        if (upsMonSection) upsMonSection.style.display = 'none';
-        if (netdevMonSection) netdevMonSection.style.display = 'none';
-        if (speedtestMonSection) speedtestMonSection.style.display = 'none';
-        if (iperf3MonSection) iperf3MonSection.style.display = 'none';
-        if (smartSensorsMonSection) smartSensorsMonSection.style.display = 'none';
-        if (backupsMon) backupsMon.style.display = 'none';
-        if (tilesMonSection) tilesMonSection.style.display = 'none';
-        if (truenasPoolsMonSection) truenasPoolsMonSection.style.display = 'none';
-        if (truenasDisksMonSection) truenasDisksMonSection.style.display = 'none';
-        if (truenasServicesMonSection) truenasServicesMonSection.style.display = 'none';
-        if (truenasAppsMonSection) truenasAppsMonSection.style.display = 'none';
-        if (drawMonSection) drawMonSection.style.display = 'none';
-        if (monitorView) monitorView.style.display = 'none';
-        renderMonitorScreenDots();
+    const result = monitorViewRouterManager.applyView(view, {
+        monitorMode,
+        currentServerType,
+        lastBackupsDataForMonitor
+    });
+    if (result && result.redirectedTo) {
+        applyMonitorView(result.redirectedTo);
         return;
-    }
-
-    // Выключаем все экраны монитора, затем включаем нужный.
-    if (dashboardSection) dashboardSection.style.display = 'none';
-    if (dashboardContent) dashboardContent.style.display = 'none';
-    if (servicesMonSection) servicesMonSection.style.display = 'none';
-    if (vmsMonSection) vmsMonSection.style.display = 'none';
-    if (upsMonSection) upsMonSection.style.display = 'none';
-    if (netdevMonSection) netdevMonSection.style.display = 'none';
-    if (speedtestMonSection) speedtestMonSection.style.display = 'none';
-    if (iperf3MonSection) iperf3MonSection.style.display = 'none';
-    if (smartSensorsMonSection) smartSensorsMonSection.style.display = 'none';
-    if (backupsMon) backupsMon.style.display = 'none';
-    if (tilesMonSection) tilesMonSection.style.display = 'none';
-    if (truenasPoolsMonSection) truenasPoolsMonSection.style.display = 'none';
-    if (truenasDisksMonSection) truenasDisksMonSection.style.display = 'none';
-    if (truenasServicesMonSection) truenasServicesMonSection.style.display = 'none';
-    if (truenasAppsMonSection) truenasAppsMonSection.style.display = 'none';
-    if (drawMonSection) drawMonSection.style.display = 'none';
-    if (monitorView) monitorView.style.display = 'none';
-
-    if (view === 'backupRuns' && currentServerType !== 'proxmox') {
-        applyMonitorView('cluster');
-        return;
-    }
-
-    if (view === 'cluster') {
-        if (dashboardSection) dashboardSection.style.display = 'block';
-        if (dashboardContent) dashboardContent.style.display = 'block';
-
-        // Гарантируем, что в “кластер” активна панель узлов (как в основном режиме).
-        const myTabContent = document.getElementById('myTabContent');
-        if (myTabContent) {
-            myTabContent.querySelectorAll('.tab-pane').forEach((pane) => {
-                pane.classList.remove('show', 'active');
-            });
-            const nodesPane = document.getElementById('nodes');
-            if (nodesPane) nodesPane.classList.add('show', 'active');
-        }
-    } else if (view === 'services') {
-        if (servicesMonSection) servicesMonSection.style.display = 'block';
-        renderMonitoredServices();
-    } else if (view === 'vms') {
-        if (vmsMonSection) vmsMonSection.style.display = 'block';
-        renderVmsMonitorCards();
-    } else if (view === 'ups') {
-        if (upsMonSection) upsMonSection.style.display = 'block';
-        updateUPSDashboard().catch(() => {});
-    } else if (view === 'netdev') {
-        if (netdevMonSection) netdevMonSection.style.display = 'block';
-        updateNetdevDashboard().catch(() => {});
-    } else if (view === 'speedtest') {
-        if (speedtestMonSection) speedtestMonSection.style.display = 'block';
-        updateSpeedtestDashboard().catch(() => {});
-    } else if (view === 'iperf3') {
-        if (iperf3MonSection) iperf3MonSection.style.display = 'block';
-        updateIperf3Dashboard().catch(() => {});
-    } else if (view === 'smartSensors') {
-        if (smartSensorsMonSection) smartSensorsMonSection.style.display = 'block';
-        updateSmartSensorsDashboard().catch(() => {});
-    } else if (view === 'tiles') {
-        if (tilesMonSection) tilesMonSection.style.display = 'block';
-        renderTilesMonitorScreen().catch(() => {});
-    } else if (view === 'truenasPools') {
-        if (truenasPoolsMonSection) truenasPoolsMonSection.style.display = 'block';
-        renderTrueNASMonitorScreenTiles('truenasPoolsMonitorGrid', 'truenas_pool').catch(() => {});
-    } else if (view === 'truenasDisks') {
-        if (truenasDisksMonSection) truenasDisksMonSection.style.display = 'block';
-        renderTrueNASMonitorScreenTiles('truenasDisksMonitorGrid', 'truenas_disk').catch(() => {});
-    } else if (view === 'truenasServices') {
-        if (truenasServicesMonSection) truenasServicesMonSection.style.display = 'block';
-        renderTrueNASMonitorScreenTiles('truenasServicesMonitorGrid', 'truenas_service').catch(() => {});
-    } else if (view === 'truenasApps') {
-        if (truenasAppsMonSection) truenasAppsMonSection.style.display = 'block';
-        renderTrueNASMonitorScreenTiles('truenasAppsMonitorGrid', 'truenas_app').catch(() => {});
-    } else if (view === 'backupRuns') {
-        /* flex, не block — иначе .monitor-backups-main-card не растягивается и card-body с flex:1 схлопывается в 0 */
-        if (backupsMon) backupsMon.style.display = 'flex';
-        renderMonitorBackupRuns(lastBackupsDataForMonitor);
-    } else if (view === 'draw') {
-        if (drawMonSection) drawMonSection.style.display = 'flex';
-        initMonitorDrawScreen();
-        requestAnimationFrame(() => {
-            resizeMonitorDrawCanvas();
-        });
     }
 
     if (monitorMode) persistMonitorCurrentView(monitorCurrentView);
@@ -10314,430 +9925,51 @@ function applyMonitorTheme() {
 
 // ==================== CUSTOM THEME CSS (normal/monitor x light/dark) ====================
 function ensureCustomThemeStyleEl() {
-    let el = document.getElementById(CUSTOM_THEME_STYLE_EL_ID);
-    if (!el) {
-        el = document.createElement('style');
-        el.id = CUSTOM_THEME_STYLE_EL_ID;
-        document.head.appendChild(el);
-    }
-    return el;
+    return customThemeManager.ensureStyleEl();
 }
 
 function normalizeCustomThemeCssInput(input) {
-    const base = {
-        normal: { light: '', dark: '' },
-        monitor: { light: '', dark: '' }
-    };
-    if (!input || typeof input !== 'object') return base;
-
-    // Accept both nested and flat shapes (for forward/backward compatibility)
-    const nested = input.normal || input.monitor ? input : null;
-    const flat = !nested ? input : null;
-
-    const normalSource = nested ? nested.normal : input.normal;
-    const monitorSource = nested ? nested.monitor : input.monitor;
-
-    const getStr = (obj, key) => (obj && typeof obj[key] === 'string') ? obj[key] : '';
-    if (flat) {
-        return {
-            normal: {
-                light: typeof input.normalLight === 'string' ? input.normalLight : '',
-                dark: typeof input.normalDark === 'string' ? input.normalDark : ''
-            },
-            monitor: {
-                light: typeof input.monitorLight === 'string' ? input.monitorLight : '',
-                dark: typeof input.monitorDark === 'string' ? input.monitorDark : ''
-            }
-        };
-    }
-
-    return {
-        normal: {
-            light: getStr(normalSource, 'light'),
-            dark: getStr(normalSource, 'dark')
-        },
-        monitor: {
-            light: getStr(monitorSource, 'light'),
-            dark: getStr(monitorSource, 'dark')
-        }
-    };
-}
-
-function getCustomThemeVariantScope(variantKey) {
-    // Note: monitor-mode and dark theme are independent.
-    if (variantKey === 'normalLight') return 'body:not(.dark-mode):not(.monitor-mode)';
-    if (variantKey === 'normalDark') return 'body.dark-mode:not(.monitor-mode)';
-    if (variantKey === 'monitorLight') return 'body.monitor-mode:not(.monitor-theme-dark)';
-    if (variantKey === 'monitorDark') return 'body.monitor-mode.monitor-theme-dark';
-    return '';
-}
-
-function expandCustomCssSnippet(snippet, scope) {
-    const s = String(snippet ?? '').trim();
-    if (!s) return '';
-    const scopeReplaced = s
-        .replaceAll('{{SCOPE}}', scope)
-        .replaceAll('{{scope}}', scope);
-    const t = scopeReplaced.trim();
-    if (!t) return '';
-    if (t.startsWith('@')) {
-        // Heuristic: don't try to scope at-rules. Use {{SCOPE}} in user CSS for full control.
-        return t;
-    }
-    if (t.includes(scope) || s.includes('{{SCOPE}}') || s.includes('{{scope}}')) return t;
-    // Best-effort heuristic: prefix the snippet with the scope selector.
-    return scope + ' ' + t;
+    return customThemeManager.normalizeCssInput(input);
 }
 
 function applyCustomThemeCss() {
-    const styleEl = ensureCustomThemeStyleEl();
-    const normalized = normalizeCustomThemeCssInput(customThemeCss);
-
-    const variants = [
-        { key: 'normalLight', scope: getCustomThemeVariantScope('normalLight'), css: normalized.normal.light },
-        { key: 'normalDark', scope: getCustomThemeVariantScope('normalDark'), css: normalized.normal.dark },
-        { key: 'monitorLight', scope: getCustomThemeVariantScope('monitorLight'), css: normalized.monitor.light },
-        { key: 'monitorDark', scope: getCustomThemeVariantScope('monitorDark'), css: normalized.monitor.dark }
-    ];
-
-    const parts = variants
-        .map(v => expandCustomCssSnippet(v.css, v.scope))
-        .filter(Boolean);
-
-    styleEl.textContent = parts.join('\n\n');
+    customThemeManager.applyCss();
 }
-
-// ==================== CUSTOM THEME PLAIN SETTINGS ====================
-const CUSTOM_THEME_STYLE_DEFAULTS = {
-    normal: {
-        light: {
-            cardBg: '#ffffff',
-            cardTextColor: '#2d3748',
-            cardHeaderFrom: '#667eea',
-            cardHeaderTo: '#764ba2',
-            cardHeaderTextColor: '#ffffff',
-            statValueColor: '#333333',
-            statLabelColor: '#666666',
-            statCardBg: '#ffffff',
-            nodeCardBg: '#ffffff',
-            nodeCardTextColor: '#2d3748',
-            tableHeaderBg: '#f8f9fa',
-            tableHeaderTextColor: '#2d3748',
-            tableCellTextColor: '#2d3748',
-            tableBorderColor: 'rgba(0,0,0,0.125)',
-            tableHoverTdBg: 'rgba(0,0,0,0.03)',
-            progressBg: '#e2e8f0',
-            monitorViewCardBg: 'rgba(255, 255, 255, 0.95)'
-        },
-        dark: {
-            cardBg: '#1e1e1e',
-            cardTextColor: '#ffffff',
-            cardHeaderFrom: '#2a3f5c',
-            cardHeaderTo: '#4a3478',
-            cardHeaderTextColor: '#ffffff',
-            statValueColor: '#ffffff',
-            statLabelColor: '#9e9e9e',
-            statCardBg: '#1e1e1e',
-            nodeCardBg: '#1c1c1c',
-            nodeCardTextColor: '#e8e8e8',
-            tableHeaderBg: '#2a3f5c',
-            tableHeaderTextColor: '#ffffff',
-            tableCellTextColor: '#e8e8e8',
-            tableBorderColor: 'rgba(255,255,255,0.09)',
-            tableHoverTdBg: 'rgba(66, 165, 245, 0.08)',
-            progressBg: 'rgba(255,255,255,0.08)',
-            monitorViewCardBg: 'rgba(0,0,0,0)'
-        }
-    },
-    monitor: {
-        light: {
-            cardBg: '#ffffff',
-            cardTextColor: '#2d3748',
-            cardHeaderFrom: '#edf2f7',
-            cardHeaderTo: '#e2e8f0',
-            cardHeaderTextColor: '#2d3748',
-            statValueColor: '#2d3748',
-            statLabelColor: '#4a5568',
-            statCardBg: '#ffffff',
-            nodeCardBg: '#ffffff',
-            nodeCardTextColor: '#2d3748',
-            tableHeaderBg: '#edf2f7',
-            tableHeaderTextColor: '#2d3748',
-            tableCellTextColor: '#2d3748',
-            tableBorderColor: '#e2e8f0',
-            tableHoverTdBg: 'rgba(0,0,0,0.03)',
-            progressBg: '#e2e8f0',
-            monitorViewCardBg: 'rgba(255, 255, 255, 0.95)'
-        },
-        dark: {
-            cardBg: '#1e1e1e',
-            cardTextColor: '#ffffff',
-            cardHeaderFrom: '#2a3f5c',
-            cardHeaderTo: '#4a3478',
-            cardHeaderTextColor: '#ffffff',
-            statValueColor: '#ffffff',
-            statLabelColor: '#9e9e9e',
-            statCardBg: '#1e1e1e',
-            nodeCardBg: '#1c1c1c',
-            nodeCardTextColor: '#e8e8e8',
-            tableHeaderBg: '#2a3f5c',
-            tableHeaderTextColor: '#ffffff',
-            tableCellTextColor: '#e8e8e8',
-            tableBorderColor: 'rgba(255,255,255,0.09)',
-            tableHoverTdBg: 'rgba(66, 165, 245, 0.08)',
-            progressBg: 'rgba(255,255,255,0.08)',
-            monitorViewCardBg: '#1c1c1c'
-        }
-    }
-};
 
 function normalizeCustomThemeStyleSettingsInput(input) {
-    if (!input || typeof input !== 'object') return null;
-    const out = JSON.parse(JSON.stringify(CUSTOM_THEME_STYLE_DEFAULTS));
-
-    const normal = input.normal || {};
-    const monitor = input.monitor || {};
-
-    const applyVariant = (target, src) => {
-        if (!src || typeof src !== 'object') return;
-        Object.keys(target).forEach((k) => {
-            if (src[k] !== undefined && src[k] !== null && src[k] !== '') target[k] = String(src[k]);
-        });
-    };
-
-    applyVariant(out.normal.light, normal.light);
-    applyVariant(out.normal.dark, normal.dark);
-    applyVariant(out.monitor.light, monitor.light);
-    applyVariant(out.monitor.dark, monitor.dark);
-
-    return out;
-}
-
-function buildCustomThemeCssSnippetFromStyle(styleVariant) {
-    const s = styleVariant || {};
-    const safe = (v) => (v == null ? '' : String(v));
-
-    // Snippets are written without {{SCOPE}}; applyCustomThemeCss will prefix by scope automatically.
-    return [
-        `.card { background: ${safe(s.cardBg)} !important; color: ${safe(s.cardTextColor)} !important; border-color: ${safe(s.tableBorderColor)} !important; }`,
-        `.card-header { background: linear-gradient(135deg, ${safe(s.cardHeaderFrom)} 0%, ${safe(s.cardHeaderTo)} 100%) !important; color: ${safe(s.cardHeaderTextColor)} !important; }`,
-        `.stat-card { background: ${safe(s.statCardBg)} !important; }`,
-        `.stat-value { color: ${safe(s.statValueColor)} !important; }`,
-        `.stat-label { color: ${safe(s.statLabelColor)} !important; }`,
-        `.node-card { background: ${safe(s.nodeCardBg)} !important; color: ${safe(s.nodeCardTextColor)} !important; border-color: ${safe(s.tableBorderColor)} !important; }`,
-        `.table { color: ${safe(s.tableCellTextColor)} !important; border-color: ${safe(s.tableBorderColor)} !important; }`,
-        `.table th { background-color: ${safe(s.tableHeaderBg)} !important; color: ${safe(s.tableHeaderTextColor)} !important; border-color: ${safe(s.tableBorderColor)} !important; }`,
-        `.table tbody td { color: ${safe(s.tableCellTextColor)} !important; border-color: ${safe(s.tableBorderColor)} !important; }`,
-        `.table tbody tr:hover td { background-color: ${safe(s.tableHoverTdBg)} !important; }`,
-        `.progress { background: ${safe(s.progressBg)} !important; }`,
-        `.monitor-view__card { background: ${safe(s.monitorViewCardBg)} !important; border-color: ${safe(s.tableBorderColor)} !important; }`,
-        `.monitor-view__panel-title { color: ${safe(s.cardHeaderTextColor)} !important; }`,
-        `.monitor-view__stat-value, .monitor-view__res-value { color: ${safe(s.statValueColor)} !important; }`,
-        `.monitor-view__stat-label, .monitor-view__res-label { color: ${safe(s.statLabelColor)} !important; }`
-    ].join('\n');
+    return customThemeManager.normalizeStyleSettingsInput(input);
 }
 
 function applyCustomThemeStyleSettings() {
-    // If unset/null: remove overrides completely (back to base CSS).
-    if (customThemeStyleSettings == null) {
-        customThemeCss = {
-            normal: { light: '', dark: '' },
-            monitor: { light: '', dark: '' }
-        };
-        applyCustomThemeCss();
-        return;
-    }
-
-    const normalized = normalizeCustomThemeStyleSettingsInput(customThemeStyleSettings);
-    if (!normalized) {
-        customThemeStyleSettings = null;
-        applyCustomThemeStyleSettings();
-        return;
-    }
-
-    customThemeCss = {
-        normal: {
-            light: buildCustomThemeCssSnippetFromStyle(normalized.normal.light),
-            dark: buildCustomThemeCssSnippetFromStyle(normalized.normal.dark)
-        },
-        monitor: {
-            light: buildCustomThemeCssSnippetFromStyle(normalized.monitor.light),
-            dark: buildCustomThemeCssSnippetFromStyle(normalized.monitor.dark)
-        }
-    };
-    applyCustomThemeCss();
-    // Update UI if the styles editor is present in DOM.
-    syncCustomThemeStyleSettingsUI();
-}
-
-function getCustomThemeStyleVariantDefaults(variantKey) {
-    const isNormal = variantKey.startsWith('normal');
-    const isMonitor = variantKey.startsWith('monitor');
-    const isLight = variantKey.endsWith('Light');
-
-    if (isNormal && isLight) return CUSTOM_THEME_STYLE_DEFAULTS.normal.light;
-    if (isNormal && !isLight) return CUSTOM_THEME_STYLE_DEFAULTS.normal.dark;
-    if (isMonitor && isLight) return CUSTOM_THEME_STYLE_DEFAULTS.monitor.light;
-    if (isMonitor && !isLight) return CUSTOM_THEME_STYLE_DEFAULTS.monitor.dark;
-    return CUSTOM_THEME_STYLE_DEFAULTS.normal.light;
+    customThemeManager.applyStyleSettings();
 }
 
 function getCustomThemeStyleVariantFromSelect() {
-    const sel = document.getElementById('customThemeVariantSelect');
-    if (!sel) return 'normalLight';
-    return String(sel.value || 'normalLight');
-}
-
-function readCustomThemeStyleVariantFromInputs() {
-    const read = (id) => {
-        const el = document.getElementById(id);
-        return el ? String(el.value ?? '').trim() : '';
-    };
-
-    return {
-        cardBg: read('customThemeStyleCardBg'),
-        cardTextColor: read('customThemeStyleCardTextColor'),
-        cardHeaderFrom: read('customThemeStyleCardHeaderFrom'),
-        cardHeaderTo: read('customThemeStyleCardHeaderTo'),
-        cardHeaderTextColor: read('customThemeStyleCardHeaderTextColor'),
-        statValueColor: read('customThemeStyleStatValueColor'),
-        statLabelColor: read('customThemeStyleStatLabelColor'),
-        tableHeaderBg: read('customThemeStyleTableHeaderBg'),
-        tableHeaderTextColor: read('customThemeStyleTableHeaderTextColor'),
-        tableCellTextColor: read('customThemeStyleTableCellTextColor'),
-        tableBorderColor: read('customThemeStyleTableBorderColor'),
-        tableHoverTdBg: read('customThemeStyleTableHoverTdBg'),
-        progressBg: read('customThemeStyleProgressBg'),
-        monitorViewCardBg: read('customThemeStyleMonitorViewCardBg')
-    };
-}
-
-function applyCustomThemeStyleVariantToInputs(variantKey) {
-    const variantDefaults = getCustomThemeStyleVariantDefaults(variantKey);
-    const haveStored = customThemeStyleSettings != null;
-    const storedVariant = (() => {
-        const isNormal = variantKey.startsWith('normal');
-        const isMonitor = variantKey.startsWith('monitor');
-        const isLight = variantKey.endsWith('Light');
-        if (!haveStored) return null;
-        if (isNormal && isLight) return customThemeStyleSettings?.normal?.light ?? null;
-        if (isNormal && !isLight) return customThemeStyleSettings?.normal?.dark ?? null;
-        if (isMonitor && isLight) return customThemeStyleSettings?.monitor?.light ?? null;
-        if (isMonitor && !isLight) return customThemeStyleSettings?.monitor?.dark ?? null;
-        return null;
-    })();
-
-    const s = storedVariant ? storedVariant : variantDefaults;
-    const set = (id, val) => {
-        const el = document.getElementById(id);
-        if (el) el.value = String(val ?? '');
-    };
-
-    set('customThemeStyleCardBg', s.cardBg);
-    set('customThemeStyleCardTextColor', s.cardTextColor);
-    set('customThemeStyleCardHeaderFrom', s.cardHeaderFrom);
-    set('customThemeStyleCardHeaderTo', s.cardHeaderTo);
-    set('customThemeStyleCardHeaderTextColor', s.cardHeaderTextColor);
-    set('customThemeStyleStatValueColor', s.statValueColor);
-    set('customThemeStyleStatLabelColor', s.statLabelColor);
-    set('customThemeStyleTableHeaderBg', s.tableHeaderBg);
-    set('customThemeStyleTableHeaderTextColor', s.tableHeaderTextColor);
-    set('customThemeStyleTableCellTextColor', s.tableCellTextColor);
-    set('customThemeStyleTableBorderColor', s.tableBorderColor);
-    set('customThemeStyleTableHoverTdBg', s.tableHoverTdBg);
-    set('customThemeStyleProgressBg', s.progressBg);
-    set('customThemeStyleMonitorViewCardBg', s.monitorViewCardBg);
+    return customThemeManager.getStyleVariantFromSelect();
 }
 
 function syncCustomThemeStyleSettingsUI() {
-    const variantKey = getCustomThemeStyleVariantFromSelect();
-    applyCustomThemeStyleVariantToInputs(variantKey);
+    customThemeManager.syncStyleSettingsUI();
 }
 
 function onCustomThemeStyleVariantChange() {
-    syncCustomThemeStyleSettingsUI();
+    customThemeManager.onStyleVariantChange();
 }
 
 async function saveCustomThemeStyleSettingsVariant() {
-    const variantKey = getCustomThemeStyleVariantFromSelect();
-    const variantValues = readCustomThemeStyleVariantFromInputs();
-
-    const normalized = normalizeCustomThemeStyleSettingsInput(customThemeStyleSettings || {});
-    if (!normalized) return;
-
-    const isNormal = variantKey.startsWith('normal');
-    const isMonitor = variantKey.startsWith('monitor');
-    const isLight = variantKey.endsWith('Light');
-
-    if (isNormal && isLight) normalized.normal.light = variantValues;
-    else if (isNormal && !isLight) normalized.normal.dark = variantValues;
-    else if (isMonitor && isLight) normalized.monitor.light = variantValues;
-    else if (isMonitor && !isLight) normalized.monitor.dark = variantValues;
-
-    // Preserve default values for fields not represented in the plain-settings UI.
-    if (isNormal && isLight) normalized.normal.light = { ...getCustomThemeStyleVariantDefaults('normalLight'), ...normalized.normal.light, ...variantValues };
-    if (isNormal && !isLight) normalized.normal.dark = { ...getCustomThemeStyleVariantDefaults('normalDark'), ...normalized.normal.dark, ...variantValues };
-    if (isMonitor && isLight) normalized.monitor.light = { ...getCustomThemeStyleVariantDefaults('monitorLight'), ...normalized.monitor.light, ...variantValues };
-    if (isMonitor && !isLight) normalized.monitor.dark = { ...getCustomThemeStyleVariantDefaults('monitorDark'), ...normalized.monitor.dark, ...variantValues };
-
-    customThemeStyleSettings = normalized;
-    applyCustomThemeStyleSettings();
-    saveSettingsToServer({ customThemeStyleSettings });
-    showToast('Стили сохранены', 'success');
+    await customThemeManager.saveStyleSettingsVariant();
 }
 
 async function resetCustomThemeStyleSettingsVariant() {
-    const variantKey = getCustomThemeStyleVariantFromSelect();
-    const defaults = getCustomThemeStyleVariantDefaults(variantKey);
-
-    const normalized = normalizeCustomThemeStyleSettingsInput(customThemeStyleSettings || {});
-    if (!normalized) return;
-
-    const isNormal = variantKey.startsWith('normal');
-    const isMonitor = variantKey.startsWith('monitor');
-    const isLight = variantKey.endsWith('Light');
-
-    if (isNormal && isLight) normalized.normal.light = defaults;
-    else if (isNormal && !isLight) normalized.normal.dark = defaults;
-    else if (isMonitor && isLight) normalized.monitor.light = defaults;
-    else if (isMonitor && !isLight) normalized.monitor.dark = defaults;
-
-    customThemeStyleSettings = normalized;
-    applyCustomThemeStyleSettings();
-    saveSettingsToServer({ customThemeStyleSettings });
-    syncCustomThemeStyleSettingsUI();
-    showToast('Вариант сброшен к значениям по умолчанию', 'info');
+    await customThemeManager.resetStyleSettingsVariant();
 }
 
 async function unloadCustomThemeStyleSettingsAll() {
-    customThemeStyleSettings = null;
-    applyCustomThemeStyleSettings();
-    // Also clear legacy `custom_theme_css` so the disable action persists after reload.
-    saveSettingsToServer({
-        customThemeStyleSettings: null,
-        customThemeCss: {
-            normal: { light: '', dark: '' },
-            monitor: { light: '', dark: '' }
-        }
-    });
-    syncCustomThemeStyleSettingsUI();
-    showToast('Кастомные стили отключены', 'info');
+    await customThemeManager.unloadStyleSettingsAll();
 }
 
 function exportCustomThemeStyleSettings() {
-    const data = {
-        exportedAt: new Date().toISOString(),
-        type: 'customThemeStyleSettings',
-        version: 1,
-        customThemeStyleSettings
-    };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'custom-theme-style-settings-' + new Date().toISOString().slice(0, 10) + '.json';
-    a.click();
-    URL.revokeObjectURL(a.href);
-    showToast('Экспорт готов', 'success');
+    customThemeManager.exportStyleSettings();
 }
 
 function triggerCustomThemeStyleImportFilePicker() {
@@ -10748,31 +9980,7 @@ function triggerCustomThemeStyleImportFilePicker() {
 }
 
 async function importCustomThemeStyleSettingsFromFile(file) {
-    if (!file) return;
-    const text = await file.text();
-    let parsed = null;
-    try {
-        parsed = JSON.parse(text);
-    } catch (_) {
-        showToast('Невалидный JSON', 'error');
-        return;
-    }
-
-    const incoming = parsed?.customThemeStyleSettings ?? parsed;
-    const normalized = normalizeCustomThemeStyleSettingsInput(incoming);
-    if (!normalized) {
-        customThemeStyleSettings = null;
-        applyCustomThemeStyleSettings();
-        saveSettingsToServer({ customThemeStyleSettings: null });
-        showToast('Импорт: стили отключены', 'info');
-        return;
-    }
-
-    customThemeStyleSettings = normalized;
-    applyCustomThemeStyleSettings();
-    syncCustomThemeStyleSettingsUI();
-    await saveSettingsToServer({ customThemeStyleSettings });
-    showToast('Импорт стилей выполнен', 'success');
+    await customThemeManager.importStyleSettingsFromFile(file);
 }
 
 function getCustomThemeVariantFromSelect() {
@@ -10783,86 +9991,27 @@ function getCustomThemeVariantFromSelect() {
 }
 
 function syncCustomThemeCssEditorUI() {
-    const textarea = document.getElementById('customThemeCssEditor');
-    if (!textarea) return;
-
-    const normalized = normalizeCustomThemeCssInput(customThemeCss);
-    const variant = getCustomThemeVariantFromSelect();
-
-    if (variant === 'normalLight') textarea.value = normalized.normal.light || '';
-    else if (variant === 'normalDark') textarea.value = normalized.normal.dark || '';
-    else if (variant === 'monitorLight') textarea.value = normalized.monitor.light || '';
-    else if (variant === 'monitorDark') textarea.value = normalized.monitor.dark || '';
+    customThemeManager.syncCssEditorUI();
 }
 
 function onCustomThemeVariantChange() {
-    syncCustomThemeCssEditorUI();
+    customThemeManager.onCssVariantChange();
 }
 
 async function saveCustomThemeCssVariant() {
-    const variant = getCustomThemeVariantFromSelect();
-    const textarea = document.getElementById('customThemeCssEditor');
-    if (!textarea) return;
-
-    const value = String(textarea.value ?? '');
-    const normalized = normalizeCustomThemeCssInput(customThemeCss);
-
-    if (variant === 'normalLight') normalized.normal.light = value;
-    else if (variant === 'normalDark') normalized.normal.dark = value;
-    else if (variant === 'monitorLight') normalized.monitor.light = value;
-    else if (variant === 'monitorDark') normalized.monitor.dark = value;
-
-    customThemeCss = normalized;
-    applyCustomThemeCss();
-    saveSettingsToServer({ customThemeCss });
-    showToast('Стили сохранены', 'success');
+    await customThemeManager.saveCssVariant();
 }
 
 async function clearCustomThemeCssVariant() {
-    const variant = getCustomThemeVariantFromSelect();
-    const textarea = document.getElementById('customThemeCssEditor');
-    if (!textarea) return;
-
-    const normalized = normalizeCustomThemeCssInput(customThemeCss);
-    if (variant === 'normalLight') normalized.normal.light = '';
-    else if (variant === 'normalDark') normalized.normal.dark = '';
-    else if (variant === 'monitorLight') normalized.monitor.light = '';
-    else if (variant === 'monitorDark') normalized.monitor.dark = '';
-
-    customThemeCss = normalized;
-    textarea.value = '';
-    applyCustomThemeCss();
-    saveSettingsToServer({ customThemeCss });
-    showToast('Стили этого варианта удалены', 'info');
+    await customThemeManager.clearCssVariant();
 }
 
 async function unloadCustomThemeCssAll() {
-    customThemeCss = {
-        normal: { light: '', dark: '' },
-        monitor: { light: '', dark: '' }
-    };
-    const textarea = document.getElementById('customThemeCssEditor');
-    if (textarea) textarea.value = '';
-    applyCustomThemeCss();
-    saveSettingsToServer({ customThemeCss });
-    showToast('Пользовательские стили удалены', 'info');
+    await customThemeManager.unloadCssAll();
 }
 
 function exportCustomThemeCss() {
-    const normalized = normalizeCustomThemeCssInput(customThemeCss);
-    const data = {
-        exportedAt: new Date().toISOString(),
-        type: 'customThemeCss',
-        version: 1,
-        customThemeCss: normalized
-    };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'custom-theme-css-' + new Date().toISOString().slice(0, 10) + '.json';
-    a.click();
-    URL.revokeObjectURL(a.href);
-    showToast('Экспорт готов', 'success');
+    customThemeManager.exportCss();
 }
 
 function triggerCustomThemeImportFilePicker() {
@@ -10873,23 +10022,7 @@ function triggerCustomThemeImportFilePicker() {
 }
 
 async function importCustomThemeCssFromFile(file) {
-    if (!file) return;
-    const text = await file.text();
-    let parsed = null;
-    try {
-        parsed = JSON.parse(text);
-    } catch (e) {
-        showToast('Невалидный JSON файла', 'error');
-        return;
-    }
-
-    const incoming = parsed?.customThemeCss ?? parsed;
-    const normalized = normalizeCustomThemeCssInput(incoming);
-    customThemeCss = normalized;
-    applyCustomThemeCss();
-    syncCustomThemeCssEditorUI();
-    saveSettingsToServer({ customThemeCss });
-    showToast('Импорт стилей выполнен', 'success');
+    await customThemeManager.importCssFromFile(file);
 }
 
 function goMonitorView(direction) {
@@ -10909,124 +10042,18 @@ function monitorDrawSwipesBlocked() {
 }
 
 function destroyMonitorSwipes() {
-    monitorSwipeStartX = null;
-    monitorSwipeHandlersAttached = false;
-    const target = document.body;
-    if (target._monitorSwipeStart) {
-        target.removeEventListener('touchstart', target._monitorSwipeStart);
-        target.removeEventListener('touchend', target._monitorSwipeEnd);
-        delete target._monitorSwipeStart;
-        delete target._monitorSwipeEnd;
-    }
-    if (target._monitorSwipeMouseStart) {
-        target.removeEventListener('mousedown', target._monitorSwipeMouseStart);
-        delete target._monitorSwipeMouseStart;
-    }
+    monitorInteractionsManager.destroySwipes();
 }
 
 let monitorKeyboardNavAttached = false;
 
 function initMonitorKeyboardNavigation() {
-    if (monitorKeyboardNavAttached) return;
-
-    document.addEventListener('keydown', (e) => {
-        if (!monitorMode || !e) return;
-
-        const target = e.target;
-        const tag = target && target.tagName ? String(target.tagName).toUpperCase() : '';
-        const isEditable = !!(target && (
-            target.isContentEditable ||
-            tag === 'INPUT' ||
-            tag === 'TEXTAREA' ||
-            tag === 'SELECT'
-        ));
-        if (isEditable) return;
-
-        if (e.key === 'ArrowLeft') {
-            e.preventDefault();
-            goMonitorView('prev');
-            return;
-        }
-        if (e.key === 'ArrowRight') {
-            e.preventDefault();
-            goMonitorView('next');
-            return;
-        }
-        if (e.key === 'Home') {
-            e.preventDefault();
-            applyMonitorView('cluster');
-            return;
-        }
-
-        const key = String(e.key || '').trim();
-        const parts = [];
-        if (e.metaKey) parts.push('Meta');
-        if (e.ctrlKey) parts.push('Ctrl');
-        if (e.altKey) parts.push('Alt');
-        if (e.shiftKey) parts.push('Shift');
-        if (key && !['Control', 'Shift', 'Alt', 'Meta'].includes(key)) {
-            parts.push(key.length === 1 ? key.toUpperCase() : key);
-        } else if (!parts.length && key) {
-            // Handle single modifier presses as dedicated hotkeys.
-            if (key === 'Meta') parts.push('Meta');
-            else if (key === 'Control') parts.push('Ctrl');
-            else if (key === 'Alt') parts.push('Alt');
-            else if (key === 'Shift') parts.push('Shift');
-        }
-        const pressedCombo = normalizeMonitorHotkeyCombo(parts.join('+'));
-        if (!pressedCombo) return;
-        const handled = queueMonitorHotkeyCombo(pressedCombo);
-        if (!handled) return;
-        e.preventDefault();
-    });
-
+    monitorInteractionsManager.initKeyboardNavigation();
     monitorKeyboardNavAttached = true;
 }
 
 function initMonitorSwipes() {
-    if (monitorSwipeHandlersAttached) return;
-    const minDist = 80;
-    function onStart(e) {
-        if (!monitorMode) return;
-        if (monitorDrawSwipesBlocked()) return;
-        const x = e.touches ? e.touches[0].clientX : e.clientX;
-        monitorSwipeStartX = x;
-    }
-    function onEnd(e) {
-        if (!monitorMode) return;
-        if (monitorDrawSwipesBlocked()) {
-            monitorSwipeStartX = null;
-            return;
-        }
-        if (monitorSwipeStartX == null) return;
-        const x = e.changedTouches ? e.changedTouches[0].clientX : e.clientX;
-        const delta = x - monitorSwipeStartX;
-        if (delta < -minDist) goMonitorView('next');
-        else if (delta > minDist) goMonitorView('prev');
-        monitorSwipeStartX = null;
-    }
-    function mouseStart(e) {
-        if (!monitorMode) return;
-        if (monitorDrawSwipesBlocked()) return;
-        monitorSwipeStartX = e.clientX;
-        function mouseEnd(ev) {
-            if (monitorDrawSwipesBlocked()) {
-                monitorSwipeStartX = null;
-                return;
-            }
-            const d = ev.clientX - monitorSwipeStartX;
-            if (Math.abs(d) > minDist) goMonitorView(d < 0 ? 'next' : 'prev');
-            document.body.removeEventListener('mouseup', mouseEnd);
-        }
-        document.body.addEventListener('mouseup', mouseEnd, { once: true });
-    }
-    document.body._monitorSwipeStart = onStart;
-    document.body._monitorSwipeEnd = onEnd;
-    document.body._monitorSwipeMouseStart = mouseStart;
-    document.body.addEventListener('touchstart', onStart, { passive: true });
-    document.body.addEventListener('touchend', onEnd, { passive: true });
-    document.body.addEventListener('mousedown', mouseStart);
-    monitorSwipeHandlersAttached = true;
+    monitorInteractionsManager.initSwipes();
 }
 
 /** Главная: закрыть настройки; в режиме монитора — экран кластера без выхода из fullscreen; иначе обычный дашборд. */
@@ -11078,96 +10105,7 @@ function startAutoRefresh() {
 // Connect (called after connectAs(type) sets currentServerType)
 /** @param {{ skipDashboard?: boolean }} [options] — для мастера: не переключать экран до завершения шагов */
 async function connect(options) {
-    const opt = options && typeof options === 'object' ? options : {};
-    const skipDashboard = !!opt.skipDashboard;
-    const tokenInput = currentServerType === 'truenas'
-        ? document.getElementById('apiTokenTrueNAS')
-        : document.getElementById('apiToken');
-    if (currentServerType === 'proxmox') syncProxmoxApiTokenFromParts();
-    const rawToken = tokenInput ? tokenInput.value.trim() : '';
-    const masked = rawToken.includes('•');
-    const token = masked ? (apiToken || '') : rawToken;
-    const connId = getCurrentConnectionId();
-    // Секрет только в БД: поле с маской, apiToken в памяти уже null — используем сохранённое подключение
-    const reuseExistingSecret = connId && (!rawToken || (masked && !apiToken));
-
-    if (!reuseExistingSecret && !token) {
-        showToast(t('tokenRequired'), 'error');
-        return false;
-    }
-
-    const connectBtnId = currentServerType === 'truenas' ? 'connectBtnTrueNAS' : 'connectBtnProxmox';
-    const connectBtn = document.getElementById(connectBtnId);
-    const originalText = connectBtn ? connectBtn.innerHTML : '';
-    if (connectBtn) {
-        connectBtn.disabled = true;
-        connectBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>' + t('loading');
-    }
-
-    const serverUrl = getCurrentServerUrl();
-    try {
-        if (reuseExistingSecret) {
-            const testRes = await fetch(`/api/connections/${connId}/test`, { method: 'POST' });
-            const testData = await testRes.json().catch(() => ({}));
-            if (!testRes.ok || !testData.success) {
-                throw new Error(testData?.error || `HTTP ${testRes.status}`);
-            }
-            showToast(t('connectSuccess'), 'success');
-            const logoutContainerId = currentServerType === 'truenas' ? 'logoutContainerTrueNAS' : 'logoutContainerProxmox';
-            setDisplay(logoutContainerId, 'block');
-            updateConnectionStatus(true, currentServerType);
-            if (!skipDashboard) showDashboard();
-            return true;
-        }
-
-        // Всегда сохраняем секрет в DB и используем connectionId
-        const upsertRes = await fetch('/api/connections/upsert', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                type: currentServerType,
-                url: serverUrl,
-                secret: token
-            })
-        });
-        const upsertData = await upsertRes.json();
-        if (!upsertRes.ok || !upsertData?.success) {
-            throw new Error(upsertData?.error || `connections: HTTP ${upsertRes.status}`);
-        }
-        saveConnectionId(currentServerType, upsertData.connection.url, upsertData.connection.id);
-        apiToken = null; // секрет в памяти не держим, всё в DB
-
-        const response = await fetch(currentServerType === 'truenas' ? '/api/truenas/auth/test' : '/api/auth/test', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(currentServerType === 'truenas'
-                ? { apiKey: token, serverUrl }
-                : { token, serverUrl })
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-            showToast(t('connectSuccess'), 'success');
-            const logoutContainerId = currentServerType === 'truenas' ? 'logoutContainerTrueNAS' : 'logoutContainerProxmox';
-            setDisplay(logoutContainerId, 'block');
-            updateConnectionStatus(true, currentServerType);
-            if (!skipDashboard) showDashboard();
-            return true;
-        }
-        showToast(t('connectError') + ': ' + data.error, 'error');
-        updateConnectionStatus(false, currentServerType);
-        return false;
-    } catch (error) {
-        showToast(t('connectError') + ': ' + error.message, 'error');
-        updateConnectionStatus(false, currentServerType);
-        return false;
-    } finally {
-        if (connectBtn) {
-            connectBtn.disabled = false;
-            connectBtn.innerHTML = originalText;
-        }
-    }
+    return connectionManager.connect(options && typeof options === 'object' ? options : {});
 }
 
 function connectAs(type) {
@@ -11177,67 +10115,7 @@ function connectAs(type) {
 
 // Test connection
 async function testConnection() {
-    const tokenInput = currentServerType === 'truenas'
-        ? document.getElementById('apiTokenTrueNAS')
-        : document.getElementById('apiToken');
-    if (currentServerType === 'proxmox') syncProxmoxApiTokenFromParts();
-    const rawToken = tokenInput ? tokenInput.value.trim() : '';
-    const masked = rawToken.includes('•');
-    const token = masked ? (apiToken || '') : rawToken;
-    const connId = getCurrentConnectionId();
-    const reuseExistingSecret = connId && (!rawToken || (masked && !apiToken));
-
-    const testBtnId = currentServerType === 'truenas' ? 'testConnectionBtnTrueNAS' : 'testConnectionBtnProxmox';
-    const testBtn = document.getElementById(testBtnId);
-    const originalText = testBtn.innerHTML;
-    testBtn.disabled = true;
-    testBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>' + t('loading');
-
-    const serverUrl = getCurrentServerUrl();
-    try {
-        if (reuseExistingSecret) {
-            const testRes = await fetch(`/api/connections/${connId}/test`, { method: 'POST' });
-            const testData = await testRes.json();
-            if (testRes.ok && testData.success) {
-                showToast(t('connectionStatusConnected'), 'success');
-                updateConnectionStatus(true, currentServerType);
-                return;
-            }
-            showToast(t('connectionStatusDisconnected') + ': ' + (testData.error || `HTTP ${testRes.status}`), 'error');
-            updateConnectionStatus(false, currentServerType);
-            return;
-        }
-
-        if (!token) {
-            showToast(t('tokenRequired'), 'warning');
-            updateConnectionStatus(false, currentServerType);
-            return;
-        }
-
-        const response = await fetch(currentServerType === 'truenas' ? '/api/truenas/auth/test' : '/api/auth/test', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(currentServerType === 'truenas'
-                ? { apiKey: token, serverUrl }
-                : { token, serverUrl })
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            showToast(t('connectionStatusConnected'), 'success');
-            updateConnectionStatus(true, currentServerType);
-        } else {
-            showToast(t('connectionStatusDisconnected') + ': ' + data.error, 'error');
-            updateConnectionStatus(false, currentServerType);
-        }
-    } catch (error) {
-        showToast(t('connectionStatusDisconnected') + ': ' + error.message, 'error');
-        updateConnectionStatus(false, currentServerType);
-    } finally {
-        testBtn.disabled = false;
-        testBtn.innerHTML = originalText;
-    }
+    return connectionManager.testConnection();
 }
 
 function testConnectionAs(type) {
@@ -11247,21 +10125,7 @@ function testConnectionAs(type) {
 
 // Update connection status for a given type (proxmox | truenas)
 function updateConnectionStatus(connected, type) {
-    const suffix = (type || currentServerType) === 'truenas' ? 'TrueNAS' : 'Proxmox';
-    const statusDisplay = document.getElementById('connectionStatusDisplay' + suffix);
-    const statusBadge = document.getElementById('connectionStatusBadge' + suffix);
-    const statusText = document.getElementById('connectionStatusText' + suffix);
-
-    if (statusDisplay && statusBadge && statusText) {
-        statusDisplay.style.display = 'block';
-        if (connected) {
-            statusBadge.className = 'badge bg-success';
-            statusText.textContent = t('connectionStatusConnected');
-        } else {
-            statusBadge.className = 'badge bg-danger';
-            statusText.textContent = t('connectionStatusDisconnected');
-        }
-    }
+    connectionManager.updateConnectionStatus(connected, type);
 }
 
 // Refresh data
