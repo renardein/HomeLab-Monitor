@@ -12373,7 +12373,7 @@ async function exportServicesOnly() {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'homelab-monitor-services'+ new Date().toISOString().slice(0, 19).replace(/:/g, '-') +'.json';
+        a.download = 'homelab-monitor-services' + new Date().toISOString().slice(0, 19).replace(/:/g, '-') + '.json';
         document.body.appendChild(a);
         a.click();
         a.remove();
@@ -12455,7 +12455,7 @@ async function exportVmsOnly() {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'homelab-monitor-vms-'+ new Date().toISOString().slice(0, 19).replace(/:/g, '-') +'.json';
+        a.download = 'homelab-monitor-vms-' + new Date().toISOString().slice(0, 19).replace(/:/g, '-') + '.json';
         document.body.appendChild(a);
         a.click();
         a.remove();
@@ -12532,8 +12532,7 @@ async function exportAllConfig() {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'homelab-monitor-'+ new Date().toISOString().slice(0, 19).replace(/:/g, '-') +'.json';
-        console.log(a.download);
+        a.download = 'homelab-monitor-config-' + new Date().toISOString().slice(0, 19).replace(/:/g, '-') + '.json';
         document.body.appendChild(a);
         a.click();
         a.remove();
