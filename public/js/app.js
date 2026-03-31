@@ -113,6 +113,9 @@ const CLUSTER_DASHBOARD_TILE_TYPES = ['service', 'vmct', 'netdev', 'ups', 'speed
 /** Кэш конфигов для выпадающего списка плиток «датчик» (не только открытый редактор). */
 let smartSensorsConfigsForTiles = [];
 const MAX_CLUSTER_DASHBOARD_TILES = 12;
+/** Сетка экрана Tiles: колонки × строки, клетка 1×1. */
+const TILES_MONITOR_GRID_COLS = 12;
+const TILES_MONITOR_GRID_ROWS = 8;
 const DEFAULT_DASHBOARD_TIMEZONE = (() => {
     try {
         return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
@@ -4990,6 +4993,16 @@ async function loadSmartSensorsConfigsForTiles() {
     }
 }
 
+function tilesSizeToGridWH(size) {
+    const s = String(size || '1x1').trim();
+    if (s === '4x1') return { w: 4, h: 1 };
+    if (s === '3x1') return { w: 3, h: 1 };
+    if (s === '2x1') return { w: 2, h: 1 };
+    if (s === '2x2') return { w: 2, h: 2 };
+    if (s === '3x2') return { w: 3, h: 2 };
+    return { w: 1, h: 1 };
+}
+
 function normalizeClusterDashboardTile(raw) {
     const tile = raw && typeof raw === 'object' ? raw : {};
     const type = String(tile.type || '').trim().toLowerCase();
@@ -5014,18 +5027,299 @@ function normalizeClusterDashboardTile(raw) {
     const hasExplicitCluster = Object.prototype.hasOwnProperty.call(tile, 'showOnCluster');
     const hasExplicitTiles = Object.prototype.hasOwnProperty.call(tile, 'showOnTiles');
     const isLegacyTile = !hasExplicitCluster && !hasExplicitTiles;
-    const tilesSize = ['1x1', '2x1', '3x1', '4x1'].includes(String(tile.tilesSize || '').trim())
+    const tilesSize = ['1x1', '2x1', '3x1', '4x1', '2x2', '3x2'].includes(String(tile.tilesSize || '').trim())
         ? String(tile.tilesSize).trim()
         : '1x1';
+    const fromSize = tilesSizeToGridWH(tilesSize);
+    let tilesGridW = parseInt(tile.tilesGridW, 10);
+    let tilesGridH = parseInt(tile.tilesGridH, 10);
+    if (!Number.isFinite(tilesGridW) || tilesGridW < 1) tilesGridW = fromSize.w;
+    if (!Number.isFinite(tilesGridH) || tilesGridH < 1) tilesGridH = fromSize.h;
+    tilesGridW = Math.min(Math.max(1, tilesGridW), TILES_MONITOR_GRID_COLS);
+    tilesGridH = Math.min(Math.max(1, tilesGridH), TILES_MONITOR_GRID_ROWS);
+
+    let tilesGridCol = parseInt(tile.tilesGridCol, 10);
+    let tilesGridRow = parseInt(tile.tilesGridRow, 10);
+    if (!Number.isFinite(tilesGridCol) || tilesGridCol < 0) tilesGridCol = 0;
+    if (!Number.isFinite(tilesGridRow) || tilesGridRow < 0) tilesGridRow = 0;
+    if (tilesGridCol > TILES_MONITOR_GRID_COLS) tilesGridCol = 0;
+    if (tilesGridRow > TILES_MONITOR_GRID_ROWS) tilesGridRow = 0;
+
     return {
         type,
         sourceId,
-        showOnCluster: tile.showOnCluster !== false,
+        // Legacy visibility flag; Homelab dashboard no longer exposes this toggle — always on for compatibility.
+        showOnCluster: true,
         // Backward compatibility: old tiles (without flags) appear on Tiles screen too.
         showOnTiles: tile.showOnTiles === true || isLegacyTile,
-        tilesSize
+        tilesSize,
+        tilesGridW,
+        tilesGridH,
+        tilesGridCol,
+        tilesGridRow
     };
 }
+
+/**
+ * Расстановка плиток на сетке: явные col/row (1-based, 0 = авто) или поиск первого свободного места.
+ */
+function computeTilesMonitorPlacements(tiles) {
+    const COLS = TILES_MONITOR_GRID_COLS;
+    const ROWS = TILES_MONITOR_GRID_ROWS;
+    const occupied = Array.from({ length: ROWS }, () => Array(COLS).fill(false));
+
+    function canPlace(r0, c0, w, h) {
+        if (c0 + w > COLS || r0 + h > ROWS) return false;
+        for (let rr = r0; rr < r0 + h; rr++) {
+            for (let cc = c0; cc < c0 + w; cc++) {
+                if (occupied[rr][cc]) return false;
+            }
+        }
+        return true;
+    }
+
+    function occupy(r0, c0, w, h) {
+        for (let rr = r0; rr < r0 + h; rr++) {
+            for (let cc = c0; cc < c0 + w; cc++) {
+                occupied[rr][cc] = true;
+            }
+        }
+    }
+
+    return tiles.map((tile) => {
+        const w = tile.tilesGridW || 1;
+        const h = tile.tilesGridH || 1;
+        const wantCol = tile.tilesGridCol | 0;
+        const wantRow = tile.tilesGridRow | 0;
+
+        if (wantCol > 0 && wantRow > 0) {
+            const c0 = wantCol - 1;
+            const r0 = wantRow - 1;
+            if (canPlace(r0, c0, w, h)) {
+                occupy(r0, c0, w, h);
+                return { tile, gridCol: wantCol, gridRow: wantRow };
+            }
+        }
+
+        for (let r0 = 0; r0 < ROWS; r0++) {
+            for (let c0 = 0; c0 < COLS; c0++) {
+                if (canPlace(r0, c0, w, h)) {
+                    occupy(r0, c0, w, h);
+                    return { tile, gridCol: c0 + 1, gridRow: r0 + 1 };
+                }
+            }
+        }
+        return { tile, gridCol: 1, gridRow: 1 };
+    });
+}
+
+let tilesEditorSelectedIndex = -1;
+let tilesEditorPointerState = null;
+
+function getTilesEditorWorkingSet() {
+    const normalized = normalizeClusterDashboardTiles(clusterDashboardTiles);
+    let selected = normalized.map((tile, index) => ({ ...tile, __idx: index })).filter((tile) => tile.showOnTiles === true);
+    if (!selected.length) {
+        selected = normalized.map((tile, index) => ({ ...tile, __idx: index })).filter((tile) => tile.showOnCluster !== false);
+    }
+    return selected;
+}
+
+function getTilesEditorResolvedPlacement(tileIndex) {
+    const set = getTilesEditorWorkingSet();
+    const placements = computeTilesMonitorPlacements(set);
+    return placements.find((p) => p.tile && p.tile.__idx === tileIndex) || null;
+}
+
+function renderTilesVisualEditor() {
+    const host = document.getElementById('settingsClusterTilesVisualEditor');
+    if (!host) return;
+    const set = getTilesEditorWorkingSet();
+    if (!set.length) {
+        host.innerHTML = `<div class="text-muted small">${escapeHtml(t('settingsClusterTilesEmpty') || 'No tiles configured yet.')}</div>`;
+        return;
+    }
+    const placements = computeTilesMonitorPlacements(set);
+    const html = placements.map(({ tile, gridCol, gridRow }) => {
+        const idx = tile.__idx;
+        const title = getClusterDashboardTileTypeLabel(tile.type);
+        const src = String(tile.sourceId || '').replace(/^.+:/, '');
+        const w = Math.max(1, Math.min(TILES_MONITOR_GRID_COLS, tile.tilesGridW || 1));
+        const h = Math.max(1, Math.min(TILES_MONITOR_GRID_ROWS, tile.tilesGridH || 1));
+        const selectedCls = idx === tilesEditorSelectedIndex ? ' is-selected' : '';
+        return `
+            <button type="button"
+                class="tiles-layout-editor__item${selectedCls}"
+                data-tile-index="${idx}"
+                style="grid-column:${gridCol} / span ${w}; grid-row:${gridRow} / span ${h};"
+                onpointerdown="onTilesEditorItemPointerDown(${idx}, event)">
+                <span class="tiles-layout-editor__item-title">${escapeHtml(title)}</span>
+                <span class="tiles-layout-editor__item-src">${escapeHtml(src)}</span>
+                <span class="tiles-layout-editor__resize" onpointerdown="onTilesEditorResizePointerDown(${idx}, event)"></span>
+            </button>
+        `;
+    }).join('');
+    host.innerHTML = `
+        <div class="tiles-layout-editor__hint small text-muted mb-2">${escapeHtml(t('settingsClusterTileTilesGridAutoHint') || 'Use 0 for automatic placement.')}</div>
+        <div class="tiles-layout-editor__grid" id="tilesLayoutEditorGrid"
+            style="--tiles-grid-cols:${TILES_MONITOR_GRID_COLS}; --tiles-grid-rows:${TILES_MONITOR_GRID_ROWS};">
+            ${html}
+        </div>
+    `;
+}
+
+const TILES_EDITOR_DRAG_THRESHOLD_PX = 7;
+
+function beginTilesEditorPointer(tileIndex, event, mode) {
+    if (!event) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const item = document.querySelector(`.tiles-layout-editor__item[data-tile-index="${tileIndex}"]`);
+    const grid = document.getElementById('tilesLayoutEditorGrid');
+    const placement = getTilesEditorResolvedPlacement(tileIndex);
+    if (!(item instanceof HTMLElement) || !(grid instanceof HTMLElement) || !placement) return;
+    const rect = grid.getBoundingClientRect();
+    const cellW = rect.width / TILES_MONITOR_GRID_COLS;
+    const cellH = rect.height / TILES_MONITOR_GRID_ROWS;
+    if (!cellW || !cellH) return;
+    const w = Math.max(1, Math.min(TILES_MONITOR_GRID_COLS, placement.tile.tilesGridW || 1));
+    const h = Math.max(1, Math.min(TILES_MONITOR_GRID_ROWS, placement.tile.tilesGridH || 1));
+    const pointerCol = Math.floor((event.clientX - rect.left) / cellW) + 1;
+    const pointerRow = Math.floor((event.clientY - rect.top) / cellH) + 1;
+    tilesEditorPointerState = {
+        mode,
+        tileIndex,
+        pointerId: event.pointerId,
+        startCol: placement.gridCol,
+        startRow: placement.gridRow,
+        startW: w,
+        startH: h,
+        offsetCol: Math.max(0, Math.min(w - 1, pointerCol - placement.gridCol)),
+        offsetRow: Math.max(0, Math.min(h - 1, pointerRow - placement.gridRow)),
+        rect,
+        cellW,
+        cellH
+    };
+    try { item.setPointerCapture(event.pointerId); } catch (_) {}
+}
+
+function onTilesEditorItemPointerDown(tileIndex, event) {
+    if (event.target && (event.target).closest && (event.target).closest('.tiles-layout-editor__resize')) return;
+    if (!event) return;
+    event.preventDefault();
+    const grid = document.getElementById('tilesLayoutEditorGrid');
+    const placement = getTilesEditorResolvedPlacement(tileIndex);
+    if (!(grid instanceof HTMLElement) || !placement) return;
+    const rect = grid.getBoundingClientRect();
+    const cellW = rect.width / TILES_MONITOR_GRID_COLS;
+    const cellH = rect.height / TILES_MONITOR_GRID_ROWS;
+    if (!cellW || !cellH) return;
+    tilesEditorPointerState = {
+        mode: 'pending',
+        tileIndex,
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        rect,
+        cellW,
+        cellH,
+        placement
+    };
+}
+
+function onTilesEditorResizePointerDown(tileIndex, event) {
+    if (!event) return;
+    event.preventDefault();
+    event.stopPropagation();
+    beginTilesEditorPointer(tileIndex, event, 'resize');
+}
+
+function promotePendingTilesEditorToMoveDrag(event) {
+    const s = tilesEditorPointerState;
+    if (!s || s.mode !== 'pending' || !s.placement) return;
+    const tileIndex = s.tileIndex;
+    const item = document.querySelector(`.tiles-layout-editor__item[data-tile-index="${tileIndex}"]`);
+    const placement = s.placement;
+    if (!(item instanceof HTMLElement)) return;
+    const w = Math.max(1, Math.min(TILES_MONITOR_GRID_COLS, placement.tile.tilesGridW || 1));
+    const h = Math.max(1, Math.min(TILES_MONITOR_GRID_ROWS, placement.tile.tilesGridH || 1));
+    const pointerCol = Math.floor((event.clientX - s.rect.left) / s.cellW) + 1;
+    const pointerRow = Math.floor((event.clientY - s.rect.top) / s.cellH) + 1;
+    tilesEditorPointerState = {
+        mode: 'move',
+        tileIndex,
+        pointerId: s.pointerId,
+        startCol: placement.gridCol,
+        startRow: placement.gridRow,
+        startW: w,
+        startH: h,
+        offsetCol: Math.max(0, Math.min(w - 1, pointerCol - placement.gridCol)),
+        offsetRow: Math.max(0, Math.min(h - 1, pointerRow - placement.gridRow)),
+        rect: s.rect,
+        cellW: s.cellW,
+        cellH: s.cellH
+    };
+    try { item.setPointerCapture(event.pointerId); } catch (_) {}
+}
+
+function handleTilesEditorPointerMove(event) {
+    const s = tilesEditorPointerState;
+    if (!s || event.pointerId !== s.pointerId) return;
+    if (s.mode === 'pending') {
+        const dist = Math.hypot(event.clientX - s.startX, event.clientY - s.startY);
+        if (dist > TILES_EDITOR_DRAG_THRESHOLD_PX) promotePendingTilesEditorToMoveDrag(event);
+        return;
+    }
+    const item = document.querySelector(`.tiles-layout-editor__item[data-tile-index="${s.tileIndex}"]`);
+    if (!(item instanceof HTMLElement)) return;
+    const rawCol = Math.floor((event.clientX - s.rect.left) / s.cellW) + 1;
+    const rawRow = Math.floor((event.clientY - s.rect.top) / s.cellH) + 1;
+    if (s.mode === 'resize') {
+        const maxW = TILES_MONITOR_GRID_COLS - s.startCol + 1;
+        const maxH = TILES_MONITOR_GRID_ROWS - s.startRow + 1;
+        const nextW = Math.max(1, Math.min(maxW, rawCol - s.startCol + 1));
+        const nextH = Math.max(1, Math.min(maxH, rawRow - s.startRow + 1));
+        item.style.gridColumn = `${s.startCol} / span ${nextW}`;
+        item.style.gridRow = `${s.startRow} / span ${nextH}`;
+    } else {
+        const nextCol = Math.max(1, Math.min(TILES_MONITOR_GRID_COLS - s.startW + 1, rawCol - s.offsetCol));
+        const nextRow = Math.max(1, Math.min(TILES_MONITOR_GRID_ROWS - s.startH + 1, rawRow - s.offsetRow));
+        item.style.gridColumn = `${nextCol} / span ${s.startW}`;
+        item.style.gridRow = `${nextRow} / span ${s.startH}`;
+    }
+}
+
+function handleTilesEditorPointerUp(event) {
+    const s = tilesEditorPointerState;
+    if (!s || event.pointerId !== s.pointerId) return;
+    if (s.mode === 'pending') {
+        tilesEditorSelectedIndex = s.tileIndex;
+        tilesEditorPointerState = null;
+        renderClusterDashboardTilesSettings();
+        return;
+    }
+    const item = document.querySelector(`.tiles-layout-editor__item[data-tile-index="${s.tileIndex}"]`);
+    if (!(item instanceof HTMLElement)) {
+        tilesEditorPointerState = null;
+        return;
+    }
+    const colMatch = /(\d+)\s*\/\s*span\s*(\d+)/.exec(item.style.gridColumn || '');
+    const rowMatch = /(\d+)\s*\/\s*span\s*(\d+)/.exec(item.style.gridRow || '');
+    const nextCol = colMatch ? parseInt(colMatch[1], 10) : s.startCol;
+    const nextW = colMatch ? parseInt(colMatch[2], 10) : s.startW;
+    const nextRow = rowMatch ? parseInt(rowMatch[1], 10) : s.startRow;
+    const nextH = rowMatch ? parseInt(rowMatch[2], 10) : s.startH;
+    if (s.mode === 'resize') {
+        updateClusterDashboardTileFlags(s.tileIndex, { tilesGridW: nextW, tilesGridH: nextH, tilesGridCol: nextCol, tilesGridRow: nextRow });
+    } else if (s.mode === 'move') {
+        updateClusterDashboardTileFlags(s.tileIndex, { tilesGridCol: nextCol, tilesGridRow: nextRow });
+    }
+    tilesEditorPointerState = null;
+}
+
+window.addEventListener('pointermove', handleTilesEditorPointerMove);
+window.addEventListener('pointerup', handleTilesEditorPointerUp);
+window.addEventListener('pointercancel', handleTilesEditorPointerUp);
 
 function normalizeClusterDashboardTiles(raw) {
     if (!Array.isArray(raw)) return [];
@@ -5199,11 +5493,43 @@ function markClusterDashboardTilesDirty(nextDirty) {
     if (saveBtn) saveBtn.disabled = !clusterDashboardTilesDirty;
 }
 
-function renderClusterDashboardTilesSettings() {
-    const listEl = document.getElementById('settingsClusterTilesList');
-    if (!listEl) return;
+function clampTilesEditorSelectedIndex() {
+    if (!Array.isArray(clusterDashboardTiles)) clusterDashboardTiles = [];
+    if (!clusterDashboardTiles.length) {
+        tilesEditorSelectedIndex = -1;
+        return;
+    }
+    if (tilesEditorSelectedIndex < 0 || tilesEditorSelectedIndex >= clusterDashboardTiles.length) {
+        tilesEditorSelectedIndex = -1;
+    }
+}
 
-    const emptyText = t('settingsClusterTilesEmpty');
+function buildClusterDashboardTilesSelectorHtml() {
+    const selectHint = t('settingsClusterTilesSelectHint');
+    if (!Array.isArray(clusterDashboardTiles) || !clusterDashboardTiles.length) {
+        return `<div class="text-muted small py-2">${escapeHtml(selectHint)}</div>`;
+    }
+    return `
+        <div class="cluster-tiles-selector">
+            ${clusterDashboardTiles.map((tile, index) => {
+                const nt = normalizeClusterDashboardTiles([tile])[0] || tile;
+                const isSelected = index === tilesEditorSelectedIndex;
+                const typeText = getClusterDashboardTileTypeLabel(nt.type);
+                const srcText = String(nt.sourceId || '').replace(/^.+:/, '') || '—';
+                return `
+                    <button type="button"
+                        class="cluster-tiles-selector__item${isSelected ? ' is-selected' : ''}"
+                        onclick="selectClusterDashboardTile(${index})">
+                        <span class="cluster-tiles-selector__title">${escapeHtml(typeText)}</span>
+                        <span class="cluster-tiles-selector__src">${escapeHtml(srcText)}</span>
+                    </button>
+                `;
+            }).join('')}
+        </div>
+    `;
+}
+
+function buildClusterDashboardTileDetailHtml(index) {
     const typeLabel = t('settingsClusterTileTypeLabel');
     const sourceLabel = t('settingsClusterTileSourceLabel');
     const missingSourceText = t('settingsClusterTileSourceMissing');
@@ -5211,86 +5537,154 @@ function renderClusterDashboardTilesSettings() {
     const removeTitle = t('settingsClusterTileRemoveTitle');
     const moveUpTitle = t('settingsClusterTileMoveUpTitle');
     const moveDownTitle = t('settingsClusterTileMoveDownTitle');
+    const gridColLabel = t('settingsClusterTileTilesGridColLabel');
+    const gridRowLabel = t('settingsClusterTileTilesGridRowLabel');
+    const gridWLabel = t('settingsClusterTileTilesGridWLabel');
+    const gridHLabel = t('settingsClusterTileTilesGridHLabel');
+    const gridAutoHint = t('settingsClusterTileTilesGridAutoHint');
+    const gridPresetLabel = t('settingsClusterTileTilesGridPresetLabel');
+    const showTilesLabel = t('settingsClusterTileShowOnTilesLabel');
+
+    const tile = clusterDashboardTiles[index];
+    if (!tile) return '';
+    const nt = normalizeClusterDashboardTiles([tile])[0] || tile;
+    const availableTypes = getAvailableClusterDashboardTileTypes();
+    const typeOptions = availableTypes.map((type) => `
+        <option value="${escapeHtml(type)}" ${nt.type === type ? 'selected' : ''}>${escapeHtml(getClusterDashboardTileTypeLabel(type))}</option>
+    `).join('');
+
+    let sourceOptions = getClusterDashboardTileSourceOptions(nt.type);
+    if (nt.sourceId && !sourceOptions.some((opt) => opt.value === nt.sourceId)) {
+        sourceOptions = [{
+            value: nt.sourceId,
+            label: `${missingSourceText}: ${nt.sourceId}`
+        }].concat(sourceOptions);
+    }
+
+    const sourceOptionsHtml = sourceOptions.length
+        ? sourceOptions.map((opt) => `
+            <option value="${escapeHtml(opt.value)}" ${nt.sourceId === opt.value ? 'selected' : ''}>${escapeHtml(opt.label)}</option>
+        `).join('')
+        : `<option value="">${escapeHtml(noSourcesText)}</option>`;
+
+    const gCol = nt.tilesGridCol | 0;
+    const gRow = nt.tilesGridRow | 0;
+    const gW = nt.tilesGridW || 1;
+    const gH = nt.tilesGridH || 1;
+    const len = clusterDashboardTiles.length;
+
+    return `
+        <div class="border rounded p-3 cluster-tiles-detail-panel cluster-tiles-detail-panel--side">
+            <div class="row g-2 align-items-end">
+                <div class="col-12">
+                    <label class="form-label fw-bold small mb-1">${escapeHtml(typeLabel)}</label>
+                    <select class="form-select form-select-sm" onchange="updateClusterDashboardTileType(${index}, this.value)">
+                        ${typeOptions}
+                    </select>
+                </div>
+                <div class="col-12">
+                    <label class="form-label fw-bold small mb-1">${escapeHtml(sourceLabel)}</label>
+                    <select class="form-select form-select-sm" onchange="updateClusterDashboardTileSource(${index}, this.value)">
+                        ${sourceOptionsHtml}
+                    </select>
+                </div>
+                <div class="col-12">
+                    <div class="d-flex gap-2 justify-content-end flex-wrap">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="moveClusterDashboardTile(${index}, -1)" title="${escapeHtml(moveUpTitle)}" ${index === 0 ? 'disabled' : ''}>
+                            <i class="bi bi-arrow-up"></i>
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="moveClusterDashboardTile(${index}, 1)" title="${escapeHtml(moveDownTitle)}" ${index === len - 1 ? 'disabled' : ''}>
+                            <i class="bi bi-arrow-down"></i>
+                        </button>
+                        <button type="button" class="btn btn-outline-danger btn-sm" onclick="removeClusterDashboardTile(${index})" title="${escapeHtml(removeTitle)}">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="col-12 mt-2">
+                    <div class="form-check mb-0">
+                        <input class="form-check-input" type="checkbox" id="tileShowTiles${index}" ${nt.showOnTiles ? 'checked' : ''} onchange="updateClusterDashboardTileFlags(${index}, { showOnTiles: this.checked })">
+                        <label class="form-check-label small" for="tileShowTiles${index}">${escapeHtml(showTilesLabel)}</label>
+                    </div>
+                </div>
+                <div class="col-12 mt-2">
+                    <div class="small text-muted mb-2">${escapeHtml(gridPresetLabel)}</div>
+                    <div class="d-flex flex-wrap gap-2 mb-3">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="updateClusterDashboardTileFlags(${index}, { tilesSize: '1x1' })">1×1</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="updateClusterDashboardTileFlags(${index}, { tilesSize: '2x1' })">2×1</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="updateClusterDashboardTileFlags(${index}, { tilesSize: '3x1' })">3×1</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="updateClusterDashboardTileFlags(${index}, { tilesSize: '4x1' })">4×1</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="updateClusterDashboardTileFlags(${index}, { tilesSize: '2x2' })">2×2</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="updateClusterDashboardTileFlags(${index}, { tilesSize: '3x2' })">3×2</button>
+                    </div>
+                    <div class="row g-2 align-items-end">
+                        <div class="col-6 col-md-3">
+                            <label class="form-label small mb-0">${escapeHtml(gridWLabel)}</label>
+                            <input type="number" class="form-control form-control-sm" min="1" max="${TILES_MONITOR_GRID_COLS}" value="${gW}"
+                                onchange="updateClusterDashboardTileFlags(${index}, { tilesGridW: parseInt(this.value, 10) })">
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label class="form-label small mb-0">${escapeHtml(gridHLabel)}</label>
+                            <input type="number" class="form-control form-control-sm" min="1" max="${TILES_MONITOR_GRID_ROWS}" value="${gH}"
+                                onchange="updateClusterDashboardTileFlags(${index}, { tilesGridH: parseInt(this.value, 10) })">
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label class="form-label small mb-0">${escapeHtml(gridColLabel)}</label>
+                            <input type="number" class="form-control form-control-sm" min="0" max="${TILES_MONITOR_GRID_COLS}" value="${gCol}"
+                                onchange="updateClusterDashboardTileFlags(${index}, { tilesGridCol: parseInt(this.value, 10) || 0 })">
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label class="form-label small mb-0">${escapeHtml(gridRowLabel)}</label>
+                            <input type="number" class="form-control form-control-sm" min="0" max="${TILES_MONITOR_GRID_ROWS}" value="${gRow}"
+                                onchange="updateClusterDashboardTileFlags(${index}, { tilesGridRow: parseInt(this.value, 10) || 0 })">
+                        </div>
+                    </div>
+                    <div class="form-text small mt-1">${escapeHtml(gridAutoHint)}</div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function renderClusterDashboardTilesSettings() {
+    const listEl = document.getElementById('settingsClusterTilesList');
+    if (!listEl) return;
+
+    const emptyText = t('settingsClusterTilesEmpty');
+    const clickHint = t('settingsClusterTilesClickHint');
+    const selectHint = t('settingsClusterTilesSelectHint');
 
     if (!Array.isArray(clusterDashboardTiles)) clusterDashboardTiles = [];
+
+    clampTilesEditorSelectedIndex();
 
     if (!clusterDashboardTiles.length) {
         listEl.innerHTML = `<div class="text-muted small">${escapeHtml(emptyText)}</div>`;
     } else {
-        const availableTypes = getAvailableClusterDashboardTileTypes();
-        listEl.innerHTML = clusterDashboardTiles.map((tile, index) => {
-            const typeOptions = availableTypes.map((type) => `
-                <option value="${escapeHtml(type)}" ${tile.type === type ? 'selected' : ''}>${escapeHtml(getClusterDashboardTileTypeLabel(type))}</option>
-            `).join('');
+        const selectorHtml = buildClusterDashboardTilesSelectorHtml();
+        const detailHtml = tilesEditorSelectedIndex >= 0
+            ? buildClusterDashboardTileDetailHtml(tilesEditorSelectedIndex)
+            : `<div class="text-muted small p-3">${escapeHtml(selectHint)}</div>`;
 
-            let sourceOptions = getClusterDashboardTileSourceOptions(tile.type);
-            if (tile.sourceId && !sourceOptions.some((opt) => opt.value === tile.sourceId)) {
-                sourceOptions = [{
-                    value: tile.sourceId,
-                    label: `${missingSourceText}: ${tile.sourceId}`
-                }].concat(sourceOptions);
-            }
-
-            const sourceOptionsHtml = sourceOptions.length
-                ? sourceOptions.map((opt) => `
-                    <option value="${escapeHtml(opt.value)}" ${tile.sourceId === opt.value ? 'selected' : ''}>${escapeHtml(opt.label)}</option>
-                `).join('')
-                : `<option value="">${escapeHtml(noSourcesText)}</option>`;
-
-            return `
-                <div class="border rounded p-3 mb-2">
-                    <div class="row g-2 align-items-end">
-                        <div class="col-md-4">
-                            <label class="form-label fw-bold small mb-1">${escapeHtml(typeLabel)}</label>
-                            <select class="form-select" onchange="updateClusterDashboardTileType(${index}, this.value)">
-                                ${typeOptions}
-                            </select>
+        listEl.innerHTML = `
+            <div class="tiles-layout-editor tiles-layout-editor--split">
+                <div class="tiles-layout-editor__sidebar">
+                    ${selectorHtml}
+                </div>
+                <div class="tiles-layout-editor__main">
+                    <div class="small text-muted mb-2 tiles-layout-editor__hint-bar">${escapeHtml(clickHint)}</div>
+                    <div class="tiles-layout-editor__workspace">
+                        <div class="tiles-layout-editor__grid-column">
+                            <div id="settingsClusterTilesVisualEditor"></div>
                         </div>
-                        <div class="col-md-5">
-                            <label class="form-label fw-bold small mb-1">${escapeHtml(sourceLabel)}</label>
-                            <select class="form-select" onchange="updateClusterDashboardTileSource(${index}, this.value)">
-                                ${sourceOptionsHtml}
-                            </select>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="d-flex gap-2 justify-content-md-end">
-                                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="moveClusterDashboardTile(${index}, -1)" title="${escapeHtml(moveUpTitle)}" ${index === 0 ? 'disabled' : ''}>
-                                    <i class="bi bi-arrow-up"></i>
-                                </button>
-                                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="moveClusterDashboardTile(${index}, 1)" title="${escapeHtml(moveDownTitle)}" ${index === clusterDashboardTiles.length - 1 ? 'disabled' : ''}>
-                                    <i class="bi bi-arrow-down"></i>
-                                </button>
-                                <button type="button" class="btn btn-outline-danger btn-sm" onclick="removeClusterDashboardTile(${index})" title="${escapeHtml(removeTitle)}">
-                                    <i class="bi bi-trash"></i>
-                                </button>
-                            </div>
-                        </div>
-                        <div class="col-12 mt-2">
-                            <div class="d-flex flex-wrap align-items-center gap-3">
-                                <div class="form-check form-check-inline mb-0">
-                                    <input class="form-check-input" type="checkbox" id="tileShowCluster${index}" ${tile.showOnCluster ? 'checked' : ''} onchange="updateClusterDashboardTileFlags(${index}, { showOnCluster: this.checked })">
-                                    <label class="form-check-label small" for="tileShowCluster${index}">Отображать на экране Homelab</label>
-                                </div>
-                                <div class="form-check form-check-inline mb-0">
-                                    <input class="form-check-input" type="checkbox" id="tileShowTiles${index}" ${tile.showOnTiles ? 'checked' : ''} onchange="updateClusterDashboardTileFlags(${index}, { showOnTiles: this.checked })">
-                                    <label class="form-check-label small" for="tileShowTiles${index}">Отображать на экране Tiles</label>
-                                </div>
-                                <div class="d-inline-flex align-items-center gap-2">
-                                    <label class="small text-muted mb-0">Размер Tiles:</label>
-                                    <select class="form-select form-select-sm" style="width:auto;" onchange="updateClusterDashboardTileFlags(${index}, { tilesSize: this.value })">
-                                        <option value="1x1" ${tile.tilesSize === '1x1' ? 'selected' : ''}>1x1</option>
-                                        <option value="2x1" ${tile.tilesSize === '2x1' ? 'selected' : ''}>2x1</option>
-                                        <option value="3x1" ${tile.tilesSize === '3x1' ? 'selected' : ''}>3x1</option>
-                                        <option value="4x1" ${tile.tilesSize === '4x1' ? 'selected' : ''}>4x1</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
+                        <aside class="tiles-layout-editor__form-column" id="settingsClusterTilesDetailPanel">${detailHtml}</aside>
                     </div>
                 </div>
-            `;
-        }).join('');
+            </div>
+        `;
     }
+
+    renderTilesVisualEditor();
 
     const addBtn = document.getElementById('settingsClusterTilesAddBtn');
     if (addBtn) addBtn.disabled = clusterDashboardTiles.length >= MAX_CLUSTER_DASHBOARD_TILES;
@@ -5325,11 +5719,22 @@ function addClusterDashboardTile() {
     clusterDashboardTiles = clusterDashboardTiles.concat([{
         type: selectedType,
         sourceId: firstSource ? firstSource.value : (fallbackSourceByType[selectedType] || `${selectedType}:default`),
-        showOnCluster: true,
         showOnTiles: false,
-        tilesSize: '1x1'
+        tilesSize: '1x1',
+        tilesGridW: 1,
+        tilesGridH: 1,
+        tilesGridCol: 0,
+        tilesGridRow: 0
     }]).slice(0, MAX_CLUSTER_DASHBOARD_TILES);
+    tilesEditorSelectedIndex = clusterDashboardTiles.length - 1;
     markClusterDashboardTilesDirty(true);
+    renderClusterDashboardTilesSettings();
+}
+
+function selectClusterDashboardTile(index) {
+    if (!Array.isArray(clusterDashboardTiles)) return;
+    if (index < 0 || index >= clusterDashboardTiles.length) return;
+    tilesEditorSelectedIndex = index;
     renderClusterDashboardTilesSettings();
 }
 
@@ -5352,13 +5757,12 @@ function updateClusterDashboardTileType(index, nextType) {
         truenas_app: 'truenas_app:default',
         smart_sensor: 'smart_sensor:__missing__'
     };
-    clusterDashboardTiles[index] = {
+    const merged = normalizeClusterDashboardTiles([{
+        ...current,
         type,
-        sourceId: firstSource ? firstSource.value : (fallbackSourceByType[type] || `${type}:default`),
-        showOnCluster: current.showOnCluster !== false,
-        showOnTiles: current.showOnTiles === true,
-        tilesSize: ['1x1', '2x1', '3x1', '4x1'].includes(String(current.tilesSize || '')) ? current.tilesSize : '1x1'
-    };
+        sourceId: firstSource ? firstSource.value : (fallbackSourceByType[type] || `${type}:default`)
+    }])[0];
+    if (merged) clusterDashboardTiles[index] = merged;
     clusterDashboardTiles = normalizeClusterDashboardTiles(clusterDashboardTiles);
     markClusterDashboardTilesDirty(true);
     renderClusterDashboardTilesSettings();
@@ -5372,15 +5776,42 @@ function updateClusterDashboardTileSource(index, sourceId) {
     };
     clusterDashboardTiles = normalizeClusterDashboardTiles(clusterDashboardTiles);
     markClusterDashboardTilesDirty(true);
+    renderClusterDashboardTilesSettings();
 }
 
 function updateClusterDashboardTileFlags(index, patch) {
     if (!clusterDashboardTiles[index]) return;
     const next = { ...clusterDashboardTiles[index], ...(patch || {}) };
-    if (!['1x1', '2x1', '3x1', '4x1'].includes(String(next.tilesSize || ''))) next.tilesSize = '1x1';
+    if (!['1x1', '2x1', '3x1', '4x1', '2x2', '3x2'].includes(String(next.tilesSize || ''))) next.tilesSize = '1x1';
+    if (patch && Object.prototype.hasOwnProperty.call(patch, 'tilesSize') && patch.tilesSize != null) {
+        const wh = tilesSizeToGridWH(patch.tilesSize);
+        next.tilesGridW = wh.w;
+        next.tilesGridH = wh.h;
+    }
+    if (Object.prototype.hasOwnProperty.call(next, 'tilesGridW')) {
+        let w = parseInt(next.tilesGridW, 10);
+        if (!Number.isFinite(w) || w < 1) w = 1;
+        next.tilesGridW = Math.min(TILES_MONITOR_GRID_COLS, w);
+    }
+    if (Object.prototype.hasOwnProperty.call(next, 'tilesGridH')) {
+        let h = parseInt(next.tilesGridH, 10);
+        if (!Number.isFinite(h) || h < 1) h = 1;
+        next.tilesGridH = Math.min(TILES_MONITOR_GRID_ROWS, h);
+    }
+    if (Object.prototype.hasOwnProperty.call(next, 'tilesGridCol')) {
+        let c = parseInt(next.tilesGridCol, 10);
+        if (!Number.isFinite(c) || c < 0) c = 0;
+        next.tilesGridCol = Math.min(TILES_MONITOR_GRID_COLS, c);
+    }
+    if (Object.prototype.hasOwnProperty.call(next, 'tilesGridRow')) {
+        let r = parseInt(next.tilesGridRow, 10);
+        if (!Number.isFinite(r) || r < 0) r = 0;
+        next.tilesGridRow = Math.min(TILES_MONITOR_GRID_ROWS, r);
+    }
     clusterDashboardTiles[index] = next;
     clusterDashboardTiles = normalizeClusterDashboardTiles(clusterDashboardTiles);
     markClusterDashboardTilesDirty(true);
+    renderClusterDashboardTilesSettings();
 }
 
 function moveClusterDashboardTile(index, delta) {
@@ -5391,12 +5822,16 @@ function moveClusterDashboardTile(index, delta) {
     next[index] = next[nextIndex];
     next[nextIndex] = tmp;
     clusterDashboardTiles = next;
+    if (tilesEditorSelectedIndex === index) tilesEditorSelectedIndex = nextIndex;
+    else if (tilesEditorSelectedIndex === nextIndex) tilesEditorSelectedIndex = index;
     markClusterDashboardTilesDirty(true);
     renderClusterDashboardTilesSettings();
 }
 
 function removeClusterDashboardTile(index) {
     clusterDashboardTiles = clusterDashboardTiles.filter((_, idx) => idx !== index);
+    if (tilesEditorSelectedIndex === index) tilesEditorSelectedIndex = -1;
+    else if (tilesEditorSelectedIndex > index) tilesEditorSelectedIndex--;
     markClusterDashboardTilesDirty(true);
     renderClusterDashboardTilesSettings();
 }
@@ -8577,6 +9012,9 @@ function getTilesMonitorCellClass(size) {
 async function renderTilesMonitorScreen(targetGridId = 'tilesMonitorGrid') {
     const gridEl = document.getElementById(targetGridId);
     if (!gridEl) return;
+    gridEl.classList.add('tiles-monitor-grid');
+    gridEl.style.setProperty('--tiles-grid-cols', String(TILES_MONITOR_GRID_COLS));
+    gridEl.style.setProperty('--tiles-grid-rows', String(TILES_MONITOR_GRID_ROWS));
     const normalizedTiles = normalizeClusterDashboardTiles(clusterDashboardTiles);
     let tiles = normalizedTiles.filter((tile) => tile.showOnTiles === true);
     // Fallback: if no tiles explicitly selected for Tiles screen,
@@ -8585,7 +9023,7 @@ async function renderTilesMonitorScreen(targetGridId = 'tilesMonitorGrid') {
         tiles = normalizedTiles.filter((tile) => tile.showOnCluster !== false);
     }
     if (!tiles.length) {
-        setHTMLIfChanged(targetGridId, `<div class="col-12"><div class="monitor-view__empty">${escapeHtml(t('backupNoData') || 'Нет данных')}</div></div>`);
+        setHTMLIfChanged(targetGridId, `<div class="tiles-monitor-cell tiles-monitor-cell--empty" style="grid-column: 1 / -1; grid-row: 1 / -1;"><div class="monitor-view__empty">${escapeHtml(t('backupNoData') || 'Нет данных')}</div></div>`);
         return;
     }
 
@@ -8616,7 +9054,8 @@ async function renderTilesMonitorScreen(targetGridId = 'tilesMonitorGrid') {
     ]);
     if (truenasOverview && !truenasOverview.error) lastTrueNASOverviewData = truenasOverview;
 
-    const html = tiles.map((tile) => {
+    const placements = computeTilesMonitorPlacements(tiles);
+    const html = placements.map(({ tile, gridCol, gridRow }) => {
         let tileHtml = '';
         if (tile.type === 'service') tileHtml = buildClusterServiceTileHtml(tile);
         else if (tile.type === 'vmct') tileHtml = buildClusterVmTileHtml(tile);
@@ -8630,8 +9069,12 @@ async function renderTilesMonitorScreen(targetGridId = 'tilesMonitorGrid') {
         else if (tile.type === 'truenas_disk') tileHtml = buildClusterTrueNASDiskTileHtml(tile);
         else if (tile.type === 'truenas_service') tileHtml = buildClusterTrueNASServiceTileHtml(tile);
         else if (tile.type === 'truenas_app') tileHtml = buildClusterTrueNASAppTileHtml(tile);
-        const cellClass = getTilesMonitorCellClass(tile.tilesSize || '1x1');
-        return `<div class="${cellClass} tiles-monitor-cell">${tileHtml}</div>`;
+        const w = Math.max(1, Math.min(TILES_MONITOR_GRID_COLS, tile.tilesGridW || 1));
+        const h = Math.max(1, Math.min(TILES_MONITOR_GRID_ROWS, tile.tilesGridH || 1));
+        const gc = Math.max(1, Math.min(TILES_MONITOR_GRID_COLS, gridCol));
+        const gr = Math.max(1, Math.min(TILES_MONITOR_GRID_ROWS, gridRow));
+        const style = `grid-column: ${gc} / span ${w}; grid-row: ${gr} / span ${h};`;
+        return `<div class="tiles-monitor-cell" style="${style}">${tileHtml}</div>`;
     }).join('');
     setHTMLIfChanged(targetGridId, html);
 }
