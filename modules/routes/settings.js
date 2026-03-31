@@ -123,6 +123,7 @@ const SETTING_KEYS = [
     'monitor_hidden_vm_ids',
     'monitor_screens_order',
     'monitor_screens_enabled',
+    'monitor_hotkeys',
     'cluster_dashboard_tiles',
     'dashboard_weather_city',
     'dashboard_weather_provider',
@@ -182,6 +183,7 @@ router.get('/', (req, res) => {
                     key === 'monitor_hidden_vm_ids' ||
                     key === 'monitor_screens_order' ||
                     key === 'monitor_screens_enabled' ||
+                    key === 'monitor_hotkeys' ||
                     key === 'cluster_dashboard_tiles' ||
                     key === 'telegram_routes' ||
                     key === 'telegram_notification_rules'
@@ -329,6 +331,7 @@ router.post('/', (req, res) => {
             monitor_vm_icon_colors: body.monitor_vm_icon_colors ?? body.monitorVmIconColors,
             monitor_screens_order: body.monitor_screens_order ?? body.monitorScreensOrder,
             monitor_screens_enabled: body.monitor_screens_enabled ?? body.monitorScreensEnabled,
+            monitor_hotkeys: body.monitor_hotkeys ?? body.monitorHotkeys,
             cluster_dashboard_tiles: body.cluster_dashboard_tiles ?? body.clusterDashboardTiles,
             dashboard_weather_city: body.dashboard_weather_city ?? body.dashboardWeatherCity,
             dashboard_weather_provider: (() => {

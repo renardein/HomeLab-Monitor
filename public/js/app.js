@@ -854,6 +854,7 @@ async function saveDashboardTimeWeatherSettings() {
     monitorShowTime = !!(el('settingsMonitorShowTimeCheckbox') && el('settingsMonitorShowTimeCheckbox').checked);
     monitorShowWeather = !!(el('settingsMonitorShowWeatherCheckbox') && el('settingsMonitorShowWeatherCheckbox').checked);
     monitorDisableChromeGestures = !!(el('settingsMonitorDisableChromeGesturesCheckbox') && el('settingsMonitorDisableChromeGesturesCheckbox').checked);
+    monitorHotkeys = normalizeMonitorHotkeys(monitorHotkeys);
 
     dashboardWeatherCity = nextCity;
     dashboardTimezone = nextTimezone;
@@ -873,7 +874,8 @@ async function saveDashboardTimeWeatherSettings() {
         dashboardShowWeather,
         monitorShowTime,
         monitorShowWeather,
-        monitorDisableChromeGestures
+        monitorDisableChromeGestures,
+        monitorHotkeys
     };
     const owmIn = el('settingsWeatherOwmKeyInput');
     const yaIn = el('settingsWeatherYandexKeyInput');
@@ -1417,6 +1419,7 @@ async function saveSettingsToServer(payload) {
     if (payload.monitorVmIconColors !== undefined) body.monitorVmIconColors = payload.monitorVmIconColors;
     if (payload.monitorScreensOrder !== undefined) body.monitorScreensOrder = payload.monitorScreensOrder;
     if (payload.monitorScreensEnabled !== undefined) body.monitorScreensEnabled = payload.monitorScreensEnabled;
+    if (payload.monitorHotkeys !== undefined) body.monitorHotkeys = payload.monitorHotkeys;
     if (payload.clusterDashboardTiles !== undefined) body.clusterDashboardTiles = payload.clusterDashboardTiles;
     if (payload.dashboardWeatherCity !== undefined) body.dashboardWeatherCity = payload.dashboardWeatherCity;
     if (payload.dashboardWeatherProvider !== undefined) body.dashboardWeatherProvider = payload.dashboardWeatherProvider;
@@ -2738,9 +2741,16 @@ function updateUILanguage() {
     setText('settingsMonitorShowTimeLabel', t('settingsMonitorShowTimeLabel'));
     setText('settingsMonitorShowWeatherLabel', t('settingsMonitorShowWeatherLabel'));
     setText('settingsMonitorDisableChromeGesturesLabel', t('settingsMonitorDisableChromeGesturesLabel'));
+    setText('monitorHotkeysTitle', t('monitorHotkeysTitle'));
+    setText('monitorHotkeysHint', t('monitorHotkeysHint'));
+    setText('monitorHotkeysComboLabel', t('monitorHotkeysComboLabel'));
+    setText('monitorHotkeysClicksLabel', t('monitorHotkeysClicksLabel'));
+    setText('monitorHotkeysActionLabel', t('monitorHotkeysActionLabel'));
+    setText('monitorHotkeysEnabledLabel', t('monitorHotkeysEnabledLabel'));
     setPlaceholder('settingsDashboardWeatherCityInput', t('settingsDashboardWeatherCityPlaceholder') || 'Berlin');
     setPlaceholder('settingsDashboardTimezoneInput', t('settingsDashboardTimezonePlaceholder') || 'Europe/Berlin');
     onDashboardWeatherProviderChange();
+    renderMonitorHotkeysSettingsUI();
     setText('settingsClusterTilesTitle', t('settingsClusterTilesTitle'));
     setText('settingsClusterTilesHint', t('settingsClusterTilesHint'));
     setText('settingsClusterTilesAddBtnLabel', t('settingsClusterTilesAddBtn'));
@@ -9410,6 +9420,14 @@ function applyStoredDashboardHomeTab() {
 
 let monitorScreensOrder = MONITOR_SCREEN_IDS_ALL.slice();
 let monitorScreensEnabled = {};
+const MONITOR_HOTKEY_ACTIONS = ['refreshData', 'reloadPage', 'home', 'closeBrowser'];
+const DEFAULT_MONITOR_HOTKEYS = [
+    { combo: 'Meta+R', clicks: 1, action: 'refreshData', enabled: true },
+    { combo: 'Meta+Shift+R', clicks: 1, action: 'reloadPage', enabled: true },
+    { combo: 'Meta+H', clicks: 1, action: 'home', enabled: true }
+];
+let monitorHotkeys = DEFAULT_MONITOR_HOTKEYS.map((x) => ({ ...x }));
+let monitorHotkeyClickState = { combo: '', clicks: 0, timer: null };
 /** Speedtest включён в настройках (для скрытия экрана в режиме монитора) */
 let speedtestClientEnabled = false;
 /** Активный движок Speedtest: ookla | librespeed */
@@ -9623,6 +9641,180 @@ function normalizeMonitorScreensEnabled(raw) {
         }
     }
     return out;
+}
+
+function normalizeMonitorHotkeyCombo(raw) {
+    const s = String(raw || '').trim();
+    if (!s) return '';
+    const parts = s.split('+').map((x) => String(x || '').trim()).filter(Boolean);
+    const out = [];
+    const lower = parts.map((x) => x.toLowerCase());
+    if (lower.includes('meta') || lower.includes('super') || lower.includes('win') || lower.includes('windows')) out.push('Meta');
+    if (lower.includes('ctrl') || lower.includes('control')) out.push('Ctrl');
+    if (lower.includes('alt') || lower.includes('option')) out.push('Alt');
+    if (lower.includes('shift')) out.push('Shift');
+    let key = parts[parts.length - 1] || '';
+    const keyLower = key.toLowerCase();
+    if (['meta', 'super', 'win', 'windows', 'ctrl', 'control', 'alt', 'option', 'shift'].includes(keyLower)) key = '';
+    if (key.length === 1) key = key.toUpperCase();
+    if (key) out.push(key);
+    return out.join('+');
+}
+
+function normalizeMonitorHotkeys(raw) {
+    const list = Array.isArray(raw) ? raw : DEFAULT_MONITOR_HOTKEYS;
+    const out = [];
+    for (const item of list) {
+        if (!item || typeof item !== 'object') continue;
+        const action = MONITOR_HOTKEY_ACTIONS.includes(item.action) ? item.action : '';
+        const combo = normalizeMonitorHotkeyCombo(item.combo);
+        const clicks = Math.max(1, Math.min(3, parseInt(item.clicks, 10) || 1));
+        if (!action || !combo) continue;
+        out.push({ combo, clicks, action, enabled: item.enabled !== false });
+    }
+    if (!out.length) return DEFAULT_MONITOR_HOTKEYS.map((x) => ({ ...x }));
+    return out.slice(0, 6);
+}
+
+function monitorHotkeyActionLabel(action) {
+    if (action === 'refreshData') return t('monitorHotkeyActionRefreshData');
+    if (action === 'reloadPage') return t('monitorHotkeyActionReloadPage');
+    if (action === 'home') return t('monitorHotkeyActionHome');
+    if (action === 'closeBrowser') return t('monitorHotkeyActionCloseBrowser');
+    return action;
+}
+
+function executeMonitorHotkeyAction(action) {
+    if (action === 'refreshData') return refreshData();
+    if (action === 'reloadPage') return window.location.reload();
+    if (action === 'home') return applyMonitorView('cluster');
+    if (action === 'closeBrowser') {
+        try { window.close(); } catch (_) {}
+        setTimeout(() => {
+            if (!document.hidden) window.location.href = 'about:blank';
+        }, 150);
+    }
+}
+
+function queueMonitorHotkeyCombo(combo) {
+    const clickWindowMs = 450;
+    const hotkeys = normalizeMonitorHotkeys(monitorHotkeys).filter((x) => x.enabled !== false && x.combo === combo);
+    if (!hotkeys.length) return false;
+    if (monitorHotkeyClickState.timer) clearTimeout(monitorHotkeyClickState.timer);
+    if (monitorHotkeyClickState.combo !== combo) {
+        monitorHotkeyClickState.combo = combo;
+        monitorHotkeyClickState.clicks = 1;
+    } else {
+        monitorHotkeyClickState.clicks = Math.min(3, monitorHotkeyClickState.clicks + 1);
+    }
+    if (monitorHotkeyClickState.clicks >= 3) {
+        const rule3 = hotkeys.find((x) => x.clicks === 3);
+        if (rule3) {
+            executeMonitorHotkeyAction(rule3.action);
+            monitorHotkeyClickState = { combo: '', clicks: 0, timer: null };
+            return true;
+        }
+    }
+    monitorHotkeyClickState.timer = setTimeout(() => {
+        const c = monitorHotkeyClickState.clicks;
+        const rule = hotkeys.find((x) => x.clicks === c) || hotkeys.find((x) => x.clicks === 1 && c >= 1);
+        if (rule) executeMonitorHotkeyAction(rule.action);
+        monitorHotkeyClickState = { combo: '', clicks: 0, timer: null };
+    }, clickWindowMs);
+    return true;
+}
+
+function renderMonitorHotkeysSettingsUI() {
+    const wrap = el('monitorHotkeysList');
+    if (!wrap) return;
+    const rows = normalizeMonitorHotkeys(monitorHotkeys);
+    monitorHotkeys = rows;
+    wrap.innerHTML = rows.map((row, idx) => {
+        const options = MONITOR_HOTKEY_ACTIONS
+            .map((a) => `<option value="${a}" ${row.action === a ? 'selected' : ''}>${escapeHtml(monitorHotkeyActionLabel(a))}</option>`)
+            .join('');
+        return `<div class="row g-2 align-items-center mb-2">
+          <div class="col-md-4">
+            <input class="form-control monitor-hotkey-combo-input" data-idx="${idx}" value="${escapeHtml(row.combo)}" readonly>
+          </div>
+          <div class="col-md-2">
+            <select class="form-select monitor-hotkey-clicks-select" data-idx="${idx}">
+              <option value="1" ${row.clicks === 1 ? 'selected' : ''}>1x</option>
+              <option value="2" ${row.clicks === 2 ? 'selected' : ''}>2x</option>
+              <option value="3" ${row.clicks === 3 ? 'selected' : ''}>3x</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <select class="form-select monitor-hotkey-action-select" data-idx="${idx}">${options}</select>
+          </div>
+          <div class="col-md-3 d-flex align-items-center gap-2">
+            <div class="form-check m-0">
+              <input class="form-check-input monitor-hotkey-enabled-chk" type="checkbox" data-idx="${idx}" ${row.enabled !== false ? 'checked' : ''}>
+            </div>
+            <button class="btn btn-outline-secondary btn-sm monitor-hotkey-clear-btn" type="button" data-idx="${idx}">${escapeHtml(t('monitorHotkeyClearBtn'))}</button>
+          </div>
+        </div>`;
+    }).join('');
+
+    wrap.querySelectorAll('.monitor-hotkey-combo-input').forEach((inp) => {
+        inp.addEventListener('keydown', (e) => {
+            e.preventDefault();
+            const idx = parseInt(inp.dataset.idx, 10);
+            if (!Number.isFinite(idx) || idx < 0 || idx >= monitorHotkeys.length) return;
+            const key = String(e.key || '').trim();
+            if (!key) return;
+            const parts = [];
+            if (e.metaKey) parts.push('Meta');
+            if (e.ctrlKey) parts.push('Ctrl');
+            if (e.altKey) parts.push('Alt');
+            if (e.shiftKey) parts.push('Shift');
+            if (!['Control', 'Shift', 'Alt', 'Meta'].includes(key)) {
+                parts.push(key.length === 1 ? key.toUpperCase() : key);
+            } else if (!parts.length) {
+                // Allow single modifier hotkeys (e.g. Meta from touch keyboard button).
+                if (key === 'Meta') parts.push('Meta');
+                else if (key === 'Control') parts.push('Ctrl');
+                else if (key === 'Alt') parts.push('Alt');
+                else if (key === 'Shift') parts.push('Shift');
+            }
+            const combo = normalizeMonitorHotkeyCombo(parts.join('+'));
+            if (!combo) return;
+            monitorHotkeys[idx].combo = combo;
+            inp.value = combo;
+        });
+    });
+    wrap.querySelectorAll('.monitor-hotkey-action-select').forEach((sel) => {
+        sel.addEventListener('change', () => {
+            const idx = parseInt(sel.dataset.idx, 10);
+            if (!Number.isFinite(idx) || idx < 0 || idx >= monitorHotkeys.length) return;
+            const action = String(sel.value || '');
+            if (!MONITOR_HOTKEY_ACTIONS.includes(action)) return;
+            monitorHotkeys[idx].action = action;
+        });
+    });
+    wrap.querySelectorAll('.monitor-hotkey-clicks-select').forEach((sel) => {
+        sel.addEventListener('change', () => {
+            const idx = parseInt(sel.dataset.idx, 10);
+            if (!Number.isFinite(idx) || idx < 0 || idx >= monitorHotkeys.length) return;
+            monitorHotkeys[idx].clicks = Math.max(1, Math.min(3, parseInt(sel.value, 10) || 1));
+        });
+    });
+    wrap.querySelectorAll('.monitor-hotkey-enabled-chk').forEach((chk) => {
+        chk.addEventListener('change', () => {
+            const idx = parseInt(chk.dataset.idx, 10);
+            if (!Number.isFinite(idx) || idx < 0 || idx >= monitorHotkeys.length) return;
+            monitorHotkeys[idx].enabled = !!chk.checked;
+        });
+    });
+    wrap.querySelectorAll('.monitor-hotkey-clear-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            const idx = parseInt(btn.dataset.idx, 10);
+            if (!Number.isFinite(idx) || idx < 0 || idx >= monitorHotkeys.length) return;
+            monitorHotkeys[idx].combo = '';
+            const input = wrap.querySelector(`.monitor-hotkey-combo-input[data-idx="${idx}"]`);
+            if (input) input.value = '';
+        });
+    });
 }
 
 function getMonitorViewsOrder() {
@@ -10763,7 +10955,29 @@ function initMonitorKeyboardNavigation() {
         if (e.key === 'Home') {
             e.preventDefault();
             applyMonitorView('cluster');
+            return;
         }
+
+        const key = String(e.key || '').trim();
+        const parts = [];
+        if (e.metaKey) parts.push('Meta');
+        if (e.ctrlKey) parts.push('Ctrl');
+        if (e.altKey) parts.push('Alt');
+        if (e.shiftKey) parts.push('Shift');
+        if (key && !['Control', 'Shift', 'Alt', 'Meta'].includes(key)) {
+            parts.push(key.length === 1 ? key.toUpperCase() : key);
+        } else if (!parts.length && key) {
+            // Handle single modifier presses as dedicated hotkeys.
+            if (key === 'Meta') parts.push('Meta');
+            else if (key === 'Control') parts.push('Ctrl');
+            else if (key === 'Alt') parts.push('Alt');
+            else if (key === 'Shift') parts.push('Shift');
+        }
+        const pressedCombo = normalizeMonitorHotkeyCombo(parts.join('+'));
+        if (!pressedCombo) return;
+        const handled = queueMonitorHotkeyCombo(pressedCombo);
+        if (!handled) return;
+        e.preventDefault();
     });
 
     monitorKeyboardNavAttached = true;
@@ -13317,6 +13531,7 @@ async function loadSettings() {
     monitorShowTime = parseBoolSettingClient(data.monitor_show_time, true);
     monitorShowWeather = parseBoolSettingClient(data.monitor_show_weather, true);
     monitorDisableChromeGestures = parseBoolSettingClient(data.monitor_disable_chrome_gestures, true);
+    monitorHotkeys = normalizeMonitorHotkeys(data.monitor_hotkeys);
     setValue('settingsDashboardWeatherCityInput', dashboardWeatherCity);
     setValue('settingsDashboardTimezoneInput', dashboardTimezone);
     const pSel = el('settingsDashboardWeatherProviderSelect');
@@ -13332,6 +13547,7 @@ async function loadSettings() {
     if (cMonW) cMonW.checked = monitorShowWeather;
     const cMonChrome = el('settingsMonitorDisableChromeGesturesCheckbox');
     if (cMonChrome) cMonChrome.checked = monitorDisableChromeGestures;
+    renderMonitorHotkeysSettingsUI();
     monitorVmIcons = normalizeMonitorVmIconsMap(data.monitor_vm_icons);
     monitorVmIconColors = normalizeMonitorVmIconColorsMap(data.monitor_vm_icon_colors);
     if (data.current_server_index != null) currentServerIndex = parseInt(data.current_server_index, 10) || 0;
