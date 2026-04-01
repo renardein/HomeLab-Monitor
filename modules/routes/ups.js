@@ -96,6 +96,42 @@ function formatRuntimeSeconds(seconds) {
     return `${s}s`;
 }
 
+function mapNutStatus(statusRaw) {
+    const s = String(statusRaw || '').toUpperCase();
+    if (!s) return { label: 'unknown', up: null, badge: 'bg-secondary' };
+    if (s === 'OL') return { label: 'Online', up: true, badge: 'bg-success' };
+    if (s === 'OB') return { label: 'On battery', up: false, badge: 'bg-warning text-dark' };
+    if (s === 'LB') return { label: 'Low battery', up: false, badge: 'bg-danger' };
+    if (s === 'OFF') return { label: 'Off', up: false, badge: 'bg-secondary' };
+    return { label: s, up: null, badge: 'bg-secondary' };
+}
+
+const MAX_UPS_FIELDS = 15;
+const UPS_SEMANTIC_IDS = ['status', 'charge', 'runtime', 'inputVoltage', 'outputVoltage', 'power', 'load', 'frequency'];
+const UPS_FIELD_FORMATS = new Set(['text', 'number', 'percent', 'voltage', 'watt', 'frequency', 'time', 'nut_status', 'boot', 'status']);
+
+const LEGACY_NUT_KEYS = {
+    status: 'nutVarStatus',
+    charge: 'nutVarCharge',
+    runtime: 'nutVarRuntime',
+    inputVoltage: 'nutVarInputVoltage',
+    outputVoltage: 'nutVarOutputVoltage',
+    power: 'nutVarPower',
+    load: 'nutVarLoad',
+    frequency: 'nutVarFrequency'
+};
+
+const LEGACY_SNMP_KEYS = {
+    status: 'snmpOidStatus',
+    charge: 'snmpOidCharge',
+    runtime: 'snmpOidRuntime',
+    inputVoltage: 'snmpOidInputVoltage',
+    outputVoltage: 'snmpOidOutputVoltage',
+    power: 'snmpOidPower',
+    load: 'snmpOidLoad',
+    frequency: 'snmpOidFrequency'
+};
+
 function normalizeNutDefaults(cfg) {
     return {
         nutVarStatus: cfg.nutVarStatus || 'ups.status',
@@ -123,6 +159,100 @@ function normalizeSnmpDefaults(cfg) {
     };
 }
 
+function parseUpsStatusList(arr) {
+    if (!Array.isArray(arr)) return [];
+    return arr.map((x) => String(x || '').trim().toLowerCase()).filter(Boolean);
+}
+
+function normalizeUpsFieldDef(raw, idx, upsType) {
+    const f = raw && typeof raw === 'object' ? raw : {};
+    let id = String(f.id || '').trim().replace(/[^\w-]/g, '');
+    if (!id) id = `field_${idx}`;
+
+    let format = String(f.format || 'text').trim().toLowerCase();
+    if (format === 'bool') format = 'boot';
+    if (!UPS_FIELD_FORMATS.has(format)) format = 'text';
+    if (upsType === 'snmp' && format === 'nut_status') format = 'status';
+
+    const path = String(f.path != null ? f.path : f.oid || '').trim();
+    const label = String(f.label || '').trim() || `Field ${idx + 1}`;
+    const enabled = f.enabled !== false && f.poll !== false;
+
+    return {
+        id,
+        label,
+        path,
+        format,
+        enabled,
+        statusUpValues: parseUpsStatusList(f.statusUpValues),
+        statusDownValues: parseUpsStatusList(f.statusDownValues)
+    };
+}
+
+function buildDefaultNutFields(nut) {
+    const defs = [
+        ['status', 'nut_status', nut.nutVarStatus],
+        ['charge', 'percent', nut.nutVarCharge],
+        ['runtime', 'time', nut.nutVarRuntime],
+        ['inputVoltage', 'voltage', nut.nutVarInputVoltage],
+        ['outputVoltage', 'voltage', nut.nutVarOutputVoltage],
+        ['power', 'watt', nut.nutVarPower],
+        ['load', 'percent', nut.nutVarLoad],
+        ['frequency', 'frequency', nut.nutVarFrequency]
+    ];
+    return defs.map(([id, format, path]) => ({
+        id,
+        label: id,
+        path: path || '',
+        format,
+        enabled: true,
+        statusUpValues: [],
+        statusDownValues: []
+    }));
+}
+
+function buildDefaultSnmpFields(snmp) {
+    const defs = [
+        ['status', 'status', snmp.snmpOidStatus],
+        ['charge', 'percent', snmp.snmpOidCharge],
+        ['runtime', 'time', snmp.snmpOidRuntime],
+        ['inputVoltage', 'voltage', snmp.snmpOidInputVoltage],
+        ['outputVoltage', 'voltage', snmp.snmpOidOutputVoltage],
+        ['power', 'watt', snmp.snmpOidPower],
+        ['load', 'percent', snmp.snmpOidLoad],
+        ['frequency', 'frequency', snmp.snmpOidFrequency]
+    ];
+    return defs.map(([id, format, path]) => ({
+        id,
+        label: id,
+        path: path || '',
+        format,
+        enabled: true,
+        statusUpValues: [],
+        statusDownValues: []
+    }));
+}
+
+function resolveUpsFieldList(cfg, type) {
+    if (Array.isArray(cfg.fields) && cfg.fields.length > 0) {
+        return cfg.fields.map((f, i) => normalizeUpsFieldDef(f, i, type)).slice(0, MAX_UPS_FIELDS);
+    }
+    const base = type === 'nut' ? normalizeNutDefaults(cfg) : normalizeSnmpDefaults(cfg);
+    const built = type === 'nut' ? buildDefaultNutFields(base) : buildDefaultSnmpFields(base);
+    return built.slice(0, MAX_UPS_FIELDS);
+}
+
+function applyFieldsToLegacyKeys(legacyObj, fields, type) {
+    const map = type === 'nut' ? LEGACY_NUT_KEYS : LEGACY_SNMP_KEYS;
+    for (const id of UPS_SEMANTIC_IDS) {
+        const key = map[id];
+        const f = fields.find((x) => x.id === id);
+        if (f && String(f.path || '').trim()) {
+            legacyObj[key] = f.path.trim();
+        }
+    }
+}
+
 function normalizeUpsConfig(raw) {
     const cfg = raw && typeof raw === 'object' ? raw : {};
     const enabled = toBool(cfg.enabled);
@@ -134,10 +264,164 @@ function normalizeUpsConfig(raw) {
 
     if (type === 'nut') {
         const nut = normalizeNutDefaults(cfg);
-        return { enabled, type, host, port, name, ...nut };
+        const fields = resolveUpsFieldList({ ...cfg, ...nut }, 'nut');
+        applyFieldsToLegacyKeys(nut, fields, 'nut');
+        return { enabled, type, host, port, name, ...nut, fields };
     }
     const snmp = normalizeSnmpDefaults(cfg);
-    return { enabled, type, host, port, name, ...snmp };
+    const fields = resolveUpsFieldList({ ...cfg, ...snmp }, 'snmp');
+    applyFieldsToLegacyKeys(snmp, fields, 'snmp');
+    return { enabled, type, host, port, name, ...snmp, fields };
+}
+
+function classifyUpsSnmpStatus(raw, field) {
+    const r = raw != null ? String(raw).trim().toLowerCase() : '';
+    const ups = field.statusUpValues || [];
+    const downs = field.statusDownValues || [];
+    if (ups.length && ups.includes(r)) {
+        return { up: true, label: String(raw) };
+    }
+    if (downs.length && downs.includes(r)) {
+        return { up: false, label: String(raw) };
+    }
+    if (field.format === 'boot') {
+        if (['1', 'true', 'yes', 'on', 'up', 'online'].includes(r)) return { up: true, label: String(raw) };
+        if (['0', 'false', 'no', 'off', 'down', 'offline'].includes(r)) return { up: false, label: String(raw) };
+    }
+    return { up: null, label: r !== '' ? String(raw) : 'unknown' };
+}
+
+function buildUpsMetricRow(field, raw, ok, pollError) {
+    const row = {
+        id: field.id,
+        label: field.label,
+        format: field.format,
+        path: field.path,
+        ok: !!ok,
+        raw: ok && raw != null ? String(raw) : null,
+        display: '—',
+        value: null,
+        up: null,
+        error: ok ? null : (pollError || 'fail')
+    };
+    if (!ok) return row;
+    const r = raw;
+    switch (field.format) {
+        case 'nut_status': {
+            const m = mapNutStatus(r);
+            row.display = m.label;
+            row.up = m.up;
+            break;
+        }
+        case 'status':
+        case 'boot': {
+            const c = classifyUpsSnmpStatus(r, field);
+            row.display = c.label;
+            row.up = c.up;
+            break;
+        }
+        case 'percent':
+        case 'number': {
+            const n = firstNumberFromString(r);
+            row.value = n;
+            row.display = n != null ? (field.format === 'percent' ? `${n}%` : String(n)) : String(r);
+            break;
+        }
+        case 'voltage':
+        case 'watt':
+        case 'frequency': {
+            const n = firstNumberFromString(r);
+            row.value = n;
+            const suf = field.format === 'voltage' ? ' V' : field.format === 'watt' ? ' W' : ' Hz';
+            row.display = n != null ? `${n}${suf}` : String(r);
+            break;
+        }
+        case 'time': {
+            const n = firstNumberFromString(r);
+            row.value = n;
+            row.display = n != null ? (formatRuntimeSeconds(n) || String(n)) : String(r);
+            break;
+        }
+        default:
+            row.display = r != null ? String(r) : '—';
+    }
+    return row;
+}
+
+function findOkUpsMetric(metrics, pred) {
+    return metrics.find((m) => m.ok && pred(m)) || null;
+}
+
+function buildLegacyUpsFromMetrics(metrics) {
+    const st =
+        findOkUpsMetric(metrics, (m) => m.id === 'status' && ['nut_status', 'status', 'boot'].includes(m.format)) ||
+        findOkUpsMetric(metrics, (m) => m.format === 'nut_status') ||
+        findOkUpsMetric(metrics, (m) => m.format === 'status' || m.format === 'boot');
+
+    const status = { raw: null, label: 'unknown', up: null };
+    if (st) {
+        status.raw = st.raw;
+        if (st.format === 'nut_status') {
+            const mm = mapNutStatus(st.raw);
+            status.label = mm.label;
+            status.up = mm.up;
+        } else {
+            status.label = st.display || (st.raw != null ? String(st.raw) : 'unknown');
+            status.up = st.up;
+        }
+    }
+
+    const ch =
+        findOkUpsMetric(metrics, (m) => m.id === 'charge') ||
+        findOkUpsMetric(metrics, (m) => m.format === 'percent' && m.id !== 'load') ||
+        findOkUpsMetric(metrics, (m) => m.format === 'percent');
+
+    const loadM = findOkUpsMetric(metrics, (m) => m.id === 'load');
+
+    const rt = findOkUpsMetric(metrics, (m) => m.id === 'runtime') || findOkUpsMetric(metrics, (m) => m.format === 'time');
+
+    const inVm = findOkUpsMetric(metrics, (m) => m.id === 'inputVoltage');
+    const outVm = findOkUpsMetric(metrics, (m) => m.id === 'outputVoltage');
+    const vols = metrics.filter((m) => m.ok && m.format === 'voltage');
+    const inVmet = inVm || vols[0] || null;
+    const outVmet = outVm || vols[1] || null;
+
+    const pwr = findOkUpsMetric(metrics, (m) => m.id === 'power') || findOkUpsMetric(metrics, (m) => m.format === 'watt');
+    const freqM = findOkUpsMetric(metrics, (m) => m.id === 'frequency') || findOkUpsMetric(metrics, (m) => m.format === 'frequency');
+
+    const chargeRaw = ch ? ch.raw : null;
+    const runtimeRaw = rt ? rt.raw : null;
+    const rtSec = runtimeRaw != null ? firstNumberFromString(runtimeRaw) : null;
+
+    return {
+        status,
+        battery: {
+            chargeRaw,
+            chargePct: firstNumberFromString(chargeRaw),
+            runtimeRaw,
+            runtimeFormatted: rtSec != null ? formatRuntimeSeconds(rtSec) : null
+        },
+        electrical: {
+            inputVoltage: metricFromRaw(inVmet ? inVmet.raw : null),
+            outputVoltage: metricFromRaw(outVmet ? outVmet.raw : null),
+            powerW: metricFromRaw(pwr ? pwr.raw : null),
+            loadPercent: metricFromRaw(loadM ? loadM.raw : null),
+            frequencyHz: metricFromRaw(freqM ? freqM.raw : null)
+        }
+    };
+}
+
+function getSnmpUpsStatusPath(cfg) {
+    const fields = cfg.fields;
+    if (Array.isArray(fields)) {
+        const st = fields.find((f) =>
+            f.enabled &&
+            String(f.path || '').trim() &&
+            (f.id === 'status' || f.format === 'status' || f.format === 'boot' || f.format === 'nut_status')
+        );
+        if (st) return st.path.trim();
+    }
+    return String(cfg.snmpOidStatus || '').trim();
 }
 
 function loadUpsConfigsFromStore() {
@@ -243,21 +527,6 @@ function buildUpsCurrentCacheKey() {
         .digest('hex')
         .slice(0, 16);
     return `ups_current_${fingerprint}`;
-}
-
-function mapNutStatus(statusRaw) {
-    const s = String(statusRaw || '').toUpperCase();
-    // NUT common codes:
-    // OL: On line (mains)
-    // OB: On battery
-    // LB: Low battery
-    // OFF: Off / not supported
-    if (!s) return { label: 'unknown', up: null, badge: 'bg-secondary' };
-    if (s === 'OL') return { label: 'Online', up: true, badge: 'bg-success' };
-    if (s === 'OB') return { label: 'On battery', up: false, badge: 'bg-warning text-dark' };
-    if (s === 'LB') return { label: 'Low battery', up: false, badge: 'bg-danger' };
-    if (s === 'OFF') return { label: 'Off', up: false, badge: 'bg-secondary' };
-    return { label: s, up: null, badge: 'bg-secondary' };
 }
 
 function parseVarLine(line) {
@@ -501,55 +770,48 @@ async function fetchUpsCurrentForNotify() {
             return { type: 'nut', host: cfg.host, upsName: null, error: 'ups_name missing' };
         }
 
-        const varNames = [
-            cfg.nutVarStatus,
-            cfg.nutVarCharge,
-            cfg.nutVarRuntime,
-            cfg.nutVarInputVoltage,
-            cfg.nutVarOutputVoltage,
-            cfg.nutVarPower,
-            cfg.nutVarLoad,
-            cfg.nutVarFrequency
-        ];
-        const batch = await nutGetVarsBatch(cfg.host, nutPort, upsName, varNames);
-        const [
-            st, ch, rt,
-            inV, outV, pwr, loadRes, freqRes
-        ] = batch;
+        const fields = Array.isArray(cfg.fields) ? cfg.fields : resolveUpsFieldList(cfg, 'nut');
+        const active = fields.filter((f) => f.enabled && String(f.path || '').trim());
+        if (!active.length) {
+            return { type: 'nut', host: cfg.host, upsName, error: 'no fields configured' };
+        }
 
-        const statusRaw = st.ok ? st.value : null;
-        const mapped = mapNutStatus(statusRaw);
-        const chargeRaw = ch.ok ? ch.value : null;
-        const runtimeRaw = rt.ok ? rt.value : null;
+        const paths = [];
+        const idxMap = [];
+        for (const f of active) {
+            const p = f.path.trim();
+            let ix = paths.indexOf(p);
+            if (ix < 0) {
+                ix = paths.length;
+                paths.push(p);
+            }
+            idxMap.push(ix);
+        }
 
-        if (!st.ok) {
-            log('warn', `[UPS] NUT ${cfg.host}:${nutPort} "${upsName}": статус (${cfg.nutVarStatus}) недоступен`, {
-                error: st.error || 'fail'
+        const batchRaw = await nutGetVarsBatch(cfg.host, nutPort, upsName, paths);
+        const metrics = active.map((f, i) => {
+            const br = batchRaw[idxMap[i]];
+            const raw = br && br.ok ? br.value : null;
+            return buildUpsMetricRow(f, raw, !!(br && br.ok), br && br.ok ? null : (br && br.error) || 'fail');
+        });
+
+        const stRowIdx = active.findIndex((f) => f.id === 'status' || f.format === 'nut_status');
+        const stBatchIdx = stRowIdx >= 0 ? idxMap[stRowIdx] : idxMap[0];
+        const stRes = batchRaw[stBatchIdx];
+        if (!stRes || !stRes.ok) {
+            const pathShown = stRowIdx >= 0 ? active[stRowIdx].path : paths[0];
+            log('warn', `[UPS] NUT ${cfg.host}:${nutPort} "${upsName}": (${pathShown}) недоступен`, {
+                error: (stRes && stRes.error) || 'fail'
             });
         }
 
+        const legacy = buildLegacyUpsFromMetrics(metrics);
         return {
             type: 'nut',
             host: cfg.host,
             upsName,
-            status: {
-                raw: statusRaw,
-                label: mapped.label,
-                up: mapped.up
-            },
-            battery: {
-                chargeRaw,
-                chargePct: firstNumberFromString(chargeRaw),
-                runtimeRaw,
-                runtimeFormatted: runtimeRaw != null ? formatRuntimeSeconds(runtimeRaw) : null
-            },
-            electrical: {
-                inputVoltage: metricFromRaw(inV.ok ? inV.value : null),
-                outputVoltage: metricFromRaw(outV.ok ? outV.value : null),
-                powerW: metricFromRaw(pwr.ok ? pwr.value : null),
-                loadPercent: metricFromRaw(loadRes.ok ? loadRes.value : null),
-                frequencyHz: metricFromRaw(freqRes.ok ? freqRes.value : null)
-            },
+            fields: metrics,
+            ...legacy,
             updatedAt: nowIso
         };
     };
@@ -557,37 +819,28 @@ async function fetchUpsCurrentForNotify() {
     const pollOneSnmp = async (cfg) => {
         const snmpPort = cfg.port || 161;
         const community = cfg.snmpCommunity;
-        const oidStatus = cfg.snmpOidStatus;
-        if (!community || !oidStatus) {
+        const statusPath = getSnmpUpsStatusPath(cfg);
+        if (!community || !statusPath) {
             return { type: 'snmp', host: cfg.host, error: 'community or status oid missing' };
         }
 
-        const [
-            st, ch, rt,
-            inV, outV, pwr, loadRes, freqRes
-        ] = await Promise.all([
-            snmpGetOid(cfg.host, snmpPort, community, oidStatus),
-            cfg.snmpOidCharge ? snmpGetOid(cfg.host, snmpPort, community, cfg.snmpOidCharge) : Promise.resolve({ ok: false }),
-            cfg.snmpOidRuntime ? snmpGetOid(cfg.host, snmpPort, community, cfg.snmpOidRuntime) : Promise.resolve({ ok: false }),
-            cfg.snmpOidInputVoltage ? snmpGetOid(cfg.host, snmpPort, community, cfg.snmpOidInputVoltage) : Promise.resolve({ ok: false }),
-            cfg.snmpOidOutputVoltage ? snmpGetOid(cfg.host, snmpPort, community, cfg.snmpOidOutputVoltage) : Promise.resolve({ ok: false }),
-            cfg.snmpOidPower ? snmpGetOid(cfg.host, snmpPort, community, cfg.snmpOidPower) : Promise.resolve({ ok: false }),
-            cfg.snmpOidLoad ? snmpGetOid(cfg.host, snmpPort, community, cfg.snmpOidLoad) : Promise.resolve({ ok: false }),
-            cfg.snmpOidFrequency ? snmpGetOid(cfg.host, snmpPort, community, cfg.snmpOidFrequency) : Promise.resolve({ ok: false })
-        ]);
+        const fields = Array.isArray(cfg.fields) ? cfg.fields : resolveUpsFieldList(cfg, 'snmp');
+        const active = fields.filter((f) => f.enabled && String(f.path || '').trim());
+        if (!active.length) {
+            return { type: 'snmp', host: cfg.host, error: 'no fields configured' };
+        }
 
-        const statusRaw = st.ok ? st.value : null;
-        const chargeRaw = ch.ok ? ch.value : null;
-        const runtimeRaw = rt.ok ? rt.value : null;
+        const results = await Promise.all(
+            active.map((f) => snmpGetOid(cfg.host, snmpPort, community, f.path.trim()))
+        );
 
-        const snmpReads = [['status', st]];
-        if (cfg.snmpOidCharge) snmpReads.push(['charge', ch]);
-        if (cfg.snmpOidRuntime) snmpReads.push(['runtime', rt]);
-        if (cfg.snmpOidInputVoltage) snmpReads.push(['inputVoltage', inV]);
-        if (cfg.snmpOidOutputVoltage) snmpReads.push(['outputVoltage', outV]);
-        if (cfg.snmpOidPower) snmpReads.push(['power', pwr]);
-        if (cfg.snmpOidLoad) snmpReads.push(['load', loadRes]);
-        if (cfg.snmpOidFrequency) snmpReads.push(['frequency', freqRes]);
+        const metrics = active.map((f, i) => {
+            const r = results[i];
+            const raw = r.ok ? r.value : null;
+            return buildUpsMetricRow(f, raw, r.ok, r.ok ? null : r.error || 'fail');
+        });
+
+        const snmpReads = metrics.map((m, i) => [active[i].id || `f${i}`, results[i]]);
         const snmpFailed = snmpReads.filter(([, r]) => !r.ok);
         if (snmpFailed.length) {
             log('warn', `[UPS] SNMP ${cfg.host}:${snmpPort}: не прочитаны OID (${snmpFailed.length}/${snmpReads.length})`, {
@@ -595,27 +848,12 @@ async function fetchUpsCurrentForNotify() {
             });
         }
 
+        const legacy = buildLegacyUpsFromMetrics(metrics);
         return {
             type: 'snmp',
             host: cfg.host,
-            status: {
-                raw: statusRaw,
-                label: statusRaw != null ? String(statusRaw) : 'unknown',
-                up: null
-            },
-            battery: {
-                chargeRaw,
-                chargePct: firstNumberFromString(chargeRaw),
-                runtimeRaw,
-                runtimeFormatted: runtimeRaw != null ? formatRuntimeSeconds(runtimeRaw) : null
-            },
-            electrical: {
-                inputVoltage: metricFromRaw(inV.ok ? inV.value : null),
-                outputVoltage: metricFromRaw(outV.ok ? outV.value : null),
-                powerW: metricFromRaw(pwr.ok ? pwr.value : null),
-                loadPercent: metricFromRaw(loadRes.ok ? loadRes.value : null),
-                frequencyHz: metricFromRaw(freqRes.ok ? freqRes.value : null)
-            },
+            fields: metrics,
+            ...legacy,
             updatedAt: nowIso
         };
     };

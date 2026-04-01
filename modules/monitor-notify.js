@@ -390,7 +390,10 @@ async function runNotifyTick() {
     }
 
     function getUpsPowerState(upsItem) {
-        const raw = String(upsItem && upsItem.status && upsItem.status.raw || '').toUpperCase();
+        const st = upsItem && upsItem.status;
+        if (st && st.up === true) return 'mains';
+        if (st && st.up === false) return 'battery';
+        const raw = String(st && st.raw || '').toUpperCase();
         if (!raw) return null;
         if (raw.includes('OB') || raw.includes('LB')) return 'battery';
         if (raw.includes('OL')) return 'mains';

@@ -615,7 +615,7 @@
                                 </div>
                                 <div class="col-md-3">
                                     <label class="form-label fw-bold" id="upsEnabledLabel">Включить</label>
-                                    <select class="form-select" id="upsEnabledSelect">
+                                    <select class="form-select" id="upsEnabledSelect" onchange="toggleUpsFields()">
                                         <option value="0">Нет</option>
                                         <option value="1" selected>Да</option>
                                     </select>
@@ -643,38 +643,6 @@
                                         <label class="form-label fw-bold" for="upsNutNameInput" id="upsNutNameLabel">NUT имя UPS</label>
                                         <input type="text" class="form-control" id="upsNutNameInput" placeholder="myups">
                                     </div>
-                                    <div class="col-md-4">
-                                        <label class="form-label fw-bold" for="upsNutVarStatusInput" id="upsNutVarStatusLabel">VAR статус</label>
-                                        <input type="text" class="form-control" id="upsNutVarStatusInput" placeholder="ups.status" value="ups.status">
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label class="form-label fw-bold" for="upsNutVarChargeInput" id="upsNutVarChargeLabel">VAR заряд</label>
-                                        <input type="text" class="form-control" id="upsNutVarChargeInput" placeholder="battery.charge" value="battery.charge">
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label class="form-label fw-bold" for="upsNutVarRuntimeInput" id="upsNutVarRuntimeLabel">VAR runtime</label>
-                                        <input type="text" class="form-control" id="upsNutVarRuntimeInput" placeholder="battery.runtime" value="battery.runtime">
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label class="form-label fw-bold" for="upsNutVarInputVoltageInput" id="upsNutVarInputVoltageLabel">VAR вход U</label>
-                                        <input type="text" class="form-control" id="upsNutVarInputVoltageInput" placeholder="input.voltage" value="input.voltage">
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label class="form-label fw-bold" for="upsNutVarOutputVoltageInput" id="upsNutVarOutputVoltageLabel">VAR выход U</label>
-                                        <input type="text" class="form-control" id="upsNutVarOutputVoltageInput" placeholder="output.voltage" value="output.voltage">
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label class="form-label fw-bold" for="upsNutVarPowerInput" id="upsNutVarPowerLabel">VAR мощность (Вт)</label>
-                                        <input type="text" class="form-control" id="upsNutVarPowerInput" placeholder="ups.realpower" value="ups.realpower">
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label class="form-label fw-bold" for="upsNutVarLoadInput" id="upsNutVarLoadLabel">VAR нагрузка %</label>
-                                        <input type="text" class="form-control" id="upsNutVarLoadInput" placeholder="ups.load" value="ups.load">
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label class="form-label fw-bold" for="upsNutVarFrequencyInput" id="upsNutVarFrequencyLabel">VAR частота</label>
-                                        <input type="text" class="form-control" id="upsNutVarFrequencyInput" placeholder="input.frequency" value="input.frequency">
-                                    </div>
                                 </div>
                             </div>
 
@@ -684,39 +652,13 @@
                                         <label class="form-label fw-bold" for="upsSnmpCommunityInput">Community</label>
                                         <input type="text" class="form-control" id="upsSnmpCommunityInput" placeholder="public">
                                     </div>
-                                    <div class="col-md-8">
-                                        <label class="form-label fw-bold" for="upsSnmpOidStatusInput" id="upsSnmpOidStatusLabel">OID статус</label>
-                                        <input type="text" class="form-control" id="upsSnmpOidStatusInput" placeholder="1.3.6.1....">
-                                    </div>
-                                    <div class="col-md-8">
-                                        <label class="form-label fw-bold" for="upsSnmpOidChargeInput" id="upsSnmpOidChargeLabel">OID заряд</label>
-                                        <input type="text" class="form-control" id="upsSnmpOidChargeInput" placeholder="(необязательно)">
-                                    </div>
-                                    <div class="col-md-8">
-                                        <label class="form-label fw-bold" for="upsSnmpOidRuntimeInput" id="upsSnmpOidRuntimeLabel">OID runtime</label>
-                                        <input type="text" class="form-control" id="upsSnmpOidRuntimeInput" placeholder="(необязательно)">
-                                    </div>
-                                    <div class="col-md-8">
-                                        <label class="form-label fw-bold" for="upsSnmpOidInputVoltageInput" id="upsSnmpOidInputVoltageLabel">OID вход U</label>
-                                        <input type="text" class="form-control" id="upsSnmpOidInputVoltageInput" placeholder="(необязательно)">
-                                    </div>
-                                    <div class="col-md-8">
-                                        <label class="form-label fw-bold" for="upsSnmpOidOutputVoltageInput" id="upsSnmpOidOutputVoltageLabel">OID выход U</label>
-                                        <input type="text" class="form-control" id="upsSnmpOidOutputVoltageInput" placeholder="(необязательно)">
-                                    </div>
-                                    <div class="col-md-8">
-                                        <label class="form-label fw-bold" for="upsSnmpOidPowerInput" id="upsSnmpOidPowerLabel">OID мощность</label>
-                                        <input type="text" class="form-control" id="upsSnmpOidPowerInput" placeholder="(необязательно)">
-                                    </div>
-                                    <div class="col-md-8">
-                                        <label class="form-label fw-bold" for="upsSnmpOidLoadInput" id="upsSnmpOidLoadLabel">OID нагрузка %</label>
-                                        <input type="text" class="form-control" id="upsSnmpOidLoadInput" placeholder="(необязательно)">
-                                    </div>
-                                    <div class="col-md-8">
-                                        <label class="form-label fw-bold" for="upsSnmpOidFrequencyInput" id="upsSnmpOidFrequencyLabel">OID частота</label>
-                                        <input type="text" class="form-control" id="upsSnmpOidFrequencyInput" placeholder="(необязательно)">
-                                    </div>
                                 </div>
+                            </div>
+
+                            <div id="upsFieldsEditorSection" class="mb-3">
+                                <h6 class="fw-semibold mb-2"><i class="bi bi-list-columns me-2"></i><span id="upsFieldsSectionTitle">Поля (до 15)</span></h6>
+                                <div id="upsFieldsInputsWrap"></div>
+                                <div class="form-text" id="upsFieldsHelpText">Добавляйте и удаляйте поля кнопками; переключатель «Опрашивать» отключает чтение без удаления. Для SNMP нужен OID в поле со статусом. Для NUT статуса — формат «NUT (OL/OB)». Для стандартных назначений отдельная подпись не нужна; своё имя на дашборде — только у «Другое».</div>
                             </div>
 
                             <hr class="my-4">

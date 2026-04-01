@@ -2801,22 +2801,14 @@ function updateUILanguage() {
     setText('settingsClusterTilesHint', t('settingsClusterTilesHint'));
     setText('settingsClusterTilesAddBtnLabel', t('settingsClusterTilesAddBtn'));
     setText('settingsClusterTilesSaveBtnLabel', t('settingsClusterTilesSaveBtn'));
-    setText('upsNutVarStatusLabel', t('upsNutVarStatus'));
-    setText('upsNutVarChargeLabel', t('upsNutVarCharge'));
-    setText('upsNutVarRuntimeLabel', t('upsNutVarRuntime'));
-    setText('upsNutVarInputVoltageLabel', t('upsNutVarInputVoltage'));
-    setText('upsNutVarOutputVoltageLabel', t('upsNutVarOutputVoltage'));
-    setText('upsNutVarPowerLabel', t('upsNutVarPower'));
-    setText('upsNutVarLoadLabel', t('upsNutVarLoad'));
-    setText('upsNutVarFrequencyLabel', t('upsNutVarFrequency'));
-    setText('upsSnmpOidStatusLabel', t('upsSnmpOidStatus'));
-    setText('upsSnmpOidChargeLabel', t('upsSnmpOidCharge'));
-    setText('upsSnmpOidRuntimeLabel', t('upsSnmpOidRuntime'));
-    setText('upsSnmpOidInputVoltageLabel', t('upsSnmpOidInputVoltage'));
-    setText('upsSnmpOidOutputVoltageLabel', t('upsSnmpOidOutputVoltage'));
-    setText('upsSnmpOidPowerLabel', t('upsSnmpOidPower'));
-    setText('upsSnmpOidLoadLabel', t('upsSnmpOidLoad'));
-    setText('upsSnmpOidFrequencyLabel', t('upsSnmpOidFrequency'));
+    const upsTypeSel = document.getElementById('upsTypeSelect');
+    const upsFieldsTitleEl = document.getElementById('upsFieldsSectionTitle');
+    if (upsTypeSel && upsFieldsTitleEl) {
+        upsFieldsTitleEl.textContent = upsTypeSel.value === 'snmp'
+            ? (t('upsFieldsTitleSnmp') || 'Поля SNMP (OID), до 15')
+            : (t('upsFieldsTitleNut') || 'Поля NUT (VAR), до 15');
+    }
+    setText('upsFieldsHelpText', t('upsFieldsHelpText'));
     setText('upsNutNameLabel', t('upsNutNameLabel'));
 
     setText('netdevSettingsCardTitle', t('netdevSettingsCardTitle'));
@@ -6097,17 +6089,445 @@ async function saveClusterDashboardTilesSettings() {
 
 // ==================== UPS MONITORING (NUT/SNMP) ====================
 
+const UPS_MAX_FIELDS = 15;
+const UPS_SEMANTIC_KEYS = ['status', 'charge', 'runtime', 'inputVoltage', 'outputVoltage', 'power', 'load', 'frequency'];
+
+function upsSemanticOptionLabel(key) {
+    const map = {
+        status: t('upsSemanticStatus') || 'Статус',
+        charge: t('upsLabelCharge') || 'Заряд',
+        runtime: t('upsLabelRuntime') || 'Время на батарее',
+        inputVoltage: t('upsLabelInputVoltage') || 'Вход U',
+        outputVoltage: t('upsLabelOutputVoltage') || 'Выход U',
+        power: t('upsLabelPower') || 'Мощность',
+        load: t('upsLabelLoad') || 'Нагрузка',
+        frequency: t('upsLabelFrequency') || 'Частота'
+    };
+    return map[key] || key;
+}
+
+function createEmptyUpsField() {
+    return {
+        id: 'field_x',
+        label: '',
+        path: '',
+        format: 'text',
+        enabled: true,
+        statusUpValues: [],
+        statusDownValues: []
+    };
+}
+
+function upsDefaultFieldsFromLegacyFlat(cfg) {
+    const type = cfg.type || 'nut';
+    if (type === 'snmp') {
+        const s = normalizeSnmpDefaultsForUps(cfg);
+        return [
+            { id: 'status', label: upsSemanticOptionLabel('status'), path: s.snmpOidStatus || '', format: 'status', enabled: true, statusUpValues: [], statusDownValues: [] },
+            { id: 'charge', label: upsSemanticOptionLabel('charge'), path: s.snmpOidCharge || '', format: 'percent', enabled: true, statusUpValues: [], statusDownValues: [] },
+            { id: 'runtime', label: upsSemanticOptionLabel('runtime'), path: s.snmpOidRuntime || '', format: 'time', enabled: true, statusUpValues: [], statusDownValues: [] },
+            { id: 'inputVoltage', label: upsSemanticOptionLabel('inputVoltage'), path: s.snmpOidInputVoltage || '', format: 'voltage', enabled: true, statusUpValues: [], statusDownValues: [] },
+            { id: 'outputVoltage', label: upsSemanticOptionLabel('outputVoltage'), path: s.snmpOidOutputVoltage || '', format: 'voltage', enabled: true, statusUpValues: [], statusDownValues: [] },
+            { id: 'power', label: upsSemanticOptionLabel('power'), path: s.snmpOidPower || '', format: 'watt', enabled: true, statusUpValues: [], statusDownValues: [] },
+            { id: 'load', label: upsSemanticOptionLabel('load'), path: s.snmpOidLoad || '', format: 'percent', enabled: true, statusUpValues: [], statusDownValues: [] },
+            { id: 'frequency', label: upsSemanticOptionLabel('frequency'), path: s.snmpOidFrequency || '', format: 'frequency', enabled: true, statusUpValues: [], statusDownValues: [] }
+        ];
+    }
+    const n = normalizeNutDefaultsForUps(cfg);
+    return [
+        { id: 'status', label: upsSemanticOptionLabel('status'), path: n.nutVarStatus || 'ups.status', format: 'nut_status', enabled: true, statusUpValues: [], statusDownValues: [] },
+        { id: 'charge', label: upsSemanticOptionLabel('charge'), path: n.nutVarCharge || 'battery.charge', format: 'percent', enabled: true, statusUpValues: [], statusDownValues: [] },
+        { id: 'runtime', label: upsSemanticOptionLabel('runtime'), path: n.nutVarRuntime || 'battery.runtime', format: 'time', enabled: true, statusUpValues: [], statusDownValues: [] },
+        { id: 'inputVoltage', label: upsSemanticOptionLabel('inputVoltage'), path: n.nutVarInputVoltage || 'input.voltage', format: 'voltage', enabled: true, statusUpValues: [], statusDownValues: [] },
+        { id: 'outputVoltage', label: upsSemanticOptionLabel('outputVoltage'), path: n.nutVarOutputVoltage || 'output.voltage', format: 'voltage', enabled: true, statusUpValues: [], statusDownValues: [] },
+        { id: 'power', label: upsSemanticOptionLabel('power'), path: n.nutVarPower || 'ups.realpower', format: 'watt', enabled: true, statusUpValues: [], statusDownValues: [] },
+        { id: 'load', label: upsSemanticOptionLabel('load'), path: n.nutVarLoad || 'ups.load', format: 'percent', enabled: true, statusUpValues: [], statusDownValues: [] },
+        { id: 'frequency', label: upsSemanticOptionLabel('frequency'), path: n.nutVarFrequency || 'input.frequency', format: 'frequency', enabled: true, statusUpValues: [], statusDownValues: [] }
+    ];
+}
+
+function normalizeNutDefaultsForUps(cfg) {
+    const c = cfg && typeof cfg === 'object' ? cfg : {};
+    return {
+        nutVarStatus: c.nutVarStatus || 'ups.status',
+        nutVarCharge: c.nutVarCharge || 'battery.charge',
+        nutVarRuntime: c.nutVarRuntime || 'battery.runtime',
+        nutVarInputVoltage: c.nutVarInputVoltage || 'input.voltage',
+        nutVarOutputVoltage: c.nutVarOutputVoltage || 'output.voltage',
+        nutVarPower: c.nutVarPower || 'ups.realpower',
+        nutVarLoad: c.nutVarLoad || 'ups.load',
+        nutVarFrequency: c.nutVarFrequency || 'input.frequency'
+    };
+}
+
+function normalizeSnmpDefaultsForUps(cfg) {
+    const c = cfg && typeof cfg === 'object' ? cfg : {};
+    return {
+        snmpOidStatus: c.snmpOidStatus || '',
+        snmpOidCharge: c.snmpOidCharge || '',
+        snmpOidRuntime: c.snmpOidRuntime || '',
+        snmpOidInputVoltage: c.snmpOidInputVoltage || '',
+        snmpOidOutputVoltage: c.snmpOidOutputVoltage || '',
+        snmpOidPower: c.snmpOidPower || '',
+        snmpOidLoad: c.snmpOidLoad || '',
+        snmpOidFrequency: c.snmpOidFrequency || ''
+    };
+}
+
+function normalizeUpsFieldRowFromApi(f, idx, upsType) {
+    const x = f && typeof f === 'object' ? f : {};
+    const semSet = new Set(UPS_SEMANTIC_KEYS);
+    const id = String(x.id || '');
+    const semantic = semSet.has(id) ? id : 'custom';
+
+    let fmt = String(x.format || 'text').trim().toLowerCase();
+    if (fmt === 'bool') fmt = 'boot';
+    const allowedNut = new Set(['text', 'number', 'percent', 'voltage', 'watt', 'frequency', 'time', 'nut_status', 'boot', 'status']);
+    const allowedSnmp = new Set(['text', 'number', 'percent', 'voltage', 'watt', 'frequency', 'time', 'boot', 'status']);
+    const allowed = upsType === 'nut' ? allowedNut : allowedSnmp;
+    if (!allowed.has(fmt)) fmt = 'text';
+    if (upsType === 'snmp' && fmt === 'nut_status') fmt = 'status';
+
+    let label = x.label != null ? String(x.label).trim() : '';
+    if (semantic !== 'custom') {
+        label = '';
+    }
+
+    return {
+        semantic,
+        label,
+        path: String(x.path != null ? x.path : x.oid || ''),
+        format: fmt,
+        enabled: x.enabled !== false && x.poll !== false,
+        statusUpValues: Array.isArray(x.statusUpValues) ? x.statusUpValues : [],
+        statusDownValues: Array.isArray(x.statusDownValues) ? x.statusDownValues : []
+    };
+}
+
+function parseUpsFieldStatusListInput(str) {
+    return String(str || '')
+        .split(/[,;|]/)
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean);
+}
+
+function updateUpsFieldStatusMapRowVisibility(fieldIndex) {
+    const row = document.getElementById('upsFieldStatusMapRow' + fieldIndex);
+    const sel = document.getElementById('upsFieldFormat' + fieldIndex + 'Select');
+    const hint = document.getElementById('upsFieldStatusMapHint' + fieldIndex);
+    if (!row || !sel) return;
+    const show = sel.value === 'status' || sel.value === 'boot';
+    row.classList.toggle('d-none', !show);
+    if (hint && show) {
+        if (sel.value === 'boot') {
+            hint.textContent =
+                t('netdevStatusMapHintBoot') ||
+                'Опционально: перечислите значения для подключён/отключён; если пусто — правила 0/1, true/false, up/down и др.';
+        } else {
+            hint.textContent =
+                t('netdevStatusMapHintStatus') ||
+                'Укажите списки значений; только они определяют подключён/отключён (без авто-правил).';
+        }
+    }
+}
+
+function refreshAllUpsStatusMapRows() {
+    const root = document.getElementById('upsFieldsEditorsRoot');
+    if (!root) return;
+    root.querySelectorAll('.ups-field-block[data-ups-row]').forEach((block) => {
+        const idx = parseInt(block.getAttribute('data-ups-row'), 10);
+        if (Number.isFinite(idx)) updateUpsFieldStatusMapRowVisibility(idx);
+    });
+}
+
+function initUpsFieldFormatUi() {
+    const wrap = document.getElementById('upsFieldsInputsWrap');
+    if (!wrap || wrap.dataset.upsFormatUi === '1') return;
+    wrap.dataset.upsFormatUi = '1';
+    wrap.addEventListener('change', (ev) => {
+        const el = ev.target;
+        if (!el || !el.id) return;
+        const m = el.id.match(/^upsFieldFormat(\d+)Select$/);
+        if (m) updateUpsFieldStatusMapRowVisibility(parseInt(m[1], 10));
+    });
+}
+
+function initUpsFieldSemanticUi() {
+    const wrap = document.getElementById('upsFieldsInputsWrap');
+    if (!wrap || wrap.dataset.upsSemanticUi === '1') return;
+    wrap.dataset.upsSemanticUi = '1';
+    wrap.addEventListener('change', (ev) => {
+        const el = ev.target;
+        if (!el || !el.id) return;
+        if (!/^upsFieldSemantic\d+Select$/.test(el.id)) return;
+        const type = String(document.getElementById('upsTypeSelect')?.value || 'nut').toLowerCase();
+        const cur = getUpsFieldsFromDom();
+        renderUpsFieldsEditors(cur, type);
+    });
+}
+
+function renderUpsFieldsEditors(fields, upsType) {
+    const root = document.getElementById('upsFieldsEditorsRoot');
+    const hint = document.getElementById('upsFieldsCountHint');
+    const addBtn = document.getElementById('upsAddFieldBtn');
+    if (!root) return;
+
+    const type = upsType === 'snmp' ? 'snmp' : 'nut';
+    const list = (Array.isArray(fields) ? fields : []).map((f, i) => normalizeUpsFieldRowFromApi(f, i, type));
+
+    const lblUp = t('netdevStatusConnected') || 'Подключён';
+    const lblDown = t('netdevStatusDisconnected') || 'Отключён';
+    const lblEnabled = t('netdevFieldEnabled') || 'Опрашивать';
+    const lblRemove = t('netdevFieldRemove') || 'Удалить';
+    const lblField = t('netdevFieldNumber') || 'Поле';
+    const lblSemantic = t('upsFieldSemanticLabel') || 'Назначение';
+    const lblCaption = t('upsFieldCaptionLabel') || 'Подпись на дашборде';
+    const lblCustom = t('upsSemanticCustom') || 'Другое';
+    const emptyHint = t('upsFieldsEmptyHint') || 'Нет полей. Добавьте строку кнопкой ниже.';
+    const pathLbl = type === 'nut' ? (t('upsFieldPathVar') || 'Имя VAR') : (t('upsFieldPathOid') || 'OID');
+    const fmtLbl = t('netdevFormatLabel') || 'Формат';
+    const commaHint = t('commaSeparatedValues') || 'через запятую';
+    const phEx = t('netdevFieldPlaceholderExample') || 'Например';
+
+    const fmtOpt = (val, label, sel) => `<option value="${val}"${sel}>${escapeHtml(label)}</option>`;
+
+    let html = '';
+    if (list.length === 0) {
+        html += `<div class="text-muted small py-2 mb-2 border rounded px-3 bg-light">${escapeHtml(emptyHint)}</div>`;
+    }
+
+    list.forEach((f, i) => {
+        const mutedRow = f.enabled ? '' : ' opacity-50';
+        const upStr = Array.isArray(f.statusUpValues) ? f.statusUpValues.join(', ') : '';
+        const downStr = Array.isArray(f.statusDownValues) ? f.statusDownValues.join(', ') : '';
+
+        let semanticOpts = '';
+        for (const k of UPS_SEMANTIC_KEYS) {
+            const sel = f.semantic === k ? ' selected' : '';
+            semanticOpts += `<option value="${k}"${sel}>${escapeHtml(upsSemanticOptionLabel(k))}</option>`;
+        }
+        semanticOpts += `<option value="custom"${f.semantic === 'custom' ? ' selected' : ''}>${escapeHtml(lblCustom)}</option>`;
+
+        const fmtText = t('netdevFmtText') || 'Текст';
+        const fmtNum = t('upsFmtNumber') || 'Число';
+        const fmtPct = t('upsFmtPercent') || 'Процент';
+        const fmtV = t('upsFmtVoltage') || 'Напряжение (В)';
+        const fmtW = t('upsFmtWatt') || 'Мощность (Вт)';
+        const fmtHz = t('upsFmtFrequency') || 'Частота (Гц)';
+        const fmtTime = t('netdevFmtTime') || 'Время (сек)';
+        const fmtNut = t('upsFmtNutStatus') || 'NUT статус (OL/OB)';
+        const fmtBoot = t('netdevFmtBoot') || 'Статус (bool)';
+        const fmtStatus = t('netdevFmtStatus') || 'Статус (вручную)';
+
+        let formatHtml = '';
+        formatHtml += fmtOpt('text', fmtText, f.format === 'text' ? ' selected' : '');
+        formatHtml += fmtOpt('number', fmtNum, f.format === 'number' ? ' selected' : '');
+        formatHtml += fmtOpt('percent', fmtPct, f.format === 'percent' ? ' selected' : '');
+        formatHtml += fmtOpt('voltage', fmtV, f.format === 'voltage' ? ' selected' : '');
+        formatHtml += fmtOpt('watt', fmtW, f.format === 'watt' ? ' selected' : '');
+        formatHtml += fmtOpt('frequency', fmtHz, f.format === 'frequency' ? ' selected' : '');
+        formatHtml += fmtOpt('time', fmtTime, f.format === 'time' ? ' selected' : '');
+        if (type === 'nut') {
+            formatHtml += fmtOpt('nut_status', fmtNut, f.format === 'nut_status' ? ' selected' : '');
+        }
+        formatHtml += fmtOpt('boot', fmtBoot, f.format === 'boot' ? ' selected' : '');
+        formatHtml += fmtOpt('status', fmtStatus, f.format === 'status' ? ' selected' : '');
+
+        const showCaption = f.semantic === 'custom';
+        const captionCol = showCaption
+            ? `<div class="col-lg-2 col-md-4">
+                        <label class="form-label fw-bold" for="upsFieldLabel${i}Input">${escapeHtml(lblCaption)}</label>
+                        <input type="text" class="form-control" id="upsFieldLabel${i}Input" placeholder="${escapeHtml(phEx)}" value="${escapeHtml(f.label)}">
+                    </div>`
+            : '';
+        const pathColClass = showCaption ? 'col-lg-4 col-md-6' : 'col-lg-6 col-md-8';
+        const fmtColClass = showCaption ? 'col-lg-4 col-md-12' : 'col-lg-4 col-md-12';
+
+        html += `
+            <div class="ups-field-block border-bottom pb-3 mb-3${mutedRow}" data-ups-row="${i}">
+                <div class="row g-2 align-items-center mb-2 flex-wrap">
+                    <div class="col">
+                        <span class="fw-semibold">${escapeHtml(lblField)} ${i + 1}</span>
+                    </div>
+                    <div class="col-auto">
+                        <div class="form-check form-switch m-0">
+                            <input class="form-check-input" type="checkbox" role="switch" id="upsFieldEnabled${i}Checkbox" ${f.enabled ? 'checked' : ''}>
+                            <label class="form-check-label small" for="upsFieldEnabled${i}Checkbox">${escapeHtml(lblEnabled)}</label>
+                        </div>
+                    </div>
+                    <div class="col-auto">
+                        <button type="button" class="btn btn-sm btn-outline-danger" data-ups-remove-row="${i}">${escapeHtml(lblRemove)}</button>
+                    </div>
+                </div>
+                <div class="row g-3 align-items-end">
+                    <div class="col-lg-2 col-md-4">
+                        <label class="form-label fw-bold small" for="upsFieldSemantic${i}Select">${escapeHtml(lblSemantic)}</label>
+                        <select class="form-select form-select-sm" id="upsFieldSemantic${i}Select">${semanticOpts}</select>
+                    </div>
+                    ${captionCol}
+                    <div class="${pathColClass}">
+                        <label class="form-label fw-bold" for="upsFieldPath${i}Input">${escapeHtml(pathLbl)}</label>
+                        <input type="text" class="form-control" id="upsFieldPath${i}Input" placeholder="${type === 'nut' ? 'ups.status' : '1.3.6...'}" value="${escapeHtml(f.path)}">
+                    </div>
+                    <div class="${fmtColClass}">
+                        <label class="form-label fw-bold" for="upsFieldFormat${i}Select">${escapeHtml(fmtLbl)}</label>
+                        <select class="form-select" id="upsFieldFormat${i}Select">${formatHtml}</select>
+                    </div>
+                </div>
+                <div class="row g-2 mt-1 d-none" id="upsFieldStatusMapRow${i}">
+                    <div class="col-12 small text-muted mb-0" id="upsFieldStatusMapHint${i}"></div>
+                    <div class="col-md-6">
+                        <label class="form-label small mb-1" for="upsFieldStatusUp${i}Input">«${escapeHtml(lblUp)}» ${escapeHtml(commaHint)}</label>
+                        <input type="text" class="form-control form-control-sm" id="upsFieldStatusUp${i}Input" placeholder="1, up, true" value="${escapeHtml(upStr)}">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small mb-1" for="upsFieldStatusDown${i}Input">«${escapeHtml(lblDown)}» ${escapeHtml(commaHint)}</label>
+                        <input type="text" class="form-control form-control-sm" id="upsFieldStatusDown${i}Input" placeholder="0, 2, down" value="${escapeHtml(downStr)}">
+                    </div>
+                </div>
+            </div>`;
+    });
+
+    root.innerHTML = html;
+
+    root.querySelectorAll('.ups-field-block').forEach((block) => {
+        const ix = parseInt(block.getAttribute('data-ups-row'), 10);
+        const en = document.getElementById('upsFieldEnabled' + ix + 'Checkbox');
+        if (en) {
+            en.addEventListener('change', () => {
+                block.classList.toggle('opacity-50', !en.checked);
+            });
+        }
+    });
+
+    if (hint) hint.textContent = `${list.length} / ${UPS_MAX_FIELDS}`;
+    if (addBtn) addBtn.disabled = list.length >= UPS_MAX_FIELDS;
+    refreshAllUpsStatusMapRows();
+}
+
+function getUpsFieldsFromDom() {
+    const root = document.getElementById('upsFieldsEditorsRoot');
+    if (!root) return [];
+    const blocks = root.querySelectorAll('.ups-field-block[data-ups-row]');
+    const out = [];
+    blocks.forEach((block) => {
+        const i = parseInt(block.getAttribute('data-ups-row'), 10);
+        if (!Number.isFinite(i)) return;
+        const semEl = document.getElementById('upsFieldSemantic' + i + 'Select');
+        const labelEl = document.getElementById('upsFieldLabel' + i + 'Input');
+        const pathEl = document.getElementById('upsFieldPath' + i + 'Input');
+        const formatEl = document.getElementById('upsFieldFormat' + i + 'Select');
+        const upIn = document.getElementById('upsFieldStatusUp' + i + 'Input');
+        const downIn = document.getElementById('upsFieldStatusDown' + i + 'Input');
+        const enEl = document.getElementById('upsFieldEnabled' + i + 'Checkbox');
+        const sem = semEl ? String(semEl.value || 'custom') : 'custom';
+        const id = sem !== 'custom' ? sem : `field_${i}`;
+        let fmt = formatEl ? String(formatEl.value || 'text').trim().toLowerCase() : 'text';
+        if (fmt === 'bool') fmt = 'boot';
+        let label = '';
+        if (sem === 'custom') {
+            label = labelEl ? labelEl.value.trim() : '';
+        } else {
+            label = upsSemanticOptionLabel(sem);
+        }
+        out.push({
+            id,
+            label,
+            path: pathEl ? pathEl.value.trim() : '',
+            format: fmt,
+            enabled: enEl ? !!enEl.checked : true,
+            statusUpValues: parseUpsFieldStatusListInput(upIn ? upIn.value : ''),
+            statusDownValues: parseUpsFieldStatusListInput(downIn ? downIn.value : '')
+        });
+    });
+    return out;
+}
+
+function upsAddFieldRow() {
+    ensureUpsFieldsInfrastructure();
+    const type = String(document.getElementById('upsTypeSelect')?.value || 'nut').toLowerCase();
+    const cur = getUpsFieldsFromDom();
+    if (cur.length >= UPS_MAX_FIELDS) {
+        showToast(t('upsFieldsMaxToast') || `Не больше ${UPS_MAX_FIELDS} полей`, 'warning');
+        return;
+    }
+    cur.push(createEmptyUpsField());
+    renderUpsFieldsEditors(cur, type);
+}
+
+function upsRemoveFieldRow(rowIdx) {
+    ensureUpsFieldsInfrastructure();
+    const type = String(document.getElementById('upsTypeSelect')?.value || 'nut').toLowerCase();
+    const cur = getUpsFieldsFromDom();
+    if (rowIdx < 0 || rowIdx >= cur.length) return;
+    cur.splice(rowIdx, 1);
+    renderUpsFieldsEditors(cur, type);
+}
+
+function ensureUpsFieldsInfrastructure() {
+    const wrap = document.getElementById('upsFieldsInputsWrap');
+    if (!wrap) return;
+    const INFRA_VER = '1';
+    if (wrap.dataset.upsInfraVer !== INFRA_VER) {
+        wrap.dataset.upsInfraVer = INFRA_VER;
+        const addLbl = t('netdevFieldAdd') || 'Добавить поле';
+        wrap.innerHTML = `
+            <div id="upsFieldsEditorsRoot"></div>
+            <div class="mt-2 d-flex flex-wrap align-items-center gap-2">
+                <button type="button" class="btn btn-outline-primary btn-sm" id="upsAddFieldBtn">${escapeHtml(addLbl)}</button>
+                <span class="small text-muted" id="upsFieldsCountHint"></span>
+            </div>`;
+        const addBtn = document.getElementById('upsAddFieldBtn');
+        if (addBtn) addBtn.addEventListener('click', () => upsAddFieldRow());
+        wrap.addEventListener('click', (e) => {
+            const rm = e.target.closest('[data-ups-remove-row]');
+            if (!rm) return;
+            e.preventDefault();
+            const idx = parseInt(rm.getAttribute('data-ups-remove-row'), 10);
+            if (Number.isFinite(idx)) upsRemoveFieldRow(idx);
+        });
+    }
+    initUpsFieldFormatUi();
+    initUpsFieldSemanticUi();
+}
+
 function toggleUpsFields() {
     const enabledSelect = document.getElementById('upsEnabledSelect');
     const typeSelect = document.getElementById('upsTypeSelect');
     const nutFieldsWrap = document.getElementById('upsNutFields');
     const snmpFieldsWrap = document.getElementById('upsSnmpFields');
+    const editorSection = document.getElementById('upsFieldsEditorSection');
+    const titleEl = document.getElementById('upsFieldsSectionTitle');
     if (!enabledSelect || !typeSelect || !nutFieldsWrap || !snmpFieldsWrap) return;
 
     const enabled = String(enabledSelect.value || '0') === '1';
     const type = String(typeSelect.value || 'nut').toLowerCase();
     nutFieldsWrap.classList.toggle('d-none', !enabled || type !== 'nut');
     snmpFieldsWrap.classList.toggle('d-none', !enabled || type !== 'snmp');
+    if (editorSection) editorSection.classList.toggle('d-none', !enabled);
+    if (titleEl) {
+        titleEl.textContent = type === 'nut'
+            ? (t('upsFieldsTitleNut') || 'Поля NUT (VAR), до 15')
+            : (t('upsFieldsTitleSnmp') || 'Поля SNMP (OID), до 15');
+    }
+
+    if (enabled && Array.isArray(upsConfigs) && document.getElementById('upsFieldsEditorsRoot')) {
+        const slotIdx = getUpsSlotIndex();
+        const cfg = upsConfigs[slotIdx];
+        if (cfg) {
+            cfg.fields = getUpsFieldsFromDom();
+            cfg.type = type;
+            cfg.fields = (cfg.fields || []).map((row) => {
+                const next = { ...row };
+                if (type === 'snmp' && next.format === 'nut_status') next.format = 'status';
+                if (type === 'nut' && next.id === 'status' && next.format === 'status') next.format = 'nut_status';
+                return next;
+            });
+            ensureUpsFieldsInfrastructure();
+            renderUpsFieldsEditors(cfg.fields, type);
+            refreshAllUpsStatusMapRows();
+        }
+    }
 }
 
 function getUpsSlotIndex() {
@@ -6132,6 +6552,7 @@ function createDefaultUpsConfig() {
         host: '',
         port: null,
         name: '',
+        fields: [],
         nutVarStatus: 'ups.status',
         nutVarCharge: 'battery.charge',
         nutVarRuntime: 'battery.runtime',
@@ -6201,26 +6622,12 @@ async function loadUpsSettings() {
     const typeSelect = document.getElementById('upsTypeSelect');
     if (!enabledSelect || !typeSelect) return;
 
+    ensureUpsFieldsInfrastructure();
+
     const hostInput = document.getElementById('upsHostInput');
     const portInput = document.getElementById('upsPortInput');
     const nutNameInput = document.getElementById('upsNutNameInput');
-    const nutVarStatusInput = document.getElementById('upsNutVarStatusInput');
-    const nutVarChargeInput = document.getElementById('upsNutVarChargeInput');
-    const nutVarRuntimeInput = document.getElementById('upsNutVarRuntimeInput');
-    const nutVarInputVoltageInput = document.getElementById('upsNutVarInputVoltageInput');
-    const nutVarOutputVoltageInput = document.getElementById('upsNutVarOutputVoltageInput');
-    const nutVarPowerInput = document.getElementById('upsNutVarPowerInput');
-    const nutVarLoadInput = document.getElementById('upsNutVarLoadInput');
-    const nutVarFrequencyInput = document.getElementById('upsNutVarFrequencyInput');
     const snmpCommunityInput = document.getElementById('upsSnmpCommunityInput');
-    const snmpOidStatusInput = document.getElementById('upsSnmpOidStatusInput');
-    const snmpOidChargeInput = document.getElementById('upsSnmpOidChargeInput');
-    const snmpOidRuntimeInput = document.getElementById('upsSnmpOidRuntimeInput');
-    const snmpOidInputVoltageInput = document.getElementById('upsSnmpOidInputVoltageInput');
-    const snmpOidOutputVoltageInput = document.getElementById('upsSnmpOidOutputVoltageInput');
-    const snmpOidPowerInput = document.getElementById('upsSnmpOidPowerInput');
-    const snmpOidLoadInput = document.getElementById('upsSnmpOidLoadInput');
-    const snmpOidFrequencyInput = document.getElementById('upsSnmpOidFrequencyInput');
 
     const applySlotToForm = (slotIdx) => {
         const cfg = (Array.isArray(upsConfigs) && upsConfigs[slotIdx]) ? upsConfigs[slotIdx] : createDefaultUpsConfig();
@@ -6230,27 +6637,14 @@ async function loadUpsSettings() {
         if (hostInput) hostInput.value = cfg.host || '';
         if (portInput) portInput.value = cfg.port != null ? String(cfg.port) : '';
 
-        // NUT
         if (nutNameInput) nutNameInput.value = cfg.name || '';
-        if (nutVarStatusInput) nutVarStatusInput.value = cfg.nutVarStatus || 'ups.status';
-        if (nutVarChargeInput) nutVarChargeInput.value = cfg.nutVarCharge || 'battery.charge';
-        if (nutVarRuntimeInput) nutVarRuntimeInput.value = cfg.nutVarRuntime || 'battery.runtime';
-        if (nutVarInputVoltageInput) nutVarInputVoltageInput.value = cfg.nutVarInputVoltage || 'input.voltage';
-        if (nutVarOutputVoltageInput) nutVarOutputVoltageInput.value = cfg.nutVarOutputVoltage || 'output.voltage';
-        if (nutVarPowerInput) nutVarPowerInput.value = cfg.nutVarPower || 'ups.realpower';
-        if (nutVarLoadInput) nutVarLoadInput.value = cfg.nutVarLoad || 'ups.load';
-        if (nutVarFrequencyInput) nutVarFrequencyInput.value = cfg.nutVarFrequency || 'input.frequency';
-
-        // SNMP
         if (snmpCommunityInput) snmpCommunityInput.value = cfg.snmpCommunity || '';
-        if (snmpOidStatusInput) snmpOidStatusInput.value = cfg.snmpOidStatus || '';
-        if (snmpOidChargeInput) snmpOidChargeInput.value = cfg.snmpOidCharge || '';
-        if (snmpOidRuntimeInput) snmpOidRuntimeInput.value = cfg.snmpOidRuntime || '';
-        if (snmpOidInputVoltageInput) snmpOidInputVoltageInput.value = cfg.snmpOidInputVoltage || '';
-        if (snmpOidOutputVoltageInput) snmpOidOutputVoltageInput.value = cfg.snmpOidOutputVoltage || '';
-        if (snmpOidPowerInput) snmpOidPowerInput.value = cfg.snmpOidPower || '';
-        if (snmpOidLoadInput) snmpOidLoadInput.value = cfg.snmpOidLoad || '';
-        if (snmpOidFrequencyInput) snmpOidFrequencyInput.value = cfg.snmpOidFrequency || '';
+
+        const upsType = cfg.type || 'nut';
+        const fields = Array.isArray(cfg.fields) && cfg.fields.length > 0
+            ? cfg.fields
+            : upsDefaultFieldsFromLegacyFlat(cfg);
+        renderUpsFieldsEditors(fields, upsType);
 
         toggleUpsFields();
     };
@@ -6326,26 +6720,13 @@ async function saveUpsSettings() {
     cfg.host = host;
     cfg.port = port !== '' ? parseInt(port, 10) : null;
 
+    ensureUpsFieldsInfrastructure();
+    cfg.fields = getUpsFieldsFromDom();
+
     if (type === 'nut') {
         cfg.name = (document.getElementById('upsNutNameInput')?.value || '').trim();
-        cfg.nutVarStatus = (document.getElementById('upsNutVarStatusInput')?.value || '').trim() || 'ups.status';
-        cfg.nutVarCharge = (document.getElementById('upsNutVarChargeInput')?.value || '').trim() || 'battery.charge';
-        cfg.nutVarRuntime = (document.getElementById('upsNutVarRuntimeInput')?.value || '').trim() || 'battery.runtime';
-        cfg.nutVarInputVoltage = (document.getElementById('upsNutVarInputVoltageInput')?.value || '').trim() || 'input.voltage';
-        cfg.nutVarOutputVoltage = (document.getElementById('upsNutVarOutputVoltageInput')?.value || '').trim() || 'output.voltage';
-        cfg.nutVarPower = (document.getElementById('upsNutVarPowerInput')?.value || '').trim() || 'ups.realpower';
-        cfg.nutVarLoad = (document.getElementById('upsNutVarLoadInput')?.value || '').trim() || 'ups.load';
-        cfg.nutVarFrequency = (document.getElementById('upsNutVarFrequencyInput')?.value || '').trim() || 'input.frequency';
     } else if (type === 'snmp') {
         cfg.snmpCommunity = (document.getElementById('upsSnmpCommunityInput')?.value || '').trim();
-        cfg.snmpOidStatus = (document.getElementById('upsSnmpOidStatusInput')?.value || '').trim();
-        cfg.snmpOidCharge = (document.getElementById('upsSnmpOidChargeInput')?.value || '').trim();
-        cfg.snmpOidRuntime = (document.getElementById('upsSnmpOidRuntimeInput')?.value || '').trim();
-        cfg.snmpOidInputVoltage = (document.getElementById('upsSnmpOidInputVoltageInput')?.value || '').trim();
-        cfg.snmpOidOutputVoltage = (document.getElementById('upsSnmpOidOutputVoltageInput')?.value || '').trim();
-        cfg.snmpOidPower = (document.getElementById('upsSnmpOidPowerInput')?.value || '').trim();
-        cfg.snmpOidLoad = (document.getElementById('upsSnmpOidLoadInput')?.value || '').trim();
-        cfg.snmpOidFrequency = (document.getElementById('upsSnmpOidFrequencyInput')?.value || '').trim();
     }
 
     try {
@@ -8926,12 +9307,36 @@ function buildClusterUpsTileHtml(tile, payload) {
         : null;
     const chargeBarNum = (chargePct != null && Number.isFinite(Number(chargePct))) ? Number(chargePct) : null;
 
-    const bodyHtml = [
-        buildClusterDashboardMetricCell(ul.inV, inVText, null, null, 'col-6'),
-        buildClusterDashboardMetricCell(ul.load, loadText, loadPctNum, 'bg-warning', 'col-6'),
-        buildClusterDashboardMetricCell(ul.charge, chargeText, chargeBarNum, 'bg-success', 'col-6 mt-2'),
-        buildClusterDashboardMetricCell(ul.runtime, runtimeText, null, null, 'col-6 mt-2')
-    ].join('');
+    let bodyHtml;
+    if (Array.isArray(item.fields) && item.fields.length > 0) {
+        bodyHtml = item.fields
+            .map((f, idx) => {
+                if (!f || f.ok === false) return null;
+                const disp = f.display != null ? String(f.display) : '';
+                if (disp === '' || disp === '—') return null;
+                const lbl = (f.label && String(f.label).trim()) || f.id || '—';
+                const bar =
+                    (f.id === 'load' || f.id === 'charge' || f.format === 'percent') &&
+                    typeof f.value === 'number' &&
+                    Number.isFinite(f.value)
+                        ? f.value
+                        : null;
+                const colClass = 'col-6' + (idx >= 2 ? ' mt-2' : '');
+                return buildClusterDashboardMetricCell(lbl, disp, bar, bar != null ? 'bg-success' : null, colClass);
+            })
+            .filter(Boolean)
+            .join('');
+        if (!bodyHtml) {
+            bodyHtml = buildClusterDashboardMetricCell(t('backupNoData') || '—', '—', null, null, 'col-6');
+        }
+    } else {
+        bodyHtml = [
+            buildClusterDashboardMetricCell(ul.inV, inVText, null, null, 'col-6'),
+            buildClusterDashboardMetricCell(ul.load, loadText, loadPctNum, 'bg-warning', 'col-6'),
+            buildClusterDashboardMetricCell(ul.charge, chargeText, chargeBarNum, 'bg-success', 'col-6 mt-2'),
+            buildClusterDashboardMetricCell(ul.runtime, runtimeText, null, null, 'col-6 mt-2')
+        ].join('');
+    }
     const name = item.name || `UPS ${item.slot}`;
     const backend = item.type ? String(item.type).toUpperCase() : 'UPS';
     const footer = item.host ? `${backend} · ${item.host}` : backend;
@@ -10780,6 +11185,86 @@ function upsMetricCompactTile(iconBi, label, valueStr, progressPct, barClass, co
         </div>`;
 }
 
+function upsDashboardFieldIcon(f) {
+    if (!f) return 'bi-dot';
+    const id = f.id;
+    const fmt = f.format;
+    if (id === 'charge' || fmt === 'percent') return 'bi-battery-half';
+    if (id === 'load') return 'bi-speedometer2';
+    if (id === 'runtime' || fmt === 'time') return 'bi-clock-history';
+    if (id === 'inputVoltage' || id === 'outputVoltage' || fmt === 'voltage') return 'bi-plug';
+    if (id === 'power' || fmt === 'watt') return 'bi-lightning-charge';
+    if (id === 'frequency' || fmt === 'frequency') return 'bi-activity';
+    if (id === 'status' || fmt === 'nut_status' || fmt === 'status' || fmt === 'boot') return 'bi-info-circle';
+    return 'bi-dot';
+}
+
+function buildUpsMetricTilesHtml(item, labels) {
+    const hasVal = (v) => v != null && String(v).trim() !== '' && String(v) !== '—';
+    if (Array.isArray(item.fields) && item.fields.length > 0) {
+        return item.fields
+            .map((f) => {
+                if (!f || f.ok === false) return null;
+                const disp = f.display != null ? String(f.display) : '';
+                if (!hasVal(disp)) return null;
+                const bar =
+                    (f.id === 'load' || f.id === 'charge' || f.format === 'percent') &&
+                    typeof f.value === 'number' &&
+                    Number.isFinite(f.value)
+                        ? f.value
+                        : null;
+                const lbl = (f.label && String(f.label).trim()) || f.id || '—';
+                return upsMetricCompactTile(
+                    upsDashboardFieldIcon(f),
+                    lbl,
+                    disp,
+                    bar,
+                    'bg-success',
+                    'col-6 col-md-3'
+                );
+            })
+            .filter(Boolean)
+            .join('');
+    }
+    const electrical = item.electrical || {};
+    const inVText = formatUpsMetric(electrical.inputVoltage, ' V');
+    const loadText = formatUpsMetric(electrical.loadPercent, ' %');
+    const chargePct = item.battery?.chargePct;
+    const chargeRaw = item.battery?.chargeRaw;
+    const chargeText =
+        chargePct != null && Number.isFinite(Number(chargePct))
+            ? `${chargePct}%`
+            : chargeRaw != null
+              ? String(chargeRaw)
+              : '—';
+    const runtimeText =
+        item.battery?.runtimeFormatted != null
+            ? item.battery.runtimeFormatted
+            : item.battery?.runtimeRaw != null
+              ? String(item.battery.runtimeRaw)
+              : '—';
+    const loadPctNum =
+        electrical.loadPercent && typeof electrical.loadPercent.value === 'number'
+            ? electrical.loadPercent.value
+            : null;
+    const chargeBarNum =
+        chargePct != null && Number.isFinite(Number(chargePct)) ? Number(chargePct) : null;
+    return [
+        hasVal(inVText) ? upsMetricCompactTile('bi-plug', labels.inV, inVText, null, null, 'col-6 col-md-3') : null,
+        hasVal(loadText)
+            ? upsMetricCompactTile('bi-speedometer2', labels.load, loadText, loadPctNum, 'bg-success', 'col-6 col-md-3')
+            : null,
+        hasVal(chargeText)
+            ? upsMetricCompactTile('bi-battery-half', labels.charge, chargeText, chargeBarNum, 'bg-success', 'col-6 col-md-3')
+            : null,
+        hasVal(runtimeText)
+            ? upsMetricCompactTile('bi-clock-history', labels.runtime, runtimeText, null, null, 'col-6 col-md-3')
+            : null
+    ]
+        .filter(Boolean)
+        .join('');
+}
+
 function buildUpsCardsHtml(data, options = {}) {
     const singleUpsColClass = options.singleUpsColClass || 'col-12';
     const multiUpsColClass = options.multiUpsColClass || 'col-md-6';
@@ -10833,35 +11318,7 @@ function buildUpsCardsHtml(data, options = {}) {
         else if (up === true) badgeClass = 'bg-success';
         else if (up === false) badgeClass = 'bg-warning text-dark';
 
-        const electrical = item.electrical || {};
-        const inVText = formatUpsMetric(electrical.inputVoltage, ' V');
-        const outVText = formatUpsMetric(electrical.outputVoltage, ' V');
-        const powerText = formatUpsMetric(electrical.powerW, ' W');
-        const loadText = formatUpsMetric(electrical.loadPercent, ' %');
-        const freqText = formatUpsMetric(electrical.frequencyHz, ' Hz');
-
-        const chargePct = item.battery?.chargePct;
-        const chargeRaw = item.battery?.chargeRaw;
-        const chargeText = (chargePct != null && Number.isFinite(Number(chargePct)))
-            ? `${chargePct}%`
-            : (chargeRaw != null ? String(chargeRaw) : '—');
-
-        const runtimeText = item.battery?.runtimeFormatted != null
-            ? item.battery.runtimeFormatted
-            : (item.battery?.runtimeRaw != null ? String(item.battery.runtimeRaw) : '—');
-
-        const loadPctNum = electrical.loadPercent && typeof electrical.loadPercent.value === 'number'
-            ? electrical.loadPercent.value
-            : null;
-        const chargeBarNum = (chargePct != null && Number.isFinite(Number(chargePct))) ? Number(chargePct) : null;
-
-        const hasVal = (v) => v != null && String(v).trim() !== '' && String(v) !== '—';
-        const tilesHtml = [
-            hasVal(inVText) ? upsMetricCompactTile('bi-plug', labels.inV, inVText, null, null, 'col-6 col-md-3') : null,
-            hasVal(loadText) ? upsMetricCompactTile('bi-speedometer2', labels.load, loadText, loadPctNum, 'bg-success', 'col-6 col-md-3') : null,
-            hasVal(chargeText) ? upsMetricCompactTile('bi-battery-half', labels.charge, chargeText, chargeBarNum, 'bg-success', 'col-6 col-md-3') : null,
-            hasVal(runtimeText) ? upsMetricCompactTile('bi-clock-history', labels.runtime, runtimeText, null, null, 'col-6 col-md-3') : null
-        ].filter(Boolean).join('');
+        const tilesHtml = buildUpsMetricTilesHtml(item, labels);
         const staleHtml = isStale(item.updatedAt || data.updatedAt)
             ? `<div class="col-12 mt-2"><small class="text-warning">${escapeHtml(staleLabel)}</small></div>`
             : '';
@@ -10909,38 +11366,10 @@ function buildUpsCardsHtml(data, options = {}) {
         else if (up === true) badgeClass = 'bg-success';
         else if (up === false) badgeClass = 'bg-warning text-dark';
 
-        const electrical = item.electrical || {};
-        const inVText = formatUpsMetric(electrical.inputVoltage, ' V');
-        const outVText = formatUpsMetric(electrical.outputVoltage, ' V');
-        const powerText = formatUpsMetric(electrical.powerW, ' W');
-        const loadText = formatUpsMetric(electrical.loadPercent, ' %');
-        const freqText = formatUpsMetric(electrical.frequencyHz, ' Hz');
-
-        const chargePct = item.battery?.chargePct;
-        const chargeRaw = item.battery?.chargeRaw;
-        const chargeText = (chargePct != null && Number.isFinite(Number(chargePct)))
-            ? `${chargePct}%`
-            : (chargeRaw != null ? String(chargeRaw) : '—');
-
-        const runtimeText = item.battery?.runtimeFormatted != null
-            ? item.battery.runtimeFormatted
-            : (item.battery?.runtimeRaw != null ? String(item.battery.runtimeRaw) : '—');
-
         const name = item.name || `UPS ${item.slot}`;
         const backend = item.type ? String(item.type).toUpperCase() : 'UPS';
 
-        const loadPctNum = electrical.loadPercent && typeof electrical.loadPercent.value === 'number'
-            ? electrical.loadPercent.value
-            : null;
-        const chargeBarNum = (chargePct != null && Number.isFinite(Number(chargePct))) ? Number(chargePct) : null;
-
-        const hasVal = (v) => v != null && String(v).trim() !== '' && String(v) !== '—';
-        const tilesHtml = [
-            hasVal(inVText) ? upsMetricCompactTile('bi-plug', labels.inV, inVText, null, null, 'col-6 col-md-3') : null,
-            hasVal(loadText) ? upsMetricCompactTile('bi-speedometer2', labels.load, loadText, loadPctNum, 'bg-success', 'col-6 col-md-3') : null,
-            hasVal(chargeText) ? upsMetricCompactTile('bi-battery-half', labels.charge, chargeText, chargeBarNum, 'bg-success', 'col-6 col-md-3') : null,
-            hasVal(runtimeText) ? upsMetricCompactTile('bi-clock-history', labels.runtime, runtimeText, null, null, 'col-6 col-md-3') : null
-        ].filter(Boolean).join('');
+        const tilesHtml = buildUpsMetricTilesHtml(item, labels);
         const staleHtml = isStale(item.updatedAt || data.updatedAt)
             ? `<div class="col-12 mt-2"><small class="text-warning">${escapeHtml(staleLabel)}</small></div>`
             : '';
