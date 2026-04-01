@@ -1,55 +1,49 @@
 const express = require('express');
 const router = express.Router();
 const proxmox = require('../proxmox-api');
-const cache = require('../cache');
 const { log } = require('../utils');
 const checkAuth = require('../middleware/auth');
+const { getCachedOrFetch } = require('../proxmox-route-cache');
 
-// Список узлов
 router.get('/', checkAuth, async (req, res) => {
-    const cacheKey = `nodes_${req.token}`;
-    const cached = cache.get(cacheKey);
-    
-    if (cached) {
-        return res.json(cached);
-    }
-    
     try {
-        const nodes = await proxmox.getNodes(req.token, req.serverUrl || null);
-        const clusterStatus = await proxmox.getClusterStatus(req.token, req.serverUrl || null);
-        const orderedNodes = proxmox.sortRowsByClusterNodeOrder(nodes, clusterStatus);
-        cache.set(cacheKey, orderedNodes);
+        const orderedNodes = await getCachedOrFetch('nodes', req, async () => {
+            const [nodes, clusterStatus] = await Promise.all([
+                proxmox.getNodes(req.token, req.serverUrl || null),
+                proxmox.getClusterStatus(req.token, req.serverUrl || null)
+            ]);
+            return proxmox.sortRowsByClusterNodeOrder(nodes, clusterStatus);
+        });
         res.json(orderedNodes);
     } catch (error) {
         log('error', `Error fetching nodes: ${error.message}`);
         if (error?.response?.status) {
             const st = error.response.status;
-            res.status(st).json({ error: st === 401 ? 'Требуется API токен (или токен неверный)' : `Ошибка API: ${st}` });
+            res.status(st).json({
+                error: st === 401 ? 'Требуется API токен (или токен неверный)' : `Ошибка API: ${st}`
+            });
         } else {
             res.status(500).json({ error: 'Ошибка получения списка узлов' });
         }
     }
 });
 
-// Статус конкретного узла
 router.get('/:node/status', checkAuth, async (req, res) => {
     const { node } = req.params;
-    const cacheKey = `node_status_${node}_${req.token}`;
-    const cached = cache.get(cacheKey);
-    
-    if (cached) {
-        return res.json(cached);
-    }
-    
+    const prefix = `node_status_${String(node || '').replace(/[^\w.-]/g, '_')}`;
+
     try {
-        const status = await proxmox.getNodeStatus(node, req.token, req.serverUrl || null);
-        cache.set(cacheKey, status);
+        const status = await getCachedOrFetch(prefix, req, () =>
+            proxmox.getNodeStatus(node, req.token, req.serverUrl || null)
+        );
         res.json(status);
     } catch (error) {
         log('error', `Error fetching node ${node} status: ${error.message}`);
         if (error?.response?.status) {
             const st = error.response.status;
-            res.status(st).json({ error: st === 401 ? 'Требуется API токен (или токен неверный)' : `Ошибка API: ${st}` });
+            res.status(st).json({
+                error: st === 401 ? 'Требуется API токен (или токен неверный)' : `Ошибка API: ${st}`
+            });
         } else {
             res.status(500).json({ error: `Ошибка получения статуса узла ${node}` });
         }
