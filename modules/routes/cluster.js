@@ -4,14 +4,18 @@ const proxmox = require('../proxmox-api');
 const cache = require('../cache');
 const { formatBytes, log } = require('../utils');
 const checkAuth = require('../middleware/auth');
+const { getScopeKeyFromRequest, applyOfflineToClusterNodes } = require('../pve-node-offline-tracker');
 
 // Полная информация о кластере
 router.get('/full', checkAuth, async (req, res) => {
     const cacheKey = `cluster_full_${req.token}`;
     const cached = cache.get(cacheKey);
-    
+    const scopeKey = getScopeKeyFromRequest(req);
+
     if (cached) {
-        return res.json(cached);
+        const copy = JSON.parse(JSON.stringify(cached));
+        if (scopeKey) applyOfflineToClusterNodes(scopeKey, copy.nodes);
+        return res.json(copy);
     }
     
     try {
@@ -166,6 +170,8 @@ router.get('/full', checkAuth, async (req, res) => {
             }
         };
         
+        if (scopeKey) applyOfflineToClusterNodes(scopeKey, result.nodes);
+
         cache.set(cacheKey, result);
         res.json(result);
         

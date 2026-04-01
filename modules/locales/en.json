@@ -176,6 +176,7 @@
     "nodeCpu": "CPU",
     "nodeCpuCores": "Cores",
     "nodeOffline": "Offline",
+    "nodeOfflineSince": "Offline since",
     "nodeOnline": "Online",
     "nodeRam": "RAM",
     "nodeUptime": "Uptime",

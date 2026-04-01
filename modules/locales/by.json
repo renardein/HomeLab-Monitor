@@ -141,6 +141,7 @@
     "nodeCpu": "працэсар",
     "nodeCpuCores": "Ядраў",
     "nodeOffline": "Офлайн",
+    "nodeOfflineSince": "Не ў сетцы з",
     "nodeOnline": "Онлайн",
     "nodeRam": "АЗП",
     "nodeUptime": "Аптайм",

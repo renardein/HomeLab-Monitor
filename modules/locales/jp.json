@@ -140,6 +140,7 @@
     "nodeCpu": "CPU",
     "nodeCpuCores": "コア",
     "nodeOffline": "オフライン",
+    "nodeOfflineSince": "オフライン開始",
     "nodeOnline": "オンライン",
     "nodeRam": "ラム",
     "nodeUptime": "稼働時間",

@@ -125,7 +125,9 @@ function buildSampleVarsForTelegramRule(rule) {
             return {
                 nodeName: firstNodeName,
                 state: 'online',
-                stateRu: 'Онлайн'
+                stateRu: 'Онлайн',
+                offlineSince: '',
+                offlineSinceRu: ''
             };
         case 'netdev_updown':
             return {

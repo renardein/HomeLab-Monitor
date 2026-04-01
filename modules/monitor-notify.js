@@ -12,6 +12,11 @@ const { getEffectiveRules } = require('./telegram-rules');
 const hostMetricsRoute = require('./routes/host-metrics');
 const upsRoute = require('./routes/ups');
 const smartSensorsRoute = require('./routes/smart-sensors');
+const {
+    getScopeKeyFromConnectionId,
+    applyOfflineStatusList,
+    getOfflineSinceIso
+} = require('./pve-node-offline-tracker');
 
 function normalizeUrl(u) {
     try {
@@ -312,6 +317,14 @@ async function runNotifyTick() {
         }
     }
 
+    const pveNodeScopeKey = getScopeKeyFromConnectionId(connectionId);
+    if (pveNodeScopeKey && nodeDetails && nodeDetails.length) {
+        applyOfflineStatusList(
+            pveNodeScopeKey,
+            nodeDetails.map((nd) => ({ name: nd.name, online: !!nd.online }))
+        );
+    }
+
     let netdevItems = null;
     try {
         netdevItems = await pollNetdevMonitoringItems();
@@ -467,14 +480,27 @@ async function runNotifyTick() {
                     const prev = state.node[nodeStateKey] != null ? state.node[nodeStateKey] : legacyPrev;
                     if (prev !== undefined && prev !== stateNow) {
                         const stateRu = stateNow === 'online' ? 'Онлайн' : 'Офлайн';
+                        let offlineSince = '';
+                        let offlineSinceRu = '';
+                        if (stateNow === 'offline' && pveNodeScopeKey) {
+                            const iso = getOfflineSinceIso(pveNodeScopeKey, nname);
+                            if (iso) {
+                                offlineSince = iso;
+                                offlineSinceRu = new Date(iso).toLocaleString('ru-RU');
+                            }
+                        }
+                        let defaultBody = `Узел Proxmox «${nname}»\n${stateRu}`;
+                        if (offlineSinceRu) defaultBody += `\nНе в сети с: ${offlineSinceRu}`;
                         const msg = formatTelegramNotifyMessage(
                             rule,
                             {
                                 nodeName: nname,
                                 state: stateNow,
-                                stateRu
+                                stateRu,
+                                offlineSince,
+                                offlineSinceRu
                             },
-                            `Узел Proxmox «${nname}»\n${stateRu}`
+                            defaultBody
                         );
                         await sendTelegramMessage(token, chatId, msg, threadId, { proxyUrl: telegramProxyUrl });
                     }

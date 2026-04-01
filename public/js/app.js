@@ -11218,7 +11218,8 @@ function updateMonitorView(clusterData) {
                 const statusClass = node.status === 'online' ? 'online' : 'offline';
                 const nip = node.ip ? String(node.ip).trim() : '';
                 const ipHtml = nip ? `<span class="monitor-view__node-ip text-muted">${escapeHtml(nip)}</span>` : '';
-                return `<div class="monitor-view__node-row"><span class="monitor-view__node-name">${escapeHtml(node.name)}</span>${ipHtml ? ' ' + ipHtml : ''}<span class="monitor-view__node-status ${statusClass}" title="${node.status === 'online' ? t('nodeOnline') : t('nodeOffline')}"></span></div>`;
+                const offlineLine = formatNodeOfflineSinceLine(node);
+                return `<div class="monitor-view__node-row"><div class="d-flex align-items-center flex-wrap gap-1"><span class="monitor-view__node-name">${escapeHtml(node.name)}</span>${ipHtml ? ' ' + ipHtml : ''}<span class="monitor-view__node-status ${statusClass}" title="${node.status === 'online' ? escapeHtml(t('nodeOnline')) : escapeHtml(t('nodeOffline'))}"></span></div>${offlineLine || ''}</div>`;
             }).join('');
         }
     }
@@ -11424,6 +11425,15 @@ function formatUptime(seconds) {
     return `${minutes}${t('minutes')}`;
 }
 
+/** Строка «не в сети с …» для карточки узла (ISO с сервера). */
+function formatNodeOfflineSinceLine(node) {
+    if (!node || String(node.status || '').toLowerCase() === 'online' || !node.offlineSince) return '';
+    const d = new Date(node.offlineSince);
+    if (Number.isNaN(d.getTime())) return '';
+    const when = d.toLocaleString(currentLanguage === 'ru' ? 'ru-RU' : 'en-US');
+    return `<div class="small text-danger mt-1">${escapeHtml(t('nodeOfflineSince'))}: ${escapeHtml(when)}</div>`;
+}
+
 // Format bytes
 function formatBytes(bytes) {
     if (!bytes || bytes === 0) return '0 B';
@@ -11503,9 +11513,10 @@ function updateDashboard(clusterData, storageData, backupsData, hostMetricsData 
     if (nodesContainer) {
         nodesContainer.className = 'cluster-scroll-row';
         const nodesHtml = clusterData.nodes.map(node => {
+        const nodeOnline = String(node.status || '').toLowerCase() === 'online';
         const hostMetric = hostMetricsMap.get(node.name) || null;
         const hostMetricProblems = getHostMetricProblemMessages(hostMetric, hostMetricsRenderSettings);
-        const hostMetricWarning = hostMetricProblems.length
+        const hostMetricWarning = nodeOnline && hostMetricProblems.length
             ? `<span class="badge bg-warning text-dark ms-2 host-problem-trigger" role="button" tabindex="0" data-problem-lines="${escapeHtml(hostMetricProblems.join('\n'))}" title="${escapeHtml(t('toastWarning') || 'Warning')}"><i class="bi bi-exclamation-triangle-fill"></i></span>`
             : '';
         const nodeIpDisplay = node.ip || (hostMetric && hostMetric.nodeIp) || '';
@@ -11519,11 +11530,13 @@ function updateDashboard(clusterData, storageData, backupsData, hostMetricsData 
                         <div>
                         <h5 class="mb-0 d-inline-flex align-items-center">${node.name}${hostMetricWarning}</h5>
                         ${nodeIpLine}
+                        ${formatNodeOfflineSinceLine(node)}
                         </div>
-                        <span class="badge ${node.status === 'online' ? 'bg-success' : 'bg-danger'}">
-                            ${node.status === 'online' ? t('nodeOnline') : t('nodeOffline')}
+                        <span class="badge ${nodeOnline ? 'bg-success' : 'bg-danger'}">
+                            ${nodeOnline ? t('nodeOnline') : t('nodeOffline')}
                         </span>
                     </div>
+                    ${nodeOnline ? `
                     <div class="row g-2">
                         <div class="col-6">
                             <small class="text-muted">${t('nodeCpu')}</small>
@@ -11544,7 +11557,7 @@ function updateDashboard(clusterData, storageData, backupsData, hostMetricsData 
                             <div class="fw-bold">${node.cpuCount}</div>
                         </div>
                         ${formatHostMetricsNodeExtras(hostMetric)}
-                    </div>
+                    </div>` : ''}
                 </div>
             </div>
         `;

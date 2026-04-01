@@ -140,6 +140,7 @@
     "nodeCpu": "中央处理器",
     "nodeCpuCores": "核心",
     "nodeOffline": "离线",
+    "nodeOfflineSince": "离线自",
     "nodeOnline": "在线",
     "nodeRam": "内存",
     "nodeUptime": "运行时间",

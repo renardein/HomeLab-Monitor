@@ -176,6 +176,7 @@
     "nodeCpu": "ЦПУ",
     "nodeCpuCores": "Ядер",
     "nodeOffline": "Офлайн",
+    "nodeOfflineSince": "Не в сети с",
     "nodeOnline": "Онлайн",
     "nodeRam": "ОЗУ",
     "nodeUptime": "Аптайм",
