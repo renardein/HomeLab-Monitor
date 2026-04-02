@@ -25,9 +25,9 @@ async function getDb() {
     } else {
         db = new SQL.Database();
     }
-    const iconStylesMigrated = initSchema(db);
+    const schemaMigrated = initSchema(db);
     migrateFromJson();
-    if (!dbExisted || iconStylesMigrated) saveDb();
+    if (!dbExisted || schemaMigrated) saveDb();
     return db;
 }
 
@@ -103,7 +103,61 @@ function initSchema(database) {
     `);
     database.run(`CREATE INDEX IF NOT EXISTS idx_monitor_icon_styles_scope ON monitor_icon_styles(scope)`);
 
-    return migrateIconStylesFromAppSettings(database);
+    database.run(`
+        CREATE TABLE IF NOT EXISTS host_node_metric_samples (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            connection_id TEXT NOT NULL,
+            node_name TEXT NOT NULL,
+            recorded_at TEXT NOT NULL,
+            temp_c REAL,
+            cpu_usage_pct REAL,
+            mem_usage_pct REAL
+        )
+    `);
+    database.run(
+        `CREATE INDEX IF NOT EXISTS idx_host_node_metric_conn_node_time ON host_node_metric_samples (connection_id, node_name, recorded_at)`
+    );
+    database.run(`CREATE INDEX IF NOT EXISTS idx_host_node_metric_time ON host_node_metric_samples (recorded_at)`);
+
+    database.run(`
+        CREATE TABLE IF NOT EXISTS cluster_aggregate_samples (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            connection_id TEXT NOT NULL,
+            recorded_at TEXT NOT NULL,
+            cpu_usage_pct REAL NOT NULL,
+            mem_usage_pct REAL NOT NULL
+        )
+    `);
+    database.run(
+        `CREATE INDEX IF NOT EXISTS idx_cluster_agg_conn_time ON cluster_aggregate_samples (connection_id, recorded_at)`
+    );
+    database.run(`CREATE INDEX IF NOT EXISTS idx_cluster_agg_time ON cluster_aggregate_samples (recorded_at)`);
+
+    const iconMigrated = migrateIconStylesFromAppSettings(database);
+    const hostMetricMigrated = migrateHostCpuTempToNodeMetrics(database);
+    return iconMigrated || hostMetricMigrated;
+}
+
+/** Однократный перенос host_cpu_temp_samples → host_node_metric_samples (nullable метрики). */
+function migrateHostCpuTempToNodeMetrics(database) {
+    const markerStmt = database.prepare('SELECT value FROM app_settings WHERE key = ?');
+    markerStmt.bind(['host_node_metric_table_v1']);
+    if (markerStmt.step() && markerStmt.get()[0] === '1') {
+        markerStmt.free();
+        return false;
+    }
+    markerStmt.free();
+
+    const oldStmt = database.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='host_cpu_temp_samples' LIMIT 1");
+    const hasOld = oldStmt.step();
+    oldStmt.free();
+    if (hasOld) {
+        database.run(`INSERT INTO host_node_metric_samples (connection_id, node_name, recorded_at, temp_c, cpu_usage_pct, mem_usage_pct)
+            SELECT connection_id, node_name, recorded_at, temp_c, NULL, NULL FROM host_cpu_temp_samples`);
+        database.run(`DROP TABLE host_cpu_temp_samples`);
+    }
+    database.run(`INSERT OR REPLACE INTO app_settings (key, value) VALUES ('host_node_metric_table_v1', '1')`);
+    return true;
 }
 
 /** Переносит JSON из app_settings в таблицу (один раз), затем удаляет старые ключи. Возвращает true, если нужен saveDb. */

@@ -4,9 +4,11 @@ const { URL } = require('url');
 const proxmox = require('../proxmox-api');
 const settingsStore = require('../settings-store');
 const connectionStore = require('../connection-store');
+const { resolveProxmoxConnectionId } = require('../proxmox-connection-id');
 const checkAuth = require('../middleware/auth');
 const { log } = require('../utils');
 const hostMetricsAgentInstall = require('../host-metrics-agent-install');
+const hostCpuTempSamples = require('../host-cpu-temp-samples');
 
 const router = express.Router();
 
@@ -147,16 +149,6 @@ function saveConfigs(configs) {
     const normalized = normalizeAllConfigs(configs);
     settingsStore.setSetting(HOST_METRICS_CONFIGS_KEY, JSON.stringify(normalized));
     return normalized;
-}
-
-function resolveConnectionId(req) {
-    const headerId = safeString(req.headers['x-connection-id']).trim();
-    if (headerId) return headerId;
-    if (req.serverUrl) {
-        const conn = connectionStore.findByTypeUrl('proxmox', req.serverUrl);
-        if (conn && conn.id) return conn.id;
-    }
-    return null;
 }
 
 function hostForHttpUrl(hostRaw) {
@@ -518,7 +510,7 @@ router.post('/agent-uninstall/run', checkAuth, async (req, res) => {
 
 router.get('/discovery', checkAuth, async (req, res) => {
     const settings = loadSettings();
-    const connectionId = resolveConnectionId(req);
+    const connectionId = resolveProxmoxConnectionId(req);
     if (!connectionId) {
         return res.status(400).json({ success: false, error: 'connectionId required' });
     }
@@ -563,9 +555,46 @@ router.get('/discovery', checkAuth, async (req, res) => {
     }
 });
 
+function sendNodeMetricHistory(req, res, fixedMetric) {
+    const connectionId = resolveProxmoxConnectionId(req);
+    const node = safeString(req.query.node).trim();
+    const metricRaw = fixedMetric != null ? fixedMetric : safeString(req.query.metric).trim();
+    const metric = metricRaw === 'cpu' || metricRaw === 'mem' || metricRaw === 'temp' ? metricRaw : null;
+    if (!connectionId) {
+        return res.status(400).json({ success: false, error: 'connectionId required' });
+    }
+    if (!node) {
+        return res.status(400).json({ success: false, error: 'node required' });
+    }
+    if (!metric) {
+        return res.status(400).json({ success: false, error: 'metric must be temp, cpu, or mem' });
+    }
+    try {
+        const points = hostCpuTempSamples.getHostNodeMetricHistory(connectionId, node, metric);
+        res.json({
+            success: true,
+            node,
+            metric,
+            retentionHours: hostCpuTempSamples.HOST_NODE_METRIC_RETENTION_HOURS,
+            points
+        });
+    } catch (e) {
+        log('error', `[HostMetrics] GET metric history (${metric}): ${e.message}`);
+        res.status(500).json({ success: false, error: e.message });
+    }
+}
+
+router.get('/node-metric-history', checkAuth, (req, res) => {
+    sendNodeMetricHistory(req, res, null);
+});
+
+router.get('/cpu-temp-history', checkAuth, (req, res) => {
+    sendNodeMetricHistory(req, res, 'temp');
+});
+
 router.get('/current', checkAuth, async (req, res) => {
     const settings = loadSettings();
-    const connectionId = resolveConnectionId(req);
+    const connectionId = resolveProxmoxConnectionId(req);
     if (!connectionId) {
         return res.status(400).json({ configured: false, error: 'connectionId required' });
     }
@@ -597,11 +626,18 @@ router.get('/current', checkAuth, async (req, res) => {
             return getCachedCurrent(connectionId, nodeName, cfg, settings, nodeIp);
         }));
 
+        const updatedAt = new Date().toISOString();
+        try {
+            hostCpuTempSamples.recordHostCpuTempSamples(connectionId, items, updatedAt);
+        } catch (e) {
+            log('warn', `[HostMetrics] record cpu temp samples: ${e.message}`);
+        }
+
         res.json({
             configured: true,
             settings,
             items,
-            updatedAt: new Date().toISOString()
+            updatedAt
         });
     } catch (e) {
         log('error', `[HostMetrics] GET /current: ${e.message}`);

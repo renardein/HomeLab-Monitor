@@ -78,10 +78,11 @@
             <div class="row mb-4">
                 <div class="col-12">
                     <div class="card">
-                        <div class="card-header">
+                        <div class="card-header d-flex align-items-center justify-content-between gap-2">
                             <h5 class="mb-0"><i class="bi bi-pie-chart me-2"></i><span id="clusterResources">Cluster resources</span></h5>
+                            <span class="cluster-resources-chart-hint text-muted d-none flex-shrink-0" id="clusterResourcesChartHint" aria-hidden="true"><i class="bi bi-graph-up-arrow fs-5"></i></span>
                         </div>
-                        <div class="card-body">
+                        <div class="card-body" id="clusterResourcesCardBody">
                             <div class="row g-2">
                                 <div class="col-md-3 col-6">
                                     <div class="text-center p-3">

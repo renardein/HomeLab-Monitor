@@ -5,6 +5,38 @@ const { formatBytes, log } = require('../utils');
 const checkAuth = require('../middleware/auth');
 const { getScopeKeyFromRequest, applyOfflineToClusterNodes } = require('../pve-node-offline-tracker');
 const { getCachedOrFetch } = require('../proxmox-route-cache');
+const { resolveProxmoxConnectionId } = require('../proxmox-connection-id');
+const hostNodeMetricSamples = require('../host-cpu-temp-samples');
+const clusterAggregateSamples = require('../cluster-aggregate-samples');
+
+function safeString(v) {
+    return v == null ? '' : String(v);
+}
+
+/** Вызывается на каждый GET /full (в т.ч. из кэша), чтобы история метрик обновлялась с частотой опроса. */
+function recordClusterPayloadSamples(req, payload) {
+    const connectionId = resolveProxmoxConnectionId(req);
+    const recordedAtIso = new Date().toISOString();
+    if (!connectionId || !payload) return;
+    const nodes = Array.isArray(payload.nodes) ? payload.nodes : [];
+    if (nodes.length) {
+        try {
+            hostNodeMetricSamples.recordClusterNodeLoadSamples(connectionId, nodes, recordedAtIso);
+        } catch (e) {
+            log('warn', `[Cluster] record node load samples: ${e.message}`);
+        }
+    }
+    const summary = payload.cluster && payload.cluster.summary;
+    if (!summary) return;
+    const cpu = Number(summary.cpuUsagePercent);
+    const mem = Number(summary.memoryUsagePercent);
+    if (!Number.isFinite(cpu) || !Number.isFinite(mem)) return;
+    try {
+        clusterAggregateSamples.recordClusterAggregateSamples(connectionId, cpu, mem, recordedAtIso);
+    } catch (e) {
+        log('warn', `[Cluster] record aggregate samples: ${e.message}`);
+    }
+}
 
 async function fetchClusterFullPayload(req) {
     const [nodes, clusterStatus, clusterResources] = await Promise.all([
@@ -126,6 +158,15 @@ async function fetchClusterFullPayload(req) {
     const totalVotes = sortedQuorumNodes.reduce((sum, n) => sum + n.votes, 0);
     const onlineVotes = sortedQuorumNodes.filter((n) => n.online).reduce((sum, n) => sum + n.votes, 0);
 
+    const cpuUsagePercent =
+        clusterSummary.totalCPU > 0
+            ? Math.round((clusterSummary.usedCPU / clusterSummary.totalCPU) * 100)
+            : 0;
+    const memoryUsagePercent =
+        clusterSummary.totalMemory > 0
+            ? Math.round((clusterSummary.usedMemory / clusterSummary.totalMemory) * 100)
+            : 0;
+
     return {
         nodes: nodesDetails,
         vms,
@@ -133,16 +174,10 @@ async function fetchClusterFullPayload(req) {
             summary: {
                 totalCPU: clusterSummary.totalCPU,
                 usedCPU: Math.round(clusterSummary.usedCPU),
-                cpuUsagePercent:
-                    clusterSummary.totalCPU > 0
-                        ? Math.round((clusterSummary.usedCPU / clusterSummary.totalCPU) * 100)
-                        : 0,
+                cpuUsagePercent,
                 totalMemory: formatBytes(clusterSummary.totalMemory),
                 usedMemory: formatBytes(clusterSummary.usedMemory),
-                memoryUsagePercent:
-                    clusterSummary.totalMemory > 0
-                        ? Math.round((clusterSummary.usedMemory / clusterSummary.totalMemory) * 100)
-                        : 0,
+                memoryUsagePercent,
                 totalVMs: clusterSummary.totalVMs,
                 totalContainers: clusterSummary.totalContainers,
                 runningVMs: clusterSummary.runningVMs,
@@ -158,11 +193,35 @@ async function fetchClusterFullPayload(req) {
     };
 }
 
+router.get('/metric-history', checkAuth, (req, res) => {
+    const connectionId = resolveProxmoxConnectionId(req);
+    const metric = safeString(req.query.metric).trim();
+    if (!connectionId) {
+        return res.status(400).json({ success: false, error: 'connectionId required' });
+    }
+    if (metric !== 'cpu' && metric !== 'mem') {
+        return res.status(400).json({ success: false, error: 'metric must be cpu or mem' });
+    }
+    try {
+        const points = clusterAggregateSamples.getClusterAggregateHistory(connectionId, metric);
+        res.json({
+            success: true,
+            metric,
+            retentionHours: clusterAggregateSamples.CLUSTER_AGGREGATE_RETENTION_HOURS,
+            points
+        });
+    } catch (e) {
+        log('error', `[Cluster] GET /metric-history: ${e.message}`);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
 router.get('/full', checkAuth, async (req, res) => {
     const scopeKey = getScopeKeyFromRequest(req);
 
     try {
         const payload = await getCachedOrFetch('cluster_full', req, () => fetchClusterFullPayload(req));
+        recordClusterPayloadSamples(req, payload);
         const out = JSON.parse(JSON.stringify(payload));
         if (scopeKey) applyOfflineToClusterNodes(scopeKey, out.nodes);
         res.json(out);

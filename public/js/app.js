@@ -254,6 +254,10 @@ let backendRecoveryReloadDone = false;
 let lastClusterData = null;   // for monitor view (Proxmox)
 let lastTrueNASData = null;   // { system, pools } for monitor view (TrueNAS)
 let lastHostMetricsData = null; // { configured, items } for Proxmox host metrics
+let hostNodeMetricCharts = { temp: null, cpu: null, mem: null };
+let clusterAggregateMetricCharts = { cpu: null, mem: null };
+let clusterAggregateChartsAutoRefreshTimer = null;
+let clusterAggregateChartsAutoRefreshBusy = false;
 let lastTrueNASOverviewData = null;
 let hostMetricsSettings = { pollIntervalSec: 10, timeoutMs: 3000, cacheTtlSec: 8, criticalTempC: 85, criticalLinkSpeedMbps: 1000 };
 let hostMetricsConfigs = {}; // connectionId -> { nodes: { [node]: { enabled, agentPort, agentPath, cpuTempSensor, linkInterface } } }
@@ -2983,6 +2987,7 @@ function updateUILanguage() {
     updateSpeedtestSettingsEngineUI();
     updateSpeedtestProxySettingsUI(false);
     localizeSetupWizard();
+    syncClusterResourcesCardInteractivity();
 }
 
 function localizeSetupWizard() {
@@ -3327,6 +3332,8 @@ document.addEventListener('DOMContentLoaded', async function() {
         });
     }
     initHostMetricsAgentInstallModal();
+    initHostNodeMetricChartsOnce();
+    initClusterAggregateChartsOnce();
     bindTelegramRuleMessageModalOnce();
     const debugNav = document.getElementById('settings-nav-debug');
     if (debugNav) {
@@ -7930,6 +7937,497 @@ function getHostMetricProblemMessages(metric, settings = null) {
     return [];
 }
 
+function destroyHostNodeMetricCharts() {
+    ['temp', 'cpu', 'mem'].forEach((k) => {
+        const ch = hostNodeMetricCharts[k];
+        if (ch) {
+            try { ch.destroy(); } catch (_) {}
+            hostNodeMetricCharts[k] = null;
+        }
+    });
+}
+
+function destroyClusterAggregateMetricCharts() {
+    ['cpu', 'mem'].forEach((k) => {
+        const ch = clusterAggregateMetricCharts[k];
+        if (ch) {
+            try { ch.destroy(); } catch (_) {}
+            clusterAggregateMetricCharts[k] = null;
+        }
+    });
+}
+
+function syncClusterResourcesCardInteractivity() {
+    const clusterBody = el('clusterResourcesCardBody');
+    const clusterHint = el('clusterResourcesChartHint');
+    if (!clusterBody) return;
+    const isProxmox = currentServerType === 'proxmox';
+    clusterBody.classList.toggle('cursor-pointer', isProxmox);
+    clusterBody.classList.toggle('cluster-resources-chart-trigger', isProxmox);
+    clusterBody.setAttribute('role', isProxmox ? 'button' : 'region');
+    clusterBody.setAttribute('tabindex', isProxmox ? '0' : '-1');
+    const tip = t('clusterAggregateChartsOpenTitle');
+    clusterBody.title = isProxmox ? (tip || '') : '';
+    if (clusterHint) {
+        clusterHint.classList.toggle('d-none', !isProxmox);
+        clusterHint.title = isProxmox ? (tip || '') : '';
+    }
+}
+
+function parseMetricHistoryPoints(rawPoints) {
+    const out = [];
+    const pts = Array.isArray(rawPoints) ? rawPoints : [];
+    for (const p of pts) {
+        const tv = Number(p.v);
+        const iso = p.t != null ? String(p.t) : '';
+        if (!iso || !Number.isFinite(tv)) continue;
+        const ms = new Date(iso).getTime();
+        if (!Number.isFinite(ms)) continue;
+        out.push({ t: ms, v: tv });
+    }
+    return out;
+}
+
+function renderHostNodeMetricLineChart(canvas, series, dsLabel, lineRgb, yUnit) {
+    const locale = currentLanguage === 'ru' ? 'ru-RU' : 'en-US';
+    const labels = series.map((p) => new Date(p.t).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+    const dataVals = series.map((p) => p.v);
+    const dark = typeof document !== 'undefined' && document.body && (
+        document.body.classList.contains('dark-mode') ||
+        document.body.classList.contains('monitor-theme-dark')
+    );
+    const tickColor = dark ? '#c8c8c8' : '#495057';
+    const gridColor = dark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)';
+    return new Chart(canvas.getContext('2d'), {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [{
+                label: dsLabel,
+                data: dataVals,
+                borderColor: `rgb(${lineRgb})`,
+                backgroundColor: `rgba(${lineRgb}, 0.12)`,
+                fill: true,
+                tension: 0.2,
+                pointRadius: series.length === 1 ? 6 : 2,
+                pointHoverRadius: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            scales: {
+                x: {
+                    ticks: { color: tickColor },
+                    grid: { color: gridColor }
+                },
+                y: {
+                    ticks: { color: tickColor },
+                    grid: { color: gridColor },
+                    title: { display: true, text: yUnit, color: tickColor }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: true,
+                    labels: { color: tickColor }
+                }
+            }
+        }
+    });
+}
+
+function applyHostNodeMetricSection(suffix, metricKey, series, emptyTextKey, dsLabel, lineRgb, yUnit) {
+    const emptyEl = document.getElementById(`hostNodeChart${suffix}Empty`);
+    const wrapEl = document.getElementById(`hostNodeChart${suffix}Wrap`);
+    const canvas = document.getElementById(`hostNodeChartCanvas${suffix}`);
+    if (!canvas) return;
+    if (hostNodeMetricCharts[metricKey]) {
+        try { hostNodeMetricCharts[metricKey].destroy(); } catch (_) {}
+        hostNodeMetricCharts[metricKey] = null;
+    }
+    if (!series.length) {
+        if (emptyEl) {
+            emptyEl.textContent = t(emptyTextKey) || '';
+            emptyEl.classList.remove('d-none');
+        }
+        if (wrapEl) wrapEl.classList.add('d-none');
+        return;
+    }
+    if (emptyEl) emptyEl.classList.add('d-none');
+    if (wrapEl) wrapEl.classList.remove('d-none');
+    hostNodeMetricCharts[metricKey] = renderHostNodeMetricLineChart(canvas, series, dsLabel, lineRgb, yUnit);
+}
+
+function setHostNodeMetricSectionsLoading() {
+    ['Temp', 'Cpu', 'Mem'].forEach((suffix) => {
+        const emptyEl = document.getElementById(`hostNodeChart${suffix}Empty`);
+        const wrapEl = document.getElementById(`hostNodeChart${suffix}Wrap`);
+        if (emptyEl) {
+            emptyEl.textContent = t('hostNodeCpuTempChartLoading') || 'Loading…';
+            emptyEl.classList.remove('d-none');
+        }
+        if (wrapEl) wrapEl.classList.add('d-none');
+    });
+}
+
+async function openHostNodeAllMetricsModal(nodeName) {
+    if (typeof Chart === 'undefined') {
+        showToast(t('hostNodeCpuTempChartNoLib') || 'Chart library failed to load', 'warning');
+        return;
+    }
+    if (typeof bootstrap === 'undefined' || !bootstrap.Modal) return;
+    const modalEl = document.getElementById('hostNodeAllMetricsModal');
+    if (!modalEl) return;
+
+    destroyHostNodeMetricCharts();
+
+    const titleEl = document.getElementById('hostNodeAllMetricsModalTitleText');
+    const subEl = document.getElementById('hostNodeAllMetricsModalSubtitle');
+    const globalErr = document.getElementById('hostNodeAllMetricsGlobalError');
+    if (titleEl) titleEl.textContent = t('hostNodeAllMetricsModalTitle') || 'Node metrics';
+    if (globalErr) {
+        globalErr.textContent = '';
+        globalErr.classList.add('d-none');
+    }
+
+    const lt = document.getElementById('hostNodeChartSectionLabelTemp');
+    if (lt) lt.textContent = t('hostMetricsCpuTempLabel') || 'CPU temp';
+    const lc = document.getElementById('hostNodeChartSectionLabelCpu');
+    if (lc) lc.textContent = t('hostNodeLoadChartTitle') || 'CPU';
+    const lm = document.getElementById('hostNodeChartSectionLabelMem');
+    if (lm) lm.textContent = t('hostNodeMemChartTitle') || 'RAM';
+
+    const line1 = tParams('hostNodeCpuTempChartSubtitle', { node: nodeName });
+    const hint = t('hostNodeAllMetricsModalHint') || '';
+    if (subEl) {
+        subEl.innerHTML = `${escapeHtml(line1)}${hint ? `<br><span class="text-muted">${escapeHtml(hint)}</span>` : ''}`;
+    }
+
+    setHostNodeMetricSectionsLoading();
+
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    modal.show();
+
+    const headers = getCurrentProxmoxHeaders();
+    if (!headers) {
+        if (globalErr) {
+            globalErr.textContent = t('hostMetricsNeedConnection') || 'Connect to Proxmox first.';
+            globalErr.classList.remove('d-none');
+        }
+        ['Temp', 'Cpu', 'Mem'].forEach((suffix) => {
+            const emptyEl = document.getElementById(`hostNodeChart${suffix}Empty`);
+            if (emptyEl) emptyEl.classList.add('d-none');
+        });
+        return;
+    }
+
+    let tempPts = [];
+    let cpuPts = [];
+    let memPts = [];
+    try {
+        const base = `/api/host-metrics/node-metric-history?node=${encodeURIComponent(nodeName)}&metric=`;
+        const [rt, rc, rm] = await Promise.all([
+            fetch(base + 'temp', { headers }),
+            fetch(base + 'cpu', { headers }),
+            fetch(base + 'mem', { headers })
+        ]);
+        const [dt, dc, dm] = await Promise.all([
+            rt.json().catch(() => ({})),
+            rc.json().catch(() => ({})),
+            rm.json().catch(() => ({}))
+        ]);
+        if (!rt.ok) throw new Error(dt.error || `temp: HTTP ${rt.status}`);
+        if (!rc.ok) throw new Error(dc.error || `cpu: HTTP ${rc.status}`);
+        if (!rm.ok) throw new Error(dm.error || `mem: HTTP ${rm.status}`);
+        tempPts = parseMetricHistoryPoints(dt.points);
+        cpuPts = parseMetricHistoryPoints(dc.points);
+        memPts = parseMetricHistoryPoints(dm.points);
+    } catch (e) {
+        const msg = (e && e.message) ? e.message : String(e);
+        if (globalErr) {
+            globalErr.textContent = (t('hostNodeCpuTempChartLoadError') || '{msg}').replace('{msg}', msg);
+            globalErr.classList.remove('d-none');
+        }
+        ['Temp', 'Cpu', 'Mem'].forEach((suffix) => {
+            const emptyEl = document.getElementById(`hostNodeChart${suffix}Empty`);
+            if (emptyEl) emptyEl.classList.add('d-none');
+            const wrapEl = document.getElementById(`hostNodeChart${suffix}Wrap`);
+            if (wrapEl) wrapEl.classList.add('d-none');
+        });
+        return;
+    }
+
+    applyHostNodeMetricSection(
+        'Temp',
+        'temp',
+        tempPts,
+        'hostNodeCpuTempChartEmpty',
+        t('hostMetricsCpuTempLabel') || 'CPU temp',
+        '13, 110, 253',
+        '°C'
+    );
+    applyHostNodeMetricSection(
+        'Cpu',
+        'cpu',
+        cpuPts,
+        'hostNodeMetricChartEmptyLoadMem',
+        t('nodeCpu') || 'CPU',
+        '220, 53, 69',
+        '%'
+    );
+    applyHostNodeMetricSection(
+        'Mem',
+        'mem',
+        memPts,
+        'hostNodeMetricChartEmptyLoadMem',
+        t('nodeRam') || 'RAM',
+        '102, 16, 242',
+        '%'
+    );
+
+    requestAnimationFrame(() => {
+        ['temp', 'cpu', 'mem'].forEach((k) => {
+            const ch = hostNodeMetricCharts[k];
+            if (ch) {
+                try { ch.resize(); } catch (_) {}
+            }
+        });
+    });
+}
+
+function initHostNodeMetricChartsOnce() {
+    if (initHostNodeMetricChartsOnce._done) return;
+    initHostNodeMetricChartsOnce._done = true;
+    const nodesContainer = document.getElementById('nodesContainer');
+    if (nodesContainer) {
+        nodesContainer.addEventListener('click', (e) => {
+            if (e.target.closest('.host-problem-trigger')) return;
+            const card = e.target.closest('.host-node-card-chart-trigger');
+            if (!card) return;
+            const node = card.getAttribute('data-node');
+            if (node) void openHostNodeAllMetricsModal(node);
+        });
+        nodesContainer.addEventListener('keydown', (e) => {
+            if (e.key !== 'Enter' && e.key !== ' ') return;
+            const card = e.target.closest('.host-node-card-chart-trigger');
+            if (!card || !nodesContainer.contains(card)) return;
+            e.preventDefault();
+            const node = card.getAttribute('data-node');
+            if (node) void openHostNodeAllMetricsModal(node);
+        });
+    }
+    const modalEl = document.getElementById('hostNodeAllMetricsModal');
+    if (modalEl) {
+        modalEl.addEventListener('hidden.bs.modal', () => destroyHostNodeMetricCharts());
+    }
+}
+
+function applyClusterAggregateMetricSection(suffix, metricKey, series, emptyTextKey, dsLabel, lineRgb, yUnit) {
+    const emptyEl = document.getElementById(`clusterAggChart${suffix}Empty`);
+    const wrapEl = document.getElementById(`clusterAggChart${suffix}Wrap`);
+    const canvas = document.getElementById(`clusterAggChartCanvas${suffix}`);
+    if (!canvas) return;
+    if (clusterAggregateMetricCharts[metricKey]) {
+        try { clusterAggregateMetricCharts[metricKey].destroy(); } catch (_) {}
+        clusterAggregateMetricCharts[metricKey] = null;
+    }
+    if (!series.length) {
+        if (emptyEl) {
+            emptyEl.textContent = t(emptyTextKey) || '';
+            emptyEl.classList.remove('d-none');
+        }
+        if (wrapEl) wrapEl.classList.add('d-none');
+        return;
+    }
+    if (emptyEl) emptyEl.classList.add('d-none');
+    if (wrapEl) wrapEl.classList.remove('d-none');
+    clusterAggregateMetricCharts[metricKey] = renderHostNodeMetricLineChart(canvas, series, dsLabel, lineRgb, yUnit);
+}
+
+function setClusterAggregateSectionsLoading() {
+    ['Cpu', 'Mem'].forEach((suffix) => {
+        const emptyEl = document.getElementById(`clusterAggChart${suffix}Empty`);
+        const wrapEl = document.getElementById(`clusterAggChart${suffix}Wrap`);
+        if (emptyEl) {
+            emptyEl.textContent = t('hostNodeCpuTempChartLoading') || 'Loading…';
+            emptyEl.classList.remove('d-none');
+        }
+        if (wrapEl) wrapEl.classList.add('d-none');
+    });
+}
+
+function stopClusterAggregateChartsAutoRefresh() {
+    if (clusterAggregateChartsAutoRefreshTimer) {
+        clearInterval(clusterAggregateChartsAutoRefreshTimer);
+        clusterAggregateChartsAutoRefreshTimer = null;
+    }
+}
+
+function startClusterAggregateChartsAutoRefresh(modalEl) {
+    stopClusterAggregateChartsAutoRefresh();
+    if (!modalEl) return;
+    const intervalMs = Math.max(5000, refreshIntervalMs || 30000);
+    clusterAggregateChartsAutoRefreshTimer = setInterval(() => {
+        // Bootstrap adds `show` while modal is visible.
+        if (!modalEl.classList.contains('show')) {
+            stopClusterAggregateChartsAutoRefresh();
+            return;
+        }
+        void refreshClusterAggregateChartsData({ showLoading: false });
+    }, intervalMs);
+}
+
+async function refreshClusterAggregateChartsData({ showLoading } = { showLoading: false }) {
+    if (clusterAggregateChartsAutoRefreshBusy) return false;
+    clusterAggregateChartsAutoRefreshBusy = true;
+
+    const globalErr = document.getElementById('clusterAggregateMetricsGlobalError');
+    try {
+        const headers = getCurrentProxmoxHeaders();
+        if (!headers) {
+            if (globalErr) {
+                globalErr.textContent = t('hostMetricsNeedConnection') || 'Connect to Proxmox first.';
+                globalErr.classList.remove('d-none');
+            }
+            return false;
+        }
+
+        if (globalErr) {
+            globalErr.textContent = '';
+            globalErr.classList.add('d-none');
+        }
+        if (showLoading) setClusterAggregateSectionsLoading();
+
+        const base = `/api/cluster/metric-history?metric=`;
+        const [rc, rm] = await Promise.all([
+            fetch(base + 'cpu', { headers }),
+            fetch(base + 'mem', { headers })
+        ]);
+        const [dc, dm] = await Promise.all([
+            rc.json().catch(() => ({})),
+            rm.json().catch(() => ({}))
+        ]);
+        if (!rc.ok) throw new Error(dc.error || `cpu: HTTP ${rc.status}`);
+        if (!rm.ok) throw new Error(dm.error || `mem: HTTP ${rm.status}`);
+
+        const cpuPts = parseMetricHistoryPoints(dc.points);
+        const memPts = parseMetricHistoryPoints(dm.points);
+
+        applyClusterAggregateMetricSection(
+            'Cpu',
+            'cpu',
+            cpuPts,
+            'clusterAggregateMetricChartEmpty',
+            t('clusterAggregateCpuChartTitle') || 'Cluster CPU',
+            '220, 53, 69',
+            '%'
+        );
+        applyClusterAggregateMetricSection(
+            'Mem',
+            'mem',
+            memPts,
+            'clusterAggregateMetricChartEmpty',
+            t('clusterAggregateMemChartTitle') || 'Cluster RAM',
+            '102, 16, 242',
+            '%'
+        );
+
+        requestAnimationFrame(() => {
+            ['cpu', 'mem'].forEach((k) => {
+                const ch = clusterAggregateMetricCharts[k];
+                if (ch) {
+                    try { ch.resize(); } catch (_) {}
+                }
+            });
+        });
+        return true;
+    } catch (e) {
+        const msg = (e && e.message) ? e.message : String(e);
+        if (globalErr) {
+            globalErr.textContent = (t('hostNodeCpuTempChartLoadError') || '{msg}').replace('{msg}', msg);
+            globalErr.classList.remove('d-none');
+        }
+        ['Cpu', 'Mem'].forEach((suffix) => {
+            const emptyEl = document.getElementById(`clusterAggChart${suffix}Empty`);
+            if (emptyEl) emptyEl.classList.add('d-none');
+            const wrapEl = document.getElementById(`clusterAggChart${suffix}Wrap`);
+            if (wrapEl) wrapEl.classList.add('d-none');
+        });
+        return false;
+    } finally {
+        clusterAggregateChartsAutoRefreshBusy = false;
+    }
+}
+
+async function openClusterAggregateMetricsModal() {
+    if (currentServerType !== 'proxmox') return;
+    if (typeof Chart === 'undefined') {
+        showToast(t('hostNodeCpuTempChartNoLib') || 'Chart library failed to load', 'warning');
+        return;
+    }
+    if (typeof bootstrap === 'undefined' || !bootstrap.Modal) return;
+    const modalEl = document.getElementById('clusterAggregateMetricsModal');
+    if (!modalEl) return;
+
+    destroyClusterAggregateMetricCharts();
+
+    const titleEl = document.getElementById('clusterAggregateMetricsModalTitleText');
+    const subEl = document.getElementById('clusterAggregateMetricsModalSubtitle');
+    const globalErr = document.getElementById('clusterAggregateMetricsGlobalError');
+    if (titleEl) titleEl.textContent = t('clusterAggregateMetricsModalTitle') || 'Cluster metrics';
+    if (globalErr) {
+        globalErr.textContent = '';
+        globalErr.classList.add('d-none');
+    }
+
+    const lc = document.getElementById('clusterAggChartSectionLabelCpu');
+    if (lc) lc.textContent = t('clusterAggregateCpuChartTitle') || 'Cluster CPU';
+    const lm = document.getElementById('clusterAggChartSectionLabelMem');
+    if (lm) lm.textContent = t('clusterAggregateMemChartTitle') || 'Cluster RAM';
+
+    const hint = t('clusterAggregateMetricsModalHint') || '';
+    if (subEl) {
+        subEl.innerHTML = hint ? `<span class="text-muted">${escapeHtml(hint)}</span>` : '';
+    }
+
+    setClusterAggregateSectionsLoading();
+
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    modal.show();
+
+    stopClusterAggregateChartsAutoRefresh();
+    const ok = await refreshClusterAggregateChartsData({ showLoading: true });
+    if (ok) startClusterAggregateChartsAutoRefresh(modalEl);
+}
+
+function initClusterAggregateChartsOnce() {
+    if (initClusterAggregateChartsOnce._done) return;
+    initClusterAggregateChartsOnce._done = true;
+    const clusterBody = document.getElementById('clusterResourcesCardBody');
+    if (clusterBody) {
+        clusterBody.addEventListener('click', () => {
+            if (currentServerType !== 'proxmox') return;
+            void openClusterAggregateMetricsModal();
+        });
+        clusterBody.addEventListener('keydown', (e) => {
+            if (e.key !== 'Enter' && e.key !== ' ') return;
+            if (currentServerType !== 'proxmox') return;
+            e.preventDefault();
+            void openClusterAggregateMetricsModal();
+        });
+    }
+    const modalEl = document.getElementById('clusterAggregateMetricsModal');
+    if (modalEl) {
+        modalEl.addEventListener('hidden.bs.modal', () => {
+            stopClusterAggregateChartsAutoRefresh();
+            destroyClusterAggregateMetricCharts();
+        });
+    }
+    syncClusterResourcesCardInteractivity();
+}
+
 function initHostMetricProblemPopovers() {
     if (typeof bootstrap === 'undefined' || !bootstrap || !bootstrap.Popover) return;
     document.querySelectorAll('.host-problem-trigger').forEach((el) => {
@@ -7965,7 +8463,7 @@ function initHostMetricProblemPopovers() {
     });
 }
 
-function formatHostMetricsNodeExtras(metric) {
+function formatHostMetricsNodeExtras(metric, nodeName) {
     if (!metric) return '';
     const settings = normalizeHostMetricsSettingsClient((lastHostMetricsData && lastHostMetricsData.settings) || hostMetricsSettings);
     const cpuText = formatHostMetricsTemp(metric.cpu && metric.cpu.tempC);
@@ -7976,10 +8474,11 @@ function formatHostMetricsNodeExtras(metric) {
     const alerts = getHostMetricsAlerts(metric, settings);
     const hasCpuCritical = alerts.some((item) => item.kind === 'cpu');
     const hasLinkCritical = alerts.some((item) => item.kind === 'link');
+    const cpuBlock = `<span class="fw-bold${hasCpuCritical ? ' text-danger' : ''}">${escapeHtml(cpuText)}</span>`;
     return `
         <div class="col-6 mt-2">
             <small class="text-muted">${escapeHtml(t('hostMetricsCpuTempLabel') || 'CPU temp')}</small>
-            <div class="fw-bold${hasCpuCritical ? ' text-danger' : ''}">${escapeHtml(cpuText)}</div>
+            <div>${cpuBlock}</div>
         </div>
         <div class="col-6 mt-2">
             <small class="text-muted">${escapeHtml(t('hostMetricsLinkSpeedLabel') || 'Link speed')}</small>
@@ -11603,6 +12102,7 @@ function updateTrueNASDashboard(systemData, poolsData, overviewData = null) {
         renderMonitorServicesList();
         renderMonitorVmsList();
     }
+    syncClusterResourcesCardInteractivity();
 }
 
 // Компактный вид режима монитора (Proxmox)
@@ -11952,18 +12452,27 @@ function updateDashboard(clusterData, storageData, backupsData, hostMetricsData 
         const nodeIpLine = nodeIpDisplay
             ? `<div class="small text-muted mt-1"><i class="bi bi-hdd-network me-1"></i>${escapeHtml(String(nodeIpDisplay))}</div>`
             : '';
+        const cardClass = nodeOnline
+            ? 'node-card host-node-card-chart-trigger cursor-pointer'
+            : 'node-card';
+        const cardAttrs = nodeOnline
+            ? ` data-node="${escapeHtml(node.name)}" role="button" tabindex="0" title="${escapeHtml(t('hostNodeAllMetricsCardOpenTitle') || '')}"`
+            : '';
         return `
             <div class="cluster-scroll-item">
-                <div class="node-card">
+                <div class="${cardClass}"${cardAttrs}>
                     <div class="d-flex justify-content-between align-items-start mb-2">
                         <div>
                         <h5 class="mb-0 d-inline-flex align-items-center">${node.name}${hostMetricWarning}</h5>
                         ${nodeIpLine}
                         ${formatNodeOfflineSinceLine(node)}
                         </div>
-                        <span class="badge ${nodeOnline ? 'bg-success' : 'bg-danger'}">
+                        <div class="d-flex align-items-center gap-2 flex-shrink-0">
+                            ${nodeOnline ? `<span class="text-muted host-node-chart-hint" aria-hidden="true" title="${escapeHtml(t('hostNodeAllMetricsCardOpenTitle') || '')}"><i class="bi bi-graph-up-arrow"></i></span>` : ''}
+                            <span class="badge ${nodeOnline ? 'bg-success' : 'bg-danger'}">
                             ${nodeOnline ? t('nodeOnline') : t('nodeOffline')}
                         </span>
+                        </div>
                     </div>
                     ${nodeOnline ? `
                     <div class="row g-2">
@@ -11985,7 +12494,7 @@ function updateDashboard(clusterData, storageData, backupsData, hostMetricsData 
                             <small class="text-muted">${t('nodeCpuCores')}</small>
                             <div class="fw-bold">${node.cpuCount}</div>
                         </div>
-                        ${formatHostMetricsNodeExtras(hostMetric)}
+                        ${formatHostMetricsNodeExtras(hostMetric, node.name)}
                     </div>` : ''}
                 </div>
             </div>
@@ -12033,6 +12542,7 @@ function updateDashboard(clusterData, storageData, backupsData, hostMetricsData 
         updateMonitorView(clusterData);
         renderMonitorServicesList();
     }
+    syncClusterResourcesCardInteractivity();
 }
 
 // Update storage UI
@@ -13510,6 +14020,7 @@ async function loadSettings() {
     if (!monitorMode) {
         applyStoredDashboardHomeTab();
     }
+    syncClusterResourcesCardInteractivity();
     return data;
 }
 

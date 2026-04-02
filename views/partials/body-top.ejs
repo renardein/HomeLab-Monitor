@@ -135,6 +135,56 @@
         </div>
     </div>
 
+    <div class="modal fade" id="hostNodeAllMetricsModal" tabindex="-1" aria-labelledby="hostNodeAllMetricsModalTitle" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="hostNodeAllMetricsModalTitle"><i class="bi bi-graph-up-arrow me-2" id="hostNodeAllMetricsModalTitleIcon" aria-hidden="true"></i><span id="hostNodeAllMetricsModalTitleText">Node metrics</span></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3 small" id="hostNodeAllMetricsModalSubtitle"></div>
+                    <div id="hostNodeAllMetricsGlobalError" class="alert alert-danger py-2 d-none" role="alert"></div>
+
+                    <h6 class="fw-semibold mb-1"><i class="bi bi-thermometer-half me-1"></i><span id="hostNodeChartSectionLabelTemp"></span></h6>
+                    <div id="hostNodeChartTempEmpty" class="alert alert-light border small py-2 mb-3 d-none" role="status"></div>
+                    <div id="hostNodeChartTempWrap" class="position-relative mb-4" style="height: 200px;"><canvas id="hostNodeChartCanvasTemp" aria-label="CPU temperature chart"></canvas></div>
+
+                    <h6 class="fw-semibold mb-1"><i class="bi bi-cpu me-1"></i><span id="hostNodeChartSectionLabelCpu"></span></h6>
+                    <div id="hostNodeChartCpuEmpty" class="alert alert-light border small py-2 mb-3 d-none" role="status"></div>
+                    <div id="hostNodeChartCpuWrap" class="position-relative mb-4" style="height: 200px;"><canvas id="hostNodeChartCanvasCpu" aria-label="CPU usage chart"></canvas></div>
+
+                    <h6 class="fw-semibold mb-1"><i class="bi bi-memory me-1"></i><span id="hostNodeChartSectionLabelMem"></span></h6>
+                    <div id="hostNodeChartMemEmpty" class="alert alert-light border small py-2 mb-3 d-none" role="status"></div>
+                    <div id="hostNodeChartMemWrap" class="position-relative" style="height: 200px;"><canvas id="hostNodeChartCanvasMem" aria-label="RAM usage chart"></canvas></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="clusterAggregateMetricsModal" tabindex="-1" aria-labelledby="clusterAggregateMetricsModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="clusterAggregateMetricsModalLabel"><i class="bi bi-graph-up-arrow me-2" id="clusterAggregateMetricsModalTitleIcon" aria-hidden="true"></i><span id="clusterAggregateMetricsModalTitleText">Cluster metrics</span></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3 small" id="clusterAggregateMetricsModalSubtitle"></div>
+                    <div id="clusterAggregateMetricsGlobalError" class="alert alert-danger py-2 d-none" role="alert"></div>
+
+                    <h6 class="fw-semibold mb-1"><i class="bi bi-cpu me-1"></i><span id="clusterAggChartSectionLabelCpu"></span></h6>
+                    <div id="clusterAggChartCpuEmpty" class="alert alert-light border small py-2 mb-3 d-none" role="status"></div>
+                    <div id="clusterAggChartCpuWrap" class="position-relative mb-4" style="height: 200px;"><canvas id="clusterAggChartCanvasCpu" aria-label="Cluster CPU usage chart"></canvas></div>
+
+                    <h6 class="fw-semibold mb-1"><i class="bi bi-memory me-1"></i><span id="clusterAggChartSectionLabelMem"></span></h6>
+                    <div id="clusterAggChartMemEmpty" class="alert alert-light border small py-2 mb-3 d-none" role="status"></div>
+                    <div id="clusterAggChartMemWrap" class="position-relative" style="height: 200px;"><canvas id="clusterAggChartCanvasMem" aria-label="Cluster RAM usage chart"></canvas></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="container">
         <!-- Top navigation -->
         <nav class="navbar app-topbar navbar-expand-lg mb-4">

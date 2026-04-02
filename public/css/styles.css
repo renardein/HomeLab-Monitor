@@ -92,6 +92,12 @@
             --hm-monitor-purple: #7e57c2;
             --hm-monitor-pink: #d81b60;
             --hm-monitor-amber: #ffa000;
+            /* Bootstrap 5: модалки берут фон из --bs-modal-bg с :root; без этого окно остаётся белым */
+            --bs-modal-bg: var(--hm-monitor-surface);
+            --bs-modal-color: #e8e8e8;
+            --bs-modal-border-color: var(--hm-monitor-border);
+            --bs-modal-header-border-color: var(--hm-monitor-border);
+            --bs-modal-footer-border-color: var(--hm-monitor-border);
             background: var(--hm-monitor-bg);
             color: #fff;
         }
@@ -604,6 +610,30 @@
             transform: translateY(-2px);
             box-shadow: 0 5px 15px rgba(0,0,0,0.1);
         }
+        .host-node-chart-hint {
+            opacity: 0.8;
+            pointer-events: none;
+        }
+        .host-node-card-chart-trigger:hover .host-node-chart-hint {
+            opacity: 1;
+            color: #0d6efd !important;
+        }
+        body.dark-mode .host-node-card-chart-trigger:hover .host-node-chart-hint,
+        body.monitor-mode.monitor-theme-dark .host-node-card-chart-trigger:hover .host-node-chart-hint {
+            color: #6ea8fe !important;
+        }
+        .cluster-resources-chart-hint {
+            opacity: 0.8;
+            pointer-events: none;
+        }
+        .card:has(#clusterResourcesCardBody.cluster-resources-chart-trigger:hover) .cluster-resources-chart-hint {
+            opacity: 1;
+            color: var(--hm-monitor-blue) !important;
+        }
+        body.dark-mode .card:has(#clusterResourcesCardBody.cluster-resources-chart-trigger:hover) .cluster-resources-chart-hint,
+        body.monitor-mode.monitor-theme-dark .card:has(#clusterResourcesCardBody.cluster-resources-chart-trigger:hover) .cluster-resources-chart-hint {
+            color: var(--hm-monitor-blue) !important;
+        }
 
         /* Сетку VM/CT сделать визуально более “явной”, чем стандартные node-card */
         body:not(.monitor-mode) #vmsMonitorSection #vmsMonitorCards .node-card {
@@ -1115,6 +1145,50 @@
             background: var(--hm-monitor-surface);
             color: #fff;
             border: 1px solid var(--hm-monitor-border);
+        }
+        /* Модальные окна: Bootstrap задаёт background-color: var(--bs-modal-bg);
+           переменные на body + !important на случай порядка загрузки стилей */
+        body.dark-mode .modal-content,
+        body.monitor-mode.monitor-theme-dark .modal-content {
+            background-color: var(--hm-monitor-surface) !important;
+            color: #e8e8e8 !important;
+            border-color: var(--hm-monitor-border) !important;
+        }
+        body.dark-mode .modal-header,
+        body.monitor-mode.monitor-theme-dark .modal-header {
+            border-bottom-color: var(--hm-monitor-border) !important;
+        }
+        body.dark-mode .modal-footer,
+        body.monitor-mode.monitor-theme-dark .modal-footer {
+            border-top-color: var(--hm-monitor-border) !important;
+        }
+        body.dark-mode .modal-title,
+        body.monitor-mode.monitor-theme-dark .modal-title {
+            color: #fff !important;
+        }
+        body.dark-mode .modal-body,
+        body.monitor-mode.monitor-theme-dark .modal-body {
+            color: #e8e8e8 !important;
+        }
+        body.dark-mode #hostNodeAllMetricsModal h6,
+        body.monitor-mode.monitor-theme-dark #hostNodeAllMetricsModal h6 {
+            color: #fff;
+        }
+        body.dark-mode #hostNodeAllMetricsModal .alert.alert-light,
+        body.monitor-mode.monitor-theme-dark #hostNodeAllMetricsModal .alert.alert-light {
+            background: var(--hm-monitor-raised) !important;
+            color: #e0e0e0 !important;
+            border-color: var(--hm-monitor-border) !important;
+        }
+        body.dark-mode #clusterAggregateMetricsModal h6,
+        body.monitor-mode.monitor-theme-dark #clusterAggregateMetricsModal h6 {
+            color: #fff;
+        }
+        body.dark-mode #clusterAggregateMetricsModal .alert.alert-light,
+        body.monitor-mode.monitor-theme-dark #clusterAggregateMetricsModal .alert.alert-light {
+            background: var(--hm-monitor-raised) !important;
+            color: #e0e0e0 !important;
+            border-color: var(--hm-monitor-border) !important;
         }
         body.dark-mode .btn-close {
             filter: invert(1) grayscale(100%) brightness(200%);
@@ -1705,6 +1779,11 @@
             --hm-monitor-purple: #7e57c2;
             --hm-monitor-pink: #d81b60;
             --hm-monitor-amber: #ffa000;
+            --bs-modal-bg: var(--hm-monitor-surface);
+            --bs-modal-color: #e8e8e8;
+            --bs-modal-border-color: var(--hm-monitor-border);
+            --bs-modal-header-border-color: var(--hm-monitor-border);
+            --bs-modal-footer-border-color: var(--hm-monitor-border);
             background: var(--hm-monitor-bg);
             color: #fff;
         }
