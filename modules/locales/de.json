@@ -696,6 +696,8 @@
     "dashboardWeatherCityMissing": "Stadt in den Einstellungen festlegen",
     "settingsClusterTilesTitle": "Cluster-Bildschirm-Kacheln",
     "settingsClusterTilesHint": "Bis zu 12 Kacheln für Homelab und Tiles. Auf dem Tiles-Bildschirm werden sie in einem 12×8-Raster (1×1-Zellen) platziert; Größe und Position unten einstellen.",
+    "settingsMonitorTilesChartAxisLabels": "Achsenbeschriftungen in Tiles-Diagrammen",
+    "settingsMonitorTilesChartAxisLabelsHint": "Aus: Zeitstempel, Skalenwerte und Y-Achsen-Einheit auf Metrik-Kacheln (UPS, Cluster, Node) ausblenden.",
     "settingsClusterTilesClickHint": "Klicken Sie auf eine Kachel für die Einstellungen; ziehen zum Verschieben, Ecke ziehen zum Größenändern.",
     "settingsClusterTilesSelectHint": "Wählen Sie oben eine Kachel im Raster aus, um sie zu bearbeiten.",
     "settingsClusterTileShowOnTilesLabel": "Auf Tiles-Bildschirm anzeigen",

@@ -696,6 +696,8 @@
     "dashboardWeatherCityMissing": "請在設定中指定城市",
     "settingsClusterTilesTitle": "Cluster 畫面圖塊",
     "settingsClusterTilesHint": "為 Homelab 與 Tiles 建立最多 12 個圖塊。Tiles 畫面使用 12×8 格線（每格 1×1）；在下方設定大小與位置。",
+    "settingsMonitorTilesChartAxisLabels": "在 Tiles 圖表顯示座標軸標籤",
+    "settingsMonitorTilesChartAxisLabelsHint": "關閉時，指標圖塊（UPS、叢集、節點）不顯示時間、刻度數值與 Y 軸單位。",
     "settingsClusterTilesClickHint": "點擊圖塊可編輯設定；拖曳移動，拖曳角落調整大小。",
     "settingsClusterTilesSelectHint": "請在上方的格線中選取要編輯的圖塊。",
     "settingsClusterTileShowOnTilesLabel": "在 Tiles 畫面顯示",

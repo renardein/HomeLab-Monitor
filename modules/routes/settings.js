@@ -132,6 +132,7 @@ const SETTING_KEYS = [
     'dashboard_show_weather',
     'monitor_show_time',
     'monitor_show_weather',
+    'monitor_tiles_chart_axis_labels',
     // Speedtest (Ookla CLI)
     'speedtest_enabled',
     'speedtest_engine',
@@ -231,7 +232,8 @@ router.get('/', (req, res) => {
                     key === 'dashboard_show_time' ||
                     key === 'dashboard_show_weather' ||
                     key === 'monitor_show_time' ||
-                    key === 'monitor_show_weather'
+                    key === 'monitor_show_weather' ||
+                    key === 'monitor_tiles_chart_axis_labels'
                 ) {
                     payload[key] = !(value === '0' || value === 'false' || value === false);
                 } else if (key === 'classic_design') {
@@ -251,7 +253,7 @@ router.get('/', (req, res) => {
         if (payload.telegram_notify_interval_sec == null || !Number.isFinite(parseInt(payload.telegram_notify_interval_sec, 10))) {
             payload.telegram_notify_interval_sec = 60;
         }
-        for (const k of ['dashboard_show_time', 'dashboard_show_weather', 'monitor_show_time', 'monitor_show_weather', 'monitor_disable_chrome_gestures']) {
+        for (const k of ['dashboard_show_time', 'dashboard_show_weather', 'monitor_show_time', 'monitor_show_weather', 'monitor_disable_chrome_gestures', 'monitor_tiles_chart_axis_labels']) {
             if (payload[k] === undefined) payload[k] = true;
             else payload[k] = !(payload[k] === false || payload[k] === '0' || payload[k] === 0 || payload[k] === 'false');
         }
@@ -363,6 +365,11 @@ router.post('/', (req, res) => {
             })(),
             monitor_show_weather: (() => {
                 const v = body.monitor_show_weather ?? body.monitorShowWeather;
+                if (v === undefined) return undefined;
+                return v === true || v === '1' || v === 1 || v === 'true' ? '1' : '0';
+            })(),
+            monitor_tiles_chart_axis_labels: (() => {
+                const v = body.monitor_tiles_chart_axis_labels ?? body.monitorTilesChartAxisLabels;
                 if (v === undefined) return undefined;
                 return v === true || v === '1' || v === 1 || v === 'true' ? '1' : '0';
             })(),

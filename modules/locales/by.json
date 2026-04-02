@@ -696,6 +696,8 @@
     "dashboardWeatherCityMissing": "Укажыце горад у наладах",
     "settingsClusterTilesTitle": "Пліткі экрана Cluster",
     "settingsClusterTilesHint": "Да 12 плітак для Homelab і Tiles з VM/CT, сэрвісаў, SNMP і Speedtest. На экране Tiles — сетка 12×8 клетак (1×1); памер і пазіцыю ніжэй.",
+    "settingsMonitorTilesChartAxisLabels": "Падпісы осей на графіках Tiles",
+    "settingsMonitorTilesChartAxisLabelsHint": "Калі выключана — час, лічбы шкалы і адзінка на восі Y на метрычных плітках (UPS, кластар, вузел) схаваны.",
     "settingsClusterTilesClickHint": "Націсніце на плітку, каб адкрыць налады; перацягвайце для перамяшчэння, за кут — змяніць памер.",
     "settingsClusterTilesSelectHint": "Абярыце плітку на сетцы вышэй, каб змяніць яе.",
     "settingsClusterTileShowOnTilesLabel": "Паказваць на экране Tiles",

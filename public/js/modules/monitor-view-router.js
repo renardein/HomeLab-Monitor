@@ -106,7 +106,17 @@
                 deps.updateSmartSensorsDashboard().catch(() => {});
             } else if (view === 'tiles') {
                 if (elements.tilesMonSection) elements.tilesMonSection.style.display = 'block';
-                deps.renderTilesMonitorScreen().catch(() => {});
+                const maybeRefresh = deps.refreshData ? deps.refreshData({ silent: true }) : Promise.resolve();
+                Promise.resolve(maybeRefresh).then(() => deps.renderTilesMonitorScreen())
+                    .then(() => {
+                        // Один отложенный resize после layout; двойной rAF+timeout давал лишние chart.resize() и нагрузку.
+                        requestAnimationFrame(() => {
+                            setTimeout(() => {
+                                try { deps.resizeTilesCharts && deps.resizeTilesCharts(); } catch (_) {}
+                            }, 120);
+                        });
+                    })
+                    .catch(() => {});
             } else if (view === 'truenasPools') {
                 if (elements.truenasPoolsMonSection) elements.truenasPoolsMonSection.style.display = 'block';
                 deps.renderTrueNASMonitorScreenTiles('truenasPoolsMonitorGrid', 'truenas_pool').catch(() => {});

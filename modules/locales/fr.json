@@ -696,6 +696,8 @@
     "dashboardWeatherCityMissing": "Indiquez une ville dans les paramètres",
     "settingsClusterTilesTitle": "Tuiles de l’écran Cluster",
     "settingsClusterTilesHint": "Jusqu’à 12 tuiles pour Homelab et Tiles. Sur l’écran Tiles elles sont placées sur une grille 12×8 (cellules 1×1) ; réglez la taille et la position ci-dessous.",
+    "settingsMonitorTilesChartAxisLabels": "Afficher les libellés d’axes sur les graphiques Tiles",
+    "settingsMonitorTilesChartAxisLabelsHint": "Désactivé : masque l’heure, les graduations et l’unité sur l’axe Y des tuiles métriques (UPS, cluster, nœud).",
     "settingsClusterTilesClickHint": "Cliquez sur une tuile pour modifier ses réglages ; glisser pour déplacer, coin pour redimensionner.",
     "settingsClusterTilesSelectHint": "Sélectionnez une tuile dans la grille ci-dessus pour l’éditer.",
     "settingsClusterTileShowOnTilesLabel": "Afficher sur l’écran Tiles",

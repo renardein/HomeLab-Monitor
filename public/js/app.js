@@ -111,7 +111,7 @@ let clusterDashboardTilesDirty = false;
 let clusterDashboardTilesSettingPresent = false;
 /** Текст последней ошибки POST /api/settings (для сообщений пользователю). */
 let saveSettingsLastError = '';
-const CLUSTER_DASHBOARD_TILE_TYPES = ['service', 'vmct', 'netdev', 'ups', 'speedtest', 'iperf3', 'truenas_server', 'truenas_pool', 'truenas_disk', 'truenas_service', 'truenas_app', 'smart_sensor', 'embed'];
+const CLUSTER_DASHBOARD_TILE_TYPES = ['service', 'vmct', 'netdev', 'ups', 'ups_metric_chart', 'cluster_metric_chart', 'host_node_metric_chart', 'speedtest', 'iperf3', 'truenas_server', 'truenas_pool', 'truenas_disk', 'truenas_service', 'truenas_app', 'smart_sensor', 'embed'];
 const CLUSTER_EMBED_HTML_MAX = 100000;
 /** Макс. размер загружаемого файла изображения для плитки embed (байты). */
 const CLUSTER_EMBED_IMAGE_FILE_MAX_BYTES = 16 * 1024 * 1024;
@@ -152,6 +152,8 @@ let monitorShowTime = true;
 let monitorShowWeather = true;
 /** Блокировать системные gesture-навигации Chrome в monitor mode */
 let monitorDisableChromeGestures = true;
+/** Подписи осей (время, значения, единицы) на графиках экрана Tiles */
+let monitorTilesChartAxisLabels = true;
 const appNavigationManager = window.AppNavigationManagerModule.createManager({
     getMonitorMode: () => monitorMode,
     applyMonitorView: (view) => applyMonitorView(view),
@@ -1462,6 +1464,7 @@ async function saveSettingsToServer(payload) {
     if (payload.monitorShowTime !== undefined) body.monitorShowTime = !!payload.monitorShowTime;
     if (payload.monitorShowWeather !== undefined) body.monitorShowWeather = !!payload.monitorShowWeather;
     if (payload.monitorDisableChromeGestures !== undefined) body.monitorDisableChromeGestures = !!payload.monitorDisableChromeGestures;
+    if (payload.monitorTilesChartAxisLabels !== undefined) body.monitorTilesChartAxisLabels = !!payload.monitorTilesChartAxisLabels;
     if (payload.speedtestEnabled !== undefined) body.speedtestEnabled = !!payload.speedtestEnabled;
     if (payload.speedtestServer !== undefined) body.speedtestServer = payload.speedtestServer;
     if (payload.speedtestPerDay !== undefined) body.speedtestPerDay = payload.speedtestPerDay;
@@ -2809,6 +2812,8 @@ function updateUILanguage() {
     renderMonitorHotkeysSettingsUI();
     setText('settingsClusterTilesTitle', t('settingsClusterTilesTitle'));
     setText('settingsClusterTilesHint', t('settingsClusterTilesHint'));
+    setText('settingsMonitorTilesChartAxisLabelsLabel', t('settingsMonitorTilesChartAxisLabels'));
+    setText('settingsMonitorTilesChartAxisLabelsHint', t('settingsMonitorTilesChartAxisLabelsHint'));
     setText('settingsClusterTilesAddBtnLabel', t('settingsClusterTilesAddBtn'));
     setText('settingsClusterTilesSaveBtnLabel', t('settingsClusterTilesSaveBtn'));
     const upsTypeSel = document.getElementById('upsTypeSelect');
@@ -3353,6 +3358,12 @@ document.addEventListener('DOMContentLoaded', async function() {
     const iperf3Nav = document.getElementById('settings-nav-iperf3');
     if (iperf3Nav) {
         iperf3Nav.addEventListener('shown.bs.tab', () => updateIperf3Dashboard().catch(() => {}));
+    }
+    const clusterTilesSettingsNav = document.getElementById('settings-nav-display-cluster-tiles');
+    if (clusterTilesSettingsNav) {
+        clusterTilesSettingsNav.addEventListener('shown.bs.tab', () => {
+            renderTilesMonitorScreen('tilesNormalGrid').catch(() => {});
+        });
     }
     const homeTabs = document.getElementById('myTab');
     if (homeTabs) {
@@ -5067,6 +5078,18 @@ function tilesSizeToGridWH(size) {
     return { w: 1, h: 1 };
 }
 
+function tilesGridWHToSize(w, h) {
+    const W = Number.isFinite(Number(w)) ? parseInt(w, 10) : 1;
+    const H = Number.isFinite(Number(h)) ? parseInt(h, 10) : 1;
+    if (W === 4 && H === 1) return '4x1';
+    if (W === 3 && H === 1) return '3x1';
+    if (W === 2 && H === 1) return '2x1';
+    if (W === 3 && H === 2) return '3x2';
+    if (W === 2 && H === 2) return '2x2';
+    if (W === 1 && H === 1) return '1x1';
+    return null;
+}
+
 function normalizeClusterDashboardTile(raw) {
     const tile = raw && typeof raw === 'object' ? raw : {};
     const type = String(tile.type || '').trim().toLowerCase();
@@ -5076,7 +5099,7 @@ function normalizeClusterDashboardTile(raw) {
         const hasExplicitCluster = Object.prototype.hasOwnProperty.call(tile, 'showOnCluster');
         const hasExplicitTiles = Object.prototype.hasOwnProperty.call(tile, 'showOnTiles');
         const isLegacyTile = !hasExplicitCluster && !hasExplicitTiles;
-        const tilesSize = ['1x1', '2x1', '3x1', '4x1', '2x2', '3x2'].includes(String(tile.tilesSize || '').trim())
+        let tilesSize = ['1x1', '2x1', '3x1', '4x1', '2x2', '3x2'].includes(String(tile.tilesSize || '').trim())
             ? String(tile.tilesSize).trim()
             : '1x1';
         const fromSize = tilesSizeToGridWH(tilesSize);
@@ -5086,6 +5109,8 @@ function normalizeClusterDashboardTile(raw) {
         if (!Number.isFinite(tilesGridH) || tilesGridH < 1) tilesGridH = fromSize.h;
         tilesGridW = Math.min(Math.max(1, tilesGridW), TILES_MONITOR_GRID_COLS);
         tilesGridH = Math.min(Math.max(1, tilesGridH), TILES_MONITOR_GRID_ROWS);
+        const derived = tilesGridWHToSize(tilesGridW, tilesGridH);
+        if (derived) tilesSize = derived;
         let tilesGridCol = parseInt(tile.tilesGridCol, 10);
         let tilesGridRow = parseInt(tile.tilesGridRow, 10);
         if (!Number.isFinite(tilesGridCol) || tilesGridCol < 0) tilesGridCol = 0;
@@ -5134,6 +5159,18 @@ function normalizeClusterDashboardTile(raw) {
         if (!Number.isFinite(slot) || slot < 1 || slot > 4) return null;
         sourceId = `ups:${slot}`;
     }
+    if (type === 'cluster_metric_chart') {
+        const m = /^cluster_metric_chart:(cpu|mem)$/.exec(sourceId);
+        if (!m) return null;
+        sourceId = `cluster_metric_chart:${m[1]}`;
+    }
+    if (type === 'host_node_metric_chart') {
+        const m = /^host_node_metric_chart:([^:]+):(temp|cpu|mem)$/.exec(sourceId);
+        if (!m) return null;
+        const node = String(m[1] || '').trim();
+        if (!node) return null;
+        sourceId = `host_node_metric_chart:${node}:${m[2]}`;
+    }
     if (type === 'smart_sensor') {
         if (!sourceId.startsWith('smart_sensor:')) return null;
         const idPart = sourceId.slice('smart_sensor:'.length).trim();
@@ -5144,7 +5181,7 @@ function normalizeClusterDashboardTile(raw) {
     const hasExplicitCluster = Object.prototype.hasOwnProperty.call(tile, 'showOnCluster');
     const hasExplicitTiles = Object.prototype.hasOwnProperty.call(tile, 'showOnTiles');
     const isLegacyTile = !hasExplicitCluster && !hasExplicitTiles;
-    const tilesSize = ['1x1', '2x1', '3x1', '4x1', '2x2', '3x2'].includes(String(tile.tilesSize || '').trim())
+    let tilesSize = ['1x1', '2x1', '3x1', '4x1', '2x2', '3x2'].includes(String(tile.tilesSize || '').trim())
         ? String(tile.tilesSize).trim()
         : '1x1';
     const fromSize = tilesSizeToGridWH(tilesSize);
@@ -5154,6 +5191,8 @@ function normalizeClusterDashboardTile(raw) {
     if (!Number.isFinite(tilesGridH) || tilesGridH < 1) tilesGridH = fromSize.h;
     tilesGridW = Math.min(Math.max(1, tilesGridW), TILES_MONITOR_GRID_COLS);
     tilesGridH = Math.min(Math.max(1, tilesGridH), TILES_MONITOR_GRID_ROWS);
+    const derived = tilesGridWHToSize(tilesGridW, tilesGridH);
+    if (derived) tilesSize = derived;
 
     let tilesGridCol = parseInt(tile.tilesGridCol, 10);
     let tilesGridRow = parseInt(tile.tilesGridRow, 10);
@@ -5451,6 +5490,9 @@ function getClusterDashboardTileTypeLabel(type) {
     if (type === 'vmct') return t('settingsClusterTileTypeVmct');
     if (type === 'netdev') return t('settingsClusterTileTypeNetdev');
     if (type === 'ups') return t('settingsClusterTileTypeUps');
+    if (type === 'ups_metric_chart') return t('settingsClusterTileTypeUpsMetricChart') || 'UPS graph';
+    if (type === 'cluster_metric_chart') return t('settingsClusterTileTypeClusterMetricChart') || 'Cluster graph';
+    if (type === 'host_node_metric_chart') return t('settingsClusterTileTypeHostNodeMetricChart') || 'Node graph';
     if (type === 'speedtest') return t('settingsClusterTileTypeSpeedtest');
     if (type === 'iperf3') return t('settingsClusterTileTypeIperf3');
     if (type === 'smart_sensor') return t('settingsClusterTileTypeSmartSensor');
@@ -5486,6 +5528,52 @@ function getClusterDashboardTileSourceOptions(type) {
                 value: `ups:${slot}`,
                 label: `UPS ${slot}: ${cfg.name || cfg.host || ('#' + slot)}`
             }));
+    }
+
+    // UPS metric chart tiles (history graphs) select numeric metric fields.
+    if (type === 'ups_metric_chart') {
+        const numericFormats = new Set(['percent', 'number', 'voltage', 'watt', 'frequency', 'time']);
+        return (Array.isArray(upsConfigs) ? upsConfigs : [])
+            .map((cfg, idx) => ({ cfg, slot: idx + 1 }))
+            .filter(({ cfg }) => cfg && cfg.enabled && String(cfg.host || '').trim() !== '' && Array.isArray(cfg.fields))
+            .flatMap(({ cfg, slot }) => {
+                return (cfg.fields || [])
+                    .filter((f) => f && f.enabled !== false && String(f.id || '').trim() !== '' && numericFormats.has(String(f.format || '').trim()))
+                    .map((f) => {
+                        const metricId = String(f.id).trim();
+                        const metricLabel = (f.label != null && String(f.label).trim() !== '') ? String(f.label).trim() : metricId;
+                        return {
+                            value: `ups_metric_chart:${slot}:${metricId}`,
+                            label: `UPS ${slot}: ${metricLabel}`
+                        };
+                    });
+            });
+    }
+
+    if (type === 'cluster_metric_chart') {
+        const cpuLabel = t('clusterAggregateCpuChartTitle') || 'Cluster CPU';
+        const memLabel = t('clusterAggregateMemChartTitle') || 'Cluster RAM';
+        return [
+            { value: 'cluster_metric_chart:cpu', label: cpuLabel },
+            { value: 'cluster_metric_chart:mem', label: memLabel }
+        ];
+    }
+
+    if (type === 'host_node_metric_chart') {
+        const nodes = getClusterNodeNamesForTelegramRules();
+        const uniqueNodes = Array.from(new Set((Array.isArray(nodes) ? nodes : []).map((n) => String(n || '').trim()).filter(Boolean)));
+        const metricDefs = [
+            { id: 'temp', label: t('hostMetricsCpuTempLabel') || 'CPU temp' },
+            { id: 'cpu', label: t('nodeCpu') || 'CPU' },
+            { id: 'mem', label: t('nodeRam') || 'RAM' }
+        ];
+        const list = uniqueNodes.length ? uniqueNodes : ['pve'];
+        return list.flatMap((node) => {
+            return metricDefs.map((m) => ({
+                value: `host_node_metric_chart:${node}:${m.id}`,
+                label: `${node}: ${m.label}`
+            }));
+        });
     }
 
     if (type === 'netdev') {
@@ -5886,6 +5974,9 @@ function addClusterDashboardTile() {
         speedtest: 'speedtest:default',
         iperf3: 'iperf3:default',
         ups: 'ups:1',
+        ups_metric_chart: 'ups_metric_chart:1:charge',
+        cluster_metric_chart: 'cluster_metric_chart:cpu',
+        host_node_metric_chart: 'host_node_metric_chart:pve:cpu',
         netdev: 'netdev:1',
         service: 'service:default',
         vmct: 'vmct:default',
@@ -5934,6 +6025,9 @@ function updateClusterDashboardTileType(index, nextType) {
         speedtest: 'speedtest:default',
         iperf3: 'iperf3:default',
         ups: 'ups:1',
+        ups_metric_chart: 'ups_metric_chart:1:charge',
+        cluster_metric_chart: 'cluster_metric_chart:cpu',
+        host_node_metric_chart: 'host_node_metric_chart:pve:cpu',
         netdev: 'netdev:1',
         service: 'service:default',
         vmct: 'vmct:default',
@@ -6077,6 +6171,24 @@ function removeClusterDashboardTile(index) {
     else if (tilesEditorSelectedIndex > index) tilesEditorSelectedIndex--;
     markClusterDashboardTilesDirty(true);
     renderClusterDashboardTilesSettings();
+}
+
+async function onMonitorTilesChartAxisLabelsChange() {
+    const chk = document.getElementById('settingsMonitorTilesChartAxisLabelsCheckbox');
+    const prev = monitorTilesChartAxisLabels;
+    const next = !!(chk && chk.checked);
+    monitorTilesChartAxisLabels = next;
+    const ok = await saveSettingsToServer({ monitorTilesChartAxisLabels });
+    if (!ok) {
+        showToast((t('errorUpdate') || 'Update failed') + (saveSettingsLastError ? ': ' + saveSettingsLastError : ''), 'error');
+        monitorTilesChartAxisLabels = prev;
+        if (chk) chk.checked = prev;
+        return;
+    }
+    renderTilesMonitorScreen('tilesNormalGrid').catch(() => {});
+    if (!monitorMode || monitorCurrentView === 'tiles') {
+        renderTilesMonitorScreen().catch(() => {});
+    }
 }
 
 async function saveClusterDashboardTilesSettings() {
@@ -7999,6 +8111,9 @@ function renderHostNodeMetricLineChart(canvas, series, dsLabel, lineRgb, yUnit) 
     const locale = currentLanguage === 'ru' ? 'ru-RU' : 'en-US';
     const labels = series.map((p) => new Date(p.t).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
     const dataVals = series.map((p) => p.v);
+    const showAxisLabels = canvas?.dataset?.tileAxisLabels !== '0';
+    const isTileMetricChart = canvas?.dataset?.tileCompact === '1';
+    const hideLegend = isTileMetricChart || canvas?.dataset?.upsMetricTile === '1';
     const dark = typeof document !== 'undefined' && document.body && (
         document.body.classList.contains('dark-mode') ||
         document.body.classList.contains('monitor-theme-dark')
@@ -8023,21 +8138,23 @@ function renderHostNodeMetricLineChart(canvas, series, dsLabel, lineRgb, yUnit) 
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            resizeDelay: isTileMetricChart ? 120 : 0,
+            animation: isTileMetricChart ? false : undefined,
             interaction: { mode: 'index', intersect: false },
             scales: {
                 x: {
-                    ticks: { color: tickColor },
+                    ticks: { color: tickColor, display: showAxisLabels },
                     grid: { color: gridColor }
                 },
                 y: {
-                    ticks: { color: tickColor },
+                    ticks: { color: tickColor, display: showAxisLabels },
                     grid: { color: gridColor },
-                    title: { display: true, text: yUnit, color: tickColor }
+                    title: { display: showAxisLabels, text: yUnit, color: tickColor }
                 }
             },
             plugins: {
                 legend: {
-                    display: true,
+                    display: !hideLegend,
                     labels: { color: tickColor }
                 }
             }
@@ -10120,6 +10237,511 @@ function buildClusterUpsTileHtml(tile, payload) {
     );
 }
 
+/** Превью в настройках (#tilesNormalGrid) и экран монитора (#tilesMonitorGrid) оба в DOM — id canvas должны различаться, иначе Chart.js и chartMap цепляются к первому элементу. */
+function tilesMonitorGridDomIdSuffix(targetGridId) {
+    const s = String(targetGridId || 'grid').replace(/[^a-zA-Z0-9_-]/g, '_');
+    return s || 'grid';
+}
+
+function tilesChartAxisLabelsDatasetAttr() {
+    return { 'data-tile-axis-labels': monitorTilesChartAxisLabels ? '1' : '0' };
+}
+
+let upsMetricTileCharts = {}; // key: canvas.id
+let clusterMetricTileCharts = {}; // key: canvas.id
+let hostNodeMetricTileCharts = {}; // key: canvas.id
+
+function resizeTilesCharts() {
+    const sets = [upsMetricTileCharts, clusterMetricTileCharts, hostNodeMetricTileCharts];
+    for (const map of sets) {
+        for (const key of Object.keys(map || {})) {
+            const ch = map[key];
+            if (!ch) continue;
+            try { ch.resize(); } catch (_) {}
+        }
+    }
+}
+
+function pruneChartMap(chartMap, canvases) {
+    const alive = new Set((Array.isArray(canvases) ? canvases : []).filter((c) => c instanceof HTMLCanvasElement));
+    for (const key of Object.keys(chartMap || {})) {
+        const chart = chartMap[key];
+        const chartCanvas = chart && chart.canvas;
+        const keep =
+            chartCanvas instanceof HTMLCanvasElement &&
+            alive.has(chartCanvas) &&
+            chartCanvas.isConnected;
+        if (!keep) {
+            try { chart?.destroy?.(); } catch (_) {}
+            delete chartMap[key];
+        }
+    }
+}
+
+function lineChartLabelsFromSeries(series) {
+    const locale = currentLanguage === 'ru' ? 'ru-RU' : 'en-US';
+    return (Array.isArray(series) ? series : []).map((p) => new Date(p.t).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+}
+
+/** Сжатие ряда для компактных графиков на Tiles: тысячи точек → тяжёлый Chart.js и main thread. */
+const TILES_METRIC_CHART_MAX_POINTS = 240;
+
+function downsampleMetricSeriesEvenly(series, maxPoints) {
+    const arr = Array.isArray(series) ? series : [];
+    const cap = Math.max(8, Math.min(2000, Number(maxPoints) || TILES_METRIC_CHART_MAX_POINTS));
+    if (arr.length <= cap) return arr;
+    const step = (arr.length - 1) / (cap - 1);
+    const out = [];
+    for (let i = 0; i < cap; i++) {
+        const idx = i === cap - 1 ? arr.length - 1 : Math.round(i * step);
+        out.push(arr[idx]);
+    }
+    return out;
+}
+
+function showTileEmptyIfNoChart({ canvas, emptyEl, chartMap, message }) {
+    if (!canvas || !emptyEl) return;
+    const mapped = chartMap && chartMap[canvas.id];
+    if (mapped && mapped.canvas === canvas) return; // не мигать при временной ошибке, если график уже на этом canvas
+    emptyEl.textContent = String(message || '');
+    canvas.classList.add('d-none');
+    emptyEl.classList.remove('d-none');
+}
+
+function showTileChart({ canvas, emptyEl }) {
+    if (emptyEl) emptyEl.classList.add('d-none');
+    if (canvas) canvas.classList.remove('d-none');
+}
+
+function updateOrCreateLineChart({ canvas, chartMap, series, dsLabel, lineRgb, yUnit }) {
+    const isTileMetric = canvas?.dataset?.tileCompact === '1';
+    const seriesForChart = isTileMetric && Array.isArray(series) && series.length > TILES_METRIC_CHART_MAX_POINTS
+        ? downsampleMetricSeriesEvenly(series, TILES_METRIC_CHART_MAX_POINTS)
+        : series;
+    let existing = chartMap ? chartMap[canvas.id] : null;
+    if (existing && existing.canvas !== canvas) {
+        try { existing.destroy(); } catch (_) {}
+        delete chartMap[canvas.id];
+        existing = null;
+    }
+    if (existing) {
+        existing.data.labels = lineChartLabelsFromSeries(seriesForChart);
+        if (existing.data?.datasets?.[0]) {
+            existing.data.datasets[0].data = seriesForChart.map((p) => p.v);
+            existing.data.datasets[0].label = dsLabel;
+        }
+        const showAxisLabels = canvas?.dataset?.tileAxisLabels !== '0';
+        const sx = existing.options?.scales?.x;
+        const sy = existing.options?.scales?.y;
+        if (sx?.ticks) sx.ticks.display = showAxisLabels;
+        if (sy?.ticks) sy.ticks.display = showAxisLabels;
+        if (sy?.title) {
+            sy.title.display = showAxisLabels;
+            sy.title.text = yUnit;
+        }
+        existing.update('none');
+        return existing;
+    }
+    const chart = renderHostNodeMetricLineChart(canvas, seriesForChart, dsLabel, lineRgb, yUnit);
+    if (chartMap) chartMap[canvas.id] = chart;
+    return chart;
+}
+
+function destroyUpsMetricTileCharts() {
+    for (const chartKey of Object.keys(upsMetricTileCharts)) {
+        const chart = upsMetricTileCharts[chartKey];
+        try {
+            if (chart && typeof chart.destroy === 'function') chart.destroy();
+        } catch (_) {}
+    }
+    upsMetricTileCharts = {};
+}
+
+function destroyClusterMetricTileCharts() {
+    for (const chartKey of Object.keys(clusterMetricTileCharts)) {
+        const chart = clusterMetricTileCharts[chartKey];
+        try {
+            if (chart && typeof chart.destroy === 'function') chart.destroy();
+        } catch (_) {}
+    }
+    clusterMetricTileCharts = {};
+}
+
+function destroyHostNodeMetricTileCharts() {
+    for (const chartKey of Object.keys(hostNodeMetricTileCharts)) {
+        const chart = hostNodeMetricTileCharts[chartKey];
+        try {
+            if (chart && typeof chart.destroy === 'function') chart.destroy();
+        } catch (_) {}
+    }
+    hostNodeMetricTileCharts = {};
+}
+
+function parseUpsMetricTileSourceId(sourceId) {
+    const s = String(sourceId || '').trim();
+    const m = /^ups_metric_chart:(\d+):(.+)$/.exec(s);
+    if (!m) return null;
+    return {
+        slot: parseInt(m[1], 10),
+        metricId: String(m[2] || '').trim()
+    };
+}
+
+function parseClusterMetricTileSourceId(sourceId) {
+    const s = String(sourceId || '').trim();
+    const m = /^cluster_metric_chart:(cpu|mem)$/.exec(s);
+    if (!m) return null;
+    return { metric: m[1] };
+}
+
+function parseHostNodeMetricTileSourceId(sourceId) {
+    const s = String(sourceId || '').trim();
+    const m = /^host_node_metric_chart:([^:]+):(temp|cpu|mem)$/.exec(s);
+    if (!m) return null;
+    return { node: String(m[1] || '').trim(), metric: String(m[2] || '').trim().toLowerCase() };
+}
+
+function buildTilesChartCanvasAttrs(attrs) {
+    const obj = attrs && typeof attrs === 'object' ? attrs : {};
+    return Object.keys(obj)
+        .filter((k) => obj[k] != null && String(obj[k]).trim() !== '')
+        .map((k) => `${escapeHtml(k)}="${escapeHtml(String(obj[k]))}"`)
+        .join(' ');
+}
+
+function buildTilesChartTileBodyHtml({ emptyId, canvasId, emptyText, canvasAttrs }) {
+    const emptyTextEsc = escapeHtml(emptyText || '');
+    const canvasAttrsStr = buildTilesChartCanvasAttrs(canvasAttrs);
+    return `
+        <div class="col-12 tiles-ups-metric-chart-host d-flex flex-column p-0">
+            <div class="tiles-ups-metric-chart-wrap position-relative d-flex flex-column flex-grow-1 min-height-0" style="overflow: hidden;">
+                <div id="${escapeHtml(emptyId)}" class="tiles-ups-metric-chart-empty bg-opacity-10 border-0 text-muted small d-flex align-items-center justify-content-center flex-grow-1" style="min-height: 0; padding: 0.25rem;">
+                    ${emptyTextEsc}
+                </div>
+                <canvas id="${escapeHtml(canvasId)}"
+                    class="w-100 flex-grow-1 d-none"
+                    style="height: 100%; min-height: 0; width: 100%;"
+                    ${canvasAttrsStr}>
+                </canvas>
+            </div>
+        </div>
+    `;
+}
+
+function buildTilesChartTileShell({ titleText, badgeHtml, footerText, emptyId, canvasId, emptyText, canvasAttrs }) {
+    return buildClusterDashboardTileShell(
+        `<i class="bi bi-graph-up-arrow me-2 text-primary"></i><span class="text-truncate">${escapeHtml(titleText || '')}</span>`,
+        badgeHtml || '',
+        buildTilesChartTileBodyHtml({ emptyId, canvasId, emptyText, canvasAttrs }),
+        escapeHtml(footerText || '')
+    );
+}
+
+function buildClusterUpsMetricChartTileHtml(tile, payload, tileIndex, targetGridId) {
+    const gid = tilesMonitorGridDomIdSuffix(targetGridId);
+    const parsed = parseUpsMetricTileSourceId(tile?.sourceId);
+    if (!parsed || !Number.isFinite(parsed.slot) || !parsed.metricId) {
+        return buildClusterDashboardUnavailableTile(t('settingsClusterTileTypeUpsMetricChart') || 'UPS graph', t('backupNoData') || 'Нет данных');
+    }
+
+    const slot = parsed.slot;
+    const metricId = parsed.metricId;
+    const item = Array.isArray(payload?.items) ? payload.items.find((entry) => Number(entry.slot) === slot) : null;
+
+    if (!item) {
+        return buildClusterDashboardUnavailableTile(`UPS ${slot}`, t('upsNotConfigured') || 'UPS не настроен');
+    }
+
+    if (item.error) {
+        return buildClusterDashboardUnavailableTile(item.name || `UPS ${slot}`, String(item.error));
+    }
+
+    const statusLabel = item.status?.label ?? (item.status?.raw != null ? String(item.status.raw) : '—');
+    const up = item.status?.up;
+    let badgeClass = 'bg-secondary';
+    const lowStr = String(statusLabel).toLowerCase();
+    if (lowStr.includes('low')) badgeClass = 'bg-danger';
+    else if (up === true) badgeClass = 'bg-success';
+    else if (up === false) badgeClass = 'bg-warning text-dark';
+
+    const fields = Array.isArray(item.fields) ? item.fields : [];
+    const metricField = fields.find((f) => String(f?.id || '').trim() === metricId) || null;
+    const metricLabel = metricField?.label != null && String(metricField.label).trim() !== '' ? String(metricField.label).trim() : metricId;
+    const metricFormatHint = metricField?.format != null ? String(metricField.format).trim() : '';
+
+    const emptyText = t('upsAllMetricsChartEmpty') || 'No samples in the last 24 hours yet.';
+    const footer = t('upsAllMetricsModalHint') || 'Last 24h';
+
+    return buildTilesChartTileShell({
+        titleText: metricLabel,
+        badgeHtml: `<span class="badge ${badgeClass}">${escapeHtml(statusLabel)}</span>`,
+        footerText: footer,
+        emptyId: `upsMetricTileEmpty_${gid}_${tileIndex}`,
+        canvasId: `upsMetricTileCanvas_${gid}_${tileIndex}`,
+        emptyText,
+        canvasAttrs: {
+            ...tilesChartAxisLabelsDatasetAttr(),
+            'data-ups-metric-tile': '1',
+            'data-tile-compact': '1',
+            'data-ups-slot': String(slot),
+            'data-ups-metric-id': metricId,
+            'data-ups-metric-label': metricLabel,
+            'data-ups-metric-format': metricFormatHint
+        }
+    });
+}
+
+async function initUpsMetricChartTiles(targetGridId) {
+    const gridEl = document.getElementById(targetGridId);
+    if (!gridEl) return;
+    if (typeof Chart === 'undefined') return;
+    const gid = tilesMonitorGridDomIdSuffix(targetGridId);
+    const canvasIdPrefix = `upsMetricTileCanvas_${gid}_`;
+    const emptyText = t('upsAllMetricsChartEmpty') || 'No samples in the last 24 hours yet.';
+    const canvases = Array.from(gridEl.querySelectorAll('canvas[data-ups-metric-tile="1"]'));
+    pruneChartMap(upsMetricTileCharts, canvases);
+
+    await Promise.all(canvases.map(async (canvas) => {
+        const idStr = String(canvas?.id || '');
+        const tileIndexNum = idStr.startsWith(canvasIdPrefix)
+            ? parseInt(idStr.slice(canvasIdPrefix.length), 10)
+            : NaN;
+        const emptyEl = document.getElementById(`upsMetricTileEmpty_${gid}_${tileIndexNum}`);
+
+        const slot = parseInt(canvas.dataset.upsSlot, 10);
+        const metricId = String(canvas.dataset.upsMetricId || '').trim();
+        const metricLabel = String(canvas.dataset.upsMetricLabel || '').trim() || metricId;
+        const metricFormatHint = String(canvas.dataset.upsMetricFormat || '').trim();
+
+        if (!Number.isFinite(slot) || !metricId || !emptyEl) return;
+
+        try {
+            const url = `/api/ups/metric-history?slot=${encodeURIComponent(slot)}&metric=${encodeURIComponent(metricId)}`;
+            const res = await fetch(url);
+            const data = await res.json().catch(() => ({}));
+
+            if (!res.ok || data?.error) {
+                showTileEmptyIfNoChart({ canvas, emptyEl, chartMap: upsMetricTileCharts, message: String(data?.error || `HTTP ${res.status}` || emptyText) });
+                return;
+            }
+
+            const points = parseMetricHistoryPoints(data?.points);
+            const metricFormat = data?.metricFormat != null ? String(data.metricFormat).trim() : metricFormatHint;
+
+            if (!points.length) {
+                showTileEmptyIfNoChart({ canvas, emptyEl, chartMap: upsMetricTileCharts, message: emptyText });
+                return;
+            }
+            showTileChart({ canvas, emptyEl });
+
+            const series = points.map((p) => ({
+                t: p.t,
+                v: (String(metricFormat || '').trim().toLowerCase() === 'time') ? (p.v / 3600) : p.v
+            }));
+
+            const yUnit = upsMetricYUnitFromFormat(metricFormat);
+            const lineRgb = upsMetricColorFromFormat(metricFormat);
+            updateOrCreateLineChart({
+                canvas,
+                chartMap: upsMetricTileCharts,
+                series,
+                dsLabel: metricLabel,
+                lineRgb,
+                yUnit
+            });
+        } catch (e) {
+            showTileEmptyIfNoChart({ canvas, emptyEl, chartMap: upsMetricTileCharts, message: String(e?.message || e || emptyText) });
+        }
+    }));
+}
+
+function buildClusterClusterMetricChartTileHtml(tile, tileIndex, targetGridId) {
+    const gid = tilesMonitorGridDomIdSuffix(targetGridId);
+    const parsed = parseClusterMetricTileSourceId(tile?.sourceId);
+    const metric = parsed?.metric;
+    const title =
+        metric === 'mem'
+            ? (t('clusterAggregateMemChartTitle') || 'Cluster RAM')
+            : (t('clusterAggregateCpuChartTitle') || 'Cluster CPU');
+    const emptyText = t('clusterAggregateMetricChartEmpty') || (t('upsAllMetricsChartEmpty') || 'No samples in the last 24 hours yet.');
+    const footer = t('clusterAggregateMetricsModalHint') || 'Last 24h';
+
+    return buildTilesChartTileShell({
+        titleText: title,
+        badgeHtml: `<span class="badge bg-primary">PVE</span>`,
+        footerText: footer,
+        emptyId: `clusterMetricTileEmpty_${gid}_${tileIndex}`,
+        canvasId: `clusterMetricTileCanvas_${gid}_${tileIndex}`,
+        emptyText,
+        canvasAttrs: {
+            ...tilesChartAxisLabelsDatasetAttr(),
+            'data-cluster-metric-tile': '1',
+            'data-tile-compact': '1',
+            'data-cluster-metric': metric || 'cpu'
+        }
+    });
+}
+
+async function initClusterMetricChartTiles(targetGridId) {
+    const gridEl = document.getElementById(targetGridId);
+    if (!gridEl) return;
+    if (typeof Chart === 'undefined') return;
+    const gid = tilesMonitorGridDomIdSuffix(targetGridId);
+    const canvasIdPrefix = `clusterMetricTileCanvas_${gid}_`;
+    const canvases = Array.from(gridEl.querySelectorAll('canvas[data-cluster-metric-tile="1"]'));
+    pruneChartMap(clusterMetricTileCharts, canvases);
+    if (!canvases.length) return;
+
+    const headers = getCurrentProxmoxHeaders();
+    const emptyText = t('clusterAggregateMetricChartEmpty') || 'No samples in the last 24 hours yet.';
+    const needConnText = t('hostMetricsNeedConnection') || 'Connect to Proxmox first.';
+
+    await Promise.all(canvases.map(async (canvas) => {
+        const idStr = String(canvas?.id || '');
+        const tileIndexNum = idStr.startsWith(canvasIdPrefix)
+            ? parseInt(idStr.slice(canvasIdPrefix.length), 10)
+            : NaN;
+        const emptyEl = document.getElementById(`clusterMetricTileEmpty_${gid}_${tileIndexNum}`);
+        const metric = String(canvas.dataset.clusterMetric || '').trim().toLowerCase() === 'mem' ? 'mem' : 'cpu';
+        if (!emptyEl) return;
+
+        if (!headers) {
+            showTileEmptyIfNoChart({ canvas, emptyEl, chartMap: clusterMetricTileCharts, message: needConnText });
+            return;
+        }
+
+        try {
+            const url = `/api/cluster/metric-history?metric=${encodeURIComponent(metric)}`;
+            const res = await fetch(url, { headers });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || data?.error) {
+                showTileEmptyIfNoChart({ canvas, emptyEl, chartMap: clusterMetricTileCharts, message: String(data?.error || `HTTP ${res.status}` || emptyText) });
+                return;
+            }
+
+            const points = parseMetricHistoryPoints(data?.points);
+            if (!points.length) {
+                showTileEmptyIfNoChart({ canvas, emptyEl, chartMap: clusterMetricTileCharts, message: emptyText });
+                return;
+            }
+
+            showTileChart({ canvas, emptyEl });
+
+            const title =
+                metric === 'mem'
+                    ? (t('clusterAggregateMemChartTitle') || 'Cluster RAM')
+                    : (t('clusterAggregateCpuChartTitle') || 'Cluster CPU');
+            const lineRgb = metric === 'mem' ? '102, 16, 242' : '220, 53, 69';
+            updateOrCreateLineChart({
+                canvas,
+                chartMap: clusterMetricTileCharts,
+                series: points,
+                dsLabel: title,
+                lineRgb,
+                yUnit: '%'
+            });
+        } catch (e) {
+            showTileEmptyIfNoChart({ canvas, emptyEl, chartMap: clusterMetricTileCharts, message: String(e?.message || e || emptyText) });
+        }
+    }));
+}
+
+function hostNodeMetricTileMeta(metric) {
+    const m = String(metric || '').toLowerCase();
+    if (m === 'temp') return { label: t('hostMetricsCpuTempLabel') || 'CPU temp', lineRgb: '13, 110, 253', yUnit: '°C' };
+    if (m === 'mem') return { label: t('nodeRam') || 'RAM', lineRgb: '102, 16, 242', yUnit: '%' };
+    return { label: t('nodeCpu') || 'CPU', lineRgb: '220, 53, 69', yUnit: '%' };
+}
+
+function buildClusterHostNodeMetricChartTileHtml(tile, tileIndex, targetGridId) {
+    const gid = tilesMonitorGridDomIdSuffix(targetGridId);
+    const parsed = parseHostNodeMetricTileSourceId(tile?.sourceId);
+    const node = parsed?.node || 'pve';
+    const metric = parsed?.metric || 'cpu';
+    const meta = hostNodeMetricTileMeta(metric);
+    const title = `${node}: ${meta.label}`;
+    const emptyText = t('hostNodeMetricChartEmptyLoadMem') || t('hostNodeCpuTempChartEmpty') || (t('upsAllMetricsChartEmpty') || 'No samples in the last 24 hours yet.');
+    const footer = t('hostNodeAllMetricsModalHint') || (t('clusterAggregateMetricsModalHint') || 'Last 24h');
+
+    return buildTilesChartTileShell({
+        titleText: title,
+        badgeHtml: `<span class="badge bg-primary">${escapeHtml('PVE')}</span>`,
+        footerText: footer,
+        emptyId: `hostNodeMetricTileEmpty_${gid}_${tileIndex}`,
+        canvasId: `hostNodeMetricTileCanvas_${gid}_${tileIndex}`,
+        emptyText,
+        canvasAttrs: {
+            ...tilesChartAxisLabelsDatasetAttr(),
+            'data-host-node-metric-tile': '1',
+            'data-tile-compact': '1',
+            'data-host-node': node,
+            'data-host-metric': metric
+        }
+    });
+}
+
+async function initHostNodeMetricChartTiles(targetGridId) {
+    const gridEl = document.getElementById(targetGridId);
+    if (!gridEl) return;
+    if (typeof Chart === 'undefined') return;
+    const gid = tilesMonitorGridDomIdSuffix(targetGridId);
+    const canvasIdPrefix = `hostNodeMetricTileCanvas_${gid}_`;
+    const canvases = Array.from(gridEl.querySelectorAll('canvas[data-host-node-metric-tile="1"]'));
+    pruneChartMap(hostNodeMetricTileCharts, canvases);
+    if (!canvases.length) return;
+
+    const headers = getCurrentProxmoxHeaders();
+    const needConnText = t('hostMetricsNeedConnection') || 'Connect to Proxmox first.';
+    const emptyTextDefault = t('hostNodeMetricChartEmptyLoadMem') || t('hostNodeCpuTempChartEmpty') || 'No samples in the last 24 hours yet.';
+
+    await Promise.all(canvases.map(async (canvas) => {
+        const idStr = String(canvas?.id || '');
+        const tileIndexNum = idStr.startsWith(canvasIdPrefix)
+            ? parseInt(idStr.slice(canvasIdPrefix.length), 10)
+            : NaN;
+        const emptyEl = document.getElementById(`hostNodeMetricTileEmpty_${gid}_${tileIndexNum}`);
+        const node = String(canvas.dataset.hostNode || '').trim();
+        const metric = String(canvas.dataset.hostMetric || '').trim().toLowerCase();
+        if (!emptyEl || !node) return;
+
+        if (!headers) {
+            showTileEmptyIfNoChart({ canvas, emptyEl, chartMap: hostNodeMetricTileCharts, message: needConnText });
+            return;
+        }
+
+        try {
+            const url = `/api/host-metrics/node-metric-history?node=${encodeURIComponent(node)}&metric=${encodeURIComponent(metric || 'cpu')}`;
+            const res = await fetch(url, { headers });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || data?.error) {
+                showTileEmptyIfNoChart({ canvas, emptyEl, chartMap: hostNodeMetricTileCharts, message: String(data?.error || `HTTP ${res.status}` || emptyTextDefault) });
+                return;
+            }
+
+            const points = parseMetricHistoryPoints(data?.points);
+            if (!points.length) {
+                showTileEmptyIfNoChart({ canvas, emptyEl, chartMap: hostNodeMetricTileCharts, message: emptyTextDefault });
+                return;
+            }
+
+            showTileChart({ canvas, emptyEl });
+
+            const meta = hostNodeMetricTileMeta(metric);
+            const dsLabel = `${node}: ${meta.label}`;
+            updateOrCreateLineChart({
+                canvas,
+                chartMap: hostNodeMetricTileCharts,
+                series: points,
+                dsLabel,
+                lineRgb: meta.lineRgb,
+                yUnit: meta.yUnit
+            });
+        } catch (e) {
+            showTileEmptyIfNoChart({ canvas, emptyEl, chartMap: hostNodeMetricTileCharts, message: String(e?.message || e || emptyTextDefault) });
+        }
+    }));
+}
+
 function buildClusterSpeedtestTileHtml(summary) {
     if (!summary) {
         return buildClusterDashboardUnavailableTile(
@@ -10418,7 +11040,7 @@ async function renderClusterDashboardTiles() {
     }
 
     const needNetdev = tiles.some((tile) => tile.type === 'netdev');
-    const needUps = tiles.some((tile) => tile.type === 'ups');
+    const needUps = tiles.some((tile) => tile.type === 'ups' || tile.type === 'ups_metric_chart');
     const needSpeedtest = tiles.some((tile) => tile.type === 'speedtest');
     const needIperf3 = tiles.some((tile) => tile.type === 'iperf3');
 
@@ -10442,11 +11064,14 @@ async function renderClusterDashboardTiles() {
     ]);
     if (truenasOverview && !truenasOverview.error) lastTrueNASOverviewData = truenasOverview;
 
-    const html = tiles.map((tile) => {
+    const html = tiles.map((tile, tileIndex) => {
         if (tile.type === 'service') return buildClusterServiceTileHtml(tile);
         if (tile.type === 'vmct') return buildClusterVmTileHtml(tile);
         if (tile.type === 'netdev') return buildClusterNetdevTileHtml(tile, netdevPayload);
         if (tile.type === 'ups') return buildClusterUpsTileHtml(tile, upsPayload);
+        if (tile.type === 'ups_metric_chart') return buildClusterUpsMetricChartTileHtml(tile, upsPayload, tileIndex, 'dashboardClusterTiles');
+        if (tile.type === 'cluster_metric_chart') return buildClusterClusterMetricChartTileHtml(tile, tileIndex, 'dashboardClusterTiles');
+        if (tile.type === 'host_node_metric_chart') return buildClusterHostNodeMetricChartTileHtml(tile, tileIndex, 'dashboardClusterTiles');
         if (tile.type === 'speedtest') return buildClusterSpeedtestTileHtml(speedtestSummary);
         if (tile.type === 'iperf3') return buildClusterIperf3TileHtml(iperf3Summary);
         if (tile.type === 'truenas_server') return buildClusterTrueNASServerTileHtml(tile);
@@ -10487,7 +11112,7 @@ async function renderTilesMonitorScreen(targetGridId = 'tilesMonitorGrid') {
     }
 
     const needNetdev = tiles.some((tile) => tile.type === 'netdev');
-    const needUps = tiles.some((tile) => tile.type === 'ups');
+    const needUps = tiles.some((tile) => tile.type === 'ups' || tile.type === 'ups_metric_chart');
     const needSpeedtest = tiles.some((tile) => tile.type === 'speedtest');
     const needIperf3 = tiles.some((tile) => tile.type === 'iperf3');
     const needSmartSensors = tiles.some((tile) => tile.type === 'smart_sensor');
@@ -10514,12 +11139,15 @@ async function renderTilesMonitorScreen(targetGridId = 'tilesMonitorGrid') {
     if (truenasOverview && !truenasOverview.error) lastTrueNASOverviewData = truenasOverview;
 
     const placements = computeTilesMonitorPlacements(tiles);
-    const html = placements.map(({ tile, gridCol, gridRow }) => {
+    const html = placements.map(({ tile, gridCol, gridRow }, placementsIndex) => {
         let tileHtml = '';
         if (tile.type === 'service') tileHtml = buildClusterServiceTileHtml(tile);
         else if (tile.type === 'vmct') tileHtml = buildClusterVmTileHtml(tile);
         else if (tile.type === 'netdev') tileHtml = buildClusterNetdevTileHtml(tile, netdevPayload);
         else if (tile.type === 'ups') tileHtml = buildClusterUpsTileHtml(tile, upsPayload);
+        else if (tile.type === 'ups_metric_chart') tileHtml = buildClusterUpsMetricChartTileHtml(tile, upsPayload, placementsIndex, targetGridId);
+        else if (tile.type === 'cluster_metric_chart') tileHtml = buildClusterClusterMetricChartTileHtml(tile, placementsIndex, targetGridId);
+        else if (tile.type === 'host_node_metric_chart') tileHtml = buildClusterHostNodeMetricChartTileHtml(tile, placementsIndex, targetGridId);
         else if (tile.type === 'speedtest') tileHtml = buildClusterSpeedtestTileHtml(speedtestSummary);
         else if (tile.type === 'iperf3') tileHtml = buildClusterIperf3TileHtml(iperf3Summary);
         else if (tile.type === 'smart_sensor') tileHtml = buildClusterSmartSensorTileHtml(tile, smartSensorsPayload);
@@ -10537,6 +11165,13 @@ async function renderTilesMonitorScreen(targetGridId = 'tilesMonitorGrid') {
         return `<div class="tiles-monitor-cell" style="${style}">${tileHtml}</div>`;
     }).join('');
     setHTMLIfChanged(targetGridId, html);
+    // Important: wait for chart tiles initialization so callers (view switch)
+    // can reliably resize after charts exist (prevents "blank" charts after navigation).
+    await Promise.all([
+        initUpsMetricChartTiles(targetGridId).catch(() => {}),
+        initClusterMetricChartTiles(targetGridId).catch(() => {}),
+        initHostNodeMetricChartTiles(targetGridId).catch(() => {})
+    ]);
 }
 
 async function renderTrueNASMonitorScreenTiles(targetGridId, type) {
@@ -11317,6 +11952,8 @@ const monitorViewRouterManager = window.MonitorViewRouterModule.createManager({
     updateIperf3Dashboard: () => updateIperf3Dashboard(),
     updateSmartSensorsDashboard: () => updateSmartSensorsDashboard(),
     renderTilesMonitorScreen: () => renderTilesMonitorScreen(),
+    resizeTilesCharts: () => resizeTilesCharts(),
+    refreshData: (opts) => refreshData(opts),
     renderTrueNASMonitorScreenTiles: (gridId, type) => renderTrueNASMonitorScreenTiles(gridId, type),
     renderMonitorBackupRuns: (data) => renderMonitorBackupRuns(data),
     initMonitorDrawScreen: () => initMonitorDrawScreen(),
@@ -14123,6 +14760,7 @@ async function loadSettings() {
     monitorShowTime = parseBoolSettingClient(data.monitor_show_time, true);
     monitorShowWeather = parseBoolSettingClient(data.monitor_show_weather, true);
     monitorDisableChromeGestures = parseBoolSettingClient(data.monitor_disable_chrome_gestures, true);
+    monitorTilesChartAxisLabels = parseBoolSettingClient(data.monitor_tiles_chart_axis_labels, true);
     monitorHotkeys = normalizeMonitorHotkeys(data.monitor_hotkeys);
     setValue('settingsDashboardWeatherCityInput', dashboardWeatherCity);
     setValue('settingsDashboardTimezoneInput', dashboardTimezone);
@@ -14139,6 +14777,8 @@ async function loadSettings() {
     if (cMonW) cMonW.checked = monitorShowWeather;
     const cMonChrome = el('settingsMonitorDisableChromeGesturesCheckbox');
     if (cMonChrome) cMonChrome.checked = monitorDisableChromeGestures;
+    const cTilesAxis = el('settingsMonitorTilesChartAxisLabelsCheckbox');
+    if (cTilesAxis) cTilesAxis.checked = monitorTilesChartAxisLabels;
     renderMonitorHotkeysSettingsUI();
     monitorVmIcons = normalizeMonitorVmIconsMap(data.monitor_vm_icons);
     monitorVmIconColors = normalizeMonitorVmIconColorsMap(data.monitor_vm_icon_colors);

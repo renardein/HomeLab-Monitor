@@ -696,6 +696,8 @@
     "dashboardWeatherCityMissing": "設定で都市を指定してください",
     "settingsClusterTilesTitle": "Cluster 画面のタイル",
     "settingsClusterTilesHint": "Homelab と Tiles 用に最大 12 枚のタイルを構成します。Tiles 画面では 12×8 のセル（1×1）グリッドに配置します。サイズと位置は下で設定します。",
+    "settingsMonitorTilesChartAxisLabels": "Tiles のグラフに軸ラベルを表示",
+    "settingsMonitorTilesChartAxisLabelsHint": "オフにすると、メトリックタイル（UPS、クラスタ、ノード）の時刻・目盛り・Y 軸の単位を非表示にします。",
     "settingsClusterTilesClickHint": "タイルをクリックして設定を編集します。ドラッグで移動、角をドラッグでサイズ変更。",
     "settingsClusterTilesSelectHint": "上のグリッドでタイルを選ぶと編集できます。",
     "settingsClusterTileShowOnTilesLabel": "Tiles 画面に表示",

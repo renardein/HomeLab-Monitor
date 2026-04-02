@@ -99,7 +99,12 @@
                 await Promise.all([proxmoxTask, truenasTask]);
 
                 await deps.renderClusterDashboardTiles();
-                deps.renderTilesMonitorScreen('tilesNormalGrid').catch(() => {});
+                // На экране Tiles не обновляем превью в настройках (#tilesNormalGrid) — иначе каждый тик
+                // автообновления удваивает fetch + Chart.js и перегружает главный поток.
+                const onTilesMonitorScreen = deps.getMonitorMode() && deps.getMonitorCurrentView() === 'tiles';
+                if (!onTilesMonitorScreen) {
+                    deps.renderTilesMonitorScreen('tilesNormalGrid').catch(() => {});
+                }
                 if (!deps.getMonitorMode() || deps.getMonitorCurrentView() === 'tiles') {
                     deps.renderTilesMonitorScreen().catch(() => {});
                 }

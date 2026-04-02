@@ -2810,12 +2810,18 @@
             min-height: 0;
             display: flex;
             flex-direction: column;
+            height: 100%;
+            overflow: hidden;
         }
 
         .tiles-monitor-cell .cluster-scroll-item {
             flex: 1 1 auto;
             min-width: 0;
             width: 100%;
+            height: 100%;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
         }
 
         .tiles-monitor-cell .node-card {
@@ -2823,6 +2829,14 @@
             min-height: 0;
             height: 100%;
             margin-bottom: 0;
+            overflow: hidden;
+        }
+
+        /* Let the tile body row fill the available height (prevents canvas from forcing expansion). */
+        .tiles-monitor-cell .node-card .row.g-2 {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow: hidden;
         }
 
         .tiles-embed-tile .tiles-embed-card {
@@ -2851,6 +2865,46 @@
             width: auto;
             height: auto;
             object-fit: contain;
+        }
+
+        /* UPS graph tiles: never force grid rows to expand */
+        .tiles-ups-metric-chart-wrap {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .tiles-ups-metric-chart-wrap canvas {
+            min-height: 0;
+            display: block;
+            flex: 1 1 auto;
+        }
+
+        .tiles-ups-metric-chart-host {
+            flex: 1 1 auto;
+            min-height: 0;
+            height: 100%;
+        }
+
+        .tiles-ups-metric-chart-wrap {
+            height: 100%;
+        }
+
+        canvas[data-ups-metric-tile="1"] {
+            height: 100% !important;
+        }
+
+        /* Placeholder background should respect dark theme */
+        .tiles-ups-metric-chart-empty {
+            background: rgba(0, 0, 0, 0.02);
+        }
+
+        body.dark-mode .tiles-ups-metric-chart-empty,
+        body.monitor-theme-dark .tiles-ups-metric-chart-empty {
+            background: rgba(255, 255, 255, 0.03);
+            color: rgba(255, 255, 255, 0.65) !important;
         }
 
         .tiles-embed-iframe {
