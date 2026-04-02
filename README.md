@@ -7,23 +7,24 @@ Local web dashboard for Proxmox and TrueNAS with separate dashboard and monitor 
 ## Features
 
 - **Proxmox VE**: nodes, storage, VMs/CTs, backups, and quorum on the cluster screen
-- **TrueNAS**: CORE/SCALE system overview
+- **TrueNAS**: CORE/SCALE overview and monitor tiles
 - **Service checks**: TCP, UDP, HTTP(S), SNMP, and NUT
-- **VM / CT monitor**: Iconify icons and colors; show or hide each card in monitor mode
+- **VM / CT monitor**: icons and colors; show or hide each card in monitor mode
 - **UPS and SNMP**: NUT UPS units and SNMP network devices
-- **Cluster tiles**: up to 12 KPIs (service, VM/CT, SNMP device, UPS, or Speedtest) on the Cluster screen
-- **Time and weather**: timezone and city; separate visibility on the dashboard and in monitor mode
-- **Speedtest**: scheduled runs via the Ookla CLI (see [Environment variables](#environment-variables))
-- **Backup jobs**: execution status in monitor mode
-- **Host metrics**: CPU temperature and link speed via the [Node.js agent](./docs/proxmox_agent_manual.md); cluster discovery; install or remove the agent over SSH from the UI
-- **Monitor mode**: fullscreen screens, order, swipe and arrow navigation; light theme by default
-- **Telegram**: bot token; optional proxy for `api.telegram.org`; rules by event type; custom message templates with placeholders
-- **First run**: setup wizard or full JSON import (same format as Settings → export)
-- **Settings**: password, session TTL, import/export, SQLite storage
+- **Tiles**: Cluster screen and **Tiles** view — KPIs, metric charts, embeds, and integrations (TrueNAS, smart home, speed tests, and more)
+- **Smart home**: sensors and alerts
+- **Time and weather** on the dashboard and in monitor mode
+- **Network throughput**: external Speedtest and LAN tests (iperf3)
+- **Backup jobs**: status in monitor mode
+- **Host metrics**: [Node.js agent](./docs/proxmox_agent_manual.md) for nodes; install over SSH from the UI
+- **Monitor mode**: fullscreen screens, order, navigation, light and dark themes
+- **Telegram**: rule-based notifications
+- **First run**: setup wizard or JSON import
+- **Settings**: password, session TTL, import/export, SQLite storage; multiple Proxmox and TrueNAS connections
 - **Display**: refresh interval, custom CSS, style presets, CPU/RAM gauge thresholds
-- **Diagnostics**: debug panel, About (markdown), GitHub release check
+- **Diagnostics**: debug panel, About, GitHub release check
 - **Localization**: multiple languages
-- **HTTPS**: optional TLS (`certs/` or `SSL_*`); `TRUST_PROXY` behind a reverse proxy ([Environment variables](#environment-variables))
+- **HTTPS** and reverse-proxy support ([Environment variables](#environment-variables))
 
 ## UI Mockup
 
