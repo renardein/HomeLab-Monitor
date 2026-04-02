@@ -5,6 +5,7 @@ const { randomUUID, constants: cryptoConstants } = require('crypto');
 const { log } = require('../utils');
 const store = require('../settings-store');
 const cache = require('../cache');
+const smartSensorMetricSamples = require('../smart-sensor-metric-samples');
 
 const router = express.Router();
 
@@ -522,6 +523,12 @@ async function fetchSmartSensorsCurrent() {
         }
     }
 
+    try {
+        smartSensorMetricSamples.recordSmartSensorSamplesFromItems(items, nowIso);
+    } catch (e) {
+        log('warn', `[SmartSensors] record metric samples: ${e.message}`);
+    }
+
     return {
         configured: true,
         ble: bleCapabilities(),
@@ -576,6 +583,35 @@ router.get('/current', async (req, res) => {
     } catch (e) {
         log('error', `[SmartSensors] GET /current: ${e.message}`);
         res.status(500).json({ configured: false, error: e.message, updatedAt: new Date().toISOString() });
+    }
+});
+
+/** История числового поля датчика для графиков Tiles (до 24 ч). */
+router.get('/metric-history', (req, res) => {
+    try {
+        const sensorId = String(req.query.sensorId || req.query.sensor_id || '').trim();
+        const fieldRaw = req.query.field != null ? String(req.query.field) : '';
+        const fieldKey = (() => {
+            try {
+                return decodeURIComponent(fieldRaw.trim());
+            } catch {
+                return fieldRaw.trim();
+            }
+        })();
+        if (!sensorId || !fieldKey) {
+            return res.status(400).json({ success: false, error: 'sensorId and field required' });
+        }
+        const { points } = smartSensorMetricSamples.getSmartSensorMetricHistory(sensorId, fieldKey);
+        res.json({
+            success: true,
+            sensorId,
+            field: fieldKey,
+            retentionHours: smartSensorMetricSamples.SMART_SENSOR_METRIC_RETENTION_HOURS,
+            points
+        });
+    } catch (e) {
+        log('error', `[SmartSensors] GET /metric-history: ${e.message}`);
+        res.status(500).json({ success: false, error: e.message });
     }
 });
 

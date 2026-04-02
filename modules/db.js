@@ -146,6 +146,20 @@ function initSchema(database) {
     database.run(`CREATE INDEX IF NOT EXISTS idx_ups_metric_conn_metric_time ON ups_metric_samples (ups_slot, metric_id, recorded_at)`);
     database.run(`CREATE INDEX IF NOT EXISTS idx_ups_metric_time ON ups_metric_samples (recorded_at)`);
 
+    database.run(`
+        CREATE TABLE IF NOT EXISTS smart_sensor_metric_samples (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sensor_id TEXT NOT NULL,
+            field_key TEXT NOT NULL,
+            recorded_at TEXT NOT NULL,
+            value REAL NOT NULL
+        )
+    `);
+    database.run(
+        `CREATE INDEX IF NOT EXISTS idx_smart_sensor_metric_sf_time ON smart_sensor_metric_samples (sensor_id, field_key, recorded_at)`
+    );
+    database.run(`CREATE INDEX IF NOT EXISTS idx_smart_sensor_metric_time ON smart_sensor_metric_samples (recorded_at)`);
+
     const iconMigrated = migrateIconStylesFromAppSettings(database);
     const hostMetricMigrated = migrateHostCpuTempToNodeMetrics(database);
     return iconMigrated || hostMetricMigrated;

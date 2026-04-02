@@ -132,7 +132,9 @@ const SETTING_KEYS = [
     'dashboard_show_weather',
     'monitor_show_time',
     'monitor_show_weather',
-    'monitor_tiles_chart_axis_labels',
+    'monitor_tiles_chart_axis_time',
+    'monitor_tiles_chart_axis_values',
+    'monitor_tiles_chart_axis_y_unit',
     // Speedtest (Ookla CLI)
     'speedtest_enabled',
     'speedtest_engine',
@@ -233,7 +235,9 @@ router.get('/', (req, res) => {
                     key === 'dashboard_show_weather' ||
                     key === 'monitor_show_time' ||
                     key === 'monitor_show_weather' ||
-                    key === 'monitor_tiles_chart_axis_labels'
+                    key === 'monitor_tiles_chart_axis_time' ||
+                    key === 'monitor_tiles_chart_axis_values' ||
+                    key === 'monitor_tiles_chart_axis_y_unit'
                 ) {
                     payload[key] = !(value === '0' || value === 'false' || value === false);
                 } else if (key === 'classic_design') {
@@ -253,7 +257,29 @@ router.get('/', (req, res) => {
         if (payload.telegram_notify_interval_sec == null || !Number.isFinite(parseInt(payload.telegram_notify_interval_sec, 10))) {
             payload.telegram_notify_interval_sec = 60;
         }
-        for (const k of ['dashboard_show_time', 'dashboard_show_weather', 'monitor_show_time', 'monitor_show_weather', 'monitor_disable_chrome_gestures', 'monitor_tiles_chart_axis_labels']) {
+        const hasNewTileAxis = ['monitor_tiles_chart_axis_time', 'monitor_tiles_chart_axis_values', 'monitor_tiles_chart_axis_y_unit'].some((k) => {
+            const v = store.getSetting(k);
+            return v !== null && v !== undefined && v !== '';
+        });
+        if (!hasNewTileAxis) {
+            const legacyRaw = store.getSetting('monitor_tiles_chart_axis_labels');
+            if (legacyRaw !== null && legacyRaw !== undefined && legacyRaw !== '') {
+                const on = !(legacyRaw === '0' || legacyRaw === 'false' || legacyRaw === false);
+                if (payload.monitor_tiles_chart_axis_time === undefined) payload.monitor_tiles_chart_axis_time = on;
+                if (payload.monitor_tiles_chart_axis_values === undefined) payload.monitor_tiles_chart_axis_values = on;
+                if (payload.monitor_tiles_chart_axis_y_unit === undefined) payload.monitor_tiles_chart_axis_y_unit = on;
+            }
+        }
+        for (const k of [
+            'dashboard_show_time',
+            'dashboard_show_weather',
+            'monitor_show_time',
+            'monitor_show_weather',
+            'monitor_disable_chrome_gestures',
+            'monitor_tiles_chart_axis_time',
+            'monitor_tiles_chart_axis_values',
+            'monitor_tiles_chart_axis_y_unit'
+        ]) {
             if (payload[k] === undefined) payload[k] = true;
             else payload[k] = !(payload[k] === false || payload[k] === '0' || payload[k] === 0 || payload[k] === 'false');
         }
@@ -368,8 +394,18 @@ router.post('/', (req, res) => {
                 if (v === undefined) return undefined;
                 return v === true || v === '1' || v === 1 || v === 'true' ? '1' : '0';
             })(),
-            monitor_tiles_chart_axis_labels: (() => {
-                const v = body.monitor_tiles_chart_axis_labels ?? body.monitorTilesChartAxisLabels;
+            monitor_tiles_chart_axis_time: (() => {
+                const v = body.monitor_tiles_chart_axis_time ?? body.monitorTilesChartAxisTime;
+                if (v === undefined) return undefined;
+                return v === true || v === '1' || v === 1 || v === 'true' ? '1' : '0';
+            })(),
+            monitor_tiles_chart_axis_values: (() => {
+                const v = body.monitor_tiles_chart_axis_values ?? body.monitorTilesChartAxisValues;
+                if (v === undefined) return undefined;
+                return v === true || v === '1' || v === 1 || v === 'true' ? '1' : '0';
+            })(),
+            monitor_tiles_chart_axis_y_unit: (() => {
+                const v = body.monitor_tiles_chart_axis_y_unit ?? body.monitorTilesChartAxisYUnit;
                 if (v === undefined) return undefined;
                 return v === true || v === '1' || v === 1 || v === 'true' ? '1' : '0';
             })(),

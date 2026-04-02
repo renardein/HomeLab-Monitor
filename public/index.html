@@ -516,10 +516,18 @@
                                 <div class="settings-section">
                                     <h5 class="mb-3 settings-display-tab-title"><i class="bi bi-grid-3x2-gap me-2"></i><span id="settingsClusterTilesTitle">Плитки экрана Cluster</span></h5>
                                     <p class="text-muted small mb-2" id="settingsClusterTilesHint">Соберите до 12 плиток для экрана Cluster из VM/CT, сервисов, SNMP, UPS, Speedtest и iperf3. На экране они листаются горизонтально.</p>
+                                    <p class="text-muted small mb-2" id="settingsMonitorTilesChartAxisGroupHint">Axis elements on compact metric charts (UPS, cluster, node, smart home).</p>
+                                    <div class="form-check form-switch mb-2">
+                                        <input class="form-check-input" type="checkbox" id="settingsMonitorTilesChartAxisTimeCheckbox" checked onchange="onMonitorTilesChartAxisOptionsChange()">
+                                        <label class="form-check-label" for="settingsMonitorTilesChartAxisTimeCheckbox" id="settingsMonitorTilesChartAxisTimeLabel">Time (X axis)</label>
+                                    </div>
+                                    <div class="form-check form-switch mb-2">
+                                        <input class="form-check-input" type="checkbox" id="settingsMonitorTilesChartAxisValuesCheckbox" checked onchange="onMonitorTilesChartAxisOptionsChange()">
+                                        <label class="form-check-label" for="settingsMonitorTilesChartAxisValuesCheckbox" id="settingsMonitorTilesChartAxisValuesLabel">Scale numbers (Y)</label>
+                                    </div>
                                     <div class="form-check form-switch mb-3">
-                                        <input class="form-check-input" type="checkbox" id="settingsMonitorTilesChartAxisLabelsCheckbox" checked onchange="onMonitorTilesChartAxisLabelsChange()">
-                                        <label class="form-check-label" for="settingsMonitorTilesChartAxisLabelsCheckbox" id="settingsMonitorTilesChartAxisLabelsLabel">Axis labels on Tiles charts</label>
-                                        <div class="form-text" id="settingsMonitorTilesChartAxisLabelsHint">When off, time and value labels are hidden on metric chart tiles.</div>
+                                        <input class="form-check-input" type="checkbox" id="settingsMonitorTilesChartAxisYUnitCheckbox" checked onchange="onMonitorTilesChartAxisOptionsChange()">
+                                        <label class="form-check-label" for="settingsMonitorTilesChartAxisYUnitCheckbox" id="settingsMonitorTilesChartAxisYUnitLabel">Unit title (Y axis)</label>
                                     </div>
                                     <div id="settingsClusterTilesList"></div>
                                     <div class="d-flex gap-2 flex-wrap mt-3">
