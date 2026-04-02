@@ -258,6 +258,12 @@ let hostNodeMetricCharts = { temp: null, cpu: null, mem: null };
 let clusterAggregateMetricCharts = { cpu: null, mem: null };
 let clusterAggregateChartsAutoRefreshTimer = null;
 let clusterAggregateChartsAutoRefreshBusy = false;
+let upsMetricsChart = null;
+let upsMetricsModalAutoRefreshTimer = null;
+let upsMetricsModalAutoRefreshBusy = false;
+let upsMetricsModalSlot = null;
+let upsMetricsModalMetricId = null;
+let upsMetricsModalMetricFormat = null;
 let lastTrueNASOverviewData = null;
 let hostMetricsSettings = { pollIntervalSec: 10, timeoutMs: 3000, cacheTtlSec: 8, criticalTempC: 85, criticalLinkSpeedMbps: 1000 };
 let hostMetricsConfigs = {}; // connectionId -> { nodes: { [node]: { enabled, agentPort, agentPath, cpuTempSensor, linkInterface } } }
@@ -3334,6 +3340,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     initHostMetricsAgentInstallModal();
     initHostNodeMetricChartsOnce();
     initClusterAggregateChartsOnce();
+    initUpsAllMetricsModalOnce();
     bindTelegramRuleMessageModalOnce();
     const debugNav = document.getElementById('settings-nav-debug');
     if (debugNav) {
@@ -8428,6 +8435,272 @@ function initClusterAggregateChartsOnce() {
     syncClusterResourcesCardInteractivity();
 }
 
+function destroyUpsMetricsModalChart() {
+    if (upsMetricsChart) {
+        try { upsMetricsChart.destroy(); } catch (_) {}
+        upsMetricsChart = null;
+    }
+}
+
+function stopUpsMetricsModalAutoRefresh() {
+    if (upsMetricsModalAutoRefreshTimer) {
+        clearInterval(upsMetricsModalAutoRefreshTimer);
+        upsMetricsModalAutoRefreshTimer = null;
+    }
+}
+
+function upsMetricYUnitFromFormat(metricFormat) {
+    const mf = String(metricFormat || '').trim().toLowerCase();
+    if (mf === 'percent') return '%';
+    if (mf === 'voltage') return 'V';
+    if (mf === 'watt') return 'W';
+    if (mf === 'frequency') return 'Hz';
+    if (mf === 'time') return 'h';
+    return '';
+}
+
+function upsMetricColorFromFormat(metricFormat) {
+    const mf = String(metricFormat || '').trim().toLowerCase();
+    if (mf === 'percent') return '13, 110, 253';
+    if (mf === 'voltage') return '0, 123, 255';
+    if (mf === 'watt') return '255, 193, 7';
+    if (mf === 'frequency') return '108, 117, 125';
+    if (mf === 'time') return '126, 87, 194';
+    return '13, 110, 253';
+}
+
+function setUpsMetricsChartLoading() {
+    const emptyEl = document.getElementById('upsMetricsChartEmpty');
+    const wrapEl = document.getElementById('upsMetricsChartWrap');
+    if (emptyEl) {
+        emptyEl.textContent = t('hostNodeCpuTempChartLoading') || 'Loading…';
+        emptyEl.classList.remove('d-none');
+    }
+    if (wrapEl) wrapEl.classList.add('d-none');
+    const globalErr = document.getElementById('upsAllMetricsGlobalError');
+    if (globalErr) globalErr.classList.add('d-none');
+}
+
+async function refreshUpsMetricsModalChart({ showLoading = false } = {}) {
+    if (upsMetricsModalAutoRefreshBusy) return false;
+    if (!upsMetricsModalSlot || !upsMetricsModalMetricId) return false;
+
+    const emptyEl = document.getElementById('upsMetricsChartEmpty');
+    const wrapEl = document.getElementById('upsMetricsChartWrap');
+    const canvas = document.getElementById('upsMetricsChartCanvas');
+    const globalErr = document.getElementById('upsAllMetricsGlobalError');
+
+    if (!canvas) return false;
+
+    if (showLoading) setUpsMetricsChartLoading();
+
+    upsMetricsModalAutoRefreshBusy = true;
+    try {
+        const headers = {}; // UPS endpoints don't require auth middleware
+        const url = `/api/ups/metric-history?slot=${encodeURIComponent(upsMetricsModalSlot)}&metric=${encodeURIComponent(upsMetricsModalMetricId)}`;
+        const r = await fetch(url, { headers });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(data?.error || `HTTP ${r.status}`);
+
+        const points = parseMetricHistoryPoints(data.points);
+        upsMetricsModalMetricFormat = data.metricFormat || upsMetricsModalMetricFormat || null;
+
+        if (!Array.isArray(points) || !points.length) {
+            if (globalErr) globalErr.classList.add('d-none');
+            if (emptyEl) {
+                emptyEl.textContent = t('upsAllMetricsChartEmpty') || 'No samples in the last 24 hours yet.';
+                emptyEl.classList.remove('d-none');
+            }
+            if (wrapEl) wrapEl.classList.add('d-none');
+            destroyUpsMetricsModalChart();
+            return true;
+        }
+
+        if (emptyEl) emptyEl.classList.add('d-none');
+        if (wrapEl) wrapEl.classList.remove('d-none');
+
+        // Convert chart value for runtime:
+        const metricFormat = upsMetricsModalMetricFormat;
+        const conv = metricFormat === 'time';
+        const yUnit = upsMetricYUnitFromFormat(metricFormat);
+        const lineRgb = upsMetricColorFromFormat(metricFormat);
+        const series = conv
+            ? points.map((p) => ({ t: p.t, v: p.v / 3600 })) // seconds -> hours
+            : points;
+
+        const selectEl = document.getElementById('upsMetricsMetricSelect');
+        const dsLabel =
+            selectEl && selectEl.selectedIndex >= 0 && selectEl.options[selectEl.selectedIndex]
+                ? selectEl.options[selectEl.selectedIndex].textContent
+                : upsMetricsModalMetricId;
+
+        destroyUpsMetricsModalChart();
+        upsMetricsChart = renderHostNodeMetricLineChart(canvas, series, dsLabel, lineRgb, yUnit);
+        requestAnimationFrame(() => {
+            try { upsMetricsChart?.resize(); } catch (_) {}
+        });
+        return true;
+    } catch (e) {
+        const msg = (e && e.message) ? e.message : String(e);
+        if (globalErr) {
+            globalErr.textContent = (t('hostNodeCpuTempChartLoadError') || '{msg}').replace('{msg}', msg);
+            globalErr.classList.remove('d-none');
+        }
+        if (emptyEl) emptyEl.classList.add('d-none');
+        if (wrapEl) wrapEl.classList.add('d-none');
+        destroyUpsMetricsModalChart();
+        return false;
+    } finally {
+        upsMetricsModalAutoRefreshBusy = false;
+    }
+}
+
+function startUpsMetricsModalAutoRefresh(modalEl) {
+    stopUpsMetricsModalAutoRefresh();
+    if (!modalEl) return;
+    const intervalMs = Math.max(5000, refreshIntervalMs || 30000);
+    upsMetricsModalAutoRefreshTimer = setInterval(() => {
+        if (!modalEl.classList.contains('show')) {
+            stopUpsMetricsModalAutoRefresh();
+            return;
+        }
+        void refreshUpsMetricsModalChart({ showLoading: false });
+    }, intervalMs);
+}
+
+async function openUpsAllMetricsModal(upsSlot) {
+    if (typeof Chart === 'undefined') {
+        showToast(t('hostNodeCpuTempChartNoLib') || 'Chart library failed to load', 'warning');
+        return;
+    }
+    if (typeof bootstrap === 'undefined' || !bootstrap.Modal) return;
+    const modalEl = document.getElementById('upsAllMetricsModal');
+    if (!modalEl) return;
+
+    const slot = Number.parseInt(String(upsSlot), 10);
+    if (!Number.isFinite(slot) || slot < 1 || slot > 4) return;
+
+    upsMetricsModalSlot = slot;
+    upsMetricsModalMetricId = null;
+    upsMetricsModalMetricFormat = null;
+
+    destroyUpsMetricsModalChart();
+    stopUpsMetricsModalAutoRefresh();
+
+    const titleEl = document.getElementById('upsAllMetricsModalTitleText');
+    const subtitleEl = document.getElementById('upsAllMetricsModalSubtitle');
+    const metricLabelEl = document.getElementById('upsMetricsMetricSelectLabel');
+    const globalErr = document.getElementById('upsAllMetricsGlobalError');
+    if (titleEl) titleEl.textContent = t('upsAllMetricsModalTitle') || 'UPS metrics';
+    if (subtitleEl) {
+        subtitleEl.textContent = t('upsAllMetricsModalHint') || 'History stored up to 24 hours.';
+    }
+    if (metricLabelEl) {
+        metricLabelEl.textContent = t('upsAllMetricsMetricSelectLabel') || 'Metric';
+    }
+    if (globalErr) {
+        globalErr.textContent = '';
+        globalErr.classList.add('d-none');
+    }
+
+    const selectEl = document.getElementById('upsMetricsMetricSelect');
+    if (!selectEl) return;
+    selectEl.innerHTML = '';
+
+    setUpsMetricsChartLoading();
+
+    // Load available numeric fields for this UPS slot.
+    let currentData = null;
+    try {
+        const r = await fetch('/api/ups/current');
+        currentData = await r.json();
+        if (!r.ok) throw new Error(currentData?.error || `HTTP ${r.status}`);
+    } catch (e) {
+        const msg = (e && e.message) ? e.message : String(e);
+        if (globalErr) {
+            globalErr.textContent = (t('hostNodeCpuTempChartLoadError') || '{msg}').replace('{msg}', msg);
+            globalErr.classList.remove('d-none');
+        }
+        return;
+    }
+
+    const item = Array.isArray(currentData?.items)
+        ? currentData.items.find((x) => Number.parseInt(String(x.slot), 10) === slot) || null
+        : null;
+    const fields = Array.isArray(item?.fields) ? item.fields : [];
+    const numericFormats = new Set(['percent', 'number', 'voltage', 'watt', 'frequency', 'time']);
+    const numericFields = fields.filter((f) => f && numericFormats.has(String(f.format || '').toLowerCase()) && String(f.id || '').trim());
+
+    if (!numericFields.length) {
+        if (globalErr) {
+            globalErr.textContent = t('upsAllMetricsChartEmpty') || 'No numeric fields configured for this UPS.';
+            globalErr.classList.remove('d-none');
+        }
+        return;
+    }
+
+    // Build metric select
+    for (const f of numericFields) {
+        const metricId = String(f.id || '').trim();
+        const label = String(f.label || '').trim() || upsSemanticOptionLabel(metricId);
+        const opt = document.createElement('option');
+        opt.value = metricId;
+        opt.textContent = label;
+        selectEl.appendChild(opt);
+    }
+
+    const defaultMetric = numericFields.find((f) => String(f.id) === 'charge')
+        || numericFields[0];
+    upsMetricsModalMetricId = String(defaultMetric?.id || '').trim();
+    selectEl.value = upsMetricsModalMetricId;
+
+    selectEl.onchange = () => {
+        upsMetricsModalMetricId = selectEl.value;
+        void refreshUpsMetricsModalChart({ showLoading: true });
+    };
+
+    // Initial chart load, then start auto refresh.
+    const ok = await refreshUpsMetricsModalChart({ showLoading: true });
+    if (!ok) {
+        // still open modal, user will see error/empty
+    }
+
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    modal.show();
+    startUpsMetricsModalAutoRefresh(modalEl);
+}
+
+function initUpsAllMetricsModalOnce() {
+    if (initUpsAllMetricsModalOnce._done) return;
+    initUpsAllMetricsModalOnce._done = true;
+
+    const cardsEl = document.getElementById('upsMonitorCards');
+    if (cardsEl) {
+        cardsEl.addEventListener('click', (e) => {
+            const card = e.target.closest('.ups-metrics-open-trigger');
+            if (!card) return;
+            const slot = card.getAttribute('data-ups-slot');
+            if (slot) void openUpsAllMetricsModal(slot);
+        });
+        cardsEl.addEventListener('keydown', (e) => {
+            if (e.key !== 'Enter' && e.key !== ' ') return;
+            const card = e.target.closest('.ups-metrics-open-trigger');
+            if (!card || !cardsEl.contains(card)) return;
+            e.preventDefault();
+            const slot = card.getAttribute('data-ups-slot');
+            if (slot) void openUpsAllMetricsModal(slot);
+        });
+    }
+
+    const modalEl = document.getElementById('upsAllMetricsModal');
+    if (modalEl) {
+        modalEl.addEventListener('hidden.bs.modal', () => {
+            stopUpsMetricsModalAutoRefresh();
+            destroyUpsMetricsModalChart();
+        });
+    }
+}
+
 function initHostMetricProblemPopovers() {
     if (typeof bootstrap === 'undefined' || !bootstrap || !bootstrap.Popover) return;
     document.querySelectorAll('.host-problem-trigger').forEach((el) => {
@@ -11784,6 +12057,7 @@ function buildUpsCardsHtml(data, options = {}) {
         runtime: t('upsLabelRuntime') || 'Время на батарее'
     };
     const staleLabel = t('hostMetricsStale') || 'Stale data';
+    const upsOpenTitle = t('upsAllMetricsCardOpenTitle') || 'Show UPS metric history';
     const isStale = (iso) => {
         if (!iso) return false;
         const ts = Date.parse(iso);
@@ -11825,10 +12099,15 @@ function buildUpsCardsHtml(data, options = {}) {
         const html = singleUpsVariant === 'card'
             ? `
                 <div class="${upsColClass}">
-                    <div class="node-card ups-node-card h-100">
+                    <div class="node-card ups-node-card h-100 ups-metrics-open-trigger cursor-pointer"
+                        role="button" tabindex="0" data-ups-slot="${escapeHtml(item.slot)}"
+                        title="${escapeHtml(t('upsAllMetricsCardOpenTitle') || 'Show UPS metric history')}">
                         <div class="d-flex justify-content-between align-items-center mb-2 gap-2">
                             <h5 class="mb-0 text-truncate" title="${escapeHtml(name)}">${escapeHtml(name)}</h5>
-                            <span class="badge ${badgeClass}">${escapeHtml(statusLabel)}</span>
+                            <div class="d-flex align-items-center gap-2 flex-shrink-0">
+                                <i class="bi bi-graph-up-arrow ups-metrics-open-hint" aria-hidden="true" title="${escapeHtml(upsOpenTitle)}"></i>
+                                <span class="badge ${badgeClass}">${escapeHtml(statusLabel)}</span>
+                            </div>
                         </div>
                         <div class="row g-2 hm-cluster-metric-panel">
                             ${tilesHtml}
@@ -11839,10 +12118,15 @@ function buildUpsCardsHtml(data, options = {}) {
                 </div>`
             : `
                 <div class="${upsColClass}">
-                    <div class="node-card ups-node-card ups-node-card--single h-100">
+                    <div class="node-card ups-node-card ups-node-card--single h-100 ups-metrics-open-trigger cursor-pointer"
+                        role="button" tabindex="0" data-ups-slot="${escapeHtml(item.slot)}"
+                        title="${escapeHtml(t('upsAllMetricsCardOpenTitle') || 'Show UPS metric history')}">
                         <div class="d-flex justify-content-between align-items-center mb-2 gap-2">
                             <h5 class="mb-0 text-truncate" title="${escapeHtml(name)}">${escapeHtml(name)}</h5>
-                            <span class="badge ${badgeClass}">${escapeHtml(statusLabel)}</span>
+                            <div class="d-flex align-items-center gap-2 flex-shrink-0">
+                                <i class="bi bi-graph-up-arrow ups-metrics-open-hint" aria-hidden="true" title="${escapeHtml(upsOpenTitle)}"></i>
+                                <span class="badge ${badgeClass}">${escapeHtml(statusLabel)}</span>
+                            </div>
                         </div>
                         <div class="row g-2 hm-cluster-metric-panel">
                             ${tilesHtml}
@@ -11876,10 +12160,15 @@ function buildUpsCardsHtml(data, options = {}) {
         if (item.error) {
             return `
                     <div class="${upsColClass}">
-                        <div class="node-card ups-node-card h-100">
+                        <div class="node-card ups-node-card h-100 ups-metrics-open-trigger cursor-pointer"
+                            role="button" tabindex="0" data-ups-slot="${escapeHtml(item.slot)}"
+                            title="${escapeHtml(t('upsAllMetricsCardOpenTitle') || 'Show UPS metric history')}">
                             <div class="d-flex justify-content-between align-items-center mb-2 gap-2">
                                 <h5 class="mb-0 text-truncate" title="${escapeHtml(name)}">${escapeHtml(name)}</h5>
+                            <div class="d-flex align-items-center gap-2 flex-shrink-0">
+                                <i class="bi bi-graph-up-arrow ups-metrics-open-hint" aria-hidden="true" title="${escapeHtml(upsOpenTitle)}"></i>
                                 <span class="badge bg-secondary">${escapeHtml(t('upsError') || 'Ошибка UPS')}</span>
+                            </div>
                             </div>
                             <div class="small text-muted">${escapeHtml(backend)}: ${escapeHtml(item.error)}</div>
                         </div>
@@ -11889,10 +12178,15 @@ function buildUpsCardsHtml(data, options = {}) {
 
         return `
                 <div class="${upsColClass}">
-                    <div class="node-card ups-node-card h-100">
+                    <div class="node-card ups-node-card h-100 ups-metrics-open-trigger cursor-pointer"
+                        role="button" tabindex="0" data-ups-slot="${escapeHtml(item.slot)}"
+                        title="${escapeHtml(t('upsAllMetricsCardOpenTitle') || 'Show UPS metric history')}">
                         <div class="d-flex justify-content-between align-items-center mb-2 gap-2">
                             <h5 class="mb-0 text-truncate" title="${escapeHtml(name)}">${escapeHtml(name)}</h5>
-                            <span class="badge ${badgeClass}">${escapeHtml(statusLabel)}</span>
+                            <div class="d-flex align-items-center gap-2 flex-shrink-0">
+                                <i class="bi bi-graph-up-arrow ups-metrics-open-hint" aria-hidden="true" title="${escapeHtml(upsOpenTitle)}"></i>
+                                <span class="badge ${badgeClass}">${escapeHtml(statusLabel)}</span>
+                            </div>
                         </div>
                         <div class="row g-2 hm-cluster-metric-panel">
                             ${tilesHtml}

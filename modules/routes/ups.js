@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const { log } = require('../utils');
 const store = require('../settings-store');
 const cache = require('../cache');
+const upsMetricSamples = require('../ups-metric-samples');
 
 const router = express.Router();
 
@@ -863,6 +864,11 @@ async function fetchUpsCurrentForNotify() {
         const displayName = cfg.name || `UPS ${slot}`;
         if (cfg.type === 'nut') {
             const data = await pollOneNut(cfg);
+            try {
+                upsMetricSamples.recordUpsMetricSamples(slot, data?.fields, nowIso);
+            } catch (e) {
+                log('warn', `[UPS] record metric samples (NUT slot ${slot}): ${e.message}`);
+            }
             if (data.error) {
                 log('warn', `[UPS] Слот ${slot} (${displayName}, NUT): ${data.error}`);
             }
@@ -870,6 +876,11 @@ async function fetchUpsCurrentForNotify() {
         }
         if (cfg.type === 'snmp') {
             const data = await pollOneSnmp(cfg);
+            try {
+                upsMetricSamples.recordUpsMetricSamples(slot, data?.fields, nowIso);
+            } catch (e) {
+                log('warn', `[UPS] record metric samples (SNMP slot ${slot}): ${e.message}`);
+            }
             if (data.error) {
                 log('warn', `[UPS] Слот ${slot} (${displayName}, SNMP): ${data.error}`);
             }
@@ -899,6 +910,33 @@ router.get('/current', async (req, res) => {
     } catch (e) {
         log('error', `[UPS] GET /current: ${e.message}`, e.stack ? { stack: e.stack } : null);
         res.status(500).json({ configured: false, error: e.message, updatedAt: new Date().toISOString() });
+    }
+});
+
+// GET /api/ups/metric-history?slot=1&metric=charge
+router.get('/metric-history', (req, res) => {
+    const slotRaw = req.query.slot;
+    const metric = String(req.query.metric || '').trim();
+    const slot = Number.parseInt(String(slotRaw), 10);
+    if (!Number.isFinite(slot) || slot < 1 || slot > 4) {
+        return res.status(400).json({ success: false, error: 'slot must be 1..4' });
+    }
+    if (!metric) {
+        return res.status(400).json({ success: false, error: 'metric required' });
+    }
+    try {
+        const history = upsMetricSamples.getUpsMetricHistory(slot, metric);
+        res.json({
+            success: true,
+            slot,
+            metric,
+            metricFormat: history.metricFormat,
+            retentionHours: upsMetricSamples.UPS_METRIC_RETENTION_HOURS,
+            points: history.points
+        });
+    } catch (e) {
+        log('error', `[UPS] GET /metric-history: ${e.message}`);
+        res.status(500).json({ success: false, error: e.message });
     }
 });
 

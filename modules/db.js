@@ -133,6 +133,19 @@ function initSchema(database) {
     );
     database.run(`CREATE INDEX IF NOT EXISTS idx_cluster_agg_time ON cluster_aggregate_samples (recorded_at)`);
 
+    database.run(`
+        CREATE TABLE IF NOT EXISTS ups_metric_samples (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ups_slot INTEGER NOT NULL,
+            recorded_at TEXT NOT NULL,
+            metric_id TEXT NOT NULL,
+            metric_format TEXT NOT NULL,
+            metric_value REAL NOT NULL
+        )
+    `);
+    database.run(`CREATE INDEX IF NOT EXISTS idx_ups_metric_conn_metric_time ON ups_metric_samples (ups_slot, metric_id, recorded_at)`);
+    database.run(`CREATE INDEX IF NOT EXISTS idx_ups_metric_time ON ups_metric_samples (recorded_at)`);
+
     const iconMigrated = migrateIconStylesFromAppSettings(database);
     const hostMetricMigrated = migrateHostCpuTempToNodeMetrics(database);
     return iconMigrated || hostMetricMigrated;

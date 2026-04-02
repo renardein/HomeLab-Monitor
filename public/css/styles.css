@@ -635,6 +635,19 @@
             color: var(--hm-monitor-blue) !important;
         }
 
+        .ups-metrics-open-hint {
+            opacity: 0.75;
+            pointer-events: none;
+        }
+        .ups-metrics-open-trigger:hover .ups-metrics-open-hint {
+            opacity: 1;
+            color: var(--hm-monitor-blue) !important;
+        }
+        body.dark-mode .ups-metrics-open-trigger:hover .ups-metrics-open-hint,
+        body.monitor-mode.monitor-theme-dark .ups-metrics-open-trigger:hover .ups-metrics-open-hint {
+            color: var(--hm-monitor-blue) !important;
+        }
+
         /* Сетку VM/CT сделать визуально более “явной”, чем стандартные node-card */
         body:not(.monitor-mode) #vmsMonitorSection #vmsMonitorCards .node-card {
             border: 1px solid rgba(102, 126, 234, 0.25);
@@ -1186,6 +1199,12 @@
         }
         body.dark-mode #clusterAggregateMetricsModal .alert.alert-light,
         body.monitor-mode.monitor-theme-dark #clusterAggregateMetricsModal .alert.alert-light {
+            background: var(--hm-monitor-raised) !important;
+            color: #e0e0e0 !important;
+            border-color: var(--hm-monitor-border) !important;
+        }
+        body.dark-mode #upsAllMetricsModal .alert.alert-light,
+        body.monitor-mode.monitor-theme-dark #upsAllMetricsModal .alert.alert-light {
             background: var(--hm-monitor-raised) !important;
             color: #e0e0e0 !important;
             border-color: var(--hm-monitor-border) !important;
@@ -2567,6 +2586,19 @@
         .ups-node-card--single {
             width: 100%;
             height: 100%;
+        }
+
+        .ups-metrics-open-hint {
+            opacity: 0.75;
+            pointer-events: none;
+        }
+        .ups-metrics-open-trigger:hover .ups-metrics-open-hint {
+            opacity: 1;
+            color: var(--hm-monitor-blue) !important;
+        }
+        body.dark-mode .ups-metrics-open-trigger:hover .ups-metrics-open-hint,
+        body.monitor-mode.monitor-theme-dark .ups-metrics-open-trigger:hover .ups-metrics-open-hint {
+            color: var(--hm-monitor-blue) !important;
         }
 
         /* Режим монитора: один экран без скролла, под 1920×1200 */
