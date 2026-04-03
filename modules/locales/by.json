@@ -93,6 +93,8 @@
     "monitorDrawDisableSwipes": "Без свайпаў",
     "settingsMonitorScreensOrderTitle": "Парадак экранаў манітора",
     "settingsMonitorScreensOrderHint": "Парадак пры перагортанні. Бэкапы толькі для Proxmox. Захоўваецца ў базе.",
+    "settingsMonitorDefaultScreenLabel": "Экран па змаўчанні",
+    "settingsMonitorDefaultScreenHint": "Пры ўваходзе ў рэжым манітора або пры першым адкрыцці, калі ўкладка не памятае апошні экран. Кнопка «дом» як раней адкрывае HomeLab.",
     "monitorBackupBackText": "Да кластара",
     "backToDashboardText": "Да дашборду",
     "clusterResources": "Рэсурсы кластара",

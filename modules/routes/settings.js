@@ -96,6 +96,12 @@ function computeSetupCompleted(st) {
     return false;
 }
 
+/** Допустимые id экранов для monitor_default_screen (как на клиенте). */
+const MONITOR_DEFAULT_SCREEN_IDS = [
+    'cluster', 'tiles', 'truenasPools', 'truenasDisks', 'truenasServices', 'truenasApps',
+    'ups', 'netdev', 'speedtest', 'iperf3', 'smartSensors', 'vms', 'services', 'backupRuns', 'draw'
+];
+
 const SETTING_KEYS = [
     'theme', 'refresh_interval', 'units', 'thresholds',
     'ui_design', 'classic_design',
@@ -123,6 +129,7 @@ const SETTING_KEYS = [
     'monitor_hidden_vm_ids',
     'monitor_screens_order',
     'monitor_screens_enabled',
+    'monitor_default_screen',
     'monitor_hotkeys',
     'cluster_dashboard_tiles',
     'dashboard_weather_city',
@@ -359,6 +366,13 @@ router.post('/', (req, res) => {
             monitor_vm_icon_colors: body.monitor_vm_icon_colors ?? body.monitorVmIconColors,
             monitor_screens_order: body.monitor_screens_order ?? body.monitorScreensOrder,
             monitor_screens_enabled: body.monitor_screens_enabled ?? body.monitorScreensEnabled,
+            monitor_default_screen: (() => {
+                const v = body.monitor_default_screen ?? body.monitorDefaultScreen;
+                if (v === undefined) return undefined;
+                const s = String(v || '').trim();
+                if (!s || s === 'cluster') return 'cluster';
+                return MONITOR_DEFAULT_SCREEN_IDS.includes(s) ? s : 'cluster';
+            })(),
             monitor_hotkeys: body.monitor_hotkeys ?? body.monitorHotkeys,
             cluster_dashboard_tiles: (() => {
                 const v = body.cluster_dashboard_tiles ?? body.clusterDashboardTiles;

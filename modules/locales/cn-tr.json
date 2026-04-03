@@ -93,6 +93,8 @@
     "monitorDrawDisableSwipes": "禁止滑动切屏",
     "settingsMonitorScreensOrderTitle": "监控画面顺序",
     "settingsMonitorScreensOrderHint": "滑动与工具栏箭头的顺序。备份页仅 Proxmox。更改后写入数据库。",
+    "settingsMonitorDefaultScreenLabel": "默认监控画面",
+    "settingsMonitorDefaultScreenHint": "进入监控模式或首次打开（若标签页未记住上次画面）时显示。主页按钮仍打开 HomeLab。",
     "monitorBackupBackText": "返回集群",
     "backToDashboardText": "返回仪表板",
     "clusterResources": "集群资源",

@@ -507,6 +507,11 @@
                             <div class="tab-pane fade settings-display-subtab" id="settings-tab-display-monitor-screens" role="tabpanel">
                                 <div class="settings-section">
                                     <h5 class="mb-3 settings-display-tab-title"><i class="bi bi-layout-three-columns me-2"></i><span id="settingsMonitorScreensOrderTitle">Порядок экранов монитора</span></h5>
+                                    <div class="mb-3 p-3 rounded border bg-body-secondary bg-opacity-25">
+                                        <label class="form-label fw-bold mb-1" for="settingsMonitorDefaultScreenSelect" id="settingsMonitorDefaultScreenLabel">Экран по умолчанию</label>
+                                        <select class="form-select" id="settingsMonitorDefaultScreenSelect" onchange="onSettingsMonitorDefaultScreenChange()"></select>
+                                        <div class="form-text mt-2 mb-0" id="settingsMonitorDefaultScreenHint">При входе в режим монитора или первом открытии, если для вкладки нет запомненного экрана. Кнопка «домой» по-прежнему открывает HomeLab.</div>
+                                    </div>
                                     <p class="text-muted small mb-2" id="settingsMonitorScreensOrderHint">Порядок при перелистывании (свайп, стрелки на панели). Экран бэкапов доступен только при подключении к Proxmox.</p>
                                     <ul class="list-group list-group-flush border rounded overflow-hidden" id="settingsMonitorScreensOrderList"></ul>
                                 </div>

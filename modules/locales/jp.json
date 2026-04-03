@@ -93,6 +93,8 @@
     "monitorDrawDisableSwipes": "スワイプを無効化",
     "settingsMonitorScreensOrderTitle": "モニター画面の順序",
     "settingsMonitorScreensOrderHint": "スワイプ・矢印の順序。バックアップはProxmoxのみ。変更時にDBへ保存。",
+    "settingsMonitorDefaultScreenLabel": "既定のモニター画面",
+    "settingsMonitorDefaultScreenHint": "モニターモード開始時、またはタブに記憶がない初回表示時に使います。ホームボタンは従来どおり HomeLab を開きます。",
     "monitorBackupBackText": "クラスターへ",
     "backToDashboardText": "ダッシュボードに戻る",
     "clusterResources": "クラスタリソース",

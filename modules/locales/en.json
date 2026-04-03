@@ -93,6 +93,8 @@
     "monitorDrawDisableSwipes": "Block swipes",
     "settingsMonitorScreensOrderTitle": "Monitor screen order",
     "settingsMonitorScreensOrderHint": "Order when swiping or using toolbar arrows. Backups screen is Proxmox only. Saved to database when you change it.",
+    "settingsMonitorDefaultScreenLabel": "Default monitor screen",
+    "settingsMonitorDefaultScreenHint": "Shown when entering monitor mode or on first open if this browser tab has no remembered screen. The home button still opens HomeLab (cluster).",
     "monitorBackupBackText": "Back to Homelab",
     "backToDashboardText": "Back to dashboard",
     "clusterResources": "Cluster resources",

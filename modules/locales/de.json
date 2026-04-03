@@ -93,6 +93,8 @@
     "monitorDrawDisableSwipes": "Wischen sperren",
     "settingsMonitorScreensOrderTitle": "Reihenfolge der Monitor-Bildschirme",
     "settingsMonitorScreensOrderHint": "Reihenfolge beim Wischen und mit den Pfeilen. Backups nur für Proxmox. Wird bei Änderung in der DB gespeichert.",
+    "settingsMonitorDefaultScreenLabel": "Standard-Monitorbildschirm",
+    "settingsMonitorDefaultScreenHint": "Beim Aktivieren des Monitor-Modus oder beim ersten Öffnen, wenn kein Bildschirm im Tab gespeichert ist. Die Home-Taste öffnet weiterhin HomeLab.",
     "monitorBackupBackText": "Zum Cluster",
     "backToDashboardText": "Zurück zum Dashboard",
     "clusterResources": "Cluster-Ressourcen",

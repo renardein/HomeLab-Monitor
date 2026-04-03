@@ -93,6 +93,8 @@
     "monitorDrawDisableSwipes": "Désactiver les gestes",
     "settingsMonitorScreensOrderTitle": "Ordre des écrans du moniteur",
     "settingsMonitorScreensOrderHint": "Ordre lors du balayage et des flèches. Sauvegardes uniquement pour Proxmox. Enregistré en base à chaque modification.",
+    "settingsMonitorDefaultScreenLabel": "Écran moniteur par défaut",
+    "settingsMonitorDefaultScreenHint": "Affiché à l’entrée en mode moniteur ou à la première ouverture si l’onglet n’a pas mémorisé d’écran. Le bouton d’accueil ouvre toujours HomeLab.",
     "monitorBackupBackText": "Retour au cluster",
     "backToDashboardText": "Retour au tableau de bord",
     "clusterResources": "Ressources du cluster",

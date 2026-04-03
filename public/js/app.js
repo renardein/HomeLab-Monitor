@@ -1456,6 +1456,7 @@ async function saveSettingsToServer(payload) {
     if (payload.monitorVmIconColors !== undefined) body.monitorVmIconColors = payload.monitorVmIconColors;
     if (payload.monitorScreensOrder !== undefined) body.monitorScreensOrder = payload.monitorScreensOrder;
     if (payload.monitorScreensEnabled !== undefined) body.monitorScreensEnabled = payload.monitorScreensEnabled;
+    if (payload.monitorDefaultScreen !== undefined) body.monitorDefaultScreen = payload.monitorDefaultScreen;
     if (payload.monitorHotkeys !== undefined) body.monitorHotkeys = payload.monitorHotkeys;
     if (payload.clusterDashboardTiles !== undefined) body.clusterDashboardTiles = payload.clusterDashboardTiles;
     if (payload.dashboardWeatherCity !== undefined) body.dashboardWeatherCity = payload.dashboardWeatherCity;
@@ -2643,6 +2644,8 @@ function updateUILanguage() {
         }
         setText('settingsMonitorScreensOrderTitle', t('settingsMonitorScreensOrderTitle'));
         setText('settingsMonitorScreensOrderHint', t('settingsMonitorScreensOrderHint'));
+        setText('settingsMonitorDefaultScreenLabel', t('settingsMonitorDefaultScreenLabel'));
+        setText('settingsMonitorDefaultScreenHint', t('settingsMonitorDefaultScreenHint'));
         renderSettingsMonitorScreensOrderList();
     setText('settingsNavThresholds', t('settingsNavThresholds'));
     setText('settingsNavServices', t('settingsNavServices'));
@@ -12364,7 +12367,6 @@ async function toggleMonitorMode() {
             btn.classList.add('btn-primary');
             btn.innerHTML = '<i class="bi bi-check-lg"></i><span id="monitorModeText">' + t('monitorModeOn') + '</span>';
         }
-        monitorCurrentView = 'cluster';
         applyMonitorTheme();
         initMonitorSwipes();
         initMonitorKeyboardNavigation();
@@ -12372,6 +12374,7 @@ async function toggleMonitorMode() {
         // Определяем доступность ups/netdev/speedtest, чтобы свайп-циклы не включали “пустые/не настроенные” экраны.
         await refreshMonitorScreensAvailability();
 
+        monitorCurrentView = resolveMonitorStartupView();
         applyMonitorView(monitorCurrentView);
         applyMonitorToolbarHiddenState();
     } else {
@@ -12472,6 +12475,8 @@ function applyStoredDashboardHomeTab() {
 
 let monitorScreensOrder = MONITOR_SCREEN_IDS_ALL.slice();
 let monitorScreensEnabled = {};
+/** Стартовый экран монитора (если нет сохранённого в sessionStorage для этой вкладки). */
+let monitorDefaultScreen = 'cluster';
 const monitorScreensManager = window.MonitorScreensModule.createManager({
     screenIds: MONITOR_SCREEN_IDS_ALL,
     t,
@@ -12690,8 +12695,41 @@ function getMonitorViewsOrder() {
     });
 }
 
+function normalizeMonitorDefaultScreenFromServer(raw) {
+    const s = raw != null ? String(raw).trim() : '';
+    if (!s || s === 'cluster') return 'cluster';
+    return MONITOR_SCREEN_IDS_ALL.includes(s) ? s : 'cluster';
+}
+
+/** Стартовый экран: сначала sessionStorage, иначе настройка по умолчанию, иначе первый из доступного цикла. */
+function resolveMonitorStartupView() {
+    const views = getMonitorViewsOrder();
+    const fromSession = readStoredMonitorCurrentView();
+    if (fromSession && views.includes(fromSession)) return fromSession;
+    const def = normalizeMonitorDefaultScreenFromServer(monitorDefaultScreen);
+    if (views.includes(def)) return def;
+    return views[0] || 'cluster';
+}
+
 function monitorScreenSettingsLabel(id) {
     return monitorScreensManager.label(id);
+}
+
+function fillSettingsMonitorDefaultScreenSelect() {
+    const sel = document.getElementById('settingsMonitorDefaultScreenSelect');
+    if (!sel) return;
+    const cur = normalizeMonitorDefaultScreenFromServer(monitorDefaultScreen);
+    sel.innerHTML = MONITOR_SCREEN_IDS_ALL.map((id) =>
+        `<option value="${escapeHtml(id)}">${escapeHtml(monitorScreenSettingsLabel(id))}</option>`
+    ).join('');
+    sel.value = MONITOR_SCREEN_IDS_ALL.includes(cur) ? cur : 'cluster';
+}
+
+function onSettingsMonitorDefaultScreenChange() {
+    const sel = document.getElementById('settingsMonitorDefaultScreenSelect');
+    if (!sel) return;
+    monitorDefaultScreen = normalizeMonitorDefaultScreenFromServer(sel.value);
+    saveSettingsToServer({ monitorDefaultScreen });
 }
 
 function renderSettingsMonitorScreensOrderList() {
@@ -12713,6 +12751,7 @@ function renderSettingsMonitorScreensOrderList() {
     ul.querySelectorAll('.monitor-screen-down-btn').forEach((btn) => {
         btn.addEventListener('click', () => moveMonitorScreenOrder(parseInt(btn.dataset.index, 10), 1));
     });
+    fillSettingsMonitorDefaultScreenSelect();
 }
 
 function toggleMonitorScreenEnabled(id, enabled) {
@@ -15333,6 +15372,7 @@ async function loadSettings() {
         ? normalizeMonitorScreensOrder(data.monitor_screens_order)
         : MONITOR_SCREEN_IDS_ALL.slice();
     monitorScreensEnabled = normalizeMonitorScreensEnabled(data.monitor_screens_enabled);
+    monitorDefaultScreen = normalizeMonitorDefaultScreenFromServer(data.monitor_default_screen);
     speedtestClientEnabled = !!(data.speedtest_enabled === true || data.speedtest_enabled === '1'
         || data.speedtest_enabled === 1 || data.speedtest_enabled === 'true');
     speedtestEngine = String(data.speedtest_engine || '').trim().toLowerCase() === 'librespeed'
@@ -15451,7 +15491,7 @@ async function loadSettings() {
             monitorBtn.innerHTML = '<i class="bi bi-check-lg"></i><span id="monitorModeText">' + t('monitorModeOn') + '</span>';
         }
         if (!wasMonitorActive) {
-            monitorCurrentView = readStoredMonitorCurrentView() || 'cluster';
+            monitorCurrentView = resolveMonitorStartupView();
         }
         applyMonitorView(monitorCurrentView);
         applyMonitorTheme();

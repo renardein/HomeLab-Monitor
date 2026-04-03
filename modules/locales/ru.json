@@ -94,6 +94,8 @@
     "monitorDrawDisableSwipes": "Без свайпов",
     "settingsMonitorScreensOrderTitle": "Порядок экранов монитора",
     "settingsMonitorScreensOrderHint": "Порядок при перелистывании (свайп, стрелки). Экран бэкапов только для Proxmox. Сохраняется в базе при каждом изменении.",
+    "settingsMonitorDefaultScreenLabel": "Экран по умолчанию",
+    "settingsMonitorDefaultScreenHint": "Показывается при входе в режим монитора или при первом открытии, если для вкладки не запомнен последний экран. Кнопка «домой» по-прежнему открывает HomeLab.",
     "monitorBackupBackText": "К Homelab",
     "clusterResources": "Ресурсы кластера",
     "connectButton": "Подключиться",
