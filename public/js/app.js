@@ -119,7 +119,7 @@ const CLUSTER_EMBED_IMAGE_FILE_MAX_BYTES = 16 * 1024 * 1024;
 const CLUSTER_EMBED_IMAGE_DATA_URL_MAX = Math.ceil(CLUSTER_EMBED_IMAGE_FILE_MAX_BYTES * 4 / 3) + 512;
 /** Кэш конфигов для выпадающего списка плиток «датчик» (не только открытый редактор). */
 let smartSensorsConfigsForTiles = [];
-const MAX_CLUSTER_DASHBOARD_TILES = 12;
+const MAX_CLUSTER_DASHBOARD_TILES = 20;
 /** Сетка экрана Tiles: колонки × строки, клетка 1×1. */
 const TILES_MONITOR_GRID_COLS = 12;
 const TILES_MONITOR_GRID_ROWS = 8;
@@ -11156,9 +11156,6 @@ function buildClusterTrueNASPoolTileHtml(tile) {
     const sizeClasses = [
         'truenas-pool-tile',
         gh === 1 ? 'truenas-pool-tile--row1' : '',
-        gw === 1 && gh === 1 ? 'truenas-pool-tile--compact' : '',
-        gw >= 2 ? 'truenas-pool-tile--wide' : '',
-        gh >= 2 ? 'truenas-pool-tile--tall' : '',
         stackVertical ? 'truenas-pool-tile--stack' : ''
     ].filter(Boolean).join(' ');
     return buildClusterDashboardTileShell(

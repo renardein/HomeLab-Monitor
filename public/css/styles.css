@@ -2839,59 +2839,7 @@
             overflow: hidden;
         }
 
-        /* TrueNAS pool tile: typography & layout by grid size (tilesGridW × tilesGridH) */
-        .truenas-pool-tile--compact > .d-flex.mb-2 {
-            margin-bottom: 0.35rem !important;
-        }
-        .truenas-pool-tile--compact > .d-flex.mb-2 h5 {
-            font-size: 0.82rem;
-        }
-        .truenas-pool-tile--compact .ups-node-card__metric-label {
-            font-size: 0.65rem;
-            line-height: 1.2;
-        }
-        .truenas-pool-tile--compact .ups-node-card__metric-value {
-            font-size: 0.8rem;
-            line-height: 1.2;
-        }
-        .truenas-pool-tile--compact .p-2 {
-            padding: 0.35rem 0.4rem !important;
-        }
-        .truenas-pool-tile--compact .progress.hm-progress {
-            margin-top: 0.35rem !important;
-        }
-        .truenas-pool-tile--compact .progress,
-        .truenas-pool-tile--compact .progress-bar {
-            min-height: 0.28rem;
-        }
-
-        .truenas-pool-tile--wide:not(.truenas-pool-tile--compact) .ups-node-card__metric-value {
-            font-size: 1.05rem;
-        }
-        .truenas-pool-tile--wide:not(.truenas-pool-tile--compact) .ups-node-card__metric-label {
-            font-size: 0.78rem;
-        }
-
-        .truenas-pool-tile--tall:not(.truenas-pool-tile--compact) .ups-node-card__metric-value {
-            font-size: 1.15rem;
-        }
-        .truenas-pool-tile--tall:not(.truenas-pool-tile--compact) .ups-node-card__metric-label {
-            font-size: 0.8rem;
-        }
-        .truenas-pool-tile--tall .progress.hm-progress {
-            margin-top: 0.5rem !important;
-        }
-        .truenas-pool-tile--tall .progress,
-        .truenas-pool-tile--tall .progress-bar {
-            min-height: 0.45rem;
-        }
-
-        .truenas-pool-tile--wide.truenas-pool-tile--tall:not(.truenas-pool-tile--compact) .ups-node-card__metric-value {
-            font-size: 1.25rem;
-        }
-        .truenas-pool-tile--wide.truenas-pool-tile--tall:not(.truenas-pool-tile--compact) > .d-flex.mb-2 h5 {
-            font-size: 1.05rem;
-        }
+        /* TrueNAS pool: same metric scale as other KPI tiles (.ups-node-card__metric-*); only layout helpers below */
 
         .truenas-pool-tile--stack .row.g-2 {
             flex-direction: column;
@@ -2903,7 +2851,7 @@
             width: 100%;
         }
 
-        /* Высота сетки = 1 строка: контент часто выше ячейки — ужимаем и даём внутренний скролл */
+        /* Одна строка сетки: при нехватке высоты — скролл, без уменьшения шрифта (как у VM/CT плиток) */
         .tiles-monitor-cell .node-card.truenas-pool-tile--row1 {
             overflow-y: auto;
             overflow-x: hidden;
@@ -2916,41 +2864,6 @@
         }
         .tiles-monitor-cell .truenas-pool-tile--row1 > .small.text-muted.mt-2 {
             display: none;
-        }
-        .tiles-monitor-cell .truenas-pool-tile--row1 > .d-flex.mb-2 {
-            margin-bottom: 0.25rem !important;
-        }
-        .tiles-monitor-cell .truenas-pool-tile--row1 > .d-flex.mb-2 h5 {
-            font-size: 0.78rem;
-        }
-        .tiles-monitor-cell .truenas-pool-tile--row1 .badge {
-            font-size: 0.65rem;
-            padding: 0.15em 0.45em;
-        }
-        .tiles-monitor-cell .truenas-pool-tile--row1 .ups-node-card__metric-label {
-            font-size: 0.62rem;
-            line-height: 1.15;
-        }
-        .tiles-monitor-cell .truenas-pool-tile--row1 .ups-node-card__metric-value {
-            font-size: 0.72rem;
-            line-height: 1.15;
-        }
-        .tiles-monitor-cell .truenas-pool-tile--row1 .p-2 {
-            padding: 0.25rem 0.3rem !important;
-        }
-        .tiles-monitor-cell .truenas-pool-tile--row1 .progress.hm-progress {
-            margin-top: 0.2rem !important;
-        }
-        .tiles-monitor-cell .truenas-pool-tile--row1 .progress,
-        .tiles-monitor-cell .truenas-pool-tile--row1 .progress-bar {
-            min-height: 0.22rem;
-        }
-        /* Широкая, но низкая плитка: не увеличивать шрифт из --wide */
-        .tiles-monitor-cell .truenas-pool-tile--row1.truenas-pool-tile--wide .ups-node-card__metric-value {
-            font-size: 0.75rem;
-        }
-        .tiles-monitor-cell .truenas-pool-tile--row1.truenas-pool-tile--wide .ups-node-card__metric-label {
-            font-size: 0.62rem;
         }
 
         .tiles-embed-tile .tiles-embed-card {
