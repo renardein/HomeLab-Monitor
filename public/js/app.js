@@ -8295,6 +8295,38 @@ function parseMetricHistoryPoints(rawPoints) {
     return out;
 }
 
+/** Только маркеры линии на плитках (подписи осей — размер по умолчанию Chart.js). */
+function getTilesChartPointStyleForSeries(canvas, seriesLength) {
+    if (!canvas || canvas.dataset?.tileCompact !== '1') return null;
+    const cell = canvas.closest('.tiles-monitor-cell');
+    let r = cell ? cell.getBoundingClientRect() : null;
+    if (!r || r.width < 12 || r.height < 12) {
+        r = canvas.getBoundingClientRect();
+    }
+    const w = Math.max(1, r.width || 160);
+    const h = Math.max(1, r.height || 120);
+    const cq = Math.min(w, h);
+    const n = Number(seriesLength) || 0;
+    const pr = n === 1 ? Math.min(4, Math.max(2, Math.round(cq * 0.014))) : 0;
+    const pointHover = Math.round(Math.max(6, Math.min(10, cq * 0.034)));
+    return { pointRadius: pr, pointHover };
+}
+
+/** После resize — обновить только точки линии (оси не трогаем). */
+function applyTilesChartPointStyleToChart(chart, canvas) {
+    if (!chart || !canvas) return;
+    const sizes = getTilesChartPointStyleForSeries(canvas, chart.data?.datasets?.[0]?.data?.length ?? 0);
+    if (!sizes) return;
+    try {
+        const ds0 = chart.data?.datasets?.[0];
+        if (ds0) {
+            ds0.pointRadius = sizes.pointRadius;
+            ds0.pointHoverRadius = sizes.pointHover;
+        }
+        chart.update('none');
+    } catch (_) {}
+}
+
 function renderHostNodeMetricLineChart(canvas, series, dsLabel, lineRgb, yUnit) {
     const locale = currentLanguage === 'ru' ? 'ru-RU' : 'en-US';
     const labels = series.map((p) => new Date(p.t).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
@@ -8305,12 +8337,22 @@ function renderHostNodeMetricLineChart(canvas, series, dsLabel, lineRgb, yUnit) 
     const yTitleText = (yUnit && String(yUnit).trim()) ? String(yUnit).trim() : '';
     const isTileMetricChart = canvas?.dataset?.tileCompact === '1';
     const hideLegend = isTileMetricChart || canvas?.dataset?.upsMetricTile === '1';
+    const tilePoints = isTileMetricChart ? getTilesChartPointStyleForSeries(canvas, dataVals.length) : null;
     const dark = typeof document !== 'undefined' && document.body && (
         document.body.classList.contains('dark-mode') ||
         document.body.classList.contains('monitor-theme-dark')
     );
     const tickColor = dark ? '#c8c8c8' : '#495057';
     const gridColor = dark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)';
+    const xTicks = { color: tickColor, display: showAxisTime };
+    const yTicks = { color: tickColor, display: showAxisValues };
+    const yTitle = {
+        display: !!(showAxisYUnit && yTitleText),
+        text: yTitleText || yUnit,
+        color: tickColor
+    };
+    const pr = tilePoints ? tilePoints.pointRadius : (series.length === 1 ? 6 : 2);
+    const ph = tilePoints ? tilePoints.pointHover : 4;
     return new Chart(canvas.getContext('2d'), {
         type: 'line',
         data: {
@@ -8322,8 +8364,8 @@ function renderHostNodeMetricLineChart(canvas, series, dsLabel, lineRgb, yUnit) 
                 backgroundColor: `rgba(${lineRgb}, 0.12)`,
                 fill: true,
                 tension: 0.2,
-                pointRadius: series.length === 1 ? 6 : 2,
-                pointHoverRadius: 4
+                pointRadius: pr,
+                pointHoverRadius: ph
             }]
         },
         options: {
@@ -8334,13 +8376,13 @@ function renderHostNodeMetricLineChart(canvas, series, dsLabel, lineRgb, yUnit) 
             interaction: { mode: 'index', intersect: false },
             scales: {
                 x: {
-                    ticks: { color: tickColor, display: showAxisTime },
+                    ticks: xTicks,
                     grid: { color: gridColor }
                 },
                 y: {
-                    ticks: { color: tickColor, display: showAxisValues },
+                    ticks: yTicks,
                     grid: { color: gridColor },
-                    title: { display: !!(showAxisYUnit && yTitleText), text: yTitleText || yUnit, color: tickColor }
+                    title: yTitle
                 }
             },
             plugins: {
@@ -10126,6 +10168,23 @@ function buildClusterDashboardMetricCell(label, value, progressPct, barClass, co
     `;
 }
 
+/** Header status: pill on Homelab scroll; colored dot on Tiles (tooltip / aria-label = text). */
+function clusterTileHeaderStatusHtml(badgeClass, labelText) {
+    const raw = labelText == null ? '' : String(labelText);
+    const esc = escapeHtml(raw);
+    if (!tilesMonitorTileFooterSuppressDepth) {
+        return `<span class="badge ${badgeClass}">${esc}</span>`;
+    }
+    const bc = String(badgeClass || '');
+    let tier = 'secondary';
+    if (/\bbg-success\b/.test(bc)) tier = 'success';
+    else if (/\bbg-danger\b/.test(bc)) tier = 'danger';
+    else if (/\bbg-warning\b/.test(bc)) tier = 'warning';
+    else if (/\bbg-info\b/.test(bc)) tier = 'info';
+    else if (/\bbg-primary\b/.test(bc)) tier = 'primary';
+    return `<span class="tiles-header-status-dot tiles-header-status-dot--${tier}" title="${esc}" aria-label="${esc}" role="img"></span>`;
+}
+
 function buildClusterDashboardTileShell(titleHtml, badgeHtml, bodyHtml, footerHtml, nodeCardExtraClass = '') {
     const cardExtra = nodeCardExtraClass ? ` ${nodeCardExtraClass}` : '';
     return `
@@ -10147,7 +10206,7 @@ function buildClusterDashboardTileShell(titleHtml, badgeHtml, bodyHtml, footerHt
 function buildClusterDashboardUnavailableTile(title, message) {
     return buildClusterDashboardTileShell(
         escapeHtml(title),
-        `<span class="badge bg-secondary">${escapeHtml(t('statusDash') || '—')}</span>`,
+        clusterTileHeaderStatusHtml('bg-secondary', t('statusDash') || '—'),
         `<div class="col-12"><small class="text-muted">${escapeHtml(message || (t('backupNoData') || 'Нет данных'))}</small></div>`,
         ''
     );
@@ -10210,9 +10269,10 @@ function buildClusterServiceTileHtml(tile) {
             || (Number.isFinite(numeric) && (Number(svc?.id) === numeric || (idx + 1) === numeric))
         );
         if (!service) return buildClusterDashboardUnavailableTile(t('menuServicesMonitorText') || 'Service', t('servicesNotConfigured') || 'Сервис не найден');
-        const statusBadge = service.running
-            ? `<span class="badge bg-success">${escapeHtml(t('connected'))}</span>`
-            : `<span class="badge bg-warning text-dark">${escapeHtml(t('serverError') || 'Error')}</span>`;
+        const statusBadge = clusterTileHeaderStatusHtml(
+            service.running ? 'bg-success' : 'bg-warning text-dark',
+            service.running ? t('connected') : (t('serverError') || 'Error')
+        );
         const bodyHtml = [
             buildClusterDashboardMetricCell(t('serviceTypeLabel') || 'Type', 'TrueNAS', null, null, 'col-6'),
             buildClusterDashboardMetricCell(t('monVmStatusCol') || 'Status', service.statusLabel || 'unknown', null, null, 'col-6')
@@ -10230,10 +10290,10 @@ function buildClusterServiceTileHtml(tile) {
         return buildClusterDashboardUnavailableTile(t('menuServicesMonitorText') || 'Service', t('servicesNotConfigured') || 'Сервис не найден');
     }
     const statusBadge = service.lastStatus === 'up'
-        ? `<span class="badge bg-success">${escapeHtml(t('connected'))}</span>`
+        ? clusterTileHeaderStatusHtml('bg-success', t('connected'))
         : (service.lastStatus === 'down'
-            ? `<span class="badge bg-danger">${escapeHtml(t('serverError'))}</span>`
-            : `<span class="badge bg-secondary">${escapeHtml(t('notConnected'))}</span>`);
+            ? clusterTileHeaderStatusHtml('bg-danger', t('serverError'))
+            : clusterTileHeaderStatusHtml('bg-secondary', t('notConnected')));
     const target = getServiceTargetDisplay(service);
     const latency = typeof service.lastLatency === 'number' ? `${service.lastLatency} ms` : '—';
     const iconHtml = renderServiceIconHtml(service, 'service-monitor-icon');
@@ -10267,7 +10327,7 @@ function buildClusterVmTileHtml(tile) {
         ].join('');
         return buildClusterDashboardTileShell(
             `<i class="bi bi-boxes me-2 text-primary"></i><span class="text-truncate">${escapeHtml(app.name || 'App')}</span>`,
-            `<span class="badge ${statusClass}">${escapeHtml(statusLabel)}</span>`,
+            clusterTileHeaderStatusHtml(statusClass, statusLabel),
             bodyHtml,
             'TrueNAS Apps'
         );
@@ -10291,7 +10351,7 @@ function buildClusterVmTileHtml(tile) {
     ].join('');
     return buildClusterDashboardTileShell(
         `${iconHtml}<span class="text-truncate">${escapeHtml(vm.name || `VM/CT ${id}`)}</span>`,
-        `<span class="badge ${statusClass}">${escapeHtml(statusLabel)}</span>`,
+        clusterTileHeaderStatusHtml(statusClass, statusLabel),
         bodyHtml,
         escapeHtml(note)
     );
@@ -10316,7 +10376,7 @@ function buildClusterNetdevTileHtml(tile, payload) {
     }).join('');
     return buildClusterDashboardTileShell(
         escapeHtml(item.name || `SNMP ${slot}`),
-        `<span class="badge ${badgeClass}">${escapeHtml(statusLabel)}</span>`,
+        clusterTileHeaderStatusHtml(badgeClass, statusLabel),
         bodyHtml,
         escapeHtml(item.host ? `${t('netdevSnmpPrefix') || 'SNMP'} · ${item.host}` : (t('netdevSnmpPrefix') || 'SNMP'))
     );
@@ -10350,7 +10410,7 @@ function buildClusterSmartSensorMetricChartTileHtml(tile, payload, tileIndex, ta
     const typeLabel = (item.type || '').toLowerCase() === 'ble' ? 'BLE' : 'REST';
     return buildTilesChartTileShell({
         titleText: metricTitle,
-        badgeHtml: `<span class="badge bg-info text-dark">${escapeHtml(typeLabel)}</span>`,
+        badgeHtml: clusterTileHeaderStatusHtml('bg-info text-dark', typeLabel),
         footerText,
         emptyId: `smartSensorMetricTileEmpty_${gid}_${tileIndex}`,
         canvasId: `smartSensorMetricTileCanvas_${gid}_${tileIndex}`,
@@ -10391,7 +10451,7 @@ function buildClusterSmartSensorTileHtml(tile, payload) {
     const typeLabel = (item.type || '').toLowerCase() === 'ble' ? 'BLE' : 'REST';
     return buildClusterDashboardTileShell(
         `<i class="bi bi-broadcast-pin me-2 text-info"></i><span class="text-truncate">${escapeHtml(item.name || sensorId)}</span>`,
-        `<span class="badge bg-info text-dark">${escapeHtml(typeLabel)}</span>`,
+        clusterTileHeaderStatusHtml('bg-info text-dark', typeLabel),
         bodyHtml,
         escapeHtml(t('monitorScreenSmartSensors') || '')
     );
@@ -10471,7 +10531,7 @@ function buildClusterUpsTileHtml(tile, payload) {
     const footer = item.host ? `${backend} · ${item.host}` : backend;
     return buildClusterDashboardTileShell(
         `<i class="bi bi-lightning-charge me-2 text-warning"></i><span class="text-truncate">${escapeHtml(name)}</span>`,
-        `<span class="badge ${badgeClass}">${escapeHtml(statusLabel)}</span>`,
+        clusterTileHeaderStatusHtml(badgeClass, statusLabel),
         bodyHtml,
         escapeHtml(footer)
     );
@@ -10503,6 +10563,8 @@ function resizeTilesCharts() {
             const ch = map[key];
             if (!ch) continue;
             try { ch.resize(); } catch (_) {}
+            const cv = ch.canvas;
+            if (cv instanceof HTMLCanvasElement) applyTilesChartPointStyleToChart(ch, cv);
         }
     }
 }
@@ -10587,7 +10649,7 @@ function updateOrCreateLineChart({ canvas, chartMap, series, dsLabel, lineRgb, y
             sy.title.display = !!(showAxisYUnit && yTitleText);
             sy.title.text = yUnit;
         }
-        existing.update('none');
+        applyTilesChartPointStyleToChart(existing, canvas);
         return existing;
     }
     const chart = renderHostNodeMetricLineChart(canvas, seriesForChart, dsLabel, lineRgb, yUnit);
@@ -10786,7 +10848,7 @@ function buildClusterUpsMetricChartTileHtml(tile, payload, tileIndex, targetGrid
 
     return buildTilesChartTileShell({
         titleText: metricLabel,
-        badgeHtml: `<span class="badge ${badgeClass}">${escapeHtml(statusLabel)}</span>`,
+        badgeHtml: clusterTileHeaderStatusHtml(badgeClass, statusLabel),
         footerText: footer,
         emptyId: `upsMetricTileEmpty_${gid}_${tileIndex}`,
         canvasId: `upsMetricTileCanvas_${gid}_${tileIndex}`,
@@ -10880,7 +10942,7 @@ function buildClusterClusterMetricChartTileHtml(tile, tileIndex, targetGridId) {
 
     return buildTilesChartTileShell({
         titleText: title,
-        badgeHtml: `<span class="badge bg-primary">PVE</span>`,
+        badgeHtml: clusterTileHeaderStatusHtml('bg-primary', 'PVE'),
         footerText: footer,
         emptyId: `clusterMetricTileEmpty_${gid}_${tileIndex}`,
         canvasId: `clusterMetricTileCanvas_${gid}_${tileIndex}`,
@@ -10977,7 +11039,7 @@ function buildClusterHostNodeMetricChartTileHtml(tile, tileIndex, targetGridId) 
 
     return buildTilesChartTileShell({
         titleText: title,
-        badgeHtml: `<span class="badge bg-primary">${escapeHtml('PVE')}</span>`,
+        badgeHtml: clusterTileHeaderStatusHtml('bg-primary', 'PVE'),
         footerText: footer,
         emptyId: `hostNodeMetricTileEmpty_${gid}_${tileIndex}`,
         canvasId: `hostNodeMetricTileCanvas_${gid}_${tileIndex}`,
@@ -11064,9 +11126,7 @@ function buildClusterNodeKpiTileHtml(tile) {
                         </div>
                         <div class="d-flex align-items-center gap-2 flex-shrink-0">
                             ${nodeOnline ? `<span class="text-muted host-node-chart-hint" aria-hidden="true" title="${escapeHtml(t('hostNodeAllMetricsCardOpenTitle') || '')}"><i class="bi bi-graph-up-arrow"></i></span>` : ''}
-                            <span class="badge ${nodeOnline ? 'bg-success' : 'bg-danger'}">
-                            ${escapeHtml(nodeOnline ? t('nodeOnline') : t('nodeOffline'))}
-                        </span>
+                            ${clusterTileHeaderStatusHtml(nodeOnline ? 'bg-success' : 'bg-danger', nodeOnline ? t('nodeOnline') : t('nodeOffline'))}
                         </div>
                     </div>
                     ${metricsBlock}
@@ -11257,7 +11317,7 @@ function buildClusterSpeedtestTileHtml(summary) {
         .join(' · ');
     return buildClusterDashboardTileShell(
         `<i class="bi bi-speedometer2 text-primary me-2 flex-shrink-0" aria-hidden="true"></i><span class="text-truncate">${escapeHtml(t('dashboardSpeedtestTitle') || 'Speedtest')}</span>`,
-        `<span class="badge ${badgeClass}">${escapeHtml(badgeText)}</span>`,
+        clusterTileHeaderStatusHtml(badgeClass, badgeText),
         bodyHtml,
         footer
     );
@@ -11331,7 +11391,7 @@ function buildClusterIperf3TileHtml(summary) {
         .join(' · ');
     return buildClusterDashboardTileShell(
         `<i class="bi bi-arrow-left-right text-primary me-2 flex-shrink-0" aria-hidden="true"></i><span class="text-truncate">${escapeHtml(title)}</span>`,
-        `<span class="badge ${badgeClass}">${escapeHtml(badgeText)}</span>`,
+        clusterTileHeaderStatusHtml(badgeClass, badgeText),
         bodyHtml,
         footer
     );
@@ -11370,7 +11430,7 @@ function buildClusterTrueNASPoolTileHtml(tile) {
     ].filter(Boolean).join(' ');
     return buildClusterDashboardTileShell(
         `<i class="bi bi-database me-2 text-primary"></i><span class="text-truncate">${escapeHtml(pool.name || 'Pool')}</span>`,
-        `<span class="badge ${badgeClass}">${escapeHtml(statusLabel)}</span>`,
+        clusterTileHeaderStatusHtml(badgeClass, statusLabel),
         bodyHtml,
         'TrueNAS Storage',
         sizeClasses
@@ -11398,9 +11458,10 @@ function buildClusterTrueNASDiskTileHtml(tile) {
         buildClusterDashboardMetricCell('Size', Number.isFinite(Number(disk.sizeBytes)) ? formatSize(Number(disk.sizeBytes)) : '—', null, null, 'col-6 mt-2'),
         buildClusterDashboardMetricCell('Temp', disk.temperatureC == null ? '—' : `${disk.temperatureC} C`, null, null, 'col-6 mt-2')
     ].join('');
+    const diskHeaderStatus = diskLabel ? `${statusLabel} · ${diskLabel}` : statusLabel;
     return buildClusterDashboardTileShell(
         `<i class="bi bi-device-hdd me-2 text-primary"></i><span class="text-truncate">${escapeHtml(diskTitle || 'Disk')}</span>`,
-        `<span class="badge ${badgeClass}">${escapeHtml(statusLabel)}${diskLabel ? ` · ${escapeHtml(diskLabel)}` : ''}</span>`,
+        clusterTileHeaderStatusHtml(badgeClass, diskHeaderStatus),
         bodyHtml,
         escapeHtml(disk.pool || '')
     );
@@ -11425,7 +11486,7 @@ function buildClusterTrueNASServiceTileHtml(tile) {
     ].join('');
     return buildClusterDashboardTileShell(
         `<i class="bi bi-gear-wide-connected me-2 text-primary"></i><span class="text-truncate">${escapeHtml(service.name || 'Service')}</span>`,
-        `<span class="badge ${badgeClass}">${escapeHtml(statusLabel)}</span>`,
+        clusterTileHeaderStatusHtml(badgeClass, statusLabel),
         bodyHtml,
         ''
     );
@@ -11451,7 +11512,7 @@ function buildClusterTrueNASServerTileHtml(tile) {
     ].join('');
     return buildClusterDashboardTileShell(
         `<i class="bi bi-hdd-stack me-2 text-primary"></i><span class="text-truncate">${escapeHtml(hostname)}</span>`,
-        `<span class="badge bg-success">${escapeHtml(t('connected'))}</span>`,
+        clusterTileHeaderStatusHtml('bg-success', t('connected')),
         bodyHtml,
         'TrueNAS'
     );
@@ -11476,7 +11537,7 @@ function buildClusterTrueNASAppTileHtml(tile) {
     ].join('');
     return buildClusterDashboardTileShell(
         `<i class="bi bi-boxes me-2 text-primary"></i><span class="text-truncate">${escapeHtml(app.name || 'App')}</span>`,
-        `<span class="badge ${badgeClass}">${escapeHtml(statusLabel)}</span>`,
+        clusterTileHeaderStatusHtml(badgeClass, statusLabel),
         bodyHtml,
         'TrueNAS Apps'
     );

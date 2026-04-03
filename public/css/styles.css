@@ -2812,7 +2812,76 @@
             flex-direction: column;
             height: 100%;
             overflow: hidden;
+            container-type: size;
+            container-name: tiles-monitor-tile;
         }
+
+        /* Типографика плитки масштабируется с размером клетки (12×8 grid). Fallback: без @supports — остаются общие правила .cluster-scroll-item */
+        @supports (font-size: 1cqmin) {
+            /* Планшеты / дальний просмотр: крупная база + верхний потолок для очень больших плиток */
+            .tiles-monitor-cell .node-card {
+                font-size: clamp(1.14rem, 7.7cqmin, 2.06rem);
+            }
+            .tiles-monitor-cell .node-card h5 {
+                font-size: 1.38em;
+                font-weight: 600;
+                line-height: var(--hm-line-tight);
+            }
+            .tiles-monitor-cell .node-card h6 {
+                font-size: 1.18em;
+                font-weight: 600;
+                line-height: var(--hm-line-tight);
+            }
+            .tiles-monitor-cell .node-card .small,
+            .tiles-monitor-cell .node-card small {
+                font-size: 1.02em;
+            }
+            .tiles-monitor-cell .node-card .fw-bold {
+                font-size: 1.12em;
+            }
+            .tiles-monitor-cell .node-card code {
+                font-size: 0.98em;
+            }
+            .tiles-monitor-cell .node-card .badge {
+                font-size: 0.88em;
+            }
+            .tiles-monitor-cell .ups-node-card__metric-label {
+                font-size: 1.06em;
+            }
+            .tiles-monitor-cell .ups-node-card__metric-value {
+                font-size: 1.28em;
+            }
+            .tiles-monitor-cell .display-6 {
+                font-size: 2.85em !important;
+                line-height: 1.08;
+            }
+            .tiles-monitor-cell .hm-cluster-metric-cell {
+                padding: clamp(0.48rem, 3.6cqmin, 1.38rem) !important;
+            }
+            .tiles-monitor-cell .progress.hm-progress--cluster {
+                height: clamp(0.46rem, 1.02cqmin, var(--hm-progress-h));
+            }
+            .tiles-monitor-cell--empty .monitor-view__empty {
+                font-size: clamp(1.14rem, 7.45cqmin, 1.74rem);
+            }
+        }
+
+        /* Tiles header: status as a small dot (full text in title / aria-label). */
+        .tiles-header-status-dot {
+            display: inline-block;
+            flex-shrink: 0;
+            width: 0.62em;
+            height: 0.62em;
+            border-radius: 50%;
+            vertical-align: middle;
+            box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.1);
+        }
+        .tiles-header-status-dot--success { background-color: var(--bs-success); }
+        .tiles-header-status-dot--danger { background-color: var(--bs-danger); }
+        .tiles-header-status-dot--warning { background-color: var(--bs-warning); }
+        .tiles-header-status-dot--info { background-color: var(--bs-info); }
+        .tiles-header-status-dot--primary { background-color: var(--bs-primary); }
+        .tiles-header-status-dot--secondary { background-color: var(--bs-secondary); }
 
         .tiles-monitor-cell .cluster-scroll-item {
             flex: 1 1 auto;
