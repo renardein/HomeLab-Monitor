@@ -716,6 +716,8 @@
     "settingsClusterTilesSaveError": "Kacheln konnten nicht gespeichert werden: {msg}",
     "settingsClusterTileTypeLabel": "Kacheltyp",
     "settingsClusterTileSourceLabel": "Datenquelle",
+    "settingsClusterTileDeviceLabel": "Gerät",
+    "settingsClusterTileMetricLabel": "Metrik",
     "settingsClusterTileSourceMissing": "Quelle fehlt",
     "settingsClusterTileNoSources": "Keine Quellen verfügbar",
     "settingsClusterTileMoveUpTitle": "Nach oben",

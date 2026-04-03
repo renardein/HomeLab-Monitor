@@ -716,6 +716,8 @@
     "settingsClusterTilesSaveError": "無法儲存圖塊：{msg}",
     "settingsClusterTileTypeLabel": "圖塊類型",
     "settingsClusterTileSourceLabel": "資料來源",
+    "settingsClusterTileDeviceLabel": "裝置",
+    "settingsClusterTileMetricLabel": "指標",
     "settingsClusterTileSourceMissing": "缺少來源",
     "settingsClusterTileNoSources": "沒有可用的來源",
     "settingsClusterTileMoveUpTitle": "上移",

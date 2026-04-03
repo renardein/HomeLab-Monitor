@@ -716,6 +716,8 @@
     "settingsClusterTilesSaveError": "Не ўдалося захаваць пліткі: {msg}",
     "settingsClusterTileTypeLabel": "Тып пліткі",
     "settingsClusterTileSourceLabel": "Крыніца даных",
+    "settingsClusterTileDeviceLabel": "Прылада",
+    "settingsClusterTileMetricLabel": "Метрыка",
     "settingsClusterTileSourceMissing": "Крыніца адсутнічае",
     "settingsClusterTileNoSources": "Няма даступных крыніц",
     "settingsClusterTileMoveUpTitle": "Уверх",

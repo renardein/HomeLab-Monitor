@@ -111,7 +111,7 @@ let clusterDashboardTilesDirty = false;
 let clusterDashboardTilesSettingPresent = false;
 /** Текст последней ошибки POST /api/settings (для сообщений пользователю). */
 let saveSettingsLastError = '';
-const CLUSTER_DASHBOARD_TILE_TYPES = ['service', 'vmct', 'netdev', 'ups', 'ups_metric_chart', 'cluster_metric_chart', 'host_node_metric_chart', 'speedtest', 'iperf3', 'truenas_server', 'truenas_pool', 'truenas_disk', 'truenas_service', 'truenas_app', 'smart_sensor', 'smart_sensor_metric_chart', 'embed'];
+const CLUSTER_DASHBOARD_TILE_TYPES = ['service', 'vmct', 'netdev', 'ups', 'ups_metric_chart', 'cluster_metric_chart', 'host_node_metric_chart', 'cluster_node', 'speedtest', 'iperf3', 'truenas_server', 'truenas_pool', 'truenas_disk', 'truenas_service', 'truenas_app', 'smart_sensor', 'smart_sensor_metric_chart', 'embed'];
 const CLUSTER_EMBED_HTML_MAX = 100000;
 /** Макс. размер загружаемого файла изображения для плитки embed (байты). */
 const CLUSTER_EMBED_IMAGE_FILE_MAX_BYTES = 16 * 1024 * 1024;
@@ -5179,6 +5179,13 @@ function normalizeClusterDashboardTile(raw) {
         if (!node) return null;
         sourceId = `host_node_metric_chart:${node}:${m[2]}`;
     }
+    if (type === 'cluster_node') {
+        const prefix = 'cluster_node:';
+        if (!sourceId.startsWith(prefix)) return null;
+        const node = String(sourceId.slice(prefix.length)).trim();
+        if (!node) return null;
+        sourceId = `${prefix}${node}`;
+    }
     if (type === 'smart_sensor') {
         if (!sourceId.startsWith('smart_sensor:')) return null;
         const idPart = sourceId.slice('smart_sensor:'.length).trim();
@@ -5518,6 +5525,7 @@ function getClusterDashboardTileTypeLabel(type) {
     if (type === 'ups_metric_chart') return t('settingsClusterTileTypeUpsMetricChart') || 'UPS graph';
     if (type === 'cluster_metric_chart') return t('settingsClusterTileTypeClusterMetricChart') || 'Cluster graph';
     if (type === 'host_node_metric_chart') return t('settingsClusterTileTypeHostNodeMetricChart') || 'Node graph';
+    if (type === 'cluster_node') return t('settingsClusterTileTypeClusterNode') || 'Cluster node';
     if (type === 'speedtest') return t('settingsClusterTileTypeSpeedtest');
     if (type === 'iperf3') return t('settingsClusterTileTypeIperf3');
     if (type === 'smart_sensor') return t('settingsClusterTileTypeSmartSensor');
@@ -5600,6 +5608,18 @@ function getClusterDashboardTileSourceOptions(type) {
                 label: `${node}: ${m.label}`
             }));
         });
+    }
+
+    if (type === 'cluster_node') {
+        const raw = lastClusterData && Array.isArray(lastClusterData.nodes)
+            ? lastClusterData.nodes.map((n) => String(n.name || '').trim()).filter(Boolean)
+            : [];
+        const list = raw.length ? raw : (getClusterNodeNamesForTelegramRules().length ? getClusterNodeNamesForTelegramRules() : ['pve']);
+        const unique = Array.from(new Set(list.map((n) => String(n || '').trim()).filter(Boolean)));
+        return unique.map((node) => ({
+            value: `cluster_node:${node}`,
+            label: node
+        }));
     }
 
     if (type === 'netdev') {
@@ -5753,6 +5773,156 @@ function getClusterDashboardTileSourceOptions(type) {
     return [];
 }
 
+function clusterDashboardTileTypeUsesSplitSource(type) {
+    return type === 'host_node_metric_chart' || type === 'ups_metric_chart' || type === 'smart_sensor_metric_chart';
+}
+
+function parseClusterDashboardCompositeSource(type, sourceId) {
+    const s = String(sourceId || '').trim();
+    if (type === 'host_node_metric_chart') {
+        const m = /^host_node_metric_chart:([^:]+):(temp|cpu|mem)$/.exec(s);
+        return m ? { device: m[1], metric: m[2] } : { device: '', metric: '' };
+    }
+    if (type === 'ups_metric_chart') {
+        const m = /^ups_metric_chart:(\d+):(.+)$/.exec(s);
+        return m ? { device: m[1], metric: m[2] } : { device: '', metric: '' };
+    }
+    if (type === 'smart_sensor_metric_chart') {
+        const prefix = 'smart_sensor_metric_chart:';
+        if (!s.startsWith(prefix)) return { device: '', metric: '' };
+        const rest = s.slice(prefix.length);
+        const idx = rest.indexOf(':');
+        if (idx < 0) return { device: '', metric: '' };
+        const sensorId = rest.slice(0, idx).trim();
+        const enc = rest.slice(idx + 1);
+        return { device: sensorId, metric: enc };
+    }
+    return { device: '', metric: '' };
+}
+
+function buildClusterDashboardCompositeSourceId(type, device, metric) {
+    const d = String(device || '').trim();
+    const met = String(metric || '').trim();
+    if (type === 'host_node_metric_chart') {
+        if (!d || !/^(temp|cpu|mem)$/.test(met)) return '';
+        return `host_node_metric_chart:${d}:${met}`;
+    }
+    if (type === 'ups_metric_chart') {
+        if (!/^\d+$/.test(d) || !met) return '';
+        return `ups_metric_chart:${d}:${met}`;
+    }
+    if (type === 'smart_sensor_metric_chart') {
+        if (!d || !met) return '';
+        return `smart_sensor_metric_chart:${d}:${met}`;
+    }
+    return '';
+}
+
+function getClusterDashboardTileSplitDevices(type) {
+    if (type === 'host_node_metric_chart') {
+        const nodes = getClusterNodeNamesForTelegramRules();
+        const uniqueNodes = Array.from(new Set((Array.isArray(nodes) ? nodes : []).map((n) => String(n || '').trim()).filter(Boolean)));
+        const list = uniqueNodes.length ? uniqueNodes : ['pve'];
+        return list.map((node) => ({ value: node, label: node }));
+    }
+    if (type === 'ups_metric_chart') {
+        const numericFormats = new Set(['percent', 'number', 'voltage', 'watt', 'frequency', 'time']);
+        return (Array.isArray(upsConfigs) ? upsConfigs : [])
+            .map((cfg, idx) => ({ cfg, slot: idx + 1 }))
+            .filter(({ cfg }) => cfg && cfg.enabled && String(cfg.host || '').trim() !== '' && Array.isArray(cfg.fields))
+            .filter(({ cfg }) => (cfg.fields || []).some(
+                (f) => f && f.enabled !== false && String(f.id || '').trim() !== '' && numericFormats.has(String(f.format || '').trim())
+            ))
+            .map(({ cfg, slot }) => ({
+                value: String(slot),
+                label: `UPS ${slot}: ${cfg.name || cfg.host || ('#' + slot)}`
+            }));
+    }
+    if (type === 'smart_sensor_metric_chart') {
+        const list = Array.isArray(smartSensorsConfigsForTiles) ? smartSensorsConfigsForTiles : [];
+        const out = [];
+        for (const c of list) {
+            if (!c || c.enabled === false) continue;
+            const sid = String(c.id || '').trim();
+            if (!sid) continue;
+            if (!computeSmartSensorFieldKeysForConfig(c).length) continue;
+            const kind = c.type === 'ble' ? 'BLE' : 'REST';
+            out.push({ value: sid, label: `${c.name || sid} (${kind})` });
+        }
+        return out;
+    }
+    return [];
+}
+
+function getClusterDashboardTileSplitMetrics(type, deviceValue) {
+    const dev = String(deviceValue || '').trim();
+    if (type === 'host_node_metric_chart') {
+        return [
+            { value: 'temp', label: t('hostMetricsCpuTempLabel') || 'CPU temp' },
+            { value: 'cpu', label: t('nodeCpu') || 'CPU' },
+            { value: 'mem', label: t('nodeRam') || 'RAM' }
+        ];
+    }
+    if (type === 'ups_metric_chart') {
+        if (!dev || !/^\d+$/.test(dev)) return [];
+        const slot = parseInt(dev, 10);
+        const cfg = Array.isArray(upsConfigs) ? upsConfigs[slot - 1] : null;
+        if (!cfg || !Array.isArray(cfg.fields)) return [];
+        const numericFormats = new Set(['percent', 'number', 'voltage', 'watt', 'frequency', 'time']);
+        return (cfg.fields || [])
+            .filter((f) => f && f.enabled !== false && String(f.id || '').trim() !== '' && numericFormats.has(String(f.format || '').trim()))
+            .map((f) => {
+                const metricId = String(f.id).trim();
+                const metricLabel = (f.label != null && String(f.label).trim() !== '') ? String(f.label).trim() : metricId;
+                return { value: metricId, label: metricLabel };
+            });
+    }
+    if (type === 'smart_sensor_metric_chart') {
+        if (!dev) return [];
+        const list = Array.isArray(smartSensorsConfigsForTiles) ? smartSensorsConfigsForTiles : [];
+        const c = list.find((x) => x && String(x.id || '').trim() === dev);
+        if (!c) return [];
+        const keys = computeSmartSensorFieldKeysForConfig(c);
+        return keys.map(({ fieldKey, label }) => ({
+            value: encodeURIComponent(fieldKey),
+            label
+        }));
+    }
+    return [];
+}
+
+function updateClusterDashboardTileSplitDevice(index, deviceValue) {
+    if (!clusterDashboardTiles[index]) return;
+    const tile = clusterDashboardTiles[index];
+    const type = tile.type;
+    if (!clusterDashboardTileTypeUsesSplitSource(type)) return;
+    const dev = String(deviceValue || '').trim();
+    const metrics = getClusterDashboardTileSplitMetrics(type, dev);
+    const parsed = parseClusterDashboardCompositeSource(type, tile.sourceId);
+    let metric = parsed.metric;
+    if (!metrics.some((m) => m.value === metric)) {
+        metric = metrics.length ? metrics[0].value : '';
+    }
+    const sourceId = buildClusterDashboardCompositeSourceId(type, dev, metric);
+    if (sourceId) updateClusterDashboardTileSource(index, sourceId);
+}
+
+function updateClusterDashboardTileSplitMetric(index, metricValue) {
+    if (!clusterDashboardTiles[index]) return;
+    const tile = clusterDashboardTiles[index];
+    const type = tile.type;
+    if (!clusterDashboardTileTypeUsesSplitSource(type)) return;
+    const parsed = parseClusterDashboardCompositeSource(type, tile.sourceId);
+    const devices = getClusterDashboardTileSplitDevices(type);
+    let dev = String(parsed.device || '').trim();
+    if (!dev || !devices.some((d) => d.value === dev)) {
+        dev = devices.length ? devices[0].value : '';
+    }
+    const met = String(metricValue || '').trim();
+    const sourceId = buildClusterDashboardCompositeSourceId(type, dev, met);
+    if (sourceId) updateClusterDashboardTileSource(index, sourceId);
+}
+
 function markClusterDashboardTilesDirty(nextDirty) {
     clusterDashboardTilesDirty = !!nextDirty;
     const saveBtn = document.getElementById('settingsClusterTilesSaveBtn');
@@ -5819,19 +5989,78 @@ function buildClusterDashboardTileDetailHtml(index) {
         <option value="${escapeHtml(type)}" ${nt.type === type ? 'selected' : ''}>${escapeHtml(getClusterDashboardTileTypeLabel(type))}</option>
     `).join('');
 
-    let sourceOptions = getClusterDashboardTileSourceOptions(nt.type);
-    if (nt.sourceId && !sourceOptions.some((opt) => opt.value === nt.sourceId)) {
-        sourceOptions = [{
-            value: nt.sourceId,
-            label: `${missingSourceText}: ${nt.sourceId}`
-        }].concat(sourceOptions);
-    }
+    let sourceFieldsHtml = '';
+    if (clusterDashboardTileTypeUsesSplitSource(nt.type)) {
+        const deviceLabel = t('settingsClusterTileDeviceLabel') || 'Device';
+        const metricLabel = t('settingsClusterTileMetricLabel') || 'Metric';
+        const splitDevices = getClusterDashboardTileSplitDevices(nt.type);
+        const parsed = parseClusterDashboardCompositeSource(nt.type, nt.sourceId);
+        let deviceOpts = splitDevices;
+        let selectedDevice = String(parsed.device || '').trim();
+        if (selectedDevice && !splitDevices.some((d) => d.value === selectedDevice)) {
+            deviceOpts = [{ value: selectedDevice, label: `${missingSourceText}: ${selectedDevice}` }].concat(splitDevices);
+        }
+        if (!selectedDevice && splitDevices.length) {
+            selectedDevice = splitDevices[0].value;
+        }
+        const splitMetrics = getClusterDashboardTileSplitMetrics(nt.type, selectedDevice);
+        let metricOpts = splitMetrics;
+        let selectedMetric = parsed.metric;
+        if (selectedMetric && !splitMetrics.some((m) => m.value === selectedMetric)) {
+            metricOpts = [{ value: selectedMetric, label: `${missingSourceText}: ${selectedMetric}` }].concat(splitMetrics);
+        }
+        if (!selectedMetric && splitMetrics.length) {
+            selectedMetric = splitMetrics[0].value;
+        }
+        const deviceOptionsHtml = deviceOpts.length
+            ? deviceOpts.map((opt) => `
+            <option value="${escapeHtml(opt.value)}" ${selectedDevice === opt.value ? 'selected' : ''}>${escapeHtml(opt.label)}</option>
+        `).join('')
+            : `<option value="">${escapeHtml(noSourcesText)}</option>`;
+        const metricOptionsHtml = metricOpts.length
+            ? metricOpts.map((opt) => `
+            <option value="${escapeHtml(opt.value)}" ${selectedMetric === opt.value ? 'selected' : ''}>${escapeHtml(opt.label)}</option>
+        `).join('')
+            : `<option value="">${escapeHtml(noSourcesText)}</option>`;
+        sourceFieldsHtml = `
+                <div class="col-12">
+                    <label class="form-label fw-bold small mb-1">${escapeHtml(deviceLabel)}</label>
+                    <select class="form-select form-select-sm" onchange="updateClusterDashboardTileSplitDevice(${index}, this.value)"
+                        ${deviceOpts.length ? '' : 'disabled'}>
+                        ${deviceOptionsHtml}
+                    </select>
+                </div>
+                <div class="col-12">
+                    <label class="form-label fw-bold small mb-1">${escapeHtml(metricLabel)}</label>
+                    <select class="form-select form-select-sm" onchange="updateClusterDashboardTileSplitMetric(${index}, this.value)"
+                        ${metricOpts.length ? '' : 'disabled'}>
+                        ${metricOptionsHtml}
+                    </select>
+                </div>
+        `;
+    } else {
+        let sourceOptions = getClusterDashboardTileSourceOptions(nt.type);
+        if (nt.sourceId && !sourceOptions.some((opt) => opt.value === nt.sourceId)) {
+            sourceOptions = [{
+                value: nt.sourceId,
+                label: `${missingSourceText}: ${nt.sourceId}`
+            }].concat(sourceOptions);
+        }
 
-    const sourceOptionsHtml = sourceOptions.length
-        ? sourceOptions.map((opt) => `
+        const sourceOptionsHtml = sourceOptions.length
+            ? sourceOptions.map((opt) => `
             <option value="${escapeHtml(opt.value)}" ${nt.sourceId === opt.value ? 'selected' : ''}>${escapeHtml(opt.label)}</option>
         `).join('')
-        : `<option value="">${escapeHtml(noSourcesText)}</option>`;
+            : `<option value="">${escapeHtml(noSourcesText)}</option>`;
+        sourceFieldsHtml = `
+                <div class="col-12">
+                    <label class="form-label fw-bold small mb-1">${escapeHtml(sourceLabel)}</label>
+                    <select class="form-select form-select-sm" onchange="updateClusterDashboardTileSource(${index}, this.value)">
+                        ${sourceOptionsHtml}
+                    </select>
+                </div>
+        `;
+    }
 
     const gCol = nt.tilesGridCol | 0;
     const gRow = nt.tilesGridRow | 0;
@@ -5893,12 +6122,7 @@ function buildClusterDashboardTileDetailHtml(index) {
                         ${typeOptions}
                     </select>
                 </div>
-                <div class="col-12">
-                    <label class="form-label fw-bold small mb-1">${escapeHtml(sourceLabel)}</label>
-                    <select class="form-select form-select-sm" onchange="updateClusterDashboardTileSource(${index}, this.value)">
-                        ${sourceOptionsHtml}
-                    </select>
-                </div>
+                ${sourceFieldsHtml}
                 ${embedFieldsHtml}
                 <div class="col-12">
                     <div class="d-flex gap-2 justify-content-end flex-wrap">
@@ -6021,6 +6245,7 @@ function addClusterDashboardTile() {
         ups_metric_chart: 'ups_metric_chart:1:charge',
         cluster_metric_chart: 'cluster_metric_chart:cpu',
         host_node_metric_chart: 'host_node_metric_chart:pve:cpu',
+        cluster_node: 'cluster_node:pve',
         netdev: 'netdev:1',
         service: 'service:default',
         vmct: 'vmct:default',
@@ -6073,6 +6298,7 @@ function updateClusterDashboardTileType(index, nextType) {
         ups_metric_chart: 'ups_metric_chart:1:charge',
         cluster_metric_chart: 'cluster_metric_chart:cpu',
         host_node_metric_chart: 'host_node_metric_chart:pve:cpu',
+        cluster_node: 'cluster_node:pve',
         netdev: 'netdev:1',
         service: 'service:default',
         vmct: 'vmct:default',
@@ -8386,24 +8612,23 @@ async function openHostNodeAllMetricsModal(nodeName) {
 function initHostNodeMetricChartsOnce() {
     if (initHostNodeMetricChartsOnce._done) return;
     initHostNodeMetricChartsOnce._done = true;
-    const nodesContainer = document.getElementById('nodesContainer');
-    if (nodesContainer) {
-        nodesContainer.addEventListener('click', (e) => {
-            if (e.target.closest('.host-problem-trigger')) return;
-            const card = e.target.closest('.host-node-card-chart-trigger');
-            if (!card) return;
-            const node = card.getAttribute('data-node');
-            if (node) void openHostNodeAllMetricsModal(node);
-        });
-        nodesContainer.addEventListener('keydown', (e) => {
-            if (e.key !== 'Enter' && e.key !== ' ') return;
-            const card = e.target.closest('.host-node-card-chart-trigger');
-            if (!card || !nodesContainer.contains(card)) return;
-            e.preventDefault();
-            const node = card.getAttribute('data-node');
-            if (node) void openHostNodeAllMetricsModal(node);
-        });
-    }
+    const openFromEvent = (e) => {
+        if (e.target.closest && e.target.closest('.host-problem-trigger')) return null;
+        const card = e.target.closest('.host-node-card-chart-trigger');
+        if (!card) return null;
+        return card.getAttribute('data-node');
+    };
+    document.addEventListener('click', (e) => {
+        const node = openFromEvent(e);
+        if (node) void openHostNodeAllMetricsModal(node);
+    });
+    document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        const node = openFromEvent(e);
+        if (!node) return;
+        e.preventDefault();
+        void openHostNodeAllMetricsModal(node);
+    });
     const modalEl = document.getElementById('hostNodeAllMetricsModal');
     if (modalEl) {
         modalEl.addEventListener('hidden.bs.modal', () => destroyHostNodeMetricCharts());
@@ -10864,6 +11089,88 @@ function buildClusterHostNodeMetricChartTileHtml(tile, tileIndex, targetGridId) 
     });
 }
 
+/** KPI-карточка узла кластера (ЦПУ, ОЗУ, аптайм, ядра, temp/link с агента) — как на вкладке «Узлы». */
+function buildClusterNodeKpiTileHtml(tile) {
+    const nodeName = clusterTileSourceValue(tile, 'cluster_node');
+    const typeLabel = t('settingsClusterTileTypeClusterNode') || 'Cluster node';
+    if (!nodeName) {
+        return buildClusterDashboardUnavailableTile(typeLabel, t('backupNoData') || '—');
+    }
+    if (!lastClusterData || !Array.isArray(lastClusterData.nodes)) {
+        return buildClusterDashboardUnavailableTile(nodeName, t('backupNoData') || 'Нет данных');
+    }
+    const node = lastClusterData.nodes.find((n) => String(n.name || '') === nodeName);
+    if (!node) {
+        return buildClusterDashboardUnavailableTile(nodeName, t('storageNotFound') || 'Узел не найден');
+    }
+    const hostMetric = (lastHostMetricsData && Array.isArray(lastHostMetricsData.items))
+        ? lastHostMetricsData.items.find((item) => String(item.node || '') === nodeName)
+        : null;
+    const hostMetricsRenderSettings = normalizeHostMetricsSettingsClient((lastHostMetricsData && lastHostMetricsData.settings) || hostMetricsSettings);
+    const nodeOnline = String(node.status || '').toLowerCase() === 'online';
+    const hostMetricProblems = getHostMetricProblemMessages(hostMetric, hostMetricsRenderSettings);
+    const hostMetricWarning = nodeOnline && hostMetricProblems.length
+        ? `<span class="badge bg-warning text-dark ms-2 host-problem-trigger" role="button" tabindex="0" data-problem-lines="${escapeHtml(hostMetricProblems.join('\n'))}" title="${escapeHtml(t('toastWarning') || 'Warning')}"><i class="bi bi-exclamation-triangle-fill"></i></span>`
+        : '';
+    const nodeIpDisplay = node.ip || (hostMetric && hostMetric.nodeIp) || '';
+    const nodeIpLine = nodeIpDisplay
+        ? `<div class="small text-muted mt-1"><i class="bi bi-hdd-network me-1"></i>${escapeHtml(String(nodeIpDisplay))}</div>`
+        : '';
+    const cardClass = nodeOnline
+        ? 'node-card ups-node-card h-100 host-node-card-chart-trigger cursor-pointer'
+        : 'node-card ups-node-card h-100';
+    const cardAttrs = nodeOnline
+        ? ` data-node="${escapeHtml(node.name)}" role="button" tabindex="0" title="${escapeHtml(t('hostNodeAllMetricsCardOpenTitle') || '')}"`
+        : '';
+    const cpuPct = Number(node.cpu);
+    const memPct = Number(node.memory);
+    const cpuW = Number.isFinite(cpuPct) ? Math.min(100, Math.max(0, cpuPct)) : 0;
+    const memW = Number.isFinite(memPct) ? Math.min(100, Math.max(0, memPct)) : 0;
+    const metricsBlock = nodeOnline
+        ? `
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <small class="text-muted">${escapeHtml(t('nodeCpu'))}</small>
+                            <div class="fw-bold">${escapeHtml(String(node.cpu))}%</div>
+                            <div class="progress"><div class="progress-bar ${getColorClass(node.cpu, 'cpu')}" style="width: ${cpuW}%"></div></div>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted">${escapeHtml(t('nodeRam'))}</small>
+                            <div class="fw-bold">${escapeHtml(String(node.memory))}%</div>
+                            <div class="progress"><div class="progress-bar ${getColorClass(node.memory, 'ram')}" style="width: ${memW}%"></div></div>
+                        </div>
+                        <div class="col-6 mt-2">
+                            <small class="text-muted">${escapeHtml(t('nodeUptime'))}</small>
+                            <div class="fw-bold">${escapeHtml(formatUptime(node.uptime))}</div>
+                        </div>
+                        <div class="col-6 mt-2">
+                            <small class="text-muted">${escapeHtml(t('nodeCpuCores'))}</small>
+                            <div class="fw-bold">${escapeHtml(String(node.cpuCount != null ? node.cpuCount : '—'))}</div>
+                        </div>
+                        ${formatHostMetricsNodeExtras(hostMetric, node.name)}
+                    </div>`
+        : '';
+    return `
+            <div class="cluster-scroll-item">
+                <div class="${cardClass}"${cardAttrs}>
+                    <div class="d-flex justify-content-between align-items-start mb-2 gap-2">
+                        <div class="min-w-0" style="min-width:0">
+                            <h5 class="mb-0 text-truncate d-inline-flex align-items-center">${escapeHtml(node.name)}${hostMetricWarning}</h5>
+                            ${nodeIpLine}
+                            ${formatNodeOfflineSinceLine(node)}
+                        </div>
+                        <div class="d-flex align-items-center gap-2 flex-shrink-0">
+                            ${nodeOnline ? `<span class="text-muted host-node-chart-hint" aria-hidden="true" title="${escapeHtml(t('hostNodeAllMetricsCardOpenTitle') || '')}"><i class="bi bi-graph-up-arrow"></i></span>` : ''}
+                            <span class="badge ${nodeOnline ? 'bg-success' : 'bg-danger'}">
+                            ${escapeHtml(nodeOnline ? t('nodeOnline') : t('nodeOffline'))}
+                        </span>
+                        </div>
+                    </div>
+                    ${metricsBlock}
+                </div>
+            </div>`;
+}
+
 async function initHostNodeMetricChartTiles(targetGridId) {
     const gridEl = document.getElementById(targetGridId);
     if (!gridEl) return;
@@ -11322,6 +11629,7 @@ async function renderClusterDashboardTiles() {
         if (tile.type === 'ups_metric_chart') return buildClusterUpsMetricChartTileHtml(tile, upsPayload, tileIndex, 'dashboardClusterTiles');
         if (tile.type === 'cluster_metric_chart') return buildClusterClusterMetricChartTileHtml(tile, tileIndex, 'dashboardClusterTiles');
         if (tile.type === 'host_node_metric_chart') return buildClusterHostNodeMetricChartTileHtml(tile, tileIndex, 'dashboardClusterTiles');
+        if (tile.type === 'cluster_node') return buildClusterNodeKpiTileHtml(tile);
         if (tile.type === 'speedtest') return buildClusterSpeedtestTileHtml(speedtestSummary);
         if (tile.type === 'iperf3') return buildClusterIperf3TileHtml(iperf3Summary);
         if (tile.type === 'truenas_server') return buildClusterTrueNASServerTileHtml(tile);
@@ -11400,6 +11708,7 @@ async function renderTilesMonitorScreen(targetGridId = 'tilesMonitorGrid') {
         else if (tile.type === 'ups_metric_chart') tileHtml = buildClusterUpsMetricChartTileHtml(tile, upsPayload, placementsIndex, targetGridId);
         else if (tile.type === 'cluster_metric_chart') tileHtml = buildClusterClusterMetricChartTileHtml(tile, placementsIndex, targetGridId);
         else if (tile.type === 'host_node_metric_chart') tileHtml = buildClusterHostNodeMetricChartTileHtml(tile, placementsIndex, targetGridId);
+        else if (tile.type === 'cluster_node') tileHtml = buildClusterNodeKpiTileHtml(tile);
         else if (tile.type === 'speedtest') tileHtml = buildClusterSpeedtestTileHtml(speedtestSummary);
         else if (tile.type === 'iperf3') tileHtml = buildClusterIperf3TileHtml(iperf3Summary);
         else if (tile.type === 'smart_sensor') tileHtml = buildClusterSmartSensorTileHtml(tile, smartSensorsPayload);
@@ -11426,6 +11735,7 @@ async function renderTilesMonitorScreen(targetGridId = 'tilesMonitorGrid') {
         initHostNodeMetricChartTiles(targetGridId).catch(() => {}),
         initSmartSensorMetricChartTiles(targetGridId).catch(() => {})
     ]);
+    initHostMetricProblemPopovers();
     } finally {
         tilesMonitorTileFooterSuppressDepth--;
     }

@@ -716,6 +716,8 @@
     "settingsClusterTilesSaveError": "Impossible d’enregistrer les tuiles : {msg}",
     "settingsClusterTileTypeLabel": "Type de tuile",
     "settingsClusterTileSourceLabel": "Source de données",
+    "settingsClusterTileDeviceLabel": "Appareil",
+    "settingsClusterTileMetricLabel": "Métrique",
     "settingsClusterTileSourceMissing": "Source manquante",
     "settingsClusterTileNoSources": "Aucune source disponible",
     "settingsClusterTileMoveUpTitle": "Monter",

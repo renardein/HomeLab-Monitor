@@ -716,6 +716,8 @@
     "settingsClusterTilesSaveError": "タイルを保存できませんでした: {msg}",
     "settingsClusterTileTypeLabel": "タイルの種類",
     "settingsClusterTileSourceLabel": "データソース",
+    "settingsClusterTileDeviceLabel": "デバイス",
+    "settingsClusterTileMetricLabel": "メトリック",
     "settingsClusterTileSourceMissing": "ソースがありません",
     "settingsClusterTileNoSources": "利用できるソースがありません",
     "settingsClusterTileMoveUpTitle": "上へ",
