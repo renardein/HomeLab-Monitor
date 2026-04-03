@@ -162,6 +162,7 @@ const appNavigationManager = window.AppNavigationManagerModule.createManager({
     getMonitorMode: () => monitorMode,
     applyMonitorView: (view) => applyMonitorView(view),
     renderMonitorScreenDots: () => renderMonitorScreenDots(),
+    hideAllMonitorShellSections: () => hideAllMonitorShellSections(),
     hasAuth: () => !!apiToken,
     refreshData: (options) => refreshData(options),
     getAutoRefreshInterval: () => autoRefreshInterval,
@@ -1630,6 +1631,27 @@ function hideAllTrueNASMonitorSections() {
     });
 }
 
+/** Все полноэкранные секции монитора (sibling'и #dashboardSection, часто position:fixed). Обязательно скрывать при выходе из monitor mode и при открытии настроек — иначе «накладываются» на дашборд/настройки. */
+function hideAllMonitorShellSections() {
+    [
+        'servicesMonitorSection',
+        'vmsMonitorSection',
+        'upsMonitorSection',
+        'netdevMonitorSection',
+        'speedtestMonitorSection',
+        'iperf3MonitorSection',
+        'smartSensorsMonitorSection',
+        'tilesMonitorSection',
+        'backupsMonitorSection',
+        'drawMonitorSection',
+        'monitorView'
+    ].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = 'none';
+    });
+    hideAllTrueNASMonitorSections();
+}
+
 function openTrueNASCategoryMonitorFromMenu(kind) {
     const map = {
         pools: { sectionId: 'truenasPoolsMonitorSection', gridId: 'truenasPoolsMonitorGrid', type: 'truenas_pool' },
@@ -1642,27 +1664,9 @@ function openTrueNASCategoryMonitorFromMenu(kind) {
 
     const dashboardSection = document.getElementById('dashboardSection');
     const configSection = document.getElementById('configSection');
-    const servicesSection = document.getElementById('servicesMonitorSection');
-    const vmsSection = document.getElementById('vmsMonitorSection');
-    const netdevSection = document.getElementById('netdevMonitorSection');
-    const upsMonSection = document.getElementById('upsMonitorSection');
-    const speedtestSection = document.getElementById('speedtestMonitorSection');
-    const iperf3Section = document.getElementById('iperf3MonitorSection');
-    const smartSection = document.getElementById('smartSensorsMonitorSection');
-    const backupsMon = document.getElementById('backupsMonitorSection');
-
-    hideAllTrueNASMonitorSections();
-
+    hideAllMonitorShellSections();
     if (dashboardSection) dashboardSection.style.display = 'none';
     if (configSection) configSection.style.display = 'none';
-    if (servicesSection) servicesSection.style.display = 'none';
-    if (vmsSection) vmsSection.style.display = 'none';
-    if (netdevSection) netdevSection.style.display = 'none';
-    if (upsMonSection) upsMonSection.style.display = 'none';
-    if (speedtestSection) speedtestSection.style.display = 'none';
-    if (iperf3Section) iperf3Section.style.display = 'none';
-    if (smartSection) smartSection.style.display = 'none';
-    if (backupsMon) backupsMon.style.display = 'none';
 
     const target = document.getElementById(cfg.sectionId);
     if (target) target.style.display = 'block';
@@ -1673,16 +1677,10 @@ function openTrueNASCategoryMonitorFromMenu(kind) {
 function openServicesMonitorFromMenu() {
     const dashboardSection = document.getElementById('dashboardSection');
     const servicesSection = document.getElementById('servicesMonitorSection');
-    const vmsSection = document.getElementById('vmsMonitorSection');
-    const smartSection = document.getElementById('smartSensorsMonitorSection');
-    const backupsMon = document.getElementById('backupsMonitorSection');
     const configSection = document.getElementById('configSection');
-    hideAllTrueNASMonitorSections();
+    hideAllMonitorShellSections();
     if (dashboardSection) dashboardSection.style.display = 'none';
     if (configSection) configSection.style.display = 'none';
-    if (vmsSection) vmsSection.style.display = 'none';
-    if (smartSection) smartSection.style.display = 'none';
-    if (backupsMon) backupsMon.style.display = 'none';
     if (servicesSection) servicesSection.style.display = 'block';
     renderMonitoredServices();
 }
@@ -1701,17 +1699,11 @@ function closeServicesMonitor() {
 
 function openVmsMonitorFromMenu() {
     const dashboardSection = document.getElementById('dashboardSection');
-    const servicesSection = document.getElementById('servicesMonitorSection');
     const vmsSection = document.getElementById('vmsMonitorSection');
-    const smartSection = document.getElementById('smartSensorsMonitorSection');
-    const backupsMon = document.getElementById('backupsMonitorSection');
     const configSection = document.getElementById('configSection');
-    hideAllTrueNASMonitorSections();
+    hideAllMonitorShellSections();
     if (dashboardSection) dashboardSection.style.display = 'none';
-    if (servicesSection) servicesSection.style.display = 'none';
     if (configSection) configSection.style.display = 'none';
-    if (smartSection) smartSection.style.display = 'none';
-    if (backupsMon) backupsMon.style.display = 'none';
     if (vmsSection) vmsSection.style.display = 'block';
     renderVmsMonitorCards();
 }
@@ -1728,26 +1720,11 @@ function closeVmsMonitor() {
 
 function openNetdevMonitorFromMenu() {
     const dashboardSection = document.getElementById('dashboardSection');
-    const servicesSection = document.getElementById('servicesMonitorSection');
-    const vmsSection = document.getElementById('vmsMonitorSection');
     const netdevSection = document.getElementById('netdevMonitorSection');
-    const upsMonSection = document.getElementById('upsMonitorSection');
-    const speedtestSection = document.getElementById('speedtestMonitorSection');
-    const iperf3Section = document.getElementById('iperf3MonitorSection');
-    const smartSection = document.getElementById('smartSensorsMonitorSection');
-    const backupsMon = document.getElementById('backupsMonitorSection');
     const configSection = document.getElementById('configSection');
-
+    hideAllMonitorShellSections();
     if (dashboardSection) dashboardSection.style.display = 'none';
-    hideAllTrueNASMonitorSections();
     if (configSection) configSection.style.display = 'none';
-    if (servicesSection) servicesSection.style.display = 'none';
-    if (vmsSection) vmsSection.style.display = 'none';
-    if (upsMonSection) upsMonSection.style.display = 'none';
-    if (speedtestSection) speedtestSection.style.display = 'none';
-    if (iperf3Section) iperf3Section.style.display = 'none';
-    if (smartSection) smartSection.style.display = 'none';
-    if (backupsMon) backupsMon.style.display = 'none';
     if (netdevSection) netdevSection.style.display = 'block';
 
     updateNetdevDashboard().catch(() => {});
@@ -1766,26 +1743,11 @@ function closeNetdevMonitor() {
 
 function openSpeedtestMonitorFromMenu() {
     const dashboardSection = document.getElementById('dashboardSection');
-    const servicesSection = document.getElementById('servicesMonitorSection');
-    const vmsSection = document.getElementById('vmsMonitorSection');
     const speedtestSection = document.getElementById('speedtestMonitorSection');
-    const iperf3Section = document.getElementById('iperf3MonitorSection');
-    const netdevSection = document.getElementById('netdevMonitorSection');
-    const upsMonSection = document.getElementById('upsMonitorSection');
-    const smartSection = document.getElementById('smartSensorsMonitorSection');
-    const backupsMon = document.getElementById('backupsMonitorSection');
     const configSection = document.getElementById('configSection');
-
-    hideAllTrueNASMonitorSections();
+    hideAllMonitorShellSections();
     if (dashboardSection) dashboardSection.style.display = 'none';
     if (configSection) configSection.style.display = 'none';
-    if (servicesSection) servicesSection.style.display = 'none';
-    if (vmsSection) vmsSection.style.display = 'none';
-    if (netdevSection) netdevSection.style.display = 'none';
-    if (upsMonSection) upsMonSection.style.display = 'none';
-    if (smartSection) smartSection.style.display = 'none';
-    if (backupsMon) backupsMon.style.display = 'none';
-    if (iperf3Section) iperf3Section.style.display = 'none';
     if (speedtestSection) speedtestSection.style.display = 'block';
 
     updateSpeedtestDashboard().catch(() => {});
@@ -1793,26 +1755,11 @@ function openSpeedtestMonitorFromMenu() {
 
 function openIperf3MonitorFromMenu() {
     const dashboardSection = document.getElementById('dashboardSection');
-    const servicesSection = document.getElementById('servicesMonitorSection');
-    const vmsSection = document.getElementById('vmsMonitorSection');
-    const speedtestSection = document.getElementById('speedtestMonitorSection');
     const iperf3Section = document.getElementById('iperf3MonitorSection');
-    const netdevSection = document.getElementById('netdevMonitorSection');
-    const upsMonSection = document.getElementById('upsMonitorSection');
-    const smartSection = document.getElementById('smartSensorsMonitorSection');
-    const backupsMon = document.getElementById('backupsMonitorSection');
     const configSection = document.getElementById('configSection');
-
-    hideAllTrueNASMonitorSections();
+    hideAllMonitorShellSections();
     if (dashboardSection) dashboardSection.style.display = 'none';
     if (configSection) configSection.style.display = 'none';
-    if (servicesSection) servicesSection.style.display = 'none';
-    if (vmsSection) vmsSection.style.display = 'none';
-    if (netdevSection) netdevSection.style.display = 'none';
-    if (upsMonSection) upsMonSection.style.display = 'none';
-    if (smartSection) smartSection.style.display = 'none';
-    if (backupsMon) backupsMon.style.display = 'none';
-    if (speedtestSection) speedtestSection.style.display = 'none';
     if (iperf3Section) iperf3Section.style.display = 'block';
 
     updateIperf3Dashboard().catch(() => {});
@@ -1842,26 +1789,11 @@ function closeIperf3Monitor() {
 
 function openUpsMonitorFromMenu() {
     const dashboardSection = document.getElementById('dashboardSection');
-    const servicesSection = document.getElementById('servicesMonitorSection');
-    const vmsSection = document.getElementById('vmsMonitorSection');
-    const speedtestSection = document.getElementById('speedtestMonitorSection');
-    const iperf3Section = document.getElementById('iperf3MonitorSection');
-    const netdevSection = document.getElementById('netdevMonitorSection');
     const upsMonSection = document.getElementById('upsMonitorSection');
-    const smartSection = document.getElementById('smartSensorsMonitorSection');
-    const backupsMon = document.getElementById('backupsMonitorSection');
     const configSection = document.getElementById('configSection');
-
-    hideAllTrueNASMonitorSections();
+    hideAllMonitorShellSections();
     if (dashboardSection) dashboardSection.style.display = 'none';
     if (configSection) configSection.style.display = 'none';
-    if (servicesSection) servicesSection.style.display = 'none';
-    if (vmsSection) vmsSection.style.display = 'none';
-    if (netdevSection) netdevSection.style.display = 'none';
-    if (speedtestSection) speedtestSection.style.display = 'none';
-    if (iperf3Section) iperf3Section.style.display = 'none';
-    if (smartSection) smartSection.style.display = 'none';
-    if (backupsMon) backupsMon.style.display = 'none';
     if (upsMonSection) upsMonSection.style.display = 'block';
 
     updateUPSDashboard().catch(() => {});
@@ -1880,26 +1812,11 @@ function closeUpsMonitor() {
 
 function openSmartSensorsMonitorFromMenu() {
     const dashboardSection = document.getElementById('dashboardSection');
-    const servicesSection = document.getElementById('servicesMonitorSection');
-    const vmsSection = document.getElementById('vmsMonitorSection');
-    const speedtestSection = document.getElementById('speedtestMonitorSection');
-    const iperf3Section = document.getElementById('iperf3MonitorSection');
-    const netdevSection = document.getElementById('netdevMonitorSection');
-    const upsMonSection = document.getElementById('upsMonitorSection');
     const smartSection = document.getElementById('smartSensorsMonitorSection');
-    const backupsMon = document.getElementById('backupsMonitorSection');
     const configSection = document.getElementById('configSection');
-
-    hideAllTrueNASMonitorSections();
+    hideAllMonitorShellSections();
     if (dashboardSection) dashboardSection.style.display = 'none';
     if (configSection) configSection.style.display = 'none';
-    if (servicesSection) servicesSection.style.display = 'none';
-    if (vmsSection) vmsSection.style.display = 'none';
-    if (netdevSection) netdevSection.style.display = 'none';
-    if (upsMonSection) upsMonSection.style.display = 'none';
-    if (speedtestSection) speedtestSection.style.display = 'none';
-    if (iperf3Section) iperf3Section.style.display = 'none';
-    if (backupsMon) backupsMon.style.display = 'none';
     if (smartSection) smartSection.style.display = 'block';
 
     updateSmartSensorsDashboard().catch(() => {});
@@ -3439,23 +3356,9 @@ document.addEventListener('DOMContentLoaded', async function() {
 function showConfigSectionOnly() {
     const configSection = document.getElementById('configSection');
     const dashboardSection = document.getElementById('dashboardSection');
-    const servicesSection = document.getElementById('servicesMonitorSection');
-    const vmsSection = document.getElementById('vmsMonitorSection');
-    const upsMonSection = document.getElementById('upsMonitorSection');
-    const smartSensorsSection = document.getElementById('smartSensorsMonitorSection');
-    const backupsMon = document.getElementById('backupsMonitorSection');
-    const monitorView = document.getElementById('monitorView');
     if (configSection) configSection.style.display = 'block';
     if (dashboardSection) dashboardSection.style.display = 'none';
-    if (servicesSection) servicesSection.style.display = 'none';
-    if (vmsSection) vmsSection.style.display = 'none';
-    if (upsMonSection) upsMonSection.style.display = 'none';
-    if (smartSensorsSection) smartSensorsSection.style.display = 'none';
-    if (backupsMon) backupsMon.style.display = 'none';
-    const drawMonCfg = document.getElementById('drawMonitorSection');
-    if (drawMonCfg) drawMonCfg.style.display = 'none';
-    hideAllTrueNASMonitorSections();
-    if (monitorView) monitorView.style.display = 'none';
+    hideAllMonitorShellSections();
 }
 
 function normalizeUrlClient(u) {
@@ -11698,6 +11601,10 @@ async function renderTilesMonitorScreen(targetGridId = 'tilesMonitorGrid') {
     ]);
     if (truenasOverview && !truenasOverview.error) lastTrueNASOverviewData = truenasOverview;
 
+    if (!monitorMode || monitorCurrentView !== 'tiles') {
+        return;
+    }
+
     const placements = computeTilesMonitorPlacements(tiles);
     const html = placements.map(({ tile, gridCol, gridRow }, placementsIndex) => {
         let tileHtml = '';
@@ -11727,6 +11634,9 @@ async function renderTilesMonitorScreen(targetGridId = 'tilesMonitorGrid') {
         return `<div class="tiles-monitor-cell" style="${style}">${tileHtml}</div>`;
     }).join('');
     setHTMLIfChanged(targetGridId, html);
+    if (!monitorMode || monitorCurrentView !== 'tiles') {
+        return;
+    }
     // Important: wait for chart tiles initialization so callers (view switch)
     // can reliably resize after charts exist (prevents "blank" charts after navigation).
     await Promise.all([
@@ -11735,6 +11645,9 @@ async function renderTilesMonitorScreen(targetGridId = 'tilesMonitorGrid') {
         initHostNodeMetricChartTiles(targetGridId).catch(() => {}),
         initSmartSensorMetricChartTiles(targetGridId).catch(() => {})
     ]);
+    if (!monitorMode || monitorCurrentView !== 'tiles') {
+        return;
+    }
     initHostMetricProblemPopovers();
     } finally {
         tilesMonitorTileFooterSuppressDepth--;
@@ -11753,6 +11666,17 @@ async function renderTrueNASMonitorScreenTiles(targetGridId, type) {
             const data = await res.json().catch(() => ({}));
             if (res.ok && data && typeof data === 'object') lastTrueNASOverviewData = data;
         } catch (_) {}
+    }
+
+    const truenasViewByTileType = {
+        truenas_pool: 'truenasPools',
+        truenas_disk: 'truenasDisks',
+        truenas_service: 'truenasServices',
+        truenas_app: 'truenasApps'
+    };
+    const expectedTruenasView = truenasViewByTileType[type];
+    if (!expectedTruenasView || (monitorMode && monitorCurrentView !== expectedTruenasView)) {
+        return;
     }
 
     let tiles = [];
@@ -12245,8 +12169,7 @@ async function showConfig() {
     if (!(await ensureSettingsUnlocked())) return;
     document.getElementById('configSection').style.display = 'block';
     document.getElementById('dashboardSection').style.display = 'none';
-    const servicesSection = document.getElementById('servicesMonitorSection');
-    if (servicesSection) servicesSection.style.display = 'none';
+    hideAllMonitorShellSections();
     await loadSettingsPanelData();
     if (autoRefreshInterval) {
         clearInterval(autoRefreshInterval);
@@ -12265,13 +12188,11 @@ async function openSettingsFromMonitor() {
 async function toggleSettings() {
     const configSection = document.getElementById('configSection');
     const dashboardSection = document.getElementById('dashboardSection');
-    
-    const servicesSection = document.getElementById('servicesMonitorSection');
     if (configSection.style.display === 'none' || configSection.style.display === '') {
         if (!(await ensureSettingsUnlocked())) return;
         configSection.style.display = 'block';
         dashboardSection.style.display = 'none';
-        if (servicesSection) servicesSection.style.display = 'none';
+        hideAllMonitorShellSections();
         await loadSettingsPanelData();
         if (autoRefreshInterval) {
             clearInterval(autoRefreshInterval);
@@ -12280,7 +12201,7 @@ async function toggleSettings() {
     } else {
         configSection.style.display = 'none';
         dashboardSection.style.display = 'block';
-        if (servicesSection) servicesSection.style.display = 'none';
+        hideAllMonitorShellSections();
         if (apiToken) {
             refreshData();
             startAutoRefresh();
@@ -12367,10 +12288,6 @@ async function toggleMonitorMode() {
 
     const dashboardSection = document.getElementById('dashboardSection');
     const dashboardContent = document.getElementById('dashboardContent');
-    const servicesSection = document.getElementById('servicesMonitorSection');
-    const vmsSection = document.getElementById('vmsMonitorSection');
-    const monitorView = document.getElementById('monitorView');
-    const upsMonSection = document.getElementById('upsMonitorSection');
 
     document.body.classList.toggle('monitor-mode', monitorMode);
     applyMonitorRootLayoutClass(monitorMode);
@@ -12408,23 +12325,7 @@ async function toggleMonitorMode() {
 
         if (dashboardSection) dashboardSection.style.display = 'block';
         if (dashboardContent) dashboardContent.style.display = 'block';
-        if (servicesSection) servicesSection.style.display = 'none';
-        if (vmsSection) vmsSection.style.display = 'none';
-        if (upsMonSection) upsMonSection.style.display = 'none';
-        const smartSensorsExit = document.getElementById('smartSensorsMonitorSection');
-        if (smartSensorsExit) smartSensorsExit.style.display = 'none';
-        hideAllTrueNASMonitorSections();
-        const netdevExit = document.getElementById('netdevMonitorSection');
-        if (netdevExit) netdevExit.style.display = 'none';
-        const speedtestExit = document.getElementById('speedtestMonitorSection');
-        if (speedtestExit) speedtestExit.style.display = 'none';
-        const iperf3Exit = document.getElementById('iperf3MonitorSection');
-        if (iperf3Exit) iperf3Exit.style.display = 'none';
-        const backupsMonExit = document.getElementById('backupsMonitorSection');
-        if (backupsMonExit) backupsMonExit.style.display = 'none';
-        const drawMonExit = document.getElementById('drawMonitorSection');
-        if (drawMonExit) drawMonExit.style.display = 'none';
-        if (monitorView) monitorView.style.display = 'none';
+        hideAllMonitorShellSections();
         document.body.classList.remove('monitor-toolbar-hidden', 'monitor-dots-hidden');
         syncMonitorToolbarRevealButton();
         renderMonitorScreenDots();
@@ -12842,45 +12743,23 @@ function renderMonitorScreenDots() {
 // Переключение экранов в режиме монитора:
 // cluster/services/vms -> компактный #monitorView (без скролла/пустых зон)
 // ups/netdev/speedtest/smartSensors/backupRuns -> полноэкранные секции
-// options.transition: 'next' | 'prev' — анимация смены (свайп / стрелки / кнопки prev|next)
-function applyMonitorView(view, options) {
-    const transition = monitorMode && options && (options.transition === 'next' || options.transition === 'prev')
-        ? options.transition
-        : null;
-    const reduceMotion = typeof window.matchMedia === 'function'
-        && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-    function doApply() {
-        monitorCurrentView = view;
-        const result = monitorViewRouterManager.applyView(view, {
-            monitorMode,
-            currentServerType,
-            lastBackupsDataForMonitor
-        });
-        if (result && result.redirectedTo) {
-            applyMonitorView(result.redirectedTo);
-            return;
-        }
-
-        if (monitorMode) persistMonitorCurrentView(monitorCurrentView);
-        updateMonitorToolbarTitleForView();
-        requestAnimationFrame(() => updateHomeLabFontScale());
-    }
-
-    if (!transition || reduceMotion || typeof document.startViewTransition !== 'function') {
-        doApply();
+// Ранее второй аргумент задавал направление для View Transitions API; отключено — снимок root и
+// экраны с position:fixed давали наложение «старого» и «нового» контента при смене экрана.
+function applyMonitorView(view) {
+    monitorCurrentView = view;
+    const result = monitorViewRouterManager.applyView(view, {
+        monitorMode,
+        currentServerType,
+        lastBackupsDataForMonitor
+    });
+    if (result && result.redirectedTo) {
+        applyMonitorView(result.redirectedTo);
         return;
     }
 
-    const root = document.documentElement;
-    root.classList.remove('monitor-vt-next', 'monitor-vt-prev');
-    root.classList.add(transition === 'next' ? 'monitor-vt-next' : 'monitor-vt-prev');
-    const vt = document.startViewTransition(() => {
-        doApply();
-    });
-    void vt.finished.finally(() => {
-        root.classList.remove('monitor-vt-next', 'monitor-vt-prev');
-    });
+    if (monitorMode) persistMonitorCurrentView(monitorCurrentView);
+    updateMonitorToolbarTitleForView();
+    requestAnimationFrame(() => updateHomeLabFontScale());
 }
 
 let monitorDrawIsEraser = false;
