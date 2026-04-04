@@ -135,44 +135,75 @@
                                 <i class="bi bi-sliders"></i><span id="settingsText">Settings</span>
                             </button>
                             <div class="dropdown">
-                                <a class="btn btn-sm btn-outline-secondary app-topbar-btn dropdown-toggle" href="#" id="serverMenuDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                    <i class="bi bi-server"></i><span id="serverMenuTitle">Proxmox</span>
+                                <a class="btn btn-sm btn-outline-secondary app-topbar-btn dropdown-toggle d-inline-flex align-items-center homelab-menu-btn" href="#" id="serverMenuDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">
+                                    <i class="bi bi-server flex-shrink-0" aria-hidden="true"></i>
+                                    <span id="serverMenuTitle" class="homelab-menu-btn__current ms-1 text-truncate">Кластер</span>
                                 </a>
                                 <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="serverMenuDropdown">
-                                <li class="server-menu-backend-choice"><button class="dropdown-item" type="button" onclick="setServerType('proxmox')"><i class="bi bi-diagram-3 me-2"></i>Proxmox</button></li>
-                                <li class="server-menu-backend-choice"><button class="dropdown-item" type="button" onclick="setServerType('truenas')"><i class="bi bi-hdd-stack me-2"></i>TrueNAS</button></li>
-                                <li class="server-menu-backend-choice"><hr class="dropdown-divider"></li>
-                                <li>
-                                    <button class="dropdown-item" type="button" onclick="openServicesMonitorFromMenu()">
-                                        <i class="bi bi-activity me-2"></i><span id="menuServicesMonitorText">Мониторинг сервисов</span>
-                                    </button>
-                                </li>
-                                <li>
-                                    <button class="dropdown-item" type="button" onclick="openVmsMonitorFromMenu()">
-                                        <i class="bi bi-hdd-network me-2"></i><span id="menuVmsMonitorText">Статус VM/CT</span>
-                                    </button>
-                                </li>
-                                <li>
-                                    <button class="dropdown-item" type="button" onclick="openNetdevMonitorFromMenu()">
-                                        <i class="bi bi-diagram-3 me-2"></i><span id="menuNetdevMonitorText">Сетевые устройства (SNMP)</span>
-                                    </button>
-                                </li>
-                                <li>
-                                    <button class="dropdown-item" type="button" onclick="openSpeedtestMonitorFromMenu()">
-                                        <i class="bi bi-wifi me-2"></i><span id="menuSpeedtestMonitorText">Speedtest</span>
-                                    </button>
-                                </li>
-                                <li>
-                                    <button class="dropdown-item" type="button" onclick="openIperf3MonitorFromMenu()">
-                                        <i class="bi bi-arrow-left-right me-2"></i><span id="menuIperf3MonitorText">iperf3</span>
-                                    </button>
-                                </li>
-                                <li>
-                                    <button class="dropdown-item" type="button" onclick="openUpsMonitorFromMenu()">
-                                        <i class="bi bi-lightning-charge me-2"></i><span id="menuUpsMonitorText">UPS</span>
-                                    </button>
-                                </li>
-                            </ul>
+                                    <li>
+                                        <button class="dropdown-item" type="button" data-homelab-view="cluster" onclick="goToAppHome()">
+                                            <i class="bi bi-house-door me-2"></i><span id="menuHomelabHomeText">HomeLab</span>
+                                        </button>
+                                    </li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li>
+                                        <button class="dropdown-item" type="button" data-homelab-view="services" onclick="openServicesMonitorFromMenu()">
+                                            <i class="bi bi-activity me-2"></i><span id="menuServicesMonitorText">Мониторинг сервисов</span>
+                                        </button>
+                                    </li>
+                                    <li>
+                                        <button class="dropdown-item" type="button" data-homelab-view="vms" onclick="openVmsMonitorFromMenu()">
+                                            <i class="bi bi-hdd-network me-2"></i><span id="menuVmsMonitorText">Статус VM/CT</span>
+                                        </button>
+                                    </li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li>
+                                        <button class="dropdown-item" type="button" data-homelab-view="truenasPools" onclick="openTrueNASCategoryMonitorFromMenu('pools')">
+                                            <i class="bi bi-hdd-stack me-2"></i><span id="menuTruenasPoolsMonitorText">TrueNAS — пулы</span>
+                                        </button>
+                                    </li>
+                                    <li>
+                                        <button class="dropdown-item" type="button" data-homelab-view="truenasDisks" onclick="openTrueNASCategoryMonitorFromMenu('disks')">
+                                            <i class="bi bi-device-hdd me-2"></i><span id="menuTruenasDisksMonitorText">TrueNAS — диски</span>
+                                        </button>
+                                    </li>
+                                    <li>
+                                        <button class="dropdown-item" type="button" data-homelab-view="truenasServices" onclick="openTrueNASCategoryMonitorFromMenu('services')">
+                                            <i class="bi bi-gear me-2"></i><span id="menuTruenasServicesMonitorText">TrueNAS — сервисы</span>
+                                        </button>
+                                    </li>
+                                    <li>
+                                        <button class="dropdown-item" type="button" data-homelab-view="truenasApps" onclick="openTrueNASCategoryMonitorFromMenu('apps')">
+                                            <i class="bi bi-box-seam me-2"></i><span id="menuTruenasAppsMonitorText">TrueNAS — приложения</span>
+                                        </button>
+                                    </li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li>
+                                        <button class="dropdown-item" type="button" data-homelab-view="netdev" onclick="openNetdevMonitorFromMenu()">
+                                            <i class="bi bi-diagram-3 me-2"></i><span id="menuNetdevMonitorText">Сетевые устройства (SNMP)</span>
+                                        </button>
+                                    </li>
+                                    <li>
+                                        <button class="dropdown-item" type="button" data-homelab-view="speedtest" onclick="openSpeedtestMonitorFromMenu()">
+                                            <i class="bi bi-wifi me-2"></i><span id="menuSpeedtestMonitorText">Speedtest</span>
+                                        </button>
+                                    </li>
+                                    <li>
+                                        <button class="dropdown-item" type="button" data-homelab-view="iperf3" onclick="openIperf3MonitorFromMenu()">
+                                            <i class="bi bi-arrow-left-right me-2"></i><span id="menuIperf3MonitorText">iperf3</span>
+                                        </button>
+                                    </li>
+                                    <li>
+                                        <button class="dropdown-item" type="button" data-homelab-view="ups" onclick="openUpsMonitorFromMenu()">
+                                            <i class="bi bi-lightning-charge me-2"></i><span id="menuUpsMonitorText">ИБП</span>
+                                        </button>
+                                    </li>
+                                    <li>
+                                        <button class="dropdown-item" type="button" data-homelab-view="smartSensors" onclick="openSmartSensorsMonitorFromMenu()">
+                                            <i class="bi bi-house-heart me-2"></i><span id="menuSmartSensorsMonitorText">Датчики умного дома</span>
+                                        </button>
+                                    </li>
+                                </ul>
                             </div>
                             <button type="button" class="btn btn-sm btn-outline-secondary app-topbar-btn" onclick="toggleMonitorMode()" id="monitorModeBtn" title="Режим монитора">
                                 <i class="bi bi-display"></i><span id="monitorModeText">Монитор</span>
@@ -1786,13 +1817,6 @@
                 </div>
             </div>
 
-            <!-- Комбинируемые плитки на экране Cluster -->
-            <div class="row mb-4" id="dashboardClusterTilesSection" style="display: none;">
-                <div class="col-12">
-                    <div class="cluster-scroll-row" id="dashboardClusterTiles"></div>
-                </div>
-            </div>
-
             <div class="text-end mt-4">
                 <small class="text-muted" id="lastUpdate"></small>
             </div>
@@ -2139,12 +2163,6 @@
         <!-- Панель режима монитора (тип сервера + навигация экранов + темы + выход) -->
         <div id="monitorToolbar" class="monitor-toolbar">
             <div class="monitor-toolbar-left">
-                <div id="monitorServerTypeSelectWrap" class="monitor-toolbar-server-wrap">
-                    <select class="form-select form-select-sm monitor-toolbar-select" id="monitorServerTypeSelect" onchange="setServerType(this.value)">
-                        <option value="proxmox">Proxmox</option>
-                        <option value="truenas">TrueNAS</option>
-                    </select>
-                </div>
                 <span class="monitor-toolbar-title monitor-toolbar-title--home" id="monitorToolbarTitle" role="button" tabindex="0" onclick="goToAppHome()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();goToAppHome();}">Монитор</span>
             </div>
             <div class="monitor-toolbar-theme">

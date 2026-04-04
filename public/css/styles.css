@@ -285,6 +285,15 @@
         .app-topbar-btn.dropdown-toggle::after {
             margin-left: 0.15rem;
         }
+        .homelab-menu-btn__current {
+            max-width: 11rem;
+            font-size: 0.8125rem;
+            font-weight: 600;
+        }
+        .app-topbar-actions .dropdown-menu .dropdown-item.active,
+        .app-topbar-actions .dropdown-menu .dropdown-item:active {
+            font-weight: 600;
+        }
         .app-topbar-btn:hover,
         .app-topbar-btn:focus,
         .app-topbar-btn:focus-visible,
@@ -2206,6 +2215,63 @@
             margin: 0 !important;
             padding: var(--hm-space-3) var(--hm-space-4) var(--hm-space-4);
             overflow: hidden;
+        }
+
+        /* TrueNAS экраны: flex-колонка + скролл сетки; иначе .tiles-monitor-cell { height:100% } даёт нулевую высоту в .row */
+        body.monitor-mode #truenasPoolsMonitorSection,
+        body.monitor-mode #truenasDisksMonitorSection,
+        body.monitor-mode #truenasServicesMonitorSection,
+        body.monitor-mode #truenasAppsMonitorSection {
+            gap: var(--hm-space-2);
+        }
+        body.monitor-mode #truenasPoolsMonitorGrid,
+        body.monitor-mode #truenasDisksMonitorGrid,
+        body.monitor-mode #truenasServicesMonitorGrid,
+        body.monitor-mode #truenasAppsMonitorGrid {
+            flex: 1 1 auto;
+            min-height: 0;
+            max-height: 100%;
+            overflow-y: auto;
+            overflow-x: hidden;
+            -webkit-overflow-scrolling: touch;
+            align-content: flex-start;
+        }
+        body.monitor-mode #truenasPoolsMonitorGrid .truenas-monitor-tile-cell,
+        body.monitor-mode #truenasDisksMonitorGrid .truenas-monitor-tile-cell,
+        body.monitor-mode #truenasServicesMonitorGrid .truenas-monitor-tile-cell,
+        body.monitor-mode #truenasAppsMonitorGrid .truenas-monitor-tile-cell {
+            height: auto !important;
+            min-height: 10rem;
+        }
+        body.monitor-mode #truenasPoolsMonitorGrid .truenas-monitor-tile-cell .node-card,
+        body.monitor-mode #truenasDisksMonitorGrid .truenas-monitor-tile-cell .node-card,
+        body.monitor-mode #truenasServicesMonitorGrid .truenas-monitor-tile-cell .node-card,
+        body.monitor-mode #truenasAppsMonitorGrid .truenas-monitor-tile-cell .node-card {
+            height: auto !important;
+            min-height: 8rem;
+        }
+
+        /* Обычный режим: те же правила высоты плиток (без monitor-mode селекторов — иначе схлопывание .tiles-monitor-cell) */
+        #truenasPoolsMonitorGrid .truenas-monitor-tile-cell,
+        #truenasDisksMonitorGrid .truenas-monitor-tile-cell,
+        #truenasServicesMonitorGrid .truenas-monitor-tile-cell,
+        #truenasAppsMonitorGrid .truenas-monitor-tile-cell {
+            height: auto !important;
+            min-height: 10rem;
+        }
+        #truenasPoolsMonitorGrid .truenas-monitor-tile-cell .node-card,
+        #truenasDisksMonitorGrid .truenas-monitor-tile-cell .node-card,
+        #truenasServicesMonitorGrid .truenas-monitor-tile-cell .node-card,
+        #truenasAppsMonitorGrid .truenas-monitor-tile-cell .node-card {
+            height: auto !important;
+            min-height: 8rem;
+        }
+        #truenasPoolsMonitorGrid,
+        #truenasDisksMonitorGrid,
+        #truenasServicesMonitorGrid,
+        #truenasAppsMonitorGrid {
+            align-content: flex-start;
+            min-height: 12rem;
         }
 
         body.monitor-mode .monitor-screen__backrow {

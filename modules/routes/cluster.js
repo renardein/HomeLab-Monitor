@@ -216,6 +216,9 @@ router.get('/metric-history', checkAuth, (req, res) => {
     }
 });
 
+router.fetchClusterFullPayload = fetchClusterFullPayload;
+router.recordClusterPayloadSamples = recordClusterPayloadSamples;
+
 router.get('/full', checkAuth, async (req, res) => {
     const scopeKey = getScopeKeyFromRequest(req);
 

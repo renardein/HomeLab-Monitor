@@ -57,7 +57,7 @@
             const order = normalizeOrder(state.order);
             return order.filter((id) => {
                 if (state.enabled[id] === false) return false;
-                if (id === 'backupRuns' && state.currentServerType !== 'proxmox') return false;
+                if (id === 'backupRuns' && !state.hasProxmoxBackendAuth) return false;
                 if (id === 'speedtest' && !state.speedtestClientEnabled) return false;
                 if (id === 'iperf3' && !state.iperf3ClientEnabled) return false;
                 if (id === 'ups' && state.availability.ups === false) return false;

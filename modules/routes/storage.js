@@ -102,20 +102,24 @@ function buildStorageResult(nodes, storagesByNode) {
     };
 }
 
+async function fetchStoragePayload(req) {
+    const nodes = await proxmox.getNodes(req.token, req.serverUrl || null);
+    const rows = await Promise.all(
+        nodes.map(async (node) => {
+            const nodeName = node.node || node.name;
+            const storages = await proxmox.getNodeStorage(nodeName, req.token, req.serverUrl || null);
+            return { nodeName, storages };
+        })
+    );
+    const storagesByNode = new Map(rows.map((r) => [r.nodeName, r.storages]));
+    return buildStorageResult(nodes, storagesByNode);
+}
+
+router.fetchStoragePayload = fetchStoragePayload;
+
 router.get('/', checkAuth, async (req, res) => {
     try {
-        const result = await getCachedOrFetch('storage', req, async () => {
-            const nodes = await proxmox.getNodes(req.token, req.serverUrl || null);
-            const rows = await Promise.all(
-                nodes.map(async (node) => {
-                    const nodeName = node.node || node.name;
-                    const storages = await proxmox.getNodeStorage(nodeName, req.token, req.serverUrl || null);
-                    return { nodeName, storages };
-                })
-            );
-            const storagesByNode = new Map(rows.map((r) => [r.nodeName, r.storages]));
-            return buildStorageResult(nodes, storagesByNode);
-        });
+        const result = await getCachedOrFetch('storage', req, () => fetchStoragePayload(req));
         res.json(result);
     } catch (error) {
         log('error', `Error fetching storage: ${error.message}`);

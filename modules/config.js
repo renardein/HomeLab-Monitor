@@ -144,6 +144,17 @@ function parseUpdateApplyEnabled() {
     return v === '1' || v === 'true' || v === 'yes';
 }
 
+function parseBackgroundPollEnabled() {
+    const v = String(process.env.BACKGROUND_POLL || '').trim().toLowerCase();
+    return v === '1' || v === 'true' || v === 'yes' || v === 'on';
+}
+
+function parseBackgroundPollIntervalMs() {
+    const n = parseInt(process.env.BACKGROUND_POLL_INTERVAL_MS, 10);
+    if (Number.isFinite(n) && n >= 5000 && n <= 3600000) return n;
+    return 30000;
+}
+
 module.exports = {
     projectRoot: PROJECT_ROOT,
 
@@ -202,5 +213,11 @@ module.exports = {
     ssl,
     trustProxy,
     publicUrl,
-    cookieSecure: cookieSecureDefault()
+    cookieSecure: cookieSecureDefault(),
+
+    /** Фоновый опрос сохранённых подключений и прогрев кэша (env: BACKGROUND_POLL, BACKGROUND_POLL_INTERVAL_MS). */
+    backgroundPoll: {
+        enabled: parseBackgroundPollEnabled(),
+        intervalMs: parseBackgroundPollIntervalMs()
+    }
 };

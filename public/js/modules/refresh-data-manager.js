@@ -50,9 +50,7 @@
                     if (hmJson != null) deps.setLastHostMetricsData(hmJson);
                     const hostMetricsData = hmJson != null ? hmJson : deps.getLastHostMetricsData();
 
-                    if (deps.getCurrentServerType() !== 'truenas') {
-                        deps.updateDashboard(clusterData, storageData, backupsData, hostMetricsData);
-                    }
+                    deps.updateDashboard(clusterData, storageData, backupsData, hostMetricsData);
                 })();
 
                 const truenasTask = (async () => {
@@ -61,42 +59,52 @@
                     const overviewData = await overviewRes.json();
                     if (!overviewRes.ok) throw new Error(overviewData?.error || `overview: HTTP ${overviewRes.status}`);
                     deps.setLastTrueNASOverviewData(overviewData);
-                    if (deps.getCurrentServerType() === 'truenas') {
-                        deps.updateTrueNASDashboard(
-                            overviewData.system || {},
-                            {
-                                all: (overviewData.pools || []).map((p) => ({
-                                    node: 'truenas',
-                                    name: p.name,
-                                    type: 'pool',
-                                    used: p.used || 0,
-                                    total: p.total || 0,
-                                    used_fmt: p.used || 0,
-                                    total_fmt: p.total || 0,
-                                    usage_percent: p.total > 0 ? Math.round(((p.used || 0) / p.total) * 100) : 0,
-                                    active: p.healthy !== false,
-                                    status: p.status || null
-                                })),
-                                byType: {
-                                    pool: {
-                                        count: (overviewData.pools || []).length,
-                                        total: (overviewData.pools || []).reduce((s, x) => s + (x.total || 0), 0),
-                                        used: (overviewData.pools || []).reduce((s, x) => s + (x.used || 0), 0)
-                                    }
-                                },
-                                summary: {
-                                    total: (overviewData.pools || []).length,
-                                    active: (overviewData.pools || []).filter((p) => p.healthy !== false).length,
-                                    total_space: (overviewData.pools || []).reduce((s, x) => s + (x.total || 0), 0),
-                                    used_space: (overviewData.pools || []).reduce((s, x) => s + (x.used || 0), 0)
+                    deps.updateTrueNASDashboard(
+                        overviewData.system || {},
+                        {
+                            all: (overviewData.pools || []).map((p) => ({
+                                node: 'truenas',
+                                name: p.name,
+                                type: 'pool',
+                                used: p.used || 0,
+                                total: p.total || 0,
+                                used_fmt: p.used || 0,
+                                total_fmt: p.total || 0,
+                                usage_percent: p.total > 0 ? Math.round(((p.used || 0) / p.total) * 100) : 0,
+                                active: p.healthy !== false,
+                                status: p.status || null
+                            })),
+                            byType: {
+                                pool: {
+                                    count: (overviewData.pools || []).length,
+                                    total: (overviewData.pools || []).reduce((s, x) => s + (x.total || 0), 0),
+                                    used: (overviewData.pools || []).reduce((s, x) => s + (x.used || 0), 0)
                                 }
                             },
-                            overviewData
-                        );
-                    }
+                            summary: {
+                                total: (overviewData.pools || []).length,
+                                active: (overviewData.pools || []).filter((p) => p.healthy !== false).length,
+                                total_space: (overviewData.pools || []).reduce((s, x) => s + (x.total || 0), 0),
+                                used_space: (overviewData.pools || []).reduce((s, x) => s + (x.used || 0), 0)
+                            }
+                        },
+                        overviewData
+                    );
                 })();
 
-                await Promise.all([proxmoxTask, truenasTask]);
+                const [proxmoxResult, truenasResult] = await Promise.allSettled([proxmoxTask, truenasTask]);
+                const refreshErrors = [];
+                if (proxmoxHeaders && proxmoxResult.status === 'rejected') {
+                    const r = proxmoxResult.reason;
+                    refreshErrors.push(r && r.message ? r.message : String(r));
+                }
+                if (truenasHeaders && truenasResult.status === 'rejected') {
+                    const r = truenasResult.reason;
+                    refreshErrors.push(r && r.message ? r.message : String(r));
+                }
+                if (refreshErrors.length && !silent) {
+                    deps.showToast(deps.t('errorUpdate') + ': ' + refreshErrors.join(' · '), 'error');
+                }
 
                 await deps.renderClusterDashboardTiles();
                 // На экране Tiles не обновляем превью в настройках (#tilesNormalGrid) — иначе каждый тик
@@ -156,7 +164,7 @@
                         deps.renderClusterDashboardTiles().catch(() => {});
                     });
                 }
-                if (!silent) deps.showToast(deps.t('dataUpdated'), 'success');
+                if (!silent && !refreshErrors.length) deps.showToast(deps.t('dataUpdated'), 'success');
                 requestAnimationFrame(() => deps.updateHomeLabFontScale());
             } catch (error) {
                 if (!silent) deps.showToast(deps.t('errorUpdate') + ': ' + error.message, 'error');

@@ -170,7 +170,27 @@ async function request(endpoint, apiKey, method = 'GET', data = null, serverUrl 
     } catch (error) {
         const status = error?.response?.status;
         const statusText = error?.response?.statusText;
-        log('error', `TrueNAS API Error: ${error.message}${status ? ` (HTTP ${status}${statusText ? ` ${statusText}` : ''})` : ''}`);
+        // #region agent log
+        if (status === 404 || status === 405) {
+            fetch('http://127.0.0.1:7761/ingest/4b68827a-4247-479e-b5db-497c21a615ff', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '860a6c' },
+                body: JSON.stringify({
+                    sessionId: '860a6c',
+                    location: 'truenas-api.js:request',
+                    message: 'TrueNAS HTTP probe/fallback status',
+                    data: { statMethod, status, hypothesisId: 'H1' },
+                    timestamp: Date.now(),
+                    hypothesisId: 'H1'
+                })
+            }).catch(() => {});
+        }
+        // #endregion
+        const msg = `TrueNAS API Error: ${error.message}${status ? ` (HTTP ${status}${statusText ? ` ${statusText}` : ''})` : ''}`;
+        // 404/405 часто ожидаемы: tryFallbackGet, getReportingSnapshot, detectCapabilities — не засоряем error-лог.
+        if (status !== 404 && status !== 405) {
+            log('error', msg);
+        }
         if (error.response) {
             updateIntegrationStats(statMethod, startMs, error);
             throw error;

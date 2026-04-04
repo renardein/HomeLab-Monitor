@@ -70,7 +70,7 @@
                 monitorView: elements.monitorView
             });
 
-            if (view === 'backupRuns' && state.currentServerType !== 'proxmox') {
+            if (view === 'backupRuns' && !state.hasProxmoxBackendAuth) {
                 return { redirectedTo: 'cluster' };
             }
 
@@ -109,25 +109,48 @@
                 const maybeRefresh = deps.refreshData ? deps.refreshData({ silent: true }) : Promise.resolve();
                 Promise.resolve(maybeRefresh).then(() => deps.renderTilesMonitorScreen())
                     .then(() => {
-                        // Один отложенный resize после layout; двойной rAF+timeout давал лишние chart.resize() и нагрузку.
+                        // После display:block размеры контейнера часто 0×0 до reflow; resize + update перерисовывает Chart.js.
                         requestAnimationFrame(() => {
                             setTimeout(() => {
                                 try { deps.resizeTilesCharts && deps.resizeTilesCharts(); } catch (_) {}
+                                setTimeout(() => {
+                                    try { deps.resizeTilesCharts && deps.resizeTilesCharts(); } catch (_) {}
+                                }, 320);
                             }, 120);
                         });
                     })
                     .catch(() => {});
             } else if (view === 'truenasPools') {
-                if (elements.truenasPoolsMonSection) elements.truenasPoolsMonSection.style.display = 'block';
+                if (elements.truenasPoolsMonSection) {
+                    const el = elements.truenasPoolsMonSection;
+                    el.style.display = 'flex';
+                    el.style.flexDirection = 'column';
+                    el.style.minHeight = '0';
+                }
                 deps.renderTrueNASMonitorScreenTiles('truenasPoolsMonitorGrid', 'truenas_pool').catch(() => {});
             } else if (view === 'truenasDisks') {
-                if (elements.truenasDisksMonSection) elements.truenasDisksMonSection.style.display = 'block';
+                if (elements.truenasDisksMonSection) {
+                    const el = elements.truenasDisksMonSection;
+                    el.style.display = 'flex';
+                    el.style.flexDirection = 'column';
+                    el.style.minHeight = '0';
+                }
                 deps.renderTrueNASMonitorScreenTiles('truenasDisksMonitorGrid', 'truenas_disk').catch(() => {});
             } else if (view === 'truenasServices') {
-                if (elements.truenasServicesMonSection) elements.truenasServicesMonSection.style.display = 'block';
+                if (elements.truenasServicesMonSection) {
+                    const el = elements.truenasServicesMonSection;
+                    el.style.display = 'flex';
+                    el.style.flexDirection = 'column';
+                    el.style.minHeight = '0';
+                }
                 deps.renderTrueNASMonitorScreenTiles('truenasServicesMonitorGrid', 'truenas_service').catch(() => {});
             } else if (view === 'truenasApps') {
-                if (elements.truenasAppsMonSection) elements.truenasAppsMonSection.style.display = 'block';
+                if (elements.truenasAppsMonSection) {
+                    const el = elements.truenasAppsMonSection;
+                    el.style.display = 'flex';
+                    el.style.flexDirection = 'column';
+                    el.style.minHeight = '0';
+                }
                 deps.renderTrueNASMonitorScreenTiles('truenasAppsMonitorGrid', 'truenas_app').catch(() => {});
             } else if (view === 'backupRuns') {
                 if (elements.backupsMon) elements.backupsMon.style.display = 'flex';

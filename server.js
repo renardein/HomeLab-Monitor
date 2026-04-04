@@ -110,6 +110,10 @@ app.get('/api/debug', (req, res) => {
     const settingsStore = require('./modules/settings-store');
     const cacheStats = cache.stats && typeof cache.stats === 'function' ? cache.stats() : {};
     const cacheKeys = cache.keys && typeof cache.keys === 'function' ? cache.keys() : [];
+    let backgroundPoll = null;
+    try {
+        backgroundPoll = require('./modules/backend-poller').getStatus();
+    } catch (_) {}
     const logDir = process.env.LOG_DIR
         ? String(process.env.LOG_DIR)
         : path.join(__dirname, 'data', 'logs');
@@ -143,7 +147,8 @@ app.get('/api/debug', (req, res) => {
             dir: logDir,
             appLogSizeBytes: logFileSizeBytes,
             appLog1SizeBytes: logRotated1SizeBytes
-        }
+        },
+        backgroundPoll
     });
 });
 
@@ -279,6 +284,11 @@ getDb()
             require('./modules/monitor-notify').startMonitorNotifyScheduler();
         } catch (e) {
             log('warn', `Monitor notify scheduler: ${e.message}`);
+        }
+        try {
+            require('./modules/backend-poller').start();
+        } catch (e) {
+            log('warn', `Background poller: ${e.message}`);
         }
         const scheme = config.ssl.enabled ? 'https' : 'http';
         const publicBase = config.publicUrl || `${scheme}://localhost:${config.port}`;

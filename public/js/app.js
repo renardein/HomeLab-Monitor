@@ -36,7 +36,6 @@ let settingsSessionTtlMinutes = 30;
 const SETTINGS_UNLOCK_EXPIRY_KEY = 'settings_unlock_expiry';
 /** Время последнего успешного обновления данных (для раздела отладки) */
 let lastRefreshTime = null;
-let currentServerType = 'proxmox'; // 'proxmox' | 'truenas'
 const THRESHOLD_DEFAULTS = {
     cpuGreen: 70, cpuYellow: 90, cpuRed: 100,
     ramGreen: 70, ramYellow: 90, ramRed: 100
@@ -218,12 +217,11 @@ const connectionManager = window.ConnectionManagerModule.createManager({
     t,
     showToast,
     showDashboard,
-    getCurrentServerType: () => currentServerType,
     getApiToken: () => apiToken,
     setApiToken: (v) => { apiToken = v; },
-    getCurrentConnectionId: () => getCurrentConnectionId(),
+    getConnectionIdForType: (backendType) => getConnectionIdForType(backendType),
     syncProxmoxApiTokenFromParts: () => syncProxmoxApiTokenFromParts(),
-    getCurrentServerUrl: () => getCurrentServerUrl(),
+    getServerUrlForType: (backendType) => getServerUrlForType(backendType),
     saveConnectionId: (type, url, id) => saveConnectionId(type, url, id),
     setDisplay: (id, value) => setDisplay(id, value)
 });
@@ -1575,52 +1573,93 @@ function tParams(key, vars) {
     return s;
 }
 
-function setServerType(type) {
-    // UI now works in HomeLab mode; keep TrueNAS data only as tiles data source.
-    currentServerType = 'proxmox';
-    saveSettingsToServer({ serverType: currentServerType });
+/** Обычный режим: экран Homelab, открытый из меню (совпадает с id экранов монитора). */
+let homelabNormalNavView = 'cluster';
 
-    const monitorSelect = document.getElementById('monitorServerTypeSelect');
-    if (monitorSelect) monitorSelect.value = currentServerType;
-    const serverMenuTitle = document.getElementById('serverMenuTitle');
-    if (serverMenuTitle) {
-        serverMenuTitle.textContent = currentServerType === 'truenas' ? 'TrueNAS' : 'HomeLab';
+function getHomelabViewTitle(viewId, clusterTitleKey) {
+    const clusterKey = clusterTitleKey || 'homelabNavDashboard';
+    const titles = {
+        cluster: t(clusterKey),
+        tiles: t('monitorScreenTiles'),
+        truenasPools: t('monitorScreenTruenasPools'),
+        truenasDisks: t('monitorScreenTruenasDisks'),
+        truenasServices: t('monitorScreenTruenasServices'),
+        truenasApps: t('monitorScreenTruenasApps'),
+        ups: t('monitorScreenUps'),
+        netdev: t('monitorScreenNetdev'),
+        speedtest: t('monitorScreenSpeedtest'),
+        iperf3: t('monitorScreenIperf3'),
+        smartSensors: t('monitorScreenSmartSensors'),
+        vms: t('monitorScreenVms'),
+        services: t('monitorScreenServices'),
+        backupRuns: t('monitorScreenBackupRuns'),
+        draw: t('monitorScreenDraw')
+    };
+    return titles[viewId] || t('monitorMode');
+}
+
+function updateHomelabMenuChrome() {
+    const sectionEl = document.getElementById('serverMenuTitle');
+
+    const cfg = document.getElementById('configSection');
+    const settingsOpen = cfg && cfg.style.display === 'block';
+
+    let subsection = '';
+    if (settingsOpen) {
+        subsection = t('settings');
+    } else if (monitorMode) {
+        subsection = getHomelabViewTitle(monitorCurrentView);
+    } else {
+        subsection = getHomelabViewTitle(homelabNormalNavView);
     }
 
-    renderServerList();
-    updateCurrentServerBadge();
+    if (sectionEl) sectionEl.textContent = subsection;
 
-    // Hide/Show tabs that are not applicable
-    const isTrueNAS = currentServerType === 'truenas';
+    let activeKey = null;
+    if (!settingsOpen) {
+        activeKey = monitorMode ? monitorCurrentView : homelabNormalNavView;
+    }
+    document.querySelectorAll('[data-homelab-view]').forEach((el) => {
+        const v = el.getAttribute('data-homelab-view');
+        const on = !!activeKey && v === activeKey;
+        el.classList.toggle('active', on);
+        if (on) el.setAttribute('aria-current', 'true');
+        else el.removeAttribute('aria-current');
+    });
+}
+
+function setHomelabNormalNavView(viewId) {
+    homelabNormalNavView = typeof viewId === 'string' && viewId ? viewId : 'cluster';
+    updateHomelabMenuChrome();
+}
+
+/** Единый HomeLab: переключатель Proxmox/TrueNAS снят. Вызовы из разметки оставлены как no-op. */
+function setServerType(_type) {
+    syncHomelabChrome();
+}
+
+function syncHomelabChrome() {
+    updateHomelabMenuChrome();
     const backupsTab = document.getElementById('backups-tab')?.closest('li');
     const quorumTab = document.getElementById('quorum-tab')?.closest('li');
-    const nodesTab = document.getElementById('nodes-tab')?.closest('li');
-    const storageTab = document.getElementById('storage-tab')?.closest('li');
-    //const serversTab = document.getElementById('servers-tab')?.closest('li');
-    const tilesTab = document.getElementById('tiles-tab')?.closest('li');
     const myTab = document.getElementById('myTab');
     const tabNodesLabel = document.getElementById('tabNodes');
     const tabStorageLabel = document.getElementById('tabStorage');
     const tabServersLabel = document.getElementById('tabServers');
-    if (backupsTab) backupsTab.style.display = isTrueNAS ? 'none' : '';
-    if (quorumTab) quorumTab.style.display = isTrueNAS ? 'none' : '';
-    if (nodesTab) nodesTab.style.display = '';
-    if (storageTab) storageTab.style.display = '';
-    //if (serversTab) serversTab.style.display = '';
-    if (tilesTab) tilesTab.style.display = '';
+    if (backupsTab) backupsTab.style.display = '';
+    if (quorumTab) quorumTab.style.display = '';
+    if (myTab) myTab.style.display = '';
     if (tabNodesLabel) tabNodesLabel.textContent = t('tabNodes');
     if (tabStorageLabel) tabStorageLabel.textContent = t('tabStorage');
     if (tabServersLabel) tabServersLabel.textContent = t('tabServers');
-    if (myTab) myTab.style.display = isTrueNAS ? 'none' : '';
 
-    // Переключаем активную вкладку при смене типа
-    if (!isTrueNAS) {
-        const defaultTabId = 'nodes-tab';
-        const btn = document.getElementById(defaultTabId);
-        if (btn) btn.click();
-    }
+    const monitorSelectWrap = document.getElementById('monitorServerTypeSelectWrap');
+    if (monitorSelectWrap) monitorSelectWrap.classList.add('d-none');
+    document.querySelectorAll('.server-menu-backend-choice').forEach((el) => el.classList.add('d-none'));
 
-    if (monitorMode && isTrueNAS && monitorCurrentView === 'backupRuns') {
+    updateCurrentServerBadge();
+
+    if (monitorMode && monitorCurrentView === 'backupRuns' && !getAuthHeadersForType('proxmox')) {
         applyMonitorView('cluster');
     }
 }
@@ -1654,6 +1693,24 @@ function hideAllMonitorShellSections() {
 }
 
 function openTrueNASCategoryMonitorFromMenu(kind) {
+    const viewByKind = {
+        pools: 'truenasPools',
+        disks: 'truenasDisks',
+        services: 'truenasServices',
+        apps: 'truenasApps'
+    };
+    const view = viewByKind[kind];
+    if (!view) return;
+
+    // В режиме монитора обязательно синхронизировать monitorCurrentView с экраном — иначе
+    // renderTrueNASMonitorScreenTiles() выходит по guard и сетка остаётся пустой.
+    if (monitorMode) {
+        applyMonitorView(view);
+        return;
+    }
+
+    setHomelabNormalNavView(view);
+
     const map = {
         pools: { sectionId: 'truenasPoolsMonitorSection', gridId: 'truenasPoolsMonitorGrid', type: 'truenas_pool' },
         disks: { sectionId: 'truenasDisksMonitorSection', gridId: 'truenasDisksMonitorGrid', type: 'truenas_disk' },
@@ -1661,8 +1718,6 @@ function openTrueNASCategoryMonitorFromMenu(kind) {
         apps: { sectionId: 'truenasAppsMonitorSection', gridId: 'truenasAppsMonitorGrid', type: 'truenas_app' }
     };
     const cfg = map[kind];
-    if (!cfg) return;
-
     const dashboardSection = document.getElementById('dashboardSection');
     const configSection = document.getElementById('configSection');
     hideAllMonitorShellSections();
@@ -1670,7 +1725,11 @@ function openTrueNASCategoryMonitorFromMenu(kind) {
     if (configSection) configSection.style.display = 'none';
 
     const target = document.getElementById(cfg.sectionId);
-    if (target) target.style.display = 'block';
+    if (target) {
+        target.style.display = 'flex';
+        target.style.flexDirection = 'column';
+        target.style.minHeight = '0';
+    }
 
     renderTrueNASMonitorScreenTiles(cfg.gridId, cfg.type).catch(() => {});
 }
@@ -1683,6 +1742,7 @@ function openServicesMonitorFromMenu() {
     if (dashboardSection) dashboardSection.style.display = 'none';
     if (configSection) configSection.style.display = 'none';
     if (servicesSection) servicesSection.style.display = 'block';
+    setHomelabNormalNavView('services');
     renderMonitoredServices();
 }
 
@@ -1706,6 +1766,7 @@ function openVmsMonitorFromMenu() {
     if (dashboardSection) dashboardSection.style.display = 'none';
     if (configSection) configSection.style.display = 'none';
     if (vmsSection) vmsSection.style.display = 'block';
+    setHomelabNormalNavView('vms');
     renderVmsMonitorCards();
 }
 
@@ -1727,6 +1788,7 @@ function openNetdevMonitorFromMenu() {
     if (dashboardSection) dashboardSection.style.display = 'none';
     if (configSection) configSection.style.display = 'none';
     if (netdevSection) netdevSection.style.display = 'block';
+    setHomelabNormalNavView('netdev');
 
     updateNetdevDashboard().catch(() => {});
 }
@@ -1750,6 +1812,7 @@ function openSpeedtestMonitorFromMenu() {
     if (dashboardSection) dashboardSection.style.display = 'none';
     if (configSection) configSection.style.display = 'none';
     if (speedtestSection) speedtestSection.style.display = 'block';
+    setHomelabNormalNavView('speedtest');
 
     updateSpeedtestDashboard().catch(() => {});
 }
@@ -1762,6 +1825,7 @@ function openIperf3MonitorFromMenu() {
     if (dashboardSection) dashboardSection.style.display = 'none';
     if (configSection) configSection.style.display = 'none';
     if (iperf3Section) iperf3Section.style.display = 'block';
+    setHomelabNormalNavView('iperf3');
 
     updateIperf3Dashboard().catch(() => {});
 }
@@ -1796,6 +1860,7 @@ function openUpsMonitorFromMenu() {
     if (dashboardSection) dashboardSection.style.display = 'none';
     if (configSection) configSection.style.display = 'none';
     if (upsMonSection) upsMonSection.style.display = 'block';
+    setHomelabNormalNavView('ups');
 
     updateUPSDashboard().catch(() => {});
 }
@@ -1819,6 +1884,7 @@ function openSmartSensorsMonitorFromMenu() {
     if (dashboardSection) dashboardSection.style.display = 'none';
     if (configSection) configSection.style.display = 'none';
     if (smartSection) smartSection.style.display = 'block';
+    setHomelabNormalNavView('smartSensors');
 
     updateSmartSensorsDashboard().catch(() => {});
 }
@@ -2421,6 +2487,7 @@ function updateUILanguage() {
         removeServer: 'removeServer',
         currentServer: 'currentServer',
         monitorModeText: 'monitorMode',
+        menuHomelabHomeText: 'menuHomelabLabel',
         menuVmsMonitorText: 'menuVmsMonitorText',
         menuNetdevMonitorText: 'monitorScreenNetdev',
         menuSpeedtestMonitorText: 'monitorScreenSpeedtest',
@@ -2516,7 +2583,7 @@ function updateUILanguage() {
         setText('monitorTotalNodesLabel', t('totalNodes'));
         setText('monitorOnlineNodesLabel', t('nodesOnline'));
         setText('monitorQuorumLabel', t('quorum'));
-        setText('monitorNodesTitle', currentServerType === 'truenas' ? t('tabServers') : t('tabNodes'));
+        setText('monitorNodesTitle', (!getAuthHeadersForType('proxmox') && getAuthHeadersForType('truenas')) ? t('tabServers') : t('tabNodes'));
         setText('monitorServicesTitle', t('tabServicesMonitor'));
         setText('backupsMonitorTitle', t('backupSectionExecTitle'));
         updateMonitorToolbarTitleForView();
@@ -2824,7 +2891,6 @@ function updateUILanguage() {
     setText('speedtestProxyHint', t('speedtestProxyHint'));
     setText('speedtestRunNowText', t('speedtestRunNowText'));
     setText('speedtestClearHistoryText', t('speedtestClearHistoryText'));
-    setText('dashboardClusterTilesTitle', t('dashboardClusterTilesTitle'));
     setText('speedtestLastRunLabel', t('speedtestLastRunLabel'));
     setText('speedtestAvgLabel', t('speedtestAvgLabel'));
     setText('speedtestMinLabel', t('speedtestMinLabel'));
@@ -2927,6 +2993,7 @@ function updateUILanguage() {
     updateSpeedtestProxySettingsUI(false);
     localizeSetupWizard();
     syncClusterResourcesCardInteractivity();
+    updateHomelabMenuChrome();
 }
 
 function localizeSetupWizard() {
@@ -2974,7 +3041,6 @@ function setupWizardFillLangSelect() {
 }
 
 function setupWizardSyncFromWizardToConfig() {
-    currentServerType = setupWizardServerType === 'truenas' ? 'truenas' : 'proxmox';
     if (setupWizardServerType === 'proxmox') {
         const url = (document.getElementById('wizardProxmoxUrl') && document.getElementById('wizardProxmoxUrl').value.trim()) || '';
         const idPart = (document.getElementById('wizardApiTokenId') && document.getElementById('wizardApiTokenId').value.trim()) || '';
@@ -3094,7 +3160,6 @@ function setupWizardBindOnce() {
         }
         setupWizardSyncFromWizardToConfig();
         await saveSettingsToServer({
-            serverType: setupWizardServerType === 'truenas' ? 'truenas' : 'proxmox',
             proxmoxServers,
             truenasServers,
             currentServerIndex,
@@ -3102,7 +3167,10 @@ function setupWizardBindOnce() {
         });
         connectBtn.disabled = true;
         try {
-            const ok = await connect({ skipDashboard: true });
+            const ok = await connect({
+                skipDashboard: true,
+                backendType: setupWizardServerType === 'truenas' ? 'truenas' : 'proxmox'
+            });
             if (ok) {
                 setupWizardFinishMode = 'success';
                 setupWizardStep = 4;
@@ -3236,7 +3304,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     // иначе после F5 снова подставлялся только «серверный» язык.
     const chosenLang = settingsLang || userLang || envLang || (availableLanguages[0] || 'ru');
     setLanguage(chosenLang);
-    setServerType(currentServerType);
+    syncHomelabChrome();
 
     // Proxmox token parts -> keep hidden legacy input in sync
     try {
@@ -3362,6 +3430,7 @@ function showConfigSectionOnly() {
     if (configSection) configSection.style.display = 'block';
     if (dashboardSection) dashboardSection.style.display = 'none';
     hideAllMonitorShellSections();
+    updateHomelabMenuChrome();
 }
 
 function normalizeUrlClient(u) {
@@ -4531,7 +4600,7 @@ function getConnectionIdForType(type) {
 }
 
 function getCurrentConnectionId() {
-    return getConnectionIdForType(currentServerType);
+    return getConnectionIdForType('proxmox');
 }
 
 function getServerUrlForType(type) {
@@ -4549,8 +4618,7 @@ function getAuthHeadersForType(type) {
     if (connId) {
         return { 'X-Connection-Id': connId, 'X-Server-Url': serverUrl };
     }
-    // Raw token exists only for currently active backend type in UI/session.
-    if (currentServerType !== backendType || !apiToken) return null;
+    if (!apiToken) return null;
     return {
         'Authorization': apiToken,
         'X-Server-Url': serverUrl
@@ -4558,23 +4626,15 @@ function getAuthHeadersForType(type) {
 }
 
 function getCurrentProxmoxHeaders() {
-    if (currentServerType !== 'proxmox') return null;
-    const headers = getAuthHeadersForType('proxmox');
-    if (headers) return headers;
-    if (!apiToken) return null;
-    return null;
+    return getAuthHeadersForType('proxmox');
 }
 
 function getCurrentTrueNASHeaders() {
-    if (currentServerType !== 'truenas') return null;
-    const headers = getAuthHeadersForType('truenas');
-    if (headers) return headers;
-    if (!apiToken) return null;
-    return null;
+    return getAuthHeadersForType('truenas');
 }
 
 function getAuthHeadersForCurrentServerType() {
-    return currentServerType === 'truenas' ? getCurrentTrueNASHeaders() : getCurrentProxmoxHeaders();
+    return getCurrentProxmoxHeaders() || getCurrentTrueNASHeaders();
 }
 
 function saveConnectionId(type, url, id) {
@@ -4583,8 +4643,8 @@ function saveConnectionId(type, url, id) {
 
     // Обновляем списки серверов, чтобы URL в настройках совпадал с тем, что в DB
     if (type === 'proxmox') {
-        const servers = getServersForCurrentType();
-        const idx = getCurrentIndexForType();
+        const servers = proxmoxServers;
+        const idx = currentServerIndex;
         if (servers && typeof idx === 'number' && servers[idx]) {
             const previousUrl = servers[idx];
             const oldKey = connectionKey(type, previousUrl);
@@ -4596,8 +4656,8 @@ function saveConnectionId(type, url, id) {
             return;
         }
     } else if (type === 'truenas') {
-        const servers = getServersForCurrentType();
-        const idx = getCurrentIndexForType();
+        const servers = truenasServers;
+        const idx = currentTrueNASServerIndex;
         if (servers && typeof idx === 'number' && servers[idx]) {
             const previousUrl = servers[idx];
             const oldKey = connectionKey(type, previousUrl);
@@ -4616,18 +4676,18 @@ function saveConnectionId(type, url, id) {
 
 // (Запоминание токенов через cookies больше не используется; все секреты хранятся в DB через /api/connections/upsert)
 
-// Logout (called after logoutAs(type) sets currentServerType)
-async function logout() {
+async function logoutBackend(backendType) {
+    const type = backendType === 'truenas' ? 'truenas' : 'proxmox';
     try {
-        const url = getCurrentServerUrl();
-        delete connectionIdMap[connectionKey(currentServerType, url)];
+        const url = getServerUrlForType(type);
+        delete connectionIdMap[connectionKey(type, url)];
         saveSettingsToServer({ connectionIdMap: { ...connectionIdMap } });
         showToast(t('logoutSuccess'), 'success');
         apiToken = null;
-        const tokenInputId = currentServerType === 'truenas' ? 'apiTokenTrueNAS' : 'apiToken';
-        const logoutContainerId = currentServerType === 'truenas' ? 'logoutContainerTrueNAS' : 'logoutContainerProxmox';
+        const tokenInputId = type === 'truenas' ? 'apiTokenTrueNAS' : 'apiToken';
+        const logoutContainerId = type === 'truenas' ? 'logoutContainerTrueNAS' : 'logoutContainerProxmox';
         setValue(tokenInputId, '');
-        if (currentServerType === 'proxmox') {
+        if (type === 'proxmox') {
             const idEl = document.getElementById('apiTokenId');
             const secretEl = document.getElementById('apiTokenSecret');
             if (idEl) setValue('apiTokenId', '');
@@ -4635,6 +4695,7 @@ async function logout() {
             if (idEl || secretEl) syncProxmoxApiTokenFromParts();
         }
         setDisplay(logoutContainerId, 'none');
+        updateConnectionStatus(false, type);
         showConfig();
     } catch (error) {
         showToast(tParams('toastLogoutError', { msg: error.message }), 'error');
@@ -4642,8 +4703,7 @@ async function logout() {
 }
 
 function logoutAs(type) {
-    currentServerType = type === 'truenas' ? 'truenas' : 'proxmox';
-    logout();
+    logoutBackend(type === 'truenas' ? 'truenas' : 'proxmox');
 }
 
 // Check server status
@@ -4950,7 +5010,7 @@ async function loadSettingsPanelData() {
     } catch (e) {
         console.error('Failed to load services for settings:', e);
     }
-    if (currentServerType === 'proxmox') {
+    if (getAuthHeadersForType('proxmox')) {
         await loadClusterVmsForSettings({ silent: true });
         if (monitoredVmIds.length === 0 && getClusterVms().length > 0) {
             monitoredVmIds = getClusterVms().map(v => v.vmid).filter(id => !monitorHiddenVmIds.includes(Number(id)));
@@ -5539,46 +5599,55 @@ function getClusterDashboardTileSourceOptions(type) {
     }
 
     if (type === 'service') {
-        if (currentServerType === 'truenas') {
-            return (Array.isArray(lastTrueNASOverviewData?.services) ? lastTrueNASOverviewData.services : []).map((svc, idx) => {
+        const out = [];
+        if (getAuthHeadersForType('proxmox')) {
+            out.push(...(Array.isArray(monitoredServices) ? monitoredServices : []).map((svc) => ({
+                value: `service:${svc.id}`,
+                label: `${svc.name || getServiceTargetDisplay(svc)}`
+            })));
+        }
+        if (getAuthHeadersForType('truenas')) {
+            out.push(...(Array.isArray(lastTrueNASOverviewData?.services) ? lastTrueNASOverviewData.services : []).map((svc, idx) => {
                 const sid = String(svc?.entityId || svc?.id || svc?.name || (idx + 1));
                 return {
                     value: `service:${sid}`,
-                    label: `${svc?.name || ('Service ' + (idx + 1))}`
+                    label: `[TrueNAS] ${svc?.name || ('Service ' + (idx + 1))}`
                 };
-            });
+            }));
         }
-        return (Array.isArray(monitoredServices) ? monitoredServices : []).map((svc) => ({
-            value: `service:${svc.id}`,
-            label: `${svc.name || getServiceTargetDisplay(svc)}`
-        }));
+        return out;
     }
 
     if (type === 'vmct') {
-        if (currentServerType === 'truenas') {
-            return (Array.isArray(lastTrueNASOverviewData?.apps) ? lastTrueNASOverviewData.apps : []).map((app, idx) => {
+        const out = [];
+        if (getAuthHeadersForType('proxmox')) {
+            const clusterVms = getClusterVms();
+            if (clusterVms.length) {
+                out.push(...clusterVms.map((vm) => {
+                    const id = Number(vm.vmid != null ? vm.vmid : vm.id);
+                    const node = vm.node ? ` (${vm.node})` : '';
+                    return {
+                        value: `vmct:${id}`,
+                        label: `${vm.name || ('VM/CT ' + id)} [${id}]${node}`
+                    };
+                }));
+            } else {
+                out.push(...monitoredVmIds.map((id) => ({
+                    value: `vmct:${id}`,
+                    label: `VM/CT ${id}`
+                })));
+            }
+        }
+        if (getAuthHeadersForType('truenas')) {
+            out.push(...(Array.isArray(lastTrueNASOverviewData?.apps) ? lastTrueNASOverviewData.apps : []).map((app, idx) => {
                 const aid = String(app?.entityId || app?.id || app?.name || (idx + 1));
                 return {
                     value: `vmct:${aid}`,
-                    label: `${app?.name || ('App ' + (idx + 1))}`
+                    label: `[TrueNAS] ${app?.name || ('App ' + (idx + 1))}`
                 };
-            });
+            }));
         }
-        const clusterVms = getClusterVms();
-        if (clusterVms.length) {
-            return clusterVms.map((vm) => {
-                const id = Number(vm.vmid != null ? vm.vmid : vm.id);
-                const node = vm.node ? ` (${vm.node})` : '';
-                return {
-                    value: `vmct:${id}`,
-                    label: `${vm.name || ('VM/CT ' + id)} [${id}]${node}`
-                };
-            });
-        }
-        return monitoredVmIds.map((id) => ({
-            value: `vmct:${id}`,
-            label: `VM/CT ${id}`
-        }));
+        return out;
     }
 
     if (type === 'speedtest') {
@@ -7965,7 +8034,7 @@ function renderHostMetricsRows(items, state = null) {
     const empty = document.getElementById('hostMetricsSettingsEmpty');
     if (!tbody || !empty) return;
 
-    if (currentServerType !== 'proxmox') {
+    if (!getAuthHeadersForType('proxmox')) {
         tbody.innerHTML = '';
         empty.classList.remove('d-none');
         empty.textContent = t('hostMetricsProxmoxOnly') || 'Метрики хостов доступны только для Proxmox.';
@@ -8179,7 +8248,7 @@ async function saveHostMetricsSettings() {
 
         showToast(t('toastHostMetricsSaved') || 'Настройки метрик хостов сохранены', 'success');
         await refreshHostMetricsDiscovery({ silent: true });
-        if (currentServerType === 'proxmox' && (getCurrentConnectionId() || apiToken)) {
+        if (getAuthHeadersForType('proxmox')) {
             refreshData({ silent: true });
         }
     } catch (e) {
@@ -8271,7 +8340,7 @@ function syncClusterResourcesCardInteractivity() {
     const clusterBody = el('clusterResourcesCardBody');
     const clusterHint = el('clusterResourcesChartHint');
     if (!clusterBody) return;
-    const isProxmox = currentServerType === 'proxmox';
+    const isProxmox = !!getAuthHeadersForType('proxmox');
     clusterBody.classList.toggle('cursor-pointer', isProxmox);
     clusterBody.classList.toggle('cluster-resources-chart-trigger', isProxmox);
     clusterBody.setAttribute('role', isProxmox ? 'button' : 'region');
@@ -8331,14 +8400,18 @@ function applyTilesChartPointStyleToChart(chart, canvas) {
 }
 
 function renderHostNodeMetricLineChart(canvas, series, dsLabel, lineRgb, yUnit) {
+    const isTileMetricChart = canvas?.dataset?.tileCompact === '1';
+    const seriesForChart =
+        !isTileMetricChart && Array.isArray(series) && series.length > 1200
+            ? downsampleMetricSeriesEvenly(series, 1200)
+            : series;
     const locale = currentLanguage === 'ru' ? 'ru-RU' : 'en-US';
-    const labels = series.map((p) => new Date(p.t).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
-    const dataVals = series.map((p) => p.v);
+    const labels = seriesForChart.map((p) => new Date(p.t).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+    const dataVals = seriesForChart.map((p) => p.v);
     const showAxisTime = canvas?.dataset?.tileAxisTime !== '0';
     const showAxisValues = canvas?.dataset?.tileAxisValues !== '0';
     const showAxisYUnit = canvas?.dataset?.tileAxisYUnit !== '0';
     const yTitleText = (yUnit && String(yUnit).trim()) ? String(yUnit).trim() : '';
-    const isTileMetricChart = canvas?.dataset?.tileCompact === '1';
     const hideLegend = isTileMetricChart || canvas?.dataset?.upsMetricTile === '1';
     const tilePoints = isTileMetricChart ? getTilesChartPointStyleForSeries(canvas, dataVals.length) : null;
     const dark = typeof document !== 'undefined' && document.body && (
@@ -8354,7 +8427,7 @@ function renderHostNodeMetricLineChart(canvas, series, dsLabel, lineRgb, yUnit) 
         text: yTitleText || yUnit,
         color: tickColor
     };
-    const pr = tilePoints ? tilePoints.pointRadius : (series.length === 1 ? 6 : 2);
+    const pr = tilePoints ? tilePoints.pointRadius : (seriesForChart.length === 1 ? 6 : 2);
     const ph = tilePoints ? tilePoints.pointHover : 4;
     return new Chart(canvas.getContext('2d'), {
         type: 'line',
@@ -8721,7 +8794,7 @@ async function refreshClusterAggregateChartsData({ showLoading } = { showLoading
 }
 
 async function openClusterAggregateMetricsModal() {
-    if (currentServerType !== 'proxmox') return;
+    if (!getAuthHeadersForType('proxmox')) return;
     if (typeof Chart === 'undefined') {
         showToast(t('hostNodeCpuTempChartNoLib') || 'Chart library failed to load', 'warning');
         return;
@@ -8767,12 +8840,12 @@ function initClusterAggregateChartsOnce() {
     const clusterBody = document.getElementById('clusterResourcesCardBody');
     if (clusterBody) {
         clusterBody.addEventListener('click', () => {
-            if (currentServerType !== 'proxmox') return;
+            if (!getAuthHeadersForType('proxmox')) return;
             void openClusterAggregateMetricsModal();
         });
         clusterBody.addEventListener('keydown', (e) => {
             if (e.key !== 'Enter' && e.key !== ' ') return;
-            if (currentServerType !== 'proxmox') return;
+            if (!getAuthHeadersForType('proxmox')) return;
             e.preventDefault();
             void openClusterAggregateMetricsModal();
         });
@@ -9058,6 +9131,16 @@ function initHostMetricProblemPopovers() {
     document.querySelectorAll('.host-problem-trigger').forEach((el) => {
         const existing = bootstrap.Popover.getInstance(el);
         if (existing) existing.dispose();
+        if (el._hostProblemPopoverOnShown) {
+            el.removeEventListener('shown.bs.popover', el._hostProblemPopoverOnShown);
+            el.removeEventListener('hide.bs.popover', el._hostProblemPopoverOnHide);
+            el._hostProblemPopoverOnShown = null;
+            el._hostProblemPopoverOnHide = null;
+        }
+        if (el._hostProblemPopoverTimer) {
+            clearTimeout(el._hostProblemPopoverTimer);
+            el._hostProblemPopoverTimer = null;
+        }
         const raw = String(el.getAttribute('data-problem-lines') || '').trim();
         if (!raw) return;
         const lines = raw.split('\n').map((x) => x.trim()).filter(Boolean);
@@ -9070,7 +9153,7 @@ function initHostMetricProblemPopovers() {
             sanitize: true,
             content
         });
-        el.addEventListener('shown.bs.popover', () => {
+        const onShown = () => {
             if (el._hostProblemPopoverTimer) {
                 clearTimeout(el._hostProblemPopoverTimer);
             }
@@ -9078,13 +9161,17 @@ function initHostMetricProblemPopovers() {
                 try { popover.hide(); } catch (_) {}
                 el._hostProblemPopoverTimer = null;
             }, 3000);
-        });
-        el.addEventListener('hide.bs.popover', () => {
+        };
+        const onHide = () => {
             if (el._hostProblemPopoverTimer) {
                 clearTimeout(el._hostProblemPopoverTimer);
                 el._hostProblemPopoverTimer = null;
             }
-        });
+        };
+        el.addEventListener('shown.bs.popover', onShown);
+        el.addEventListener('hide.bs.popover', onHide);
+        el._hostProblemPopoverOnShown = onShown;
+        el._hostProblemPopoverOnHide = onHide;
     });
 }
 
@@ -10264,100 +10351,106 @@ function getClusterNetdevFieldValue(field) {
 }
 
 function buildClusterServiceTileHtml(tile) {
-    if (currentServerType === 'truenas' && Array.isArray(lastTrueNASOverviewData?.services)) {
+    const id = clusterTileSourceNumericId(tile, 'service');
+    if (getAuthHeadersForType('proxmox') && Number.isFinite(id)) {
+        const service = (Array.isArray(monitoredServices) ? monitoredServices : []).find((svc) => Number(svc.id) === id);
+        if (service) {
+            const statusBadge = service.lastStatus === 'up'
+                ? clusterTileHeaderStatusHtml('bg-success', t('connected'))
+                : (service.lastStatus === 'down'
+                    ? clusterTileHeaderStatusHtml('bg-danger', t('serverError'))
+                    : clusterTileHeaderStatusHtml('bg-secondary', t('notConnected')));
+            const target = getServiceTargetDisplay(service);
+            const latency = typeof service.lastLatency === 'number' ? `${service.lastLatency} ms` : '—';
+            const iconHtml = renderServiceIconHtml(service, 'service-monitor-icon');
+            const bodyHtml = [
+                `<div class="col-12"><div class="small text-muted mb-1"><span class="badge bg-secondary me-1">${escapeHtml((service.type || 'tcp').toUpperCase())}</span><code>${escapeHtml(target)}</code></div></div>`,
+                buildClusterDashboardMetricCell(t('serviceLatencyHeader') || 'Latency', latency, null, null, 'col-6'),
+                buildClusterDashboardMetricCell(t('serviceTypeLabel') || 'Type', (service.type || 'tcp').toUpperCase(), null, null, 'col-6')
+            ].join('');
+            return buildClusterDashboardTileShell(
+                `${iconHtml}<span class="text-truncate">${escapeHtml(service.name || target)}</span>`,
+                statusBadge,
+                bodyHtml,
+                ''
+            );
+        }
+    }
+    if (getAuthHeadersForType('truenas') && Array.isArray(lastTrueNASOverviewData?.services)) {
         const source = clusterTileSourceValue(tile, 'service');
         const numeric = parseInt(source, 10);
-        const service = lastTrueNASOverviewData.services.find((svc, idx) =>
+        const tnSvc = lastTrueNASOverviewData.services.find((svc, idx) =>
             String(svc?.entityId || svc?.id || svc?.name || '') === source
             || (Number.isFinite(numeric) && (Number(svc?.id) === numeric || (idx + 1) === numeric))
         );
-        if (!service) return buildClusterDashboardUnavailableTile(t('menuServicesMonitorText') || 'Service', t('servicesNotConfigured') || 'Сервис не найден');
-        const statusBadge = clusterTileHeaderStatusHtml(
-            service.running ? 'bg-success' : 'bg-warning text-dark',
-            service.running ? t('connected') : (t('serverError') || 'Error')
-        );
-        const bodyHtml = [
-            buildClusterDashboardMetricCell(t('serviceTypeLabel') || 'Type', 'TrueNAS', null, null, 'col-6'),
-            buildClusterDashboardMetricCell(t('monVmStatusCol') || 'Status', service.statusLabel || 'unknown', null, null, 'col-6')
-        ].join('');
-        return buildClusterDashboardTileShell(
-            `<i class="bi bi-hdd-network me-2 text-info"></i><span class="text-truncate">${escapeHtml(service.name || 'Service')}</span>`,
-            statusBadge,
-            bodyHtml,
-            ''
-        );
+        if (tnSvc) {
+            const statusBadge = clusterTileHeaderStatusHtml(
+                tnSvc.running ? 'bg-success' : 'bg-warning text-dark',
+                tnSvc.running ? t('connected') : (t('serverError') || 'Error')
+            );
+            const bodyHtml = [
+                buildClusterDashboardMetricCell(t('serviceTypeLabel') || 'Type', 'TrueNAS', null, null, 'col-6'),
+                buildClusterDashboardMetricCell(t('monVmStatusCol') || 'Status', tnSvc.statusLabel || 'unknown', null, null, 'col-6')
+            ].join('');
+            return buildClusterDashboardTileShell(
+                `<i class="bi bi-hdd-network me-2 text-info"></i><span class="text-truncate">${escapeHtml(tnSvc.name || 'Service')}</span>`,
+                statusBadge,
+                bodyHtml,
+                ''
+            );
+        }
     }
-    const id = clusterTileSourceNumericId(tile, 'service');
-    const service = (Array.isArray(monitoredServices) ? monitoredServices : []).find((svc) => Number(svc.id) === id);
-    if (!service) {
-        return buildClusterDashboardUnavailableTile(t('menuServicesMonitorText') || 'Service', t('servicesNotConfigured') || 'Сервис не найден');
-    }
-    const statusBadge = service.lastStatus === 'up'
-        ? clusterTileHeaderStatusHtml('bg-success', t('connected'))
-        : (service.lastStatus === 'down'
-            ? clusterTileHeaderStatusHtml('bg-danger', t('serverError'))
-            : clusterTileHeaderStatusHtml('bg-secondary', t('notConnected')));
-    const target = getServiceTargetDisplay(service);
-    const latency = typeof service.lastLatency === 'number' ? `${service.lastLatency} ms` : '—';
-    const iconHtml = renderServiceIconHtml(service, 'service-monitor-icon');
-    const bodyHtml = [
-        `<div class="col-12"><div class="small text-muted mb-1"><span class="badge bg-secondary me-1">${escapeHtml((service.type || 'tcp').toUpperCase())}</span><code>${escapeHtml(target)}</code></div></div>`,
-        buildClusterDashboardMetricCell(t('serviceLatencyHeader') || 'Latency', latency, null, null, 'col-6'),
-        buildClusterDashboardMetricCell(t('serviceTypeLabel') || 'Type', (service.type || 'tcp').toUpperCase(), null, null, 'col-6')
-    ].join('');
-    return buildClusterDashboardTileShell(
-        `${iconHtml}<span class="text-truncate">${escapeHtml(service.name || target)}</span>`,
-        statusBadge,
-        bodyHtml,
-        ''
-    );
+    return buildClusterDashboardUnavailableTile(t('menuServicesMonitorText') || 'Service', t('servicesNotConfigured') || 'Сервис не найден');
 }
 
 function buildClusterVmTileHtml(tile) {
-    if (currentServerType === 'truenas' && Array.isArray(lastTrueNASOverviewData?.apps)) {
+    const id = clusterTileSourceNumericId(tile, 'vmct');
+    if (getAuthHeadersForType('proxmox') && Number.isFinite(id)) {
+        const vm = getClusterVms().find((entry) => Number(entry.vmid != null ? entry.vmid : entry.id) === id);
+        if (vm) {
+            const status = vm.status || 'unknown';
+            const statusClass = getVmStatusBadgeClass(status);
+            const statusLabel = getVmStatusLabel(status);
+            const typeLabel = (vm.type || 'vm').toUpperCase();
+            const note = vm.node ? `${vm.node}${vm.vmid != null ? ` / ${vm.vmid}` : ''}` : (vm.note || '');
+            const iconHtml = renderVmIconHtml(vm, 'vm-monitor-icon');
+            const bodyHtml = [
+                buildClusterDashboardMetricCell(t('monVmTypeCol') || 'Type', typeLabel, null, null, 'col-6'),
+                buildClusterDashboardMetricCell(t('monVmNodeCol') || 'Node', vm.node || '—', null, null, 'col-6'),
+                buildClusterDashboardMetricCell('ID', vm.vmid != null ? String(vm.vmid) : String(vm.id || '—'), null, null, 'col-6 mt-2'),
+                buildClusterDashboardMetricCell(t('monVmStatusCol') || 'Status', statusLabel, null, null, 'col-6 mt-2')
+            ].join('');
+            return buildClusterDashboardTileShell(
+                `${iconHtml}<span class="text-truncate">${escapeHtml(vm.name || `VM/CT ${id}`)}</span>`,
+                clusterTileHeaderStatusHtml(statusClass, statusLabel),
+                bodyHtml,
+                escapeHtml(note)
+            );
+        }
+    }
+    if (getAuthHeadersForType('truenas') && Array.isArray(lastTrueNASOverviewData?.apps)) {
         const source = clusterTileSourceValue(tile, 'vmct');
         const numeric = parseInt(source, 10);
         const app = lastTrueNASOverviewData.apps.find((entry, idx) =>
             String(entry?.entityId || entry?.id || entry?.name || '') === source
             || (Number.isFinite(numeric) && (Number(entry?.id) === numeric || (idx + 1) === numeric))
         );
-        if (!app) return buildClusterDashboardUnavailableTile('APP', t('vmListEmpty') || 'App не найден');
-        const statusClass = app.running ? 'bg-success' : 'bg-warning text-dark';
-        const statusLabel = app.statusLabel || (app.running ? 'running' : 'stopped');
-        const bodyHtml = [
-            buildClusterDashboardMetricCell(t('monVmTypeCol') || 'Type', 'APP', null, null, 'col-6'),
-            buildClusterDashboardMetricCell(t('monVmStatusCol') || 'Status', statusLabel, null, null, 'col-6')
-        ].join('');
-        return buildClusterDashboardTileShell(
-            `<i class="bi bi-boxes me-2 text-primary"></i><span class="text-truncate">${escapeHtml(app.name || 'App')}</span>`,
-            clusterTileHeaderStatusHtml(statusClass, statusLabel),
-            bodyHtml,
-            'TrueNAS Apps'
-        );
+        if (app) {
+            const statusClass = app.running ? 'bg-success' : 'bg-warning text-dark';
+            const statusLabel = app.statusLabel || (app.running ? 'running' : 'stopped');
+            const bodyHtml = [
+                buildClusterDashboardMetricCell(t('monVmTypeCol') || 'Type', 'APP', null, null, 'col-6'),
+                buildClusterDashboardMetricCell(t('monVmStatusCol') || 'Status', statusLabel, null, null, 'col-6')
+            ].join('');
+            return buildClusterDashboardTileShell(
+                `<i class="bi bi-boxes me-2 text-primary"></i><span class="text-truncate">${escapeHtml(app.name || 'App')}</span>`,
+                clusterTileHeaderStatusHtml(statusClass, statusLabel),
+                bodyHtml,
+                'TrueNAS Apps'
+            );
+        }
     }
-    const id = clusterTileSourceNumericId(tile, 'vmct');
-    const vm = getClusterVms().find((entry) => Number(entry.vmid != null ? entry.vmid : entry.id) === id);
-    if (!vm) {
-        return buildClusterDashboardUnavailableTile(`VM/CT ${Number.isFinite(id) ? id : ''}`.trim(), t('vmListEmpty') || 'VM/CT не найден');
-    }
-    const status = vm.status || 'unknown';
-    const statusClass = getVmStatusBadgeClass(status);
-    const statusLabel = getVmStatusLabel(status);
-    const typeLabel = (vm.type || 'vm').toUpperCase();
-    const note = vm.node ? `${vm.node}${vm.vmid != null ? ` / ${vm.vmid}` : ''}` : (vm.note || '');
-    const iconHtml = renderVmIconHtml(vm, 'vm-monitor-icon');
-    const bodyHtml = [
-        buildClusterDashboardMetricCell(t('monVmTypeCol') || 'Type', typeLabel, null, null, 'col-6'),
-        buildClusterDashboardMetricCell(t('monVmNodeCol') || 'Node', vm.node || '—', null, null, 'col-6'),
-        buildClusterDashboardMetricCell('ID', vm.vmid != null ? String(vm.vmid) : String(vm.id || '—'), null, null, 'col-6 mt-2'),
-        buildClusterDashboardMetricCell(t('monVmStatusCol') || 'Status', statusLabel, null, null, 'col-6 mt-2')
-    ].join('');
-    return buildClusterDashboardTileShell(
-        `${iconHtml}<span class="text-truncate">${escapeHtml(vm.name || `VM/CT ${id}`)}</span>`,
-        clusterTileHeaderStatusHtml(statusClass, statusLabel),
-        bodyHtml,
-        escapeHtml(note)
-    );
+    return buildClusterDashboardUnavailableTile(`VM/CT ${Number.isFinite(id) ? id : ''}`.trim(), t('vmListEmpty') || 'VM/CT не найден');
 }
 
 function buildClusterNetdevTileHtml(tile, payload) {
@@ -10546,6 +10639,16 @@ function tilesMonitorGridDomIdSuffix(targetGridId) {
     return s || 'grid';
 }
 
+/** Живой грид плиток монитора: не рисуем/не обновляем Chart после await, если пользователь уже ушёл с экрана — иначе 0×0 и «пустые» графики. */
+function isTilesMonitorLiveContextOk(targetGridId) {
+    if (targetGridId !== 'tilesMonitorGrid') return true;
+    if (!monitorMode || monitorCurrentView !== 'tiles') return false;
+    const sec = document.getElementById('tilesMonitorSection');
+    if (!sec) return false;
+    const cs = window.getComputedStyle(sec);
+    return cs.display !== 'none' && cs.visibility !== 'hidden';
+}
+
 function tilesChartAxisOptionsDatasetAttr() {
     return {
         'data-tile-axis-time': monitorTilesChartAxisTime ? '1' : '0',
@@ -10566,6 +10669,7 @@ function resizeTilesCharts() {
             const ch = map[key];
             if (!ch) continue;
             try { ch.resize(); } catch (_) {}
+            try { ch.update('none'); } catch (_) {}
             const cv = ch.canvas;
             if (cv instanceof HTMLCanvasElement) applyTilesChartPointStyleToChart(ch, cv);
         }
@@ -10652,6 +10756,7 @@ function updateOrCreateLineChart({ canvas, chartMap, series, dsLabel, lineRgb, y
             sy.title.display = !!(showAxisYUnit && yTitleText);
             sy.title.text = yUnit;
         }
+        try { existing.update('none'); } catch (_) {}
         applyTilesChartPointStyleToChart(existing, canvas);
         return existing;
     }
@@ -10896,6 +11001,7 @@ async function initUpsMetricChartTiles(targetGridId) {
             const url = `/api/ups/metric-history?slot=${encodeURIComponent(slot)}&metric=${encodeURIComponent(metricId)}`;
             const res = await fetch(url);
             const data = await res.json().catch(() => ({}));
+            if (!isTilesMonitorLiveContextOk(targetGridId)) return;
 
             if (!res.ok || data?.error) {
                 showTileEmptyIfNoChart({ canvas, emptyEl, chartMap: upsMetricTileCharts, message: String(data?.error || `HTTP ${res.status}` || emptyText) });
@@ -10991,6 +11097,8 @@ async function initClusterMetricChartTiles(targetGridId) {
             const url = `/api/cluster/metric-history?metric=${encodeURIComponent(metric)}`;
             const res = await fetch(url, { headers });
             const data = await res.json().catch(() => ({}));
+            if (!isTilesMonitorLiveContextOk(targetGridId)) return;
+
             if (!res.ok || data?.error) {
                 showTileEmptyIfNoChart({ canvas, emptyEl, chartMap: clusterMetricTileCharts, message: String(data?.error || `HTTP ${res.status}` || emptyText) });
                 return;
@@ -11170,6 +11278,8 @@ async function initHostNodeMetricChartTiles(targetGridId) {
             const url = `/api/host-metrics/node-metric-history?node=${encodeURIComponent(node)}&metric=${encodeURIComponent(metric || 'cpu')}`;
             const res = await fetch(url, { headers });
             const data = await res.json().catch(() => ({}));
+            if (!isTilesMonitorLiveContextOk(targetGridId)) return;
+
             if (!res.ok || data?.error) {
                 showTileEmptyIfNoChart({ canvas, emptyEl, chartMap: hostNodeMetricTileCharts, message: String(data?.error || `HTTP ${res.status}` || emptyTextDefault) });
                 return;
@@ -11225,6 +11335,8 @@ async function initSmartSensorMetricChartTiles(targetGridId) {
             const url = `/api/smart-sensors/metric-history?sensorId=${encodeURIComponent(sensorId)}&field=${encodeURIComponent(fieldKey)}`;
             const res = await fetch(url);
             const data = await res.json().catch(() => ({}));
+            if (!isTilesMonitorLiveContextOk(targetGridId)) return;
+
             if (!res.ok || data?.error) {
                 showTileEmptyIfNoChart({ canvas, emptyEl, chartMap: smartSensorMetricTileCharts, message: String(data?.error || `HTTP ${res.status}` || emptyText) });
                 return;
@@ -11521,6 +11633,27 @@ function buildClusterTrueNASServerTileHtml(tile) {
     );
 }
 
+function hasClientTrueNASOverviewData() {
+    const d = lastTrueNASOverviewData;
+    if (!d || typeof d !== 'object' || d.error) return false;
+    if (d.system && typeof d.system === 'object' && Object.keys(d.system).length) return true;
+    if (Array.isArray(d.pools) && d.pools.length) return true;
+    if (Array.isArray(d.apps) && d.apps.length) return true;
+    if (Array.isArray(d.disks) && d.disks.length) return true;
+    return false;
+}
+
+/** Плитка по умолчанию, если в настройках нет ни одной плитки кластера, но TrueNAS уже отдал overview. */
+function syntheticTrueNASServerTileForDisplay({ forTilesScreen }) {
+    const normalized = normalizeClusterDashboardTile({
+        type: 'truenas_server',
+        sourceId: 'truenas_server:current',
+        showOnCluster: true,
+        showOnTiles: !!forTilesScreen
+    });
+    return normalized || null;
+}
+
 function buildClusterTrueNASAppTileHtml(tile) {
     if (!Array.isArray(lastTrueNASOverviewData?.apps)) {
         return buildClusterDashboardUnavailableTile('TrueNAS App', t('backupNoData') || 'Нет данных');
@@ -11551,12 +11684,12 @@ async function renderClusterDashboardTiles() {
     const containerEl = document.getElementById('dashboardClusterTiles');
     if (!sectionEl || !containerEl) return;
 
-    // Tiles are disabled on the HomeLab (Cluster) screen.
-    sectionEl.style.display = 'none';
-    setHTMLIfChanged('dashboardClusterTiles', '');
-    return;
-
-    const tiles = normalizeClusterDashboardTiles(clusterDashboardTiles).filter((tile) => tile.showOnCluster !== false);
+    let tiles = normalizeClusterDashboardTiles(clusterDashboardTiles).filter((tile) => tile.showOnCluster !== false);
+    const tnAuth = getAuthHeadersForType('truenas');
+    if (!tiles.length && tnAuth && hasClientTrueNASOverviewData()) {
+        const syn = syntheticTrueNASServerTileForDisplay({ forTilesScreen: false });
+        if (syn) tiles = [syn];
+    }
     if (!tiles.length) {
         sectionEl.style.display = 'none';
         setHTMLIfChanged('dashboardClusterTiles', '');
@@ -11568,9 +11701,10 @@ async function renderClusterDashboardTiles() {
     const needSpeedtest = tiles.some((tile) => tile.type === 'speedtest');
     const needIperf3 = tiles.some((tile) => tile.type === 'iperf3');
 
-    const fetchJson = async (url) => {
+    const fetchJson = async (url, headers) => {
         try {
-            const res = await fetch(url);
+            const init = headers && typeof headers === 'object' ? { headers } : {};
+            const res = await fetch(url, init);
             const data = await res.json().catch(() => ({}));
             return res.ok ? data : { error: data?.error || `HTTP ${res.status}` };
         } catch (e) {
@@ -11579,12 +11713,22 @@ async function renderClusterDashboardTiles() {
     };
 
     const needTrueNASOverview = tiles.some((tile) => ['truenas_server', 'truenas_pool', 'truenas_disk', 'truenas_service', 'truenas_app'].includes(tile.type));
+    const truenasOverviewPromise = (async () => {
+        if (!needTrueNASOverview) return null;
+        const h = getAuthHeadersForType('truenas');
+        if (h) {
+            const data = await fetchJson('/api/truenas/overview', h);
+            if (data && !data.error) return data;
+        }
+        const cached = lastTrueNASOverviewData;
+        return cached && typeof cached === 'object' && !cached.error ? cached : null;
+    })();
     const [netdevPayload, upsPayload, speedtestSummary, iperf3Summary, truenasOverview] = await Promise.all([
         needNetdev ? fetchJson('/api/netdevices/current') : Promise.resolve(null),
         needUps ? fetchJson('/api/ups/current') : Promise.resolve(null),
         needSpeedtest ? fetchJson('/api/speedtest/summary') : Promise.resolve(null),
         needIperf3 ? fetchJson('/api/iperf3/summary') : Promise.resolve(null),
-        needTrueNASOverview ? fetchJson('/api/truenas/overview') : Promise.resolve(null)
+        truenasOverviewPromise
     ]);
     if (truenasOverview && !truenasOverview.error) lastTrueNASOverviewData = truenasOverview;
 
@@ -11623,6 +11767,12 @@ async function renderTilesMonitorScreen(targetGridId = 'tilesMonitorGrid') {
     try {
     const gridEl = document.getElementById(targetGridId);
     if (!gridEl) return;
+    const onLiveTilesScreen = monitorMode && monitorCurrentView === 'tiles';
+    const isLiveGrid = targetGridId === 'tilesMonitorGrid';
+    const isSettingsPreviewGrid = targetGridId === 'tilesNormalGrid';
+    if (isLiveGrid && !onLiveTilesScreen) return;
+    if (isSettingsPreviewGrid && onLiveTilesScreen) return;
+
     gridEl.classList.add('tiles-monitor-grid');
     gridEl.style.setProperty('--tiles-grid-cols', String(TILES_MONITOR_GRID_COLS));
     gridEl.style.setProperty('--tiles-grid-rows', String(TILES_MONITOR_GRID_ROWS));
@@ -11632,6 +11782,13 @@ async function renderTilesMonitorScreen(targetGridId = 'tilesMonitorGrid') {
     // show Cluster set to avoid an empty monitor screen.
     if (!tiles.length) {
         tiles = normalizedTiles.filter((tile) => tile.showOnCluster !== false);
+    }
+    if (!tiles.length) {
+        const tnAuth = getAuthHeadersForType('truenas');
+        if (tnAuth && hasClientTrueNASOverviewData()) {
+            const syn = syntheticTrueNASServerTileForDisplay({ forTilesScreen: true });
+            if (syn) tiles = [syn];
+        }
     }
     if (!tiles.length) {
         setHTMLIfChanged(targetGridId, `<div class="tiles-monitor-cell tiles-monitor-cell--empty" style="grid-column: 1 / -1; grid-row: 1 / -1;"><div class="monitor-view__empty">${escapeHtml(t('backupNoData') || 'Нет данных')}</div></div>`);
@@ -11645,9 +11802,10 @@ async function renderTilesMonitorScreen(targetGridId = 'tilesMonitorGrid') {
     const needSmartSensors = tiles.some((tile) => tile.type === 'smart_sensor' || tile.type === 'smart_sensor_metric_chart');
     const needTrueNASOverview = tiles.some((tile) => ['truenas_server', 'truenas_pool', 'truenas_disk', 'truenas_service', 'truenas_app'].includes(tile.type));
 
-    const fetchJson = async (url) => {
+    const fetchJson = async (url, headers) => {
         try {
-            const res = await fetch(url);
+            const init = headers && typeof headers === 'object' ? { headers } : {};
+            const res = await fetch(url, init);
             const data = await res.json().catch(() => ({}));
             return res.ok ? data : { error: data?.error || `HTTP ${res.status}` };
         } catch (e) {
@@ -11655,19 +11813,28 @@ async function renderTilesMonitorScreen(targetGridId = 'tilesMonitorGrid') {
         }
     };
 
+    const truenasOverviewPromise = (async () => {
+        if (!needTrueNASOverview) return null;
+        const h = getAuthHeadersForType('truenas');
+        if (h) {
+            const data = await fetchJson('/api/truenas/overview', h);
+            if (data && !data.error) return data;
+        }
+        const cached = lastTrueNASOverviewData;
+        return cached && typeof cached === 'object' && !cached.error ? cached : null;
+    })();
     const [netdevPayload, upsPayload, speedtestSummary, iperf3Summary, smartSensorsPayload, truenasOverview] = await Promise.all([
         needNetdev ? fetchJson('/api/netdevices/current') : Promise.resolve(null),
         needUps ? fetchJson('/api/ups/current') : Promise.resolve(null),
         needSpeedtest ? fetchJson('/api/speedtest/summary') : Promise.resolve(null),
         needIperf3 ? fetchJson('/api/iperf3/summary') : Promise.resolve(null),
         needSmartSensors ? fetchJson('/api/smart-sensors/current') : Promise.resolve(null),
-        needTrueNASOverview ? fetchJson('/api/truenas/overview') : Promise.resolve(null)
+        truenasOverviewPromise
     ]);
     if (truenasOverview && !truenasOverview.error) lastTrueNASOverviewData = truenasOverview;
 
-    if (!monitorMode || monitorCurrentView !== 'tiles') {
-        return;
-    }
+    if (isLiveGrid && !(monitorMode && monitorCurrentView === 'tiles')) return;
+    if (isSettingsPreviewGrid && monitorMode && monitorCurrentView === 'tiles') return;
 
     const placements = computeTilesMonitorPlacements(tiles);
     const html = placements.map(({ tile, gridCol, gridRow }, placementsIndex) => {
@@ -11698,9 +11865,8 @@ async function renderTilesMonitorScreen(targetGridId = 'tilesMonitorGrid') {
         return `<div class="tiles-monitor-cell" style="${style}">${tileHtml}</div>`;
     }).join('');
     setHTMLIfChanged(targetGridId, html);
-    if (!monitorMode || monitorCurrentView !== 'tiles') {
-        return;
-    }
+    if (isLiveGrid && !(monitorMode && monitorCurrentView === 'tiles')) return;
+    if (isSettingsPreviewGrid && monitorMode && monitorCurrentView === 'tiles') return;
     // Important: wait for chart tiles initialization so callers (view switch)
     // can reliably resize after charts exist (prevents "blank" charts after navigation).
     await Promise.all([
@@ -11709,13 +11875,33 @@ async function renderTilesMonitorScreen(targetGridId = 'tilesMonitorGrid') {
         initHostNodeMetricChartTiles(targetGridId).catch(() => {}),
         initSmartSensorMetricChartTiles(targetGridId).catch(() => {})
     ]);
-    if (!monitorMode || monitorCurrentView !== 'tiles') {
-        return;
-    }
+    if (isLiveGrid && !(monitorMode && monitorCurrentView === 'tiles')) return;
+    if (isSettingsPreviewGrid && monitorMode && monitorCurrentView === 'tiles') return;
     initHostMetricProblemPopovers();
     } finally {
         tilesMonitorTileFooterSuppressDepth--;
     }
+}
+
+function truenasMonitorSectionIdForGrid(targetGridId) {
+    const map = {
+        truenasPoolsMonitorGrid: 'truenasPoolsMonitorSection',
+        truenasDisksMonitorGrid: 'truenasDisksMonitorSection',
+        truenasServicesMonitorGrid: 'truenasServicesMonitorSection',
+        truenasAppsMonitorGrid: 'truenasAppsMonitorSection'
+    };
+    return map[targetGridId] || null;
+}
+
+/** Секция TrueNAS на экране реально показана (не полагаемся на monitorCurrentView после await — гонка со свайпом). */
+function isTruenasMonitorGridSectionVisible(targetGridId) {
+    const sid = truenasMonitorSectionIdForGrid(targetGridId);
+    if (!sid) return true;
+    const el = document.getElementById(sid);
+    if (!el) return false;
+    if (el.style.display === 'none') return false;
+    const cs = window.getComputedStyle(el);
+    return cs.display !== 'none' && cs.visibility !== 'hidden' && Number(cs.opacity || '1') !== 0;
 }
 
 async function renderTrueNASMonitorScreenTiles(targetGridId, type) {
@@ -11724,22 +11910,36 @@ async function renderTrueNASMonitorScreenTiles(targetGridId, type) {
     tilesMonitorTileFooterSuppressDepth++;
     try {
     const auth = getAuthHeadersForType('truenas');
-    if (auth) {
-        try {
-            const res = await fetch('/api/truenas/overview', { headers: auth });
-            const data = await res.json().catch(() => ({}));
-            if (res.ok && data && typeof data === 'object') lastTrueNASOverviewData = data;
-        } catch (_) {}
+    if (!auth) {
+        delete htmlCache[targetGridId];
+        const msg = t('errorNoToken') || t('tokenRequired') || 'Нет авторизации TrueNAS';
+        setHTML(targetGridId, `<div class="col-12"><div class="alert alert-warning mb-0 monitor-view__empty">${escapeHtml(msg)}</div></div>`);
+        return;
     }
 
-    const truenasViewByTileType = {
-        truenas_pool: 'truenasPools',
-        truenas_disk: 'truenasDisks',
-        truenas_service: 'truenasServices',
-        truenas_app: 'truenasApps'
-    };
-    const expectedTruenasView = truenasViewByTileType[type];
-    if (!expectedTruenasView || (monitorMode && monitorCurrentView !== expectedTruenasView)) {
+    let fetchErr = null;
+    try {
+        const res = await fetch('/api/truenas/overview', { headers: auth });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data && typeof data === 'object') {
+            lastTrueNASOverviewData = data;
+        } else {
+            fetchErr = (data && data.error) ? String(data.error) : `HTTP ${res.status}`;
+        }
+    } catch (e) {
+        fetchErr = e && e.message ? e.message : String(e);
+    }
+
+    // В обычном режиме не отбрасываем ответ (меню TrueNAS): проверка видимости нужна только в monitor-mode
+    // после await, чтобы не рисовать в скрытую секцию при быстром свайпе.
+    if (monitorMode && !isTruenasMonitorGridSectionVisible(targetGridId)) {
+        return;
+    }
+
+    if (fetchErr) {
+        delete htmlCache[targetGridId];
+        const msg = (t('connectError') || 'Ошибка') + ': ' + fetchErr;
+        setHTML(targetGridId, `<div class="col-12"><div class="alert alert-danger mb-0 monitor-view__empty">${escapeHtml(msg)}</div></div>`);
         return;
     }
 
@@ -11758,6 +11958,7 @@ async function renderTrueNASMonitorScreenTiles(targetGridId, type) {
         tiles = apps.map((a, i) => ({ type, sourceId: `truenas_app:${String(a?.entityId || a?.id || a?.name || (i + 1))}`, tilesSize: '1x1' }));
     }
 
+    delete htmlCache[targetGridId];
     if (!tiles.length) {
         setHTMLIfChanged(targetGridId, `<div class="col-12"><div class="monitor-view__empty">${escapeHtml(t('backupNoData') || 'Нет данных')}</div></div>`);
         return;
@@ -11770,7 +11971,7 @@ async function renderTrueNASMonitorScreenTiles(targetGridId, type) {
         else if (tile.type === 'truenas_service') tileHtml = buildClusterTrueNASServiceTileHtml(tile);
         else if (tile.type === 'truenas_app') tileHtml = buildClusterTrueNASAppTileHtml(tile);
         const cellClass = getTilesMonitorCellClass(tile.tilesSize || '1x1');
-        return `<div class="${cellClass} tiles-monitor-cell">${tileHtml}</div>`;
+        return `<div class="${cellClass} tiles-monitor-cell truenas-monitor-tile-cell">${tileHtml}</div>`;
     }).join('');
     setHTMLIfChanged(targetGridId, html);
     } finally {
@@ -12075,7 +12276,7 @@ async function refreshDebugMetrics() {
     const clientText = [
         '--- App ---',
         `language: ${currentLanguage ?? '—'}`,
-        `serverType: ${currentServerType ?? '—'}`,
+        `backends: proxmox=${!!getAuthHeadersForType('proxmox')} truenas=${!!getAuthHeadersForType('truenas')}`,
         `connectionId: ${connId ?? '—'}`,
         `refreshIntervalMs: ${refreshIntervalMs ?? '—'}`,
         `lastRefreshTime: ${lastRefreshStr}`,
@@ -12162,7 +12363,7 @@ async function resetAllSettings() {
 function exportDebugReport() {
     const client = {
         language: currentLanguage,
-        serverType: currentServerType,
+        backends: { proxmox: !!getAuthHeadersForType('proxmox'), truenas: !!getAuthHeadersForType('truenas') },
         connectionId: getCurrentConnectionId(),
         refreshIntervalMs,
         lastRefreshTime: lastRefreshTime != null ? new Date(lastRefreshTime).toISOString() : null,
@@ -12200,6 +12401,10 @@ async function backendRecoveryWatchTick() {
             return;
         }
         backendWasUnavailable = false;
+        if (backendRecoveryWatchTimer) {
+            clearInterval(backendRecoveryWatchTimer);
+            backendRecoveryWatchTimer = null;
+        }
     } catch (_) {
         setBackendOfflineBannerVisible(true);
         backendWasUnavailable = true;
@@ -12239,6 +12444,7 @@ async function showConfig() {
         clearInterval(autoRefreshInterval);
         autoRefreshInterval = null;
     }
+    updateHomelabMenuChrome();
 }
 
 async function openSettingsFromMonitor() {
@@ -12262,14 +12468,17 @@ async function toggleSettings() {
             clearInterval(autoRefreshInterval);
             autoRefreshInterval = null;
         }
+        updateHomelabMenuChrome();
     } else {
         configSection.style.display = 'none';
         dashboardSection.style.display = 'block';
         hideAllMonitorShellSections();
+        homelabNormalNavView = 'cluster';
         if (apiToken) {
             refreshData();
             startAutoRefresh();
         }
+        updateHomelabMenuChrome();
     }
 }
 
@@ -12394,6 +12603,7 @@ async function toggleMonitorMode() {
         syncMonitorToolbarRevealButton();
         renderMonitorScreenDots();
         applyStoredDashboardHomeTab();
+        homelabNormalNavView = 'cluster';
     }
 
     try {
@@ -12412,6 +12622,7 @@ async function toggleMonitorMode() {
 
     if (apiToken || getCurrentConnectionId()) refreshData();
     renderDashboardTimeWeatherCard();
+    updateHomelabMenuChrome();
 }
 
 /** Текущий экран режима монитора */
@@ -12440,7 +12651,7 @@ function persistMonitorCurrentView(view) {
 }
 
 /** Вкладки главного дашборда (Bootstrap #myTab) — запоминаем в обычном режиме между F5 и loadSettings */
-const DASHBOARD_HOME_TAB_IDS = ['nodes-tab', 'storage-tab', 'servers-tab', 'backups-tab', 'quorum-tab', 'tiles-tab'];
+const DASHBOARD_HOME_TAB_IDS = ['nodes-tab', 'storage-tab', 'servers-tab', 'backups-tab', 'quorum-tab'];
 const DASHBOARD_HOME_TAB_SESSION_KEY = 'hm_dashboard_home_tab';
 
 function readStoredDashboardHomeTab() {
@@ -12682,7 +12893,7 @@ function getMonitorViewsOrder() {
     return monitorScreensManager.getViewsOrder({
         order: monitorScreensOrder,
         enabled: monitorScreensEnabled,
-        currentServerType,
+        hasProxmoxBackendAuth: !!getAuthHeadersForType('proxmox'),
         speedtestClientEnabled,
         iperf3ClientEnabled,
         availability: {
@@ -12772,24 +12983,7 @@ function moveMonitorScreenOrder(index, delta) {
 function updateMonitorToolbarTitleForView() {
     const el = document.getElementById('monitorToolbarTitle');
     if (!el || !monitorMode) return;
-    const titles = {
-        cluster: t('monitorScreenCluster'),
-        tiles: 'Tiles',
-        truenasPools: t('monitorScreenTruenasPools'),
-        truenasDisks: t('monitorScreenTruenasDisks'),
-        truenasServices: t('monitorScreenTruenasServices'),
-        truenasApps: t('monitorScreenTruenasApps'),
-        ups: t('monitorScreenUps'),
-        netdev: t('monitorScreenNetdev'),
-        speedtest: t('monitorScreenSpeedtest'),
-        iperf3: t('monitorScreenIperf3'),
-        smartSensors: t('monitorScreenSmartSensors'),
-        vms: t('monitorScreenVms'),
-        services: t('monitorScreenServices'),
-        backupRuns: t('monitorScreenBackupRuns'),
-        draw: t('monitorScreenDraw')
-    };
-    el.textContent = titles[monitorCurrentView] || t('monitorMode');
+    el.textContent = getHomelabViewTitle(monitorCurrentView, 'monitorScreenCluster');
     renderMonitorScreenDots();
 }
 
@@ -12849,7 +13043,7 @@ function applyMonitorView(view) {
     monitorCurrentView = view;
     const result = monitorViewRouterManager.applyView(view, {
         monitorMode,
-        currentServerType,
+        hasProxmoxBackendAuth: !!getAuthHeadersForType('proxmox'),
         lastBackupsDataForMonitor
     });
     if (result && result.redirectedTo) {
@@ -12859,6 +13053,7 @@ function applyMonitorView(view) {
 
     if (monitorMode) persistMonitorCurrentView(monitorCurrentView);
     updateMonitorToolbarTitleForView();
+    updateHomelabMenuChrome();
     requestAnimationFrame(() => updateHomeLabFontScale());
 }
 
@@ -13049,6 +13244,8 @@ function goToAppHome() {
 // Show dashboard
 function showDashboard() {
     appNavigationManager.showDashboard();
+    homelabNormalNavView = 'cluster';
+    updateHomelabMenuChrome();
 }
 
 // Start auto refresh
@@ -13056,25 +13253,24 @@ function startAutoRefresh() {
     appNavigationManager.startAutoRefresh();
 }
 
-// Connect (called after connectAs(type) sets currentServerType)
-/** @param {{ skipDashboard?: boolean }} [options] — для мастера: не переключать экран до завершения шагов */
+/** @param {{ skipDashboard?: boolean, backendType?: 'proxmox'|'truenas' }} [options] — для мастера: не переключать экран до завершения шагов */
 async function connect(options) {
     return connectionManager.connect(options && typeof options === 'object' ? options : {});
 }
 
 function connectAs(type) {
-    currentServerType = type === 'truenas' ? 'truenas' : 'proxmox';
-    connect();
+    const backendType = type === 'truenas' ? 'truenas' : 'proxmox';
+    connect({ backendType });
 }
 
 // Test connection
-async function testConnection() {
-    return connectionManager.testConnection();
+async function testConnection(options) {
+    return connectionManager.testConnection(options && typeof options === 'object' ? options : {});
 }
 
 function testConnectionAs(type) {
-    currentServerType = type === 'truenas' ? 'truenas' : 'proxmox';
-    testConnection();
+    const backendType = type === 'truenas' ? 'truenas' : 'proxmox';
+    testConnection({ backendType });
 }
 
 // Update connection status for a given type (proxmox | truenas)
@@ -13104,7 +13300,6 @@ const refreshDataManager = window.RefreshDataModule.createManager({
     showLoading,
     getLastHostMetricsData: () => lastHostMetricsData,
     setLastHostMetricsData: (v) => { lastHostMetricsData = v; },
-    getCurrentServerType: () => currentServerType,
     updateDashboard,
     setLastTrueNASOverviewData: (v) => { lastTrueNASOverviewData = v; },
     updateTrueNASDashboard,
@@ -13442,6 +13637,18 @@ async function updateUPSDashboard() {
 }
 
 function updateTrueNASDashboard(systemData, poolsData, overviewData = null) {
+    const hasPve = !!getAuthHeadersForType('proxmox');
+    lastTrueNASData = { system: systemData, pools: poolsData };
+    if (hasPve) {
+        if (monitorMode) {
+            updateMonitorViewTrueNAS(systemData, poolsData);
+            renderMonitorServicesList();
+            renderMonitorVmsList();
+        }
+        syncClusterResourcesCardInteractivity();
+        return;
+    }
+
     const sys = systemData && typeof systemData === 'object' ? systemData : {};
     const hostname = sys.hostname || sys.system_hostname || sys.host || 'TrueNAS';
     const version = sys.version || sys.product_version || sys.release || '';
@@ -13578,7 +13785,6 @@ function updateTrueNASDashboard(systemData, poolsData, overviewData = null) {
 
     setHTMLIfChanged('lastUpdate', '<i class="bi bi-clock"></i> ' + t('lastUpdate') + ': ' + new Date().toLocaleString(currentLanguage === 'ru' ? 'ru-RU' : 'en-US'));
 
-    lastTrueNASData = { system: systemData, pools: poolsData };
     if (monitorMode) {
         updateMonitorViewTrueNAS(systemData, poolsData);
         renderMonitorServicesList();
@@ -13721,7 +13927,7 @@ function renderMonitorServicesList() {
 function renderMonitorVmsList() {
     const listEl = document.getElementById('monitorVmsList');
     if (!listEl) return;
-    if (currentServerType === 'truenas') {
+    if (!getAuthHeadersForType('proxmox') && getAuthHeadersForType('truenas')) {
         setText('monitorVmsPanelTitle', 'Apps');
         const apps = Array.isArray(lastTrueNASOverviewData?.apps) ? lastTrueNASOverviewData.apps : [];
         if (!apps.length) {
@@ -14524,7 +14730,7 @@ function getClusterVms() {
 
 async function loadClusterVmsForSettings(options) {
     const silent = options && options.silent === true;
-    if (currentServerType !== 'proxmox') return;
+    if (!getAuthHeadersForType('proxmox')) return;
     const btn = document.getElementById('loadClusterVmsBtn');
     if (btn && !silent) { btn.disabled = true; setText('loadClusterVmsBtnText', t('loading') || 'Загрузка…'); }
     try {
@@ -15356,7 +15562,6 @@ async function loadSettings() {
     if (truenasServers.length) {
         currentTrueNASServerIndex = Math.max(0, Math.min(currentTrueNASServerIndex, truenasServers.length - 1));
     }
-    if (data.server_type) currentServerType = data.server_type === 'truenas' ? 'truenas' : 'proxmox';
     if (data.monitor_theme === 'light' || data.monitor_theme === 'dark') monitorTheme = data.monitor_theme;
     if (data.custom_theme_style_settings !== undefined) {
         customThemeStyleSettings = data.custom_theme_style_settings;
@@ -15686,24 +15891,7 @@ function setMonitorResFillThresholdClass(el, percent, type) {
     el.className = 'monitor-view__res-fill ' + tier;
 }
 
-// ==================== PROXMOX SERVERS MANAGEMENT ====================
-function getServersForCurrentType() {
-    return currentServerType === 'truenas' ? truenasServers : proxmoxServers;
-}
-
-function getCurrentIndexForType() {
-    return currentServerType === 'truenas' ? currentTrueNASServerIndex : currentServerIndex;
-}
-
-function setCurrentIndexForType(index) {
-    if (currentServerType === 'truenas') {
-        currentTrueNASServerIndex = index;
-        saveSettingsToServer({ currentTrueNASServerIndex: index });
-    } else {
-        currentServerIndex = index;
-        saveSettingsToServer({ currentServerIndex: index });
-    }
-}
+// ==================== PROXMOX / TRUENAS SERVERS (HomeLab, без переключателя типа) ====================
 
 /** URL считается настроенным, если задан хост (пустой «https://» не считается). */
 function isMonitorServerUrlConfigured(url) {
@@ -15726,36 +15914,11 @@ function hasTrueNASBackendConfigured() {
     return Array.isArray(truenasServers) && truenasServers.some(isMonitorServerUrlConfigured);
 }
 
-/** Если настроен только один тип — переключаемся на него (без выбора в шапке). */
-function enforceMonitorServerTypeForAvailableBackends() {
-    const p = hasProxmoxBackendConfigured();
-    const t = hasTrueNASBackendConfigured();
-    if (p && !t && currentServerType !== 'proxmox') {
-        setServerType('proxmox');
-        return;
-    }
-    if (t && !p && currentServerType !== 'truenas') {
-        setServerType('truenas');
-        return;
-    }
-}
-
-/** Показать выбор Proxmox/TrueNAS только если настроены оба типа (шапка + тулбар монитора). */
+/** Легаси-переключатель Proxmox/TrueNAS убран — скрываем остатки разметки. */
 function updateServerTypeBackendChoiceUI() {
-    enforceMonitorServerTypeForAvailableBackends();
-    const show = hasProxmoxBackendConfigured() && hasTrueNASBackendConfigured();
     const wrap = document.getElementById('monitorServerTypeSelectWrap');
-    if (wrap) wrap.classList.toggle('d-none', !show);
-    const monSel = document.getElementById('monitorServerTypeSelect');
-    if (monSel) {
-        const optP = monSel.querySelector('option[value="proxmox"]');
-        const optT = monSel.querySelector('option[value="truenas"]');
-        if (optP) optP.hidden = !hasProxmoxBackendConfigured();
-        if (optT) optT.hidden = !hasTrueNASBackendConfigured();
-    }
-    document.querySelectorAll('.server-menu-backend-choice').forEach((el) => {
-        el.classList.toggle('d-none', !show);
-    });
+    if (wrap) wrap.classList.add('d-none');
+    document.querySelectorAll('.server-menu-backend-choice').forEach((el) => el.classList.add('d-none'));
 }
 
 /** Сброс URL, привязок и токенов в БД только для Proxmox или TrueNAS. */
@@ -15786,9 +15949,7 @@ async function resetBackendSettings(type) {
         }
         const tn = document.getElementById('apiTokenTrueNAS');
         if (t === 'truenas' && tn) tn.value = '';
-        setServerType(currentServerType);
-        const monitorSel = document.getElementById('monitorServerTypeSelect');
-        if (monitorSel) monitorSel.value = currentServerType;
+        syncHomelabChrome();
         updateConnectionStatus(false, 'proxmox');
         updateConnectionStatus(false, 'truenas');
         const lp = document.getElementById('logoutContainerProxmox');
@@ -15873,7 +16034,7 @@ function setCurrentServerByType(type, index) {
     const servers = type === 'truenas' ? truenasServers : proxmoxServers;
     if (servers[index]) {
         showToast(`${t('currentServer')}: ${servers[index]}`, 'info');
-        if (currentServerType === type) refreshData();
+        refreshData({ silent: true });
     }
 }
 
@@ -15921,34 +16082,36 @@ function saveServers() {
     updateCurrentServerBadge();
 }
 
-// Update current server badge in navbar
+// Update current server badge in navbar (оба URL — Proxmox и TrueNAS)
 function updateCurrentServerBadge() {
     const badge = document.getElementById('currentServerBadge');
     const nameSpan = document.getElementById('currentServerName');
-    
+
     if (!badge || !nameSpan) return;
-    
-    const servers = getServersForCurrentType();
-    const idx = getCurrentIndexForType();
-    if (servers && servers.length > 0 && idx < servers.length) {
-        const serverUrl = servers[idx];
-        // Extract hostname from URL
+
+    const hostFromUrl = (urlStr) => {
+        const u = String(urlStr || '').trim();
+        if (!u) return '';
         try {
-            const url = new URL(serverUrl);
-            nameSpan.textContent = url.hostname;
-        } catch (e) {
-            nameSpan.textContent = serverUrl;
+            return new URL(u).hostname;
+        } catch {
+            return u;
         }
+    };
+    const parts = [];
+    if (Array.isArray(proxmoxServers) && proxmoxServers.length && currentServerIndex < proxmoxServers.length) {
+        const h = hostFromUrl(proxmoxServers[currentServerIndex]);
+        if (h) parts.push(h);
+    }
+    if (Array.isArray(truenasServers) && truenasServers.length && currentTrueNASServerIndex < truenasServers.length) {
+        const h = hostFromUrl(truenasServers[currentTrueNASServerIndex]);
+        if (h) parts.push(h);
+    }
+    const uniq = Array.from(new Set(parts.filter(Boolean)));
+    if (uniq.length) {
+        nameSpan.textContent = uniq.join(' · ');
         badge.style.display = 'inline-block';
     } else {
         badge.style.display = 'none';
     }
-}
-
-// Get current server URL
-function getCurrentServerUrl() {
-    const servers = getServersForCurrentType();
-    const idx = getCurrentIndexForType();
-    if (servers && servers[idx]) return servers[idx];
-    return currentServerType === 'truenas' ? 'https://192.168.1.2' : 'https://192.168.1.1:8006';
 }

@@ -959,75 +959,6 @@ const clusterResources = `
                 </div>
             </div>`;
 
-const clusterTiles = `
-            <div class="row mb-4" id="dashboardClusterTilesSection">
-                <div class="col-12">
-                    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
-                        <h5 class="mb-0"><i class="bi bi-grid-1x2 me-2"></i><span>Cluster Tiles</span></h5>
-                    </div>
-                    <div class="cluster-scroll-row" id="dashboardClusterTiles">
-                        <div class="cluster-scroll-item">
-                            <div class="node-card ups-node-card h-100">
-                                <div class="d-flex justify-content-between align-items-center mb-3 gap-2">
-                                    <h5 class="mb-0 text-truncate">ups</h5>
-                                    <span class="badge bg-success">Online</span>
-                                </div>
-                                <div class="row g-2">
-                                    <div class="col-6"><div class="p-2 h-100"><small class="text-muted ups-node-card__metric-label">Input V</small><div class="fw-bold ups-node-card__metric-value text-break">226 V</div></div></div>
-                                    <div class="col-6"><div class="p-2 h-100"><small class="text-muted ups-node-card__metric-label">Load</small><div class="fw-bold ups-node-card__metric-value text-break">33 %</div><div class="progress mt-2" style="height: 8px;"><div class="progress-bar bg-warning" style="width: 33%"></div></div></div></div>
-                                    <div class="col-6 mt-2"><div class="p-2 h-100"><small class="text-muted ups-node-card__metric-label">Charge</small><div class="fw-bold ups-node-card__metric-value text-break">100%</div><div class="progress mt-2" style="height: 8px;"><div class="progress-bar bg-success" style="width: 100%"></div></div></div></div>
-                                    <div class="col-6 mt-2"><div class="p-2 h-100"><small class="text-muted ups-node-card__metric-label">Battery runtime</small><div class="fw-bold ups-node-card__metric-value text-break">9m 4s</div></div></div>
-                                </div>
-                                <div class="small text-muted mt-2">NUT · 10.200.0.5</div>
-                            </div>
-                        </div>
-                        <div class="cluster-scroll-item">
-                            <div class="node-card ups-node-card h-100">
-                                <div class="d-flex justify-content-between align-items-center mb-3 gap-2">
-                                    <h5 class="mb-0 text-truncate d-inline-flex align-items-center gap-2"><span class="vm-icon vm-monitor-icon text-primary"><i class="bi bi-pc-display"></i></span><span class="text-truncate">docker-host</span></h5>
-                                    <span class="badge bg-success">Running</span>
-                                </div>
-                                <div class="row g-2">
-                                    <div class="col-6"><div class="p-2 h-100"><small class="text-muted ups-node-card__metric-label">Type</small><div class="fw-bold ups-node-card__metric-value text-break">VM</div></div></div>
-                                    <div class="col-6"><div class="p-2 h-100"><small class="text-muted ups-node-card__metric-label">Node</small><div class="fw-bold ups-node-card__metric-value text-break">pve-01</div></div></div>
-                                    <div class="col-6 mt-2"><div class="p-2 h-100"><small class="text-muted ups-node-card__metric-label">ID</small><div class="fw-bold ups-node-card__metric-value text-break">118</div></div></div>
-                                    <div class="col-6 mt-2"><div class="p-2 h-100"><small class="text-muted ups-node-card__metric-label">Status</small><div class="fw-bold ups-node-card__metric-value text-break">Running</div></div></div>
-                                </div>
-                                <div class="small text-muted mt-2">pve-01 / 118</div>
-                            </div>
-                        </div>
-                        <div class="cluster-scroll-item">
-                            <div class="node-card ups-node-card h-100">
-                                <div class="d-flex justify-content-between align-items-center mb-3 gap-2">
-                                    <h5 class="mb-0 text-truncate d-inline-flex align-items-center gap-2"><span class="service-icon service-monitor-icon text-success"><i class="bi bi-shield-check"></i></span><span class="text-truncate">Vaultwarden</span></h5>
-                                    <span class="badge bg-success">Connected</span>
-                                </div>
-                                <div class="row g-2">
-                                    <div class="col-12"><div class="small text-muted mb-1"><span class="badge bg-secondary me-1">HTTP</span><code>https://vault.example.local/</code></div></div>
-                                    <div class="col-6"><div class="p-2 h-100"><small class="text-muted ups-node-card__metric-label">Latency</small><div class="fw-bold ups-node-card__metric-value text-break">38 ms</div></div></div>
-                                    <div class="col-6"><div class="p-2 h-100"><small class="text-muted ups-node-card__metric-label">Type</small><div class="fw-bold ups-node-card__metric-value text-break">HTTP</div></div></div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="cluster-scroll-item">
-                            <div class="node-card ups-node-card h-100">
-                                <div class="d-flex justify-content-between align-items-center mb-3 gap-2">
-                                    <h5 class="mb-0 text-truncate">Speedtest</h5>
-                                    <span class="badge bg-success">OK</span>
-                                </div>
-                                <div class="row g-2">
-                                    <div class="col-6"><div class="p-2 h-100"><small class="text-muted ups-node-card__metric-label">Last Run</small><div class="fw-bold ups-node-card__metric-value text-break">17:20</div></div></div>
-                                    <div class="col-6"><div class="p-2 h-100"><small class="text-muted ups-node-card__metric-label">Average</small><div class="fw-bold ups-node-card__metric-value text-break">940 Mbps</div></div></div>
-                                    <div class="col-6 mt-2"><div class="p-2 h-100"><small class="text-muted ups-node-card__metric-label">Upload</small><div class="fw-bold ups-node-card__metric-value text-break">511 Mbps</div></div></div>
-                                    <div class="col-6 mt-2"><div class="p-2 h-100"><small class="text-muted ups-node-card__metric-label">Ping</small><div class="fw-bold ups-node-card__metric-value text-break">4 ms</div></div></div>
-                                </div>
-                                <div class="small text-muted mt-2">Frankfurt</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>`;
-
 const dashboardTabs = (active, isTrueNAS = false) => `
             <ul class="nav nav-tabs mb-4" role="tablist">
                 <li class="nav-item" role="presentation" style="${isTrueNAS ? 'display:none;' : ''}"><button class="nav-link${active === 'nodes' ? ' active' : ''}" type="button">Nodes</button></li>
@@ -1221,7 +1152,6 @@ const dashboardSection = (active, inner, isTrueNAS = false) => `
                         ${inner}
                     </div>
                 </div>
-                ${clusterTiles}
                 <div class="text-end mt-4"><small class="text-muted">Last update: 2026-03-21 17:10</small></div>
             </div>
         </div>`;
@@ -1440,7 +1370,6 @@ const monitorPageContent = {
                         ${nodesContent}
                     </div>
                 </div>
-                ${clusterTiles}
                 <div class="text-end mt-4"><small class="text-muted">Last update: 2026-03-21 17:20</small></div>
             </div>
         </div>

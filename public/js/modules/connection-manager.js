@@ -1,8 +1,13 @@
 (function initConnectionManagerModule(global) {
     function createManager(deps) {
+        function backendTypeFromOptions(options) {
+            const o = options && typeof options === 'object' ? options : {};
+            return o.backendType === 'truenas' ? 'truenas' : 'proxmox';
+        }
+
         async function connect(options = {}) {
             const skipDashboard = !!options.skipDashboard;
-            const type = deps.getCurrentServerType();
+            const type = backendTypeFromOptions(options);
             const tokenInput = type === 'truenas'
                 ? document.getElementById('apiTokenTrueNAS')
                 : document.getElementById('apiToken');
@@ -10,7 +15,7 @@
             const rawToken = tokenInput ? tokenInput.value.trim() : '';
             const masked = rawToken.includes('•');
             const token = masked ? (deps.getApiToken() || '') : rawToken;
-            const connId = deps.getCurrentConnectionId();
+            const connId = deps.getConnectionIdForType(type);
             const reuseExistingSecret = connId && (!rawToken || (masked && !deps.getApiToken()));
 
             if (!reuseExistingSecret && !token) {
@@ -26,7 +31,7 @@
                 connectBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>' + deps.t('loading');
             }
 
-            const serverUrl = deps.getCurrentServerUrl();
+            const serverUrl = deps.getServerUrlForType(type);
             try {
                 if (reuseExistingSecret) {
                     const testRes = await fetch(`/api/connections/${connId}/test`, { method: 'POST' });
@@ -79,8 +84,8 @@
             }
         }
 
-        async function testConnection() {
-            const type = deps.getCurrentServerType();
+        async function testConnection(options = {}) {
+            const type = backendTypeFromOptions(options);
             const tokenInput = type === 'truenas'
                 ? document.getElementById('apiTokenTrueNAS')
                 : document.getElementById('apiToken');
@@ -88,7 +93,7 @@
             const rawToken = tokenInput ? tokenInput.value.trim() : '';
             const masked = rawToken.includes('•');
             const token = masked ? (deps.getApiToken() || '') : rawToken;
-            const connId = deps.getCurrentConnectionId();
+            const connId = deps.getConnectionIdForType(type);
             const reuseExistingSecret = connId && (!rawToken || (masked && !deps.getApiToken()));
 
             const testBtnId = type === 'truenas' ? 'testConnectionBtnTrueNAS' : 'testConnectionBtnProxmox';
@@ -97,7 +102,7 @@
             testBtn.disabled = true;
             testBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>' + deps.t('loading');
 
-            const serverUrl = deps.getCurrentServerUrl();
+            const serverUrl = deps.getServerUrlForType(type);
             try {
                 if (reuseExistingSecret) {
                     const testRes = await fetch(`/api/connections/${connId}/test`, { method: 'POST' });
@@ -141,7 +146,7 @@
         }
 
         function updateConnectionStatus(connected, type) {
-            const suffix = (type || deps.getCurrentServerType()) === 'truenas' ? 'TrueNAS' : 'Proxmox';
+            const suffix = type === 'truenas' ? 'TrueNAS' : 'Proxmox';
             const statusDisplay = document.getElementById('connectionStatusDisplay' + suffix);
             const statusBadge = document.getElementById('connectionStatusBadge' + suffix);
             const statusText = document.getElementById('connectionStatusText' + suffix);
