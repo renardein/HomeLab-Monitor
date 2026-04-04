@@ -89,6 +89,13 @@ http://localhost:3000
 | **Хосты API по умолчанию** (если в UI ещё нет сохранённого подключения) | |
 | `PROXMOX_HOST` / `PROXMOX_PORT` | Хост и порт API Proxmox (по умолчанию `10.200.0.1`, `8006`). |
 | `TRUENAS_HOST` / `TRUENAS_PORT` | Хост и порт API TrueNAS (по умолчанию `10.200.0.2`, `443`). |
+| `TRUENAS_API_TIMEOUT_MS` | Таймаут HTTP(S) для запросов к TrueNAS API в миллисекундах (допустимо `3000`–`120000`, по умолчанию `30000`). |
+| **Фоновый прогрев кэша** | |
+| `BACKGROUND_POLL` | `1`, `true`, `yes` или `on` — периодически опрашивать **сохранённые** подключения Proxmox/TrueNAS и заполнять те же in-memory кэши, что использует UI (по умолчанию выключено). |
+| `BACKGROUND_POLL_INTERVAL_MS` | Интервал цикла опроса в мс (допустимо `5000`–`3600000`, по умолчанию `30000`). |
+| **Обновление приложения из UI** (опционально) | |
+| `UPDATE_APPLY_ENABLED` | `1`, `true` или `yes` — разрешить применение обновлений (git/npm) из интерфейса; иначе только проверка наличия обновлений. |
+| `UPDATE_APPLY_TOKEN` | Опциональный общий секрет для запросов на применение обновления (дополнительно к паролю в настройках). |
 | **Прочее** | |
 | `CORS_ORIGIN` | Origin для CORS у Express API (по умолчанию `*`). |
 | `CACHE_TTL` | TTL кэша ответов API в секундах (по умолчанию `30`). |
@@ -96,7 +103,9 @@ http://localhost:3000
 | `LOG_DIR` | Каталог для `app.log` (по умолчанию `./data/logs`). |
 | `LOG_MAX_BYTES` | Размер ротации логов (по умолчанию 5 МиБ). |
 | `LOG_BACKUPS` | Сколько файлов ротации хранить (по умолчанию `5`). |
-| `SPEEDTEST_CLI` / `SPEEDTEST_PATH` | Путь к бинарнику Speedtest/Ookla CLI. |
+| `SPEEDTEST_CLI` / `SPEEDTEST_PATH` | Путь к бинарнику Speedtest/Ookla CLI (внешние замеры скорости). |
+| `LIBRESPEED_CLI` / `LIBRESPEED_PATH` | Путь к CLI LibreSpeed (если используется вместо Ookla). |
+| `IPERF3_CLI` / `IPERF3_PATH` | Путь к бинарнику `iperf3` (замеры пропускной способности в LAN). |
 | **Агент host metrics** (только для `npm run host-metrics-agent`, не основное приложение) | |
 | `HOST_METRICS_AGENT_HOST` | Адрес прослушивания (по умолчанию `0.0.0.0`). |
 | `HOST_METRICS_AGENT_PORT` | Порт (по умолчанию `9105`). |

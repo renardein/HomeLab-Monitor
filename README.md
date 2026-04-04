@@ -89,6 +89,13 @@ Optional: copy [`.env.example`](./.env.example) to `.env` in the project root. V
 | **Default API hosts** (fallback when no connection is stored in the UI) | |
 | `PROXMOX_HOST` / `PROXMOX_PORT` | Default Proxmox API host and port (defaults: `10.200.0.1`, `8006`). |
 | `TRUENAS_HOST` / `TRUENAS_PORT` | Default TrueNAS API host and port (defaults: `10.200.0.2`, `443`). |
+| `TRUENAS_API_TIMEOUT_MS` | HTTP(S) timeout for TrueNAS REST calls in milliseconds (allowed: `3000`–`120000`, default: `30000`). |
+| **Background cache** | |
+| `BACKGROUND_POLL` | Set to `1`, `true`, `yes`, or `on` to enable periodic polling of **saved** Proxmox/TrueNAS connections and warm the same in-memory caches the UI uses (default: off). |
+| `BACKGROUND_POLL_INTERVAL_MS` | Interval between poll cycles in ms (allowed: `5000`–`3600000`, default: `30000`). |
+| **In-place updates** (optional; apply updates from the app UI) | |
+| `UPDATE_APPLY_ENABLED` | Set to `1`, `true`, or `yes` to allow git/npm apply from the UI (otherwise updates are check-only). |
+| `UPDATE_APPLY_TOKEN` | Optional shared secret for update-apply requests (in addition to the settings password). |
 | **Other** | |
 | `CORS_ORIGIN` | CORS origin for the Express API (default: `*`). |
 | `CACHE_TTL` | In-memory API cache TTL in seconds (default: `30`). |
@@ -96,7 +103,9 @@ Optional: copy [`.env.example`](./.env.example) to `.env` in the project root. V
 | `LOG_DIR` | Directory for `app.log` (default: `./data/logs`). |
 | `LOG_MAX_BYTES` | Log rotation size (default: 5 MiB). |
 | `LOG_BACKUPS` | Number of rotated log files to keep (default: `5`). |
-| `SPEEDTEST_CLI` / `SPEEDTEST_PATH` | Path to the Speedtest/Ookla CLI binary. |
+| `SPEEDTEST_CLI` / `SPEEDTEST_PATH` | Path to the Speedtest/Ookla CLI binary (external speed tests). |
+| `LIBRESPEED_CLI` / `LIBRESPEED_PATH` | Path to the LibreSpeed CLI binary (if used instead of Ookla). |
+| `IPERF3_CLI` / `IPERF3_PATH` | Path to the `iperf3` binary (LAN throughput tests). |
 | **Host metrics agent** (only for `npm run host-metrics-agent`, not the main app) | |
 | `HOST_METRICS_AGENT_HOST` | Listen address (default: `0.0.0.0`). |
 | `HOST_METRICS_AGENT_PORT` | Listen port (default: `9105`). |
