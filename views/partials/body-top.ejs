@@ -208,6 +208,29 @@
         </div>
     </div>
 
+    <div class="modal fade" id="smartSensorsAllMetricsModal" tabindex="-1" aria-labelledby="smartSensorsAllMetricsModalTitle" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="smartSensorsAllMetricsModalTitle"><i class="bi bi-house-heart me-2" id="smartSensorsAllMetricsModalTitleIcon" aria-hidden="true"></i><span id="smartSensorsAllMetricsModalTitleText">Smart sensor metrics</span></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3 small" id="smartSensorsAllMetricsModalSubtitle"></div>
+                    <div id="smartSensorsAllMetricsGlobalError" class="alert alert-danger py-2 d-none" role="alert"></div>
+
+                    <div class="d-flex align-items-center gap-2 flex-wrap mb-3">
+                        <label class="form-label mb-0" for="smartSensorsMetricsMetricSelect" id="smartSensorsMetricsMetricSelectLabel">Metric</label>
+                        <select class="form-select form-select-sm" id="smartSensorsMetricsMetricSelect" aria-label="Metric select"></select>
+                    </div>
+
+                    <div id="smartSensorsMetricsChartEmpty" class="alert alert-light border small py-2 mb-3 d-none" role="status"></div>
+                    <div id="smartSensorsMetricsChartWrap" class="position-relative" style="height: 200px;"><canvas id="smartSensorsMetricsChartCanvas" aria-label="Smart sensor metric history chart"></canvas></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="container">
         <!-- Top navigation -->
         <nav class="navbar app-topbar navbar-expand-lg mb-4">

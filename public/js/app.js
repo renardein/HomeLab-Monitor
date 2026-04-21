@@ -269,6 +269,11 @@ let upsMetricsModalAutoRefreshBusy = false;
 let upsMetricsModalSlot = null;
 let upsMetricsModalMetricId = null;
 let upsMetricsModalMetricFormat = null;
+let smartSensorsMetricsChart = null;
+let smartSensorsMetricsModalAutoRefreshTimer = null;
+let smartSensorsMetricsModalAutoRefreshBusy = false;
+let smartSensorsMetricsModalSensorId = null;
+let smartSensorsMetricsModalFieldKey = null;
 let lastTrueNASOverviewData = null;
 let hostMetricsSettings = { pollIntervalSec: 10, timeoutMs: 3000, cacheTtlSec: 8, criticalTempC: 85, criticalLinkSpeedMbps: 1000 };
 let hostMetricsConfigs = {}; // connectionId -> { nodes: { [node]: { enabled, agentPort, agentPath, cpuTempSensor, linkInterface, ipmiHost, ipmiPort } } }
@@ -2246,6 +2251,9 @@ function buildSmartSensorsCardsHtml(data) {
         const errBlock = it.error ? `<div class="text-danger small mt-2">${escapeHtml(it.error)}</div>` : '';
         const vals = it.values && typeof it.values === 'object' ? it.values : {};
         const keys = Object.keys(vals);
+        const numericKeys = keys.filter((k) => Number.isFinite(Number(vals?.[k]?.value)));
+        const canOpenMetrics = numericKeys.length > 0;
+        const openMetricsTitle = t('smartSensorsAllMetricsCardOpenTitle') || 'Show smart sensor metric history';
         const tiles = keys.length
             ? keys.map((k) => buildClusterDashboardMetricCell(k, formatSmartSensorMetricEntry(vals[k]), null, null, 'col-6 col-md-4')).join('')
             : '<div class="col-12"><span class="text-muted small">—</span></div>';
@@ -2255,7 +2263,18 @@ function buildSmartSensorsCardsHtml(data) {
                 <div class="node-card ups-node-card h-100">
                     <div class="d-flex justify-content-between align-items-center mb-2 gap-2">
                         <h5 class="mb-0 text-truncate d-inline-flex align-items-center gap-2" title="${escapeHtml(name)}">${escapeHtml(name)}</h5>
-                        <span class="badge bg-secondary flex-shrink-0">${typeBadge}</span>
+                        <div class="d-inline-flex align-items-center gap-2">
+                            ${canOpenMetrics ? `
+                            <button
+                                type="button"
+                                class="btn btn-sm btn-outline-primary smart-sensor-metrics-open-trigger"
+                                data-smart-sensor-id="${escapeHtml(String(it.id || ''))}"
+                                title="${escapeHtml(openMetricsTitle)}"
+                                aria-label="${escapeHtml(openMetricsTitle)}">
+                                <i class="bi bi-graph-up"></i>
+                            </button>` : ''}
+                            <span class="badge bg-secondary flex-shrink-0">${typeBadge}</span>
+                        </div>
                     </div>
                     <div class="row g-2 small">${tiles}</div>
                     ${errBlock}
@@ -3351,6 +3370,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     initHostNodeMetricChartsOnce();
     initClusterAggregateChartsOnce();
     initUpsAllMetricsModalOnce();
+    initSmartSensorsAllMetricsModalOnce();
     bindTelegramRuleMessageModalOnce();
     const debugNav = document.getElementById('settings-nav-debug');
     if (debugNav) {
@@ -9209,6 +9229,234 @@ function initUpsAllMetricsModalOnce() {
         modalEl.addEventListener('hidden.bs.modal', () => {
             stopUpsMetricsModalAutoRefresh();
             destroyUpsMetricsModalChart();
+        });
+    }
+}
+
+function destroySmartSensorsMetricsModalChart() {
+    if (smartSensorsMetricsChart) {
+        try { smartSensorsMetricsChart.destroy(); } catch (_) {}
+        smartSensorsMetricsChart = null;
+    }
+}
+
+function stopSmartSensorsMetricsModalAutoRefresh() {
+    if (smartSensorsMetricsModalAutoRefreshTimer) {
+        clearInterval(smartSensorsMetricsModalAutoRefreshTimer);
+        smartSensorsMetricsModalAutoRefreshTimer = null;
+    }
+}
+
+function smartSensorMetricMetaFromFieldKey(fieldKey) {
+    const fk = String(fieldKey || '').trim().toLowerCase();
+    if (fk.includes('temp')) return { unit: '°C', color: '220, 53, 69' };
+    if (fk.includes('hum')) return { unit: '%', color: '13, 110, 253' };
+    if (fk.includes('press')) return { unit: 'hPa', color: '108, 117, 125' };
+    if (fk.includes('batt')) return { unit: '%', color: '25, 135, 84' };
+    return { unit: '', color: '13, 110, 253' };
+}
+
+function setSmartSensorsMetricsChartLoading() {
+    const emptyEl = document.getElementById('smartSensorsMetricsChartEmpty');
+    const wrapEl = document.getElementById('smartSensorsMetricsChartWrap');
+    if (emptyEl) {
+        emptyEl.textContent = t('hostNodeCpuTempChartLoading') || 'Loading…';
+        emptyEl.classList.remove('d-none');
+    }
+    if (wrapEl) wrapEl.classList.add('d-none');
+    const globalErr = document.getElementById('smartSensorsAllMetricsGlobalError');
+    if (globalErr) globalErr.classList.add('d-none');
+}
+
+async function refreshSmartSensorsMetricsModalChart({ showLoading = false } = {}) {
+    if (smartSensorsMetricsModalAutoRefreshBusy) return false;
+    if (!smartSensorsMetricsModalSensorId || !smartSensorsMetricsModalFieldKey) return false;
+
+    const emptyEl = document.getElementById('smartSensorsMetricsChartEmpty');
+    const wrapEl = document.getElementById('smartSensorsMetricsChartWrap');
+    const canvas = document.getElementById('smartSensorsMetricsChartCanvas');
+    const globalErr = document.getElementById('smartSensorsAllMetricsGlobalError');
+
+    if (!canvas) return false;
+    if (showLoading) setSmartSensorsMetricsChartLoading();
+
+    smartSensorsMetricsModalAutoRefreshBusy = true;
+    try {
+        const url = `/api/smart-sensors/metric-history?sensorId=${encodeURIComponent(smartSensorsMetricsModalSensorId)}&field=${encodeURIComponent(smartSensorsMetricsModalFieldKey)}`;
+        const r = await fetch(url);
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(data?.error || `HTTP ${r.status}`);
+
+        const points = parseMetricHistoryPoints(data.points);
+        if (!Array.isArray(points) || !points.length) {
+            if (globalErr) globalErr.classList.add('d-none');
+            if (emptyEl) {
+                emptyEl.textContent = t('smartSensorMetricChartEmpty') || (t('upsAllMetricsChartEmpty') || 'No samples in the last 24 hours yet.');
+                emptyEl.classList.remove('d-none');
+            }
+            if (wrapEl) wrapEl.classList.add('d-none');
+            destroySmartSensorsMetricsModalChart();
+            return true;
+        }
+
+        if (emptyEl) emptyEl.classList.add('d-none');
+        if (wrapEl) wrapEl.classList.remove('d-none');
+
+        const meta = smartSensorMetricMetaFromFieldKey(smartSensorsMetricsModalFieldKey);
+        const selectEl = document.getElementById('smartSensorsMetricsMetricSelect');
+        const dsLabel = (selectEl && selectEl.selectedIndex >= 0 && selectEl.options[selectEl.selectedIndex])
+            ? selectEl.options[selectEl.selectedIndex].textContent
+            : smartSensorsMetricsModalFieldKey;
+
+        destroySmartSensorsMetricsModalChart();
+        smartSensorsMetricsChart = renderHostNodeMetricLineChart(canvas, points, dsLabel, meta.color, meta.unit);
+        requestAnimationFrame(() => {
+            try { smartSensorsMetricsChart?.resize(); } catch (_) {}
+        });
+        return true;
+    } catch (e) {
+        const msg = (e && e.message) ? e.message : String(e);
+        if (globalErr) {
+            globalErr.textContent = (t('hostNodeCpuTempChartLoadError') || '{msg}').replace('{msg}', msg);
+            globalErr.classList.remove('d-none');
+        }
+        if (emptyEl) emptyEl.classList.add('d-none');
+        if (wrapEl) wrapEl.classList.add('d-none');
+        destroySmartSensorsMetricsModalChart();
+        return false;
+    } finally {
+        smartSensorsMetricsModalAutoRefreshBusy = false;
+    }
+}
+
+function startSmartSensorsMetricsModalAutoRefresh(modalEl) {
+    stopSmartSensorsMetricsModalAutoRefresh();
+    if (!modalEl) return;
+    const intervalMs = Math.max(5000, refreshIntervalMs || 30000);
+    smartSensorsMetricsModalAutoRefreshTimer = setInterval(() => {
+        if (!modalEl.classList.contains('show')) {
+            stopSmartSensorsMetricsModalAutoRefresh();
+            return;
+        }
+        void refreshSmartSensorsMetricsModalChart({ showLoading: false });
+    }, intervalMs);
+}
+
+async function openSmartSensorsAllMetricsModal(sensorId) {
+    if (typeof Chart === 'undefined') {
+        showToast(t('hostNodeCpuTempChartNoLib') || 'Chart library failed to load', 'warning');
+        return;
+    }
+    if (typeof bootstrap === 'undefined' || !bootstrap.Modal) return;
+    const modalEl = document.getElementById('smartSensorsAllMetricsModal');
+    if (!modalEl) return;
+    const sensorIdNorm = String(sensorId || '').trim();
+    if (!sensorIdNorm) return;
+
+    smartSensorsMetricsModalSensorId = sensorIdNorm;
+    smartSensorsMetricsModalFieldKey = null;
+    destroySmartSensorsMetricsModalChart();
+    stopSmartSensorsMetricsModalAutoRefresh();
+
+    const titleEl = document.getElementById('smartSensorsAllMetricsModalTitleText');
+    const subtitleEl = document.getElementById('smartSensorsAllMetricsModalSubtitle');
+    const metricLabelEl = document.getElementById('smartSensorsMetricsMetricSelectLabel');
+    const globalErr = document.getElementById('smartSensorsAllMetricsGlobalError');
+    if (titleEl) titleEl.textContent = t('smartSensorsAllMetricsModalTitle') || 'Smart sensor metrics';
+    if (subtitleEl) subtitleEl.textContent = t('smartSensorsAllMetricsModalHint') || (t('smartSensorMetricChartFooter') || 'History stored up to 24 hours.');
+    if (metricLabelEl) metricLabelEl.textContent = t('smartSensorsAllMetricsMetricSelectLabel') || (t('upsAllMetricsMetricSelectLabel') || 'Metric');
+    if (globalErr) {
+        globalErr.textContent = '';
+        globalErr.classList.add('d-none');
+    }
+
+    const selectEl = document.getElementById('smartSensorsMetricsMetricSelect');
+    if (!selectEl) return;
+    selectEl.innerHTML = '';
+    setSmartSensorsMetricsChartLoading();
+
+    let currentData = null;
+    try {
+        const r = await fetch('/api/smart-sensors/current');
+        currentData = await r.json();
+        if (!r.ok) throw new Error(currentData?.error || `HTTP ${r.status}`);
+    } catch (e) {
+        const msg = (e && e.message) ? e.message : String(e);
+        if (globalErr) {
+            globalErr.textContent = (t('hostNodeCpuTempChartLoadError') || '{msg}').replace('{msg}', msg);
+            globalErr.classList.remove('d-none');
+        }
+        return;
+    }
+
+    const item = Array.isArray(currentData?.items)
+        ? currentData.items.find((x) => String(x?.id || '').trim() === sensorIdNorm) || null
+        : null;
+    if (!item) {
+        if (globalErr) {
+            globalErr.textContent = t('smartSensorsNotConfigured') || 'Sensor not found';
+            globalErr.classList.remove('d-none');
+        }
+        return;
+    }
+    const vals = item.values && typeof item.values === 'object' ? item.values : {};
+    const numericFields = Object.keys(vals)
+        .map((k) => ({ key: String(k), v: Number(vals?.[k]?.value) }))
+        .filter((x) => Number.isFinite(x.v));
+
+    if (!numericFields.length) {
+        if (globalErr) {
+            globalErr.textContent = t('smartSensorMetricChartEmpty') || (t('upsAllMetricsChartEmpty') || 'No samples in the last 24 hours yet.');
+            globalErr.classList.remove('d-none');
+        }
+        return;
+    }
+
+    for (const f of numericFields) {
+        const opt = document.createElement('option');
+        opt.value = f.key;
+        opt.textContent = f.key;
+        selectEl.appendChild(opt);
+    }
+    const preferred = numericFields.find((f) => String(f.key).toLowerCase().includes('temp')) || numericFields[0];
+    smartSensorsMetricsModalFieldKey = preferred.key;
+    selectEl.value = smartSensorsMetricsModalFieldKey;
+    selectEl.onchange = () => {
+        smartSensorsMetricsModalFieldKey = selectEl.value;
+        void refreshSmartSensorsMetricsModalChart({ showLoading: true });
+    };
+
+    await refreshSmartSensorsMetricsModalChart({ showLoading: true });
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    modal.show();
+    startSmartSensorsMetricsModalAutoRefresh(modalEl);
+}
+
+function initSmartSensorsAllMetricsModalOnce() {
+    if (initSmartSensorsAllMetricsModalOnce._done) return;
+    initSmartSensorsAllMetricsModalOnce._done = true;
+    const cardsEl = document.getElementById('smartSensorsMonitorCards');
+    if (cardsEl) {
+        cardsEl.addEventListener('click', (e) => {
+            const btn = e.target.closest('.smart-sensor-metrics-open-trigger');
+            if (!btn) return;
+            const sensorId = btn.getAttribute('data-smart-sensor-id');
+            if (sensorId) void openSmartSensorsAllMetricsModal(sensorId);
+        });
+        cardsEl.addEventListener('keydown', (e) => {
+            if (e.key !== 'Enter' && e.key !== ' ') return;
+            const btn = e.target.closest('.smart-sensor-metrics-open-trigger');
+            if (!btn || !cardsEl.contains(btn)) return;
+            e.preventDefault();
+            const sensorId = btn.getAttribute('data-smart-sensor-id');
+            if (sensorId) void openSmartSensorsAllMetricsModal(sensorId);
+        });
+    }
+    const modalEl = document.getElementById('smartSensorsAllMetricsModal');
+    if (modalEl) {
+        modalEl.addEventListener('hidden.bs.modal', () => {
+            stopSmartSensorsMetricsModalAutoRefresh();
+            destroySmartSensorsMetricsModalChart();
         });
     }
 }
