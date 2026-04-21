@@ -24,8 +24,26 @@ const httpsAgent = new https.Agent({
 let nobleModule = null;
 let nobleLoadAttempted = false;
 let nobleLoadError = null;
+const isWindows = process.platform === 'win32';
+
+function normalizeNobleLoadErrorMessage(err) {
+    const msg = String(err && err.message ? err.message : err || '').trim();
+    if (!msg) return 'noble unavailable';
+    if (/cannot find module ['"]@abandonware\/noble['"]/i.test(msg)) {
+        return '@abandonware/noble not installed';
+    }
+    // Hide long "Require stack" noise in UI status.
+    const firstLine = msg.split('\n').map((x) => x.trim()).find(Boolean);
+    return firstLine || 'noble unavailable';
+}
 
 function getNoble() {
+    if (isWindows) {
+        nobleLoadAttempted = true;
+        nobleModule = null;
+        if (!nobleLoadError) nobleLoadError = new Error('BLE server mode is not supported on Windows');
+        return null;
+    }
     if (nobleLoadAttempted) {
         return nobleModule;
     }
@@ -35,7 +53,7 @@ function getNoble() {
     } catch (e) {
         nobleLoadError = e;
         nobleModule = null;
-        log('warn', `[SmartSensors] BLE: модуль @abandonware/noble недоступен (${e.message})`);
+        log('warn', `[SmartSensors] BLE: module unavailable (${normalizeNobleLoadErrorMessage(e)})`);
     }
     return nobleModule;
 }
@@ -45,7 +63,9 @@ function bleCapabilities() {
     if (!noble) {
         return {
             available: false,
-            reason: nobleLoadError ? String(nobleLoadError.message || nobleLoadError) : 'noble not installed'
+            reason: isWindows
+                ? 'Server BLE is unavailable on Windows; use browser Bluetooth connect on sensor card.'
+                : (nobleLoadError ? normalizeNobleLoadErrorMessage(nobleLoadError) : 'noble not installed')
         };
     }
     const st = noble.state;

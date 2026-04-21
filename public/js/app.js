@@ -274,6 +274,7 @@ let smartSensorsMetricsModalAutoRefreshTimer = null;
 let smartSensorsMetricsModalAutoRefreshBusy = false;
 let smartSensorsMetricsModalSensorId = null;
 let smartSensorsMetricsModalFieldKey = null;
+const webBleSensorSessions = new Map(); // sensorId -> { device, service, characteristicMap: Map<uuid, BluetoothRemoteGATTCharacteristic> }
 let lastTrueNASOverviewData = null;
 let hostMetricsSettings = { pollIntervalSec: 10, timeoutMs: 3000, cacheTtlSec: 8, criticalTempC: 85, criticalLinkSpeedMbps: 1000 };
 let hostMetricsConfigs = {}; // connectionId -> { nodes: { [node]: { enabled, agentPort, agentPath, cpuTempSensor, linkInterface, ipmiHost, ipmiPort } } }
@@ -2236,6 +2237,123 @@ function formatSmartSensorMetricEntry(entry) {
     return '—';
 }
 
+function isWebBluetoothAvailable() {
+    return typeof navigator !== 'undefined' &&
+        !!navigator.bluetooth &&
+        typeof navigator.bluetooth.requestDevice === 'function';
+}
+
+function normalizeBleUuidClient(input) {
+    const raw = String(input || '').trim().toLowerCase().replace(/-/g, '');
+    if (!raw) return '';
+    if (raw.length <= 4) {
+        const short = raw.padStart(4, '0');
+        return `0000${short}-0000-1000-8000-00805f9b34fb`;
+    }
+    if (raw.length === 8) return `${raw}-0000-1000-8000-00805f9b34fb`;
+    if (raw.length === 32) return `${raw.slice(0, 8)}-${raw.slice(8, 12)}-${raw.slice(12, 16)}-${raw.slice(16, 20)}-${raw.slice(20)}`;
+    return String(input || '').trim().toLowerCase();
+}
+
+function decodeBleDataViewValue(dataView, format, scale, offset) {
+    if (!dataView) return null;
+    const fmt = String(format || 'int16le').trim().toLowerCase();
+    const mul = Number.isFinite(Number(scale)) ? Number(scale) : 1;
+    const add = Number.isFinite(Number(offset)) ? Number(offset) : 0;
+    let v = null;
+    try {
+        if (fmt === 'int16le' && dataView.byteLength >= 2) v = dataView.getInt16(0, true);
+        else if (fmt === 'uint16le' && dataView.byteLength >= 2) v = dataView.getUint16(0, true);
+        else if (fmt === 'int16be' && dataView.byteLength >= 2) v = dataView.getInt16(0, false);
+        else if (fmt === 'uint16be' && dataView.byteLength >= 2) v = dataView.getUint16(0, false);
+        else if (fmt === 'int8' && dataView.byteLength >= 1) v = dataView.getInt8(0);
+        else if (fmt === 'uint8' && dataView.byteLength >= 1) v = dataView.getUint8(0);
+        else if (fmt === 'floatle' && dataView.byteLength >= 4) v = dataView.getFloat32(0, true);
+        else if (fmt === 'floatbe' && dataView.byteLength >= 4) v = dataView.getFloat32(0, false);
+    } catch (_) {
+        v = null;
+    }
+    return Number.isFinite(v) ? (v * mul + add) : null;
+}
+
+function smartSensorConfigById(sensorId) {
+    const sid = String(sensorId || '').trim();
+    if (!sid) return null;
+    const list = Array.isArray(smartSensorsConfigsForTiles) ? smartSensorsConfigsForTiles : [];
+    return list.find((cfg) => String(cfg?.id || '').trim() === sid) || null;
+}
+
+async function connectWebBleSensorById(sensorId) {
+    if (!isWebBluetoothAvailable()) {
+        throw new Error(t('smartSensorsWebBluetoothUnsupported') || 'Web Bluetooth is not available in this browser.');
+    }
+    const cfg = smartSensorConfigById(sensorId);
+    if (!cfg || String(cfg.type || '').toLowerCase() !== 'ble') {
+        throw new Error(t('smartSensorsNotConfigured') || 'Sensor not found');
+    }
+    const serviceUuid = normalizeBleUuidClient(cfg.bleServiceUuid || '1809');
+    const channels = Array.isArray(cfg.bleChannels) ? cfg.bleChannels : [];
+    if (!channels.length) {
+        throw new Error(t('smartSensorMetricChartEmpty') || 'No BLE channels configured');
+    }
+    const optionalServices = [serviceUuid].filter(Boolean);
+    const device = await navigator.bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices
+    });
+    if (!device || !device.gatt) throw new Error('BLE device selection failed');
+    const server = await device.gatt.connect();
+    const service = await server.getPrimaryService(serviceUuid);
+    const characteristicMap = new Map();
+    for (const ch of channels) {
+        const uuid = normalizeBleUuidClient(ch?.uuid);
+        if (!uuid) continue;
+        if (characteristicMap.has(uuid)) continue;
+        try {
+            const characteristic = await service.getCharacteristic(uuid);
+            if (characteristic) characteristicMap.set(uuid, characteristic);
+        } catch (_) {}
+    }
+    webBleSensorSessions.set(String(cfg.id), { device, service, characteristicMap });
+    return true;
+}
+
+async function readWebBleSensorValuesById(sensorId) {
+    const sid = String(sensorId || '').trim();
+    const cfg = smartSensorConfigById(sid);
+    if (!cfg || String(cfg.type || '').toLowerCase() !== 'ble') return null;
+    const channels = Array.isArray(cfg.bleChannels) ? cfg.bleChannels : [];
+    if (!channels.length) return { error: 'no BLE channels configured', values: {} };
+    const session = webBleSensorSessions.get(sid);
+    if (!session || !session.service) return { error: 'not connected', values: {} };
+    if (!session.device?.gatt?.connected) return { error: 'not connected', values: {} };
+    const values = {};
+    for (const spec of channels) {
+        const uuid = normalizeBleUuidClient(spec?.uuid);
+        if (!uuid) continue;
+        let characteristic = session.characteristicMap.get(uuid) || null;
+        if (!characteristic) {
+            try {
+                characteristic = await session.service.getCharacteristic(uuid);
+                if (characteristic) session.characteristicMap.set(uuid, characteristic);
+            } catch (_) {
+                characteristic = null;
+            }
+        }
+        if (!characteristic) continue;
+        try {
+            const val = await characteristic.readValue();
+            const key = spec && spec.metric === 'custom' ? (spec.label || 'custom') : (spec?.metric || 'value');
+            const num = decodeBleDataViewValue(val, spec?.format, spec?.scale, spec?.offset);
+            values[String(key)] = {
+                raw: Array.from(new Uint8Array(val.buffer)).map((b) => b.toString(16).padStart(2, '0')).join(''),
+                value: num
+            };
+        } catch (_) {}
+    }
+    return { error: null, values };
+}
+
 function buildSmartSensorsCardsHtml(data) {
     const items = Array.isArray(data.items) ? data.items : [];
     if (!items.length) {
@@ -2248,6 +2366,8 @@ function buildSmartSensorsCardsHtml(data) {
     }
     const html = items.map((it) => {
         const name = it.name || it.id || '—';
+        const hasBtConnect = String(it.type || '').toLowerCase() === 'ble' && isWebBluetoothAvailable();
+        const btConnectTitle = t('smartSensorsConnectBtTitle') || 'Connect by Bluetooth';
         const errBlock = it.error ? `<div class="text-danger small mt-2">${escapeHtml(it.error)}</div>` : '';
         const vals = it.values && typeof it.values === 'object' ? it.values : {};
         const keys = Object.keys(vals);
@@ -2273,6 +2393,15 @@ function buildSmartSensorsCardsHtml(data) {
                                 aria-label="${escapeHtml(openMetricsTitle)}">
                                 <i class="bi bi-graph-up"></i>
                             </button>` : ''}
+                            ${hasBtConnect ? `
+                            <button
+                                type="button"
+                                class="btn btn-sm btn-outline-secondary smart-sensor-bt-connect-trigger"
+                                data-smart-sensor-id="${escapeHtml(String(it.id || ''))}"
+                                title="${escapeHtml(btConnectTitle)}"
+                                aria-label="${escapeHtml(btConnectTitle)}">
+                                <i class="bi bi-bluetooth"></i>
+                            </button>` : ''}
                             <span class="badge bg-secondary flex-shrink-0">${typeBadge}</span>
                         </div>
                     </div>
@@ -2294,6 +2423,19 @@ async function updateSmartSensorsDashboard() {
     try {
         const res = await fetch('/api/smart-sensors/current');
         const data = await res.json();
+        const items = Array.isArray(data?.items) ? data.items : [];
+        // Browser-side BLE fallback (Windows/macOS) when server BLE stack is unavailable.
+        for (const item of items) {
+            if (!item || String(item.type || '').toLowerCase() !== 'ble') continue;
+            const valuesObj = item.values && typeof item.values === 'object' ? item.values : {};
+            if (Object.keys(valuesObj).length && !item.error) continue;
+            const webBle = await readWebBleSensorValuesById(item.id).catch(() => null);
+            if (webBle && webBle.values && Object.keys(webBle.values).length) {
+                item.values = webBle.values;
+                item.error = null;
+                item.type = 'ble(web)';
+            }
+        }
         smartSensorsMonitorConfigured = !!(data && data.configured && Array.isArray(data.items) && data.items.length > 0);
 
         if (!data || !data.configured || !Array.isArray(data.items) || data.items.length === 0) {
@@ -9438,6 +9580,20 @@ function initSmartSensorsAllMetricsModalOnce() {
     const cardsEl = document.getElementById('smartSensorsMonitorCards');
     if (cardsEl) {
         cardsEl.addEventListener('click', (e) => {
+            const btBtn = e.target.closest('.smart-sensor-bt-connect-trigger');
+            if (btBtn) {
+                const btSensorId = btBtn.getAttribute('data-smart-sensor-id');
+                if (!btSensorId) return;
+                connectWebBleSensorById(btSensorId)
+                    .then(() => {
+                        showToast(t('smartSensorsBtConnected') || 'Bluetooth sensor connected', 'success');
+                        return updateSmartSensorsDashboard();
+                    })
+                    .catch((err) => {
+                        showToast((t('smartSensorsBtConnectError') || 'Bluetooth connection error') + ': ' + (err?.message || String(err)), 'error');
+                    });
+                return;
+            }
             const btn = e.target.closest('.smart-sensor-metrics-open-trigger');
             if (!btn) return;
             const sensorId = btn.getAttribute('data-smart-sensor-id');
@@ -9445,6 +9601,21 @@ function initSmartSensorsAllMetricsModalOnce() {
         });
         cardsEl.addEventListener('keydown', (e) => {
             if (e.key !== 'Enter' && e.key !== ' ') return;
+            const btBtn = e.target.closest('.smart-sensor-bt-connect-trigger');
+            if (btBtn && cardsEl.contains(btBtn)) {
+                e.preventDefault();
+                const btSensorId = btBtn.getAttribute('data-smart-sensor-id');
+                if (!btSensorId) return;
+                connectWebBleSensorById(btSensorId)
+                    .then(() => {
+                        showToast(t('smartSensorsBtConnected') || 'Bluetooth sensor connected', 'success');
+                        return updateSmartSensorsDashboard();
+                    })
+                    .catch((err) => {
+                        showToast((t('smartSensorsBtConnectError') || 'Bluetooth connection error') + ': ' + (err?.message || String(err)), 'error');
+                    });
+                return;
+            }
             const btn = e.target.closest('.smart-sensor-metrics-open-trigger');
             if (!btn || !cardsEl.contains(btn)) return;
             e.preventDefault();
