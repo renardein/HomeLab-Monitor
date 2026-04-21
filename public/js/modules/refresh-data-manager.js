@@ -2,6 +2,7 @@
     function createManager(deps) {
         async function refreshData(options = {}) {
             const silent = options === true ? true : !!options.silent;
+            const skipTilesRender = options && typeof options === 'object' ? !!options.skipTilesRender : false;
 
             if (deps.getIsRefreshing()) return;
             deps.setIsRefreshing(true);
@@ -113,7 +114,7 @@
                 if (!onTilesMonitorScreen) {
                     deps.renderTilesMonitorScreen('tilesNormalGrid').catch(() => {});
                 }
-                if (!deps.getMonitorMode() || deps.getMonitorCurrentView() === 'tiles') {
+                if (!skipTilesRender && (!deps.getMonitorMode() || deps.getMonitorCurrentView() === 'tiles')) {
                     deps.renderTilesMonitorScreen().catch(() => {});
                 }
                 if (deps.getMonitorMode() && deps.getMonitorCurrentView() === 'truenasPools') {

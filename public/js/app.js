@@ -11863,6 +11863,37 @@ function getTilesMonitorCellClass(size) {
     return 'col-12 col-md-6 col-xl-3';
 }
 
+function isTilesChartTileType(type) {
+    return type === 'ups_metric_chart' ||
+        type === 'cluster_metric_chart' ||
+        type === 'host_node_metric_chart' ||
+        type === 'smart_sensor_metric_chart';
+}
+
+function patchTilesMonitorGridInPlace(gridEl, renderedItems) {
+    if (!gridEl || !Array.isArray(renderedItems) || !renderedItems.length) return false;
+    const cells = Array.from(gridEl.querySelectorAll(':scope > .tiles-monitor-cell'));
+    if (cells.length !== renderedItems.length) return false;
+    for (let i = 0; i < renderedItems.length; i++) {
+        const cell = cells[i];
+        const item = renderedItems[i];
+        const key = String(cell.dataset.tileKey || '');
+        const style = String(cell.dataset.gridStyle || '');
+        if (key !== item.tileKey || style !== item.gridStyle) return false;
+    }
+    for (let i = 0; i < renderedItems.length; i++) {
+        const cell = cells[i];
+        const item = renderedItems[i];
+        if (item.isChart) continue;
+        const prev = String(cell.dataset.tileHtml || '');
+        if (prev !== item.tileHtml) {
+            cell.innerHTML = item.tileHtml;
+            cell.dataset.tileHtml = item.tileHtml;
+        }
+    }
+    return true;
+}
+
 async function renderTilesMonitorScreen(targetGridId = 'tilesMonitorGrid') {
     tilesMonitorTileFooterSuppressDepth++;
     try {
@@ -11938,7 +11969,7 @@ async function renderTilesMonitorScreen(targetGridId = 'tilesMonitorGrid') {
     if (isSettingsPreviewGrid && monitorMode && monitorCurrentView === 'tiles') return;
 
     const placements = computeTilesMonitorPlacements(tiles);
-    const html = placements.map(({ tile, gridCol, gridRow }, placementsIndex) => {
+    const renderedItems = placements.map(({ tile, gridCol, gridRow }, placementsIndex) => {
         let tileHtml = '';
         if (tile.type === 'service') tileHtml = buildClusterServiceTileHtml(tile);
         else if (tile.type === 'vmct') tileHtml = buildClusterVmTileHtml(tile);
@@ -11962,10 +11993,20 @@ async function renderTilesMonitorScreen(targetGridId = 'tilesMonitorGrid') {
         const h = Math.max(1, Math.min(TILES_MONITOR_GRID_ROWS, tile.tilesGridH || 1));
         const gc = Math.max(1, Math.min(TILES_MONITOR_GRID_COLS, gridCol));
         const gr = Math.max(1, Math.min(TILES_MONITOR_GRID_ROWS, gridRow));
-        const style = `grid-column: ${gc} / span ${w}; grid-row: ${gr} / span ${h};`;
-        return `<div class="tiles-monitor-cell" style="${style}">${tileHtml}</div>`;
-    }).join('');
-    setHTMLIfChanged(targetGridId, html);
+        const gridStyle = `grid-column: ${gc} / span ${w}; grid-row: ${gr} / span ${h};`;
+        const tileKey = `${String(tile.type || '')}:${String(tile.sourceId || '')}:${gc}:${gr}:${w}:${h}`;
+        return {
+            tileHtml,
+            gridStyle,
+            tileKey,
+            isChart: isTilesChartTileType(tile.type)
+        };
+    });
+    const patchedInPlace = patchTilesMonitorGridInPlace(gridEl, renderedItems);
+    if (!patchedInPlace) {
+        const html = renderedItems.map((item) => `<div class="tiles-monitor-cell" style="${item.gridStyle}" data-grid-style="${escapeHtml(item.gridStyle)}" data-tile-key="${escapeHtml(item.tileKey)}" data-tile-chart="${item.isChart ? '1' : '0'}" data-tile-html="${escapeHtml(item.tileHtml)}">${item.tileHtml}</div>`).join('');
+        setHTMLIfChanged(targetGridId, html);
+    }
     if (isLiveGrid && !(monitorMode && monitorCurrentView === 'tiles')) return;
     if (isSettingsPreviewGrid && monitorMode && monitorCurrentView === 'tiles') return;
     // Important: wait for chart tiles initialization so callers (view switch)

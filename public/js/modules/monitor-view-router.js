@@ -106,7 +106,9 @@
                 deps.updateSmartSensorsDashboard().catch(() => {});
             } else if (view === 'tiles') {
                 if (elements.tilesMonSection) elements.tilesMonSection.style.display = 'block';
-                const maybeRefresh = deps.refreshData ? deps.refreshData({ silent: true }) : Promise.resolve();
+                const maybeRefresh = deps.refreshData
+                    ? deps.refreshData({ silent: true, skipTilesRender: true })
+                    : Promise.resolve();
                 Promise.resolve(maybeRefresh).then(() => deps.renderTilesMonitorScreen())
                     .then(() => {
                         // После display:block размеры контейнера часто 0×0 до reflow; resize + update перерисовывает Chart.js.
