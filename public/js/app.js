@@ -271,7 +271,7 @@ let upsMetricsModalMetricId = null;
 let upsMetricsModalMetricFormat = null;
 let lastTrueNASOverviewData = null;
 let hostMetricsSettings = { pollIntervalSec: 10, timeoutMs: 3000, cacheTtlSec: 8, criticalTempC: 85, criticalLinkSpeedMbps: 1000 };
-let hostMetricsConfigs = {}; // connectionId -> { nodes: { [node]: { enabled, agentPort, agentPath, cpuTempSensor, linkInterface } } }
+let hostMetricsConfigs = {}; // connectionId -> { nodes: { [node]: { enabled, agentPort, agentPath, cpuTempSensor, linkInterface, ipmiHost, ipmiPort } } }
 let hostMetricsDiscoveryItems = [];
 let hostMetricsAgentInstallPlanCache = null;
 let lastHostMetricsAgentModalNodeName = '';
@@ -2504,6 +2504,7 @@ function updateUILanguage() {
         settingsNavVms: 'settingsNavVms',
         settingsNavNetdevices: 'settingsNavNetdevices',
         settingsNavHostMetrics: 'settingsNavHostMetrics',
+        settingsNavIpmi: 'settingsNavIpmi',
         settingsNavSmartSensors: 'settingsNavSmartSensors',
         settingsNavSpeedtest: 'settingsNavSpeedtest',
         settingsNavIperf3: 'settingsNavIperf3',
@@ -2856,8 +2857,16 @@ function updateUILanguage() {
     setText('hostMetricsAgentEndpointHeader', t('hostMetricsAgentEndpointHeader'));
     setText('hostMetricsCpuSensorHeader', t('hostMetricsCpuSensorHeader'));
     setText('hostMetricsInterfaceHeader', t('hostMetricsInterfaceHeader'));
+    setText('hostMetricsIpmiHostHeader', t('hostMetricsIpmiHostHeader'));
+    setText('hostMetricsIpmiPortHeader', t('hostMetricsIpmiPortHeader'));
     setText('hostMetricsDiscoveryHeader', t('hostMetricsDiscoveryHeader'));
     setText('hostMetricsSaveButtonText', t('hostMetricsSaveButtonText'));
+    setText('ipmiSettingsTitle', t('ipmiSettingsTitle'));
+    setText('ipmiSettingsHint', t('ipmiSettingsHint'));
+    setText('ipmiNodeHeader', t('ipmiNodeHeader') || t('tabNodes') || 'Node');
+    setText('ipmiClusterIpHeader', t('ipmiClusterIpHeader') || t('hostMetricsAgentIpHostHeader'));
+    setText('ipmiTargetHeader', t('ipmiTargetHeader'));
+    setText('ipmiSaveButtonText', t('ipmiSaveButtonText'));
     setText('hostMetricsInstallHeader', t('hostMetricsInstallHeader'));
     setText('hostMetricsAgentInstallSshHostLabel', t('hostMetricsAgentInstallSshHostLabel'));
     setText('hostMetricsAgentInstallSshPortLabel', t('hostMetricsAgentInstallSshPortLabel'));
@@ -7726,7 +7735,13 @@ function normalizeHostMetricsNodeConfigClient(raw, nodeName = '') {
         agentPort,
         agentPath,
         cpuTempSensor: String(src.cpuTempSensor || '').trim(),
-        linkInterface: String(src.linkInterface || '').trim()
+        linkInterface: String(src.linkInterface || '').trim(),
+        ipmiHost: String(src.ipmiHost || '').trim(),
+        ipmiPort: (() => {
+            const n = parseInt(src.ipmiPort, 10);
+            if (!Number.isFinite(n)) return 623;
+            return Math.min(65535, Math.max(1, n));
+        })()
     };
 }
 
@@ -8123,6 +8138,62 @@ function renderHostMetricsRows(items, state = null) {
     }).join('');
 }
 
+function renderIpmiSettingsRows(items, state = null) {
+    const tbody = document.getElementById('ipmiSettingsBody');
+    const empty = document.getElementById('ipmiSettingsEmpty');
+    if (!tbody || !empty) return;
+
+    if (!getAuthHeadersForType('proxmox')) {
+        tbody.innerHTML = '';
+        empty.classList.remove('d-none');
+        empty.textContent = t('hostMetricsProxmoxOnly') || 'Метрики хостов доступны только для Proxmox.';
+        return;
+    }
+    if (state === 'no-connection') {
+        tbody.innerHTML = '';
+        empty.classList.remove('d-none');
+        empty.textContent = t('hostMetricsNeedConnection') || 'Сначала подключитесь к Proxmox.';
+        return;
+    }
+    if (!Array.isArray(items) || !items.length) {
+        tbody.innerHTML = '';
+        empty.classList.remove('d-none');
+        empty.textContent = state === 'error'
+            ? (t('hostMetricsDiscoveryErrorHint') || 'Не удалось получить список узлов/датчиков.')
+            : (t('hostMetricsNoNodes') || 'Нет доступных узлов для настройки.');
+        return;
+    }
+
+    empty.classList.add('d-none');
+    tbody.innerHTML = items.map((item) => {
+        const nodeName = item.node || '';
+        const cfg = getHostMetricsNodeConfigForRow(nodeName, item);
+        const clusterIp = item.nodeIp ? String(item.nodeIp).trim() : '';
+        const ipmiHost = String(cfg.ipmiHost || '').trim();
+        const ipmiPort = Number.isFinite(Number(cfg.ipmiPort)) ? Number(cfg.ipmiPort) : 623;
+        const target = `${ipmiHost || clusterIp || nodeName || '—'}:${ipmiPort}`;
+        return `
+            <tr data-host-metrics-node="${escapeHtml(nodeName)}">
+                <td><div class="fw-semibold">${escapeHtml(nodeName)}</div></td>
+                <td>
+                    <div class="small text-muted">${clusterIp
+            ? `${escapeHtml(t('hostMetricsAgentIpClusterLabel') || 'IP')} ${escapeHtml(clusterIp)}`
+            : escapeHtml(t('hostMetricsAgentIpClusterDash') || '—')}</div>
+                </td>
+                <td>
+                    <input type="text" class="form-control form-control-sm host-metrics-ipmi-host"
+                        value="${escapeHtml(ipmiHost)}" placeholder="${escapeHtml(clusterIp || nodeName)}">
+                </td>
+                <td>
+                    <input type="number" class="form-control form-control-sm host-metrics-ipmi-port" min="1" max="65535"
+                        value="${escapeHtml(String(ipmiPort))}" placeholder="623">
+                </td>
+                <td><span class="small text-muted">${escapeHtml(target)}</span></td>
+            </tr>
+        `;
+    }).join('');
+}
+
 async function loadHostMetricsSettings() {
     const pollInput = document.getElementById('hostMetricsPollIntervalInput');
     const timeoutInput = document.getElementById('hostMetricsTimeoutInput');
@@ -8159,6 +8230,7 @@ async function refreshHostMetricsDiscovery(options = {}) {
     if (!headers) {
         hostMetricsDiscoveryItems = [];
         renderHostMetricsRows([], 'no-connection');
+        renderIpmiSettingsRows([], 'no-connection');
         return;
     }
 
@@ -8168,6 +8240,7 @@ async function refreshHostMetricsDiscovery(options = {}) {
         if (!res.ok || !data?.success) throw new Error(data?.error || `HTTP ${res.status}`);
         hostMetricsDiscoveryItems = Array.isArray(data.items) ? data.items : [];
         renderHostMetricsRows(hostMetricsDiscoveryItems);
+        renderIpmiSettingsRows(hostMetricsDiscoveryItems);
         if (!options.silent) {
             showToast(t('hostMetricsDiscoveryUpdated') || 'Список датчиков обновлён', 'success');
         }
@@ -8175,6 +8248,7 @@ async function refreshHostMetricsDiscovery(options = {}) {
         console.error('Host metrics discovery failed:', e);
         hostMetricsDiscoveryItems = [];
         renderHostMetricsRows([], 'error');
+        renderIpmiSettingsRows([], 'error');
         if (!options.silent) {
             showToast((t('hostMetricsDiscoveryErrorToast') || 'Ошибка получения датчиков') + ': ' + (e.message || String(e)), 'error');
         }
@@ -8194,6 +8268,7 @@ async function saveHostMetricsSettings() {
     const criticalInput = document.getElementById('hostMetricsCriticalTempInput');
     const criticalLinkInput = document.getElementById('hostMetricsCriticalLinkInput');
     const rows = document.querySelectorAll('#hostMetricsSettingsBody tr[data-host-metrics-node]');
+    const ipmiRows = document.querySelectorAll('#ipmiSettingsBody tr[data-host-metrics-node]');
     const nodes = {};
 
     rows.forEach((row) => {
@@ -8214,6 +8289,18 @@ async function saveHostMetricsSettings() {
             cpuTempSensor,
             linkInterface
         };
+    });
+    ipmiRows.forEach((row) => {
+        const nodeName = row.getAttribute('data-host-metrics-node') || '';
+        if (!nodeName) return;
+        if (!nodes[nodeName]) nodes[nodeName] = normalizeHostMetricsNodeConfigClient({}, nodeName);
+        const ipmiHost = (row.querySelector('.host-metrics-ipmi-host')?.value || '').trim();
+        const ipmiPortRaw = row.querySelector('.host-metrics-ipmi-port')?.value;
+        let ipmiPort = parseInt(ipmiPortRaw, 10);
+        if (!Number.isFinite(ipmiPort)) ipmiPort = 623;
+        ipmiPort = Math.min(65535, Math.max(1, ipmiPort));
+        nodes[nodeName].ipmiHost = ipmiHost;
+        nodes[nodeName].ipmiPort = ipmiPort;
     });
 
     const nextSettings = normalizeHostMetricsSettingsClient({
@@ -9198,6 +9285,19 @@ function formatHostMetricsNodeExtras(metric, nodeName) {
             ${stateText}
         </div>
     `;
+}
+
+function formatNodeIpmiStatusBadge(node) {
+    const ipmi = node && node.ipmi && typeof node.ipmi === 'object' ? node.ipmi : null;
+    const checked = !!(ipmi && ipmi.checked);
+    const up = checked ? ipmi.up === true : false;
+    const statusLabel = checked
+        ? (up ? (t('ipmiStatusUp') || 'Available') : (t('ipmiStatusDown') || 'Unavailable'))
+        : (t('ipmiStatusUnknown') || 'Not checked');
+    const badgeClass = checked
+        ? (up ? 'bg-success-subtle text-success-emphasis' : 'bg-danger-subtle text-danger-emphasis')
+        : 'bg-secondary-subtle text-secondary-emphasis';
+    return `<span class="badge ${badgeClass}" title="${escapeHtml(t('nodeIpmiAvailability') || 'IPMI')}">${escapeHtml(`IPMI: ${statusLabel}`)}</span>`;
 }
 
 function formatNetdevMetricValue(v) {
@@ -11238,6 +11338,7 @@ function buildClusterNodeKpiTileHtml(tile) {
                         <div class="d-flex align-items-center gap-2 flex-shrink-0">
                             ${nodeOnline ? `<span class="text-muted host-node-chart-hint" aria-hidden="true" title="${escapeHtml(t('hostNodeAllMetricsCardOpenTitle') || '')}"><i class="bi bi-graph-up-arrow"></i></span>` : ''}
                             ${clusterTileHeaderStatusHtml(nodeOnline ? 'bg-success' : 'bg-danger', nodeOnline ? t('nodeOnline') : t('nodeOffline'))}
+                            ${formatNodeIpmiStatusBadge(node)}
                         </div>
                     </div>
                     ${metricsBlock}
@@ -12485,11 +12586,12 @@ async function toggleSettings() {
 function onSettingsNavSectionChange(section) {
     // Мы держим все настройки UPS/Netdev внутри settings-tab-services по разметке,
     // но по клику слева показываем "только нужный блок", чтобы экраны не выглядели одинаково.
-    // section: 'services' | 'vms' | 'ups' | 'netdev' | 'hostMetrics' | 'smartSensors'
+    // section: 'services' | 'vms' | 'ups' | 'netdev' | 'hostMetrics' | 'ipmi' | 'smartSensors'
     const servicesHosts = document.getElementById('servicesHostsSettingsWrap');
     const upsWrap = document.getElementById('upsSettingsCardWrap');
     const netdevWrap = document.getElementById('netdevSettingsCardWrap');
     const hostMetricsWrap = document.getElementById('hostMetricsSettingsWrap');
+    const ipmiWrap = document.getElementById('ipmiSettingsWrap');
     const vmsWrap = document.getElementById('vmsForMonitoringSettingsWrap');
     const smartWrap = document.getElementById('smartSensorsSettingsCardWrap');
 
@@ -12507,6 +12609,7 @@ function onSettingsNavSectionChange(section) {
     hide(netdevWrap);
     hide(vmsWrap);
     if (hostMetricsWrap) hide(hostMetricsWrap);
+    if (ipmiWrap) hide(ipmiWrap);
     if (smartWrap) hide(smartWrap);
 
     if (section === 'ups') {
@@ -12515,6 +12618,8 @@ function onSettingsNavSectionChange(section) {
         show(netdevWrap);
     } else if (section === 'hostMetrics') {
         show(hostMetricsWrap);
+    } else if (section === 'ipmi') {
+        if (ipmiWrap) show(ipmiWrap);
     } else if (section === 'smartSensors') {
         if (smartWrap) show(smartWrap);
         loadSmartSensorsSettings();
@@ -14160,6 +14265,7 @@ function updateDashboard(clusterData, storageData, backupsData, hostMetricsData 
                             <span class="badge ${nodeOnline ? 'bg-success' : 'bg-danger'}">
                             ${nodeOnline ? t('nodeOnline') : t('nodeOffline')}
                         </span>
+                            ${formatNodeIpmiStatusBadge(node)}
                         </div>
                     </div>
                     ${nodeOnline ? `

@@ -92,7 +92,9 @@ function normalizeNodeConfig(raw) {
         agentPort,
         agentPath,
         cpuTempSensor: safeString(cfg.cpuTempSensor).trim(),
-        linkInterface: safeString(cfg.linkInterface).trim()
+        linkInterface: safeString(cfg.linkInterface).trim(),
+        ipmiHost: safeString(cfg.ipmiHost).trim(),
+        ipmiPort: clampInt(cfg.ipmiPort, 1, 65535, 623)
     };
 }
 

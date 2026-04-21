@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
+const net = require('net');
 const proxmox = require('../proxmox-api');
+const settingsStore = require('../settings-store');
 const { formatBytes, log } = require('../utils');
 const checkAuth = require('../middleware/auth');
 const { getScopeKeyFromRequest, applyOfflineToClusterNodes } = require('../pve-node-offline-tracker');
@@ -11,6 +13,73 @@ const clusterAggregateSamples = require('../cluster-aggregate-samples');
 
 function safeString(v) {
     return v == null ? '' : String(v);
+}
+
+const IPMI_DEFAULT_PORT = 623;
+const IPMI_CHECK_TIMEOUT_MS = 1200;
+const HOST_METRICS_CONFIGS_KEY = 'host_metrics_configs';
+
+function checkTcpAvailability(host, port, timeoutMs = IPMI_CHECK_TIMEOUT_MS) {
+    return new Promise((resolve) => {
+        const out = { up: false, latencyMs: null, error: 'timeout' };
+        const hostStr = safeString(host).trim();
+        const portNum = Number(port);
+        if (!hostStr || !Number.isFinite(portNum)) {
+            resolve({ ...out, error: 'invalid_target' });
+            return;
+        }
+        const socket = new net.Socket();
+        const startedAt = Date.now();
+        let done = false;
+        const finish = (payload) => {
+            if (done) return;
+            done = true;
+            try { socket.destroy(); } catch (_) {}
+            resolve(payload);
+        };
+        socket.setTimeout(timeoutMs);
+        socket.once('connect', () => {
+            finish({ up: true, latencyMs: Date.now() - startedAt, error: null });
+        });
+        socket.once('timeout', () => {
+            finish({ ...out, error: 'timeout' });
+        });
+        socket.once('error', (err) => {
+            finish({ ...out, error: err && (err.code || err.message) ? String(err.code || err.message) : 'error' });
+        });
+        try {
+            socket.connect(portNum, hostStr);
+        } catch (e) {
+            finish({ ...out, error: e && e.message ? e.message : 'error' });
+        }
+    });
+}
+
+function clampInt(v, min, max, fallback) {
+    const n = parseInt(v, 10);
+    if (!Number.isFinite(n)) return fallback;
+    if (n < min) return min;
+    if (n > max) return max;
+    return n;
+}
+
+function normalizeIpmiNodeConfig(raw) {
+    const cfg = raw && typeof raw === 'object' ? raw : {};
+    return {
+        ipmiHost: safeString(cfg.ipmiHost).trim(),
+        ipmiPort: clampInt(cfg.ipmiPort, 1, 65535, IPMI_DEFAULT_PORT)
+    };
+}
+
+function loadHostMetricsConfigs() {
+    const raw = settingsStore.getSetting(HOST_METRICS_CONFIGS_KEY);
+    if (!raw) return {};
+    try {
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+        return {};
+    }
 }
 
 /** Вызывается на каждый GET /full (в т.ч. из кэша), чтобы история метрик обновлялась с частотой опроса. */
@@ -113,7 +182,45 @@ async function fetchClusterFullPayload(req) {
             }
         })
     );
-    const nodesDetails = proxmox.sortRowsByClusterNodeOrder(nodesDetailsRaw, clusterStatus, (row) => row.name);
+    const connectionId = resolveProxmoxConnectionId(req);
+    const allHostMetricsConfigs = loadHostMetricsConfigs();
+    const connNodesCfg = (connectionId && allHostMetricsConfigs[connectionId] && allHostMetricsConfigs[connectionId].nodes && typeof allHostMetricsConfigs[connectionId].nodes === 'object')
+        ? allHostMetricsConfigs[connectionId].nodes
+        : {};
+    const nodesWithIpmi = await Promise.all(nodesDetailsRaw.map(async (nodeRow) => {
+        const nodeStatus = String(nodeRow && nodeRow.status || '').toLowerCase();
+        const nodeIp = safeString(nodeRow && nodeRow.ip).trim();
+        const nodeName = safeString(nodeRow && nodeRow.name).trim();
+        const ipmiCfg = normalizeIpmiNodeConfig(connNodesCfg[nodeName]);
+        const targetHost = ipmiCfg.ipmiHost || nodeIp;
+        const targetPort = ipmiCfg.ipmiPort || IPMI_DEFAULT_PORT;
+        if (nodeStatus !== 'online' || !targetHost) {
+            return {
+                ...nodeRow,
+                ipmi: {
+                    checked: false,
+                    up: null,
+                    latencyMs: null,
+                    error: targetHost ? 'node_offline' : 'ip_missing',
+                    host: targetHost || null,
+                    port: targetPort
+                }
+            };
+        }
+        const check = await checkTcpAvailability(targetHost, targetPort);
+        return {
+            ...nodeRow,
+            ipmi: {
+                checked: true,
+                up: !!check.up,
+                latencyMs: Number.isFinite(Number(check.latencyMs)) ? Number(check.latencyMs) : null,
+                error: check.error || null,
+                host: targetHost,
+                port: targetPort
+            }
+        };
+    }));
+    const nodesDetails = proxmox.sortRowsByClusterNodeOrder(nodesWithIpmi, clusterStatus, (row) => row.name);
 
     const vms = [];
     clusterResources.forEach((resource) => {

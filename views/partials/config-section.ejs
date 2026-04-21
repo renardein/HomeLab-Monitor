@@ -43,6 +43,9 @@
                             <button class="nav-link" id="settings-nav-hostmetrics" data-bs-toggle="pill" data-bs-target="#settings-tab-services" type="button" role="tab" onclick="onSettingsNavSectionChange('hostMetrics')">
                                 <i class="bi bi-thermometer-half me-2"></i><span id="settingsNavHostMetrics">Метрики хостов</span>
                             </button>
+                            <button class="nav-link" id="settings-nav-ipmi" data-bs-toggle="pill" data-bs-target="#settings-tab-services" type="button" role="tab" onclick="onSettingsNavSectionChange('ipmi')">
+                                <i class="bi bi-hdd-network me-2"></i><span id="settingsNavIpmi">IPMI</span>
+                            </button>
                             <button class="nav-link" id="settings-nav-smart-sensors" data-bs-toggle="pill" data-bs-target="#settings-tab-services" type="button" role="tab" onclick="onSettingsNavSectionChange('smartSensors')">
                                 <i class="bi bi-bluetooth me-2"></i><span id="settingsNavSmartSensors">Умный дом — датчики</span>
                             </button>
@@ -834,6 +837,32 @@
                             <div class="d-flex justify-content-end mt-3">
                                 <button class="btn btn-primary" type="button" onclick="saveHostMetricsSettings()">
                                     <i class="bi bi-save me-2"></i><span id="hostMetricsSaveButtonText">Сохранить метрики хостов</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="ipmiSettingsWrap" style="display: none;">
+                        <div class="settings-section mb-4">
+                            <h5 class="mb-3"><i class="bi bi-hdd-network me-2"></i><span id="ipmiSettingsTitle">IPMI мониторинг Proxmox</span></h5>
+                            <p class="text-muted small mb-3" id="ipmiSettingsHint">Для каждого узла укажите IPMI host и порт для TCP-проверки доступности. Если host пустой, используется IP узла из cluster status Proxmox.</p>
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover align-middle mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th id="ipmiNodeHeader">Узел</th>
+                                            <th id="ipmiClusterIpHeader" class="text-nowrap">IP узла (кластер)</th>
+                                            <th id="hostMetricsIpmiHostHeader" class="text-nowrap">IPMI host</th>
+                                            <th id="hostMetricsIpmiPortHeader" class="text-nowrap">IPMI port</th>
+                                            <th id="ipmiTargetHeader" class="text-nowrap">Проверка</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="ipmiSettingsBody"></tbody>
+                                </table>
+                            </div>
+                            <div class="alert alert-secondary mt-3 mb-0 d-none" id="ipmiSettingsEmpty"></div>
+                            <div class="d-flex justify-content-end mt-3">
+                                <button class="btn btn-primary" type="button" onclick="saveHostMetricsSettings()">
+                                    <i class="bi bi-save me-2"></i><span id="ipmiSaveButtonText">Сохранить IPMI</span>
                                 </button>
                             </div>
                         </div>
