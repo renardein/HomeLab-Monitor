@@ -1,8 +1,15 @@
 (function initRefreshDataModule(global) {
     function createManager(deps) {
+        let lastHeavyRenderAt = 0;
+        const HEAVY_RENDER_THROTTLE_MS = 1200;
+
         async function refreshData(options = {}) {
             const silent = options === true ? true : !!options.silent;
             const skipTilesRender = options && typeof options === 'object' ? !!options.skipTilesRender : false;
+            const visible = typeof deps.getIsPageVisible === 'function' ? !!deps.getIsPageVisible() : true;
+
+            // Silent auto-refresh in background tab: skip expensive work entirely.
+            if (silent && !visible) return;
 
             if (deps.getIsRefreshing()) return;
             deps.setIsRefreshing(true);
@@ -107,14 +114,19 @@
                     deps.showToast(deps.t('errorUpdate') + ': ' + refreshErrors.join(' · '), 'error');
                 }
 
-                await deps.renderClusterDashboardTiles();
+                const now = Date.now();
+                const allowHeavyRender = !deps.getMonitorMode() || visible || (now - lastHeavyRenderAt >= HEAVY_RENDER_THROTTLE_MS);
+                if (allowHeavyRender) {
+                    await deps.renderClusterDashboardTiles();
+                    lastHeavyRenderAt = now;
+                }
                 // На экране Tiles не обновляем превью в настройках (#tilesNormalGrid) — иначе каждый тик
                 // автообновления удваивает fetch + Chart.js и перегружает главный поток.
                 const onTilesMonitorScreen = deps.getMonitorMode() && deps.getMonitorCurrentView() === 'tiles';
-                if (!onTilesMonitorScreen) {
+                if (allowHeavyRender && !onTilesMonitorScreen) {
                     deps.renderTilesMonitorScreen('tilesNormalGrid').catch(() => {});
                 }
-                if (!skipTilesRender && (!deps.getMonitorMode() || deps.getMonitorCurrentView() === 'tiles')) {
+                if (allowHeavyRender && !skipTilesRender && (!deps.getMonitorMode() || deps.getMonitorCurrentView() === 'tiles')) {
                     deps.renderTilesMonitorScreen().catch(() => {});
                 }
                 if (deps.getMonitorMode() && deps.getMonitorCurrentView() === 'truenasPools') {
@@ -145,13 +157,15 @@
                     deps.updateSmartSensorsDashboard().catch(() => {});
                 }
 
-                requestAnimationFrame(() => {
-                    window.scrollTo({ top: prevScrollY, left: 0, behavior: 'auto' });
-                    if (prevActiveId) {
-                        const a = document.getElementById(prevActiveId);
-                        if (a && typeof a.focus === 'function') a.focus({ preventScroll: true });
-                    }
-                });
+                if (!silent) {
+                    requestAnimationFrame(() => {
+                        window.scrollTo({ top: prevScrollY, left: 0, behavior: 'auto' });
+                        if (prevActiveId) {
+                            const a = document.getElementById(prevActiveId);
+                            if (a && typeof a.focus === 'function') a.focus({ preventScroll: true });
+                        }
+                    });
+                }
                 deps.setLastRefreshTime(Date.now());
                 if (deps.getMonitorMode()) {
                     const toolbarEl = document.getElementById('monitorToolbarUpdate');
@@ -166,7 +180,7 @@
                     });
                 }
                 if (!silent && !refreshErrors.length) deps.showToast(deps.t('dataUpdated'), 'success');
-                requestAnimationFrame(() => deps.updateHomeLabFontScale());
+                if (allowHeavyRender) requestAnimationFrame(() => deps.updateHomeLabFontScale());
             } catch (error) {
                 if (!silent) deps.showToast(deps.t('errorUpdate') + ': ' + error.message, 'error');
             } finally {

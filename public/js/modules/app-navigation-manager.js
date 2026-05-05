@@ -3,7 +3,10 @@
         function startAutoRefresh() {
             const current = deps.getAutoRefreshInterval();
             if (current) clearInterval(current);
-            const next = setInterval(() => deps.refreshData({ silent: true }), deps.getRefreshIntervalMs());
+            const next = setInterval(() => {
+                if (typeof document !== 'undefined' && document.hidden) return;
+                deps.refreshData({ silent: true });
+            }, deps.getRefreshIntervalMs());
             deps.setAutoRefreshInterval(next);
         }
 

@@ -139,6 +139,10 @@ let weatherOpenweathermapApiKeySet = false;
 let weatherYandexApiKeySet = false;
 let weatherGismeteoApiKeySet = false;
 
+function isPageVisible() {
+    try { return !document.hidden; } catch (_) { return true; }
+}
+
 function initPwaOfflineLite() {
     if (!('serviceWorker' in navigator)) return;
     window.addEventListener('load', async () => {
@@ -156,6 +160,18 @@ function initPwaOfflineLite() {
     });
 }
 initPwaOfflineLite();
+
+function initMonitorPerformanceGuards() {
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) return;
+        // Refresh once after tab becomes visible to avoid stale monitor data.
+        if (monitorMode || apiToken || getCurrentConnectionId()) {
+            refreshData({ silent: true });
+        }
+        scheduleHomeLabFontScale();
+    });
+}
+initMonitorPerformanceGuards();
 let dashboardTimezone = DEFAULT_DASHBOARD_TIMEZONE;
 let dashboardWeatherData = null;
 let dashboardWeatherDisplayName = '';
@@ -1446,6 +1462,20 @@ function updateHomeLabFontScale() {
         document.documentElement.style.setProperty('--homelab-font-scale', '1');
         document.documentElement.style.setProperty('--homelab-content-scale', '1');
     }
+}
+
+let homeLabFontScaleRaf = 0;
+let homeLabFontScaleLastRun = 0;
+function scheduleHomeLabFontScale() {
+    if (homeLabFontScaleRaf) return;
+    homeLabFontScaleRaf = requestAnimationFrame(() => {
+        homeLabFontScaleRaf = 0;
+        const now = Date.now();
+        // Avoid repetitive full-dashboard measurements in tight bursts.
+        if (now - homeLabFontScaleLastRun < 250) return;
+        homeLabFontScaleLastRun = now;
+        updateHomeLabFontScale();
+    });
 }
 
 function isSettingsPasswordEnabled() {
@@ -13899,7 +13929,8 @@ const refreshDataManager = window.RefreshDataModule.createManager({
     setLastRefreshTime: (ms) => { lastRefreshTime = ms; },
     checkAllServices,
     renderMonitorServicesList,
-    updateHomeLabFontScale
+    updateHomeLabFontScale: () => scheduleHomeLabFontScale(),
+    getIsPageVisible: () => isPageVisible()
 });
 async function refreshData(options = {}) {
     return refreshDataManager.refreshData(options);
@@ -14810,10 +14841,6 @@ function updateDashboard(clusterData, storageData, backupsData, hostMetricsData 
     setHTMLIfChanged('lastUpdate', '<i class="bi bi-clock"></i> ' + t('lastUpdate') + ': ' + new Date().toLocaleString(currentLanguage === 'ru' ? 'ru-RU' : 'en-US'));
 
     lastClusterData = clusterData;
-    if (monitorMode) {
-        updateMonitorView(clusterData);
-        renderMonitorServicesList();
-    }
     syncClusterResourcesCardInteractivity();
 }
 
