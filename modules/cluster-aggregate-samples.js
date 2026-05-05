@@ -1,12 +1,22 @@
 const { getDbSync, saveDb } = require('./db');
+const settingsStore = require('./settings-store');
 
-const RETENTION_HOURS = 24;
+const DEFAULT_RETENTION_HOURS = 72;
 const TABLE = 'cluster_aggregate_samples';
+
+function getRetentionHours() {
+    const raw = settingsStore.getSetting('metrics_history_retention_hours_cluster') || settingsStore.getSetting('metrics_history_retention_hours');
+    let n = parseInt(raw, 10);
+    if (!Number.isFinite(n) || n < 24) n = DEFAULT_RETENTION_HOURS;
+    if (n > 24 * 30) n = 24 * 30;
+    return n;
+}
 
 function pruneClusterAggregateSamples() {
     try {
+        const retention = getRetentionHours();
         const db = getDbSync();
-        db.run(`DELETE FROM ${TABLE} WHERE datetime(recorded_at) < datetime('now', ?)`, [`-${RETENTION_HOURS} hours`]);
+        db.run(`DELETE FROM ${TABLE} WHERE datetime(recorded_at) < datetime('now', ?)`, [`-${retention} hours`]);
         saveDb();
     } catch (_) {
         /* ignore */
@@ -40,6 +50,7 @@ function getClusterAggregateHistory(connectionId, metric) {
     const cid = String(connectionId || '').trim();
     if (!cid) return [];
     const db = getDbSync();
+    const retention = getRetentionHours();
     const stmt = db.prepare(
         `SELECT recorded_at, ${col} AS v FROM ${TABLE}
          WHERE connection_id = ?
@@ -47,7 +58,7 @@ function getClusterAggregateHistory(connectionId, metric) {
            AND ${col} IS NOT NULL
          ORDER BY recorded_at ASC`
     );
-    stmt.bind([cid, `-${RETENTION_HOURS} hours`]);
+    stmt.bind([cid, `-${retention} hours`]);
     const out = [];
     while (stmt.step()) {
         const row = stmt.get();
@@ -64,5 +75,5 @@ module.exports = {
     recordClusterAggregateSamples,
     getClusterAggregateHistory,
     pruneClusterAggregateSamples,
-    CLUSTER_AGGREGATE_RETENTION_HOURS: RETENTION_HOURS
+    getRetentionHours
 };

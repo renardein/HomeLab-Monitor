@@ -640,6 +640,12 @@
                     <div id="upsSettingsCardWrap" style="display: none;">
                         <div class="settings-section mb-4">
                             <h5 class="mb-3"><i class="bi bi-lightning-charge me-2"></i><span id="upsSettingsCardTitle">UPS (NUT/SNMP)</span></h5>
+                            <div class="mb-3">
+                                <label class="form-label fw-bold mb-1" for="settingsRetentionUpsSelect">Хранение истории графиков UPS</label>
+                                <select class="form-select form-select-sm" id="settingsRetentionUpsSelect" onchange="onGlobalMetricsRetentionSettingsChange()">
+                                    <option value="24">24h</option><option value="72">72h</option><option value="168">7d</option><option value="336">14d</option>
+                                </select>
+                            </div>
                             <div class="row g-3 align-items-end mb-3">
                                     <div class="col-md-3">
                                     <label class="form-label fw-bold mb-2" id="upsSlotLabel">Слот UPS</label>
@@ -802,6 +808,12 @@
                     <div id="hostMetricsSettingsWrap" style="display: none;">
                         <div class="settings-section mb-4">
                             <h5 class="mb-3"><i class="bi bi-thermometer-half me-2"></i><span id="hostMetricsSettingsTitle">Метрики хостов Proxmox</span></h5>
+                            <div class="mb-3">
+                                <label class="form-label fw-bold mb-1" for="settingsRetentionHostSelect">Хранение истории графиков узлов</label>
+                                <select class="form-select form-select-sm" id="settingsRetentionHostSelect" onchange="onGlobalMetricsRetentionSettingsChange()">
+                                    <option value="24">24h</option><option value="72">72h</option><option value="168">7d</option><option value="336">14d</option>
+                                </select>
+                            </div>
                             <p class="text-muted small mb-3" id="hostMetricsSettingsHint">Адрес агента строится по IP узла из cluster status Proxmox. Укажите порт и путь HTTP; выберите датчик CPU и интерфейс для скорости линка.</p>
                             <div class="row g-3 align-items-end mb-3">
                                 <div class="col-md-6 col-lg-3">
@@ -890,6 +902,12 @@
                     <div id="smartSensorsSettingsCardWrap" style="display: none;">
                         <div class="settings-section mb-4">
                             <h5 class="mb-2"><i class="bi bi-house-heart me-2"></i><span id="smartSensorsSettingsTitle">Датчики умного дома</span></h5>
+                            <div class="mb-3">
+                                <label class="form-label fw-bold mb-1" for="settingsRetentionSmartSelect">Хранение истории графиков умного дома</label>
+                                <select class="form-select form-select-sm" id="settingsRetentionSmartSelect" onchange="onGlobalMetricsRetentionSettingsChange()">
+                                    <option value="24">24h</option><option value="72">72h</option><option value="168">7d</option><option value="336">14d</option>
+                                </select>
+                            </div>
                             <p class="text-muted small mb-2" id="smartSensorsSettingsHint">REST JSON (HTTP/HTTPS) и Bluetooth. BLE можно читать на сервере через @abandonware/noble (типично Linux) или из браузера кнопкой Bluetooth в карточке датчика (Chromium/Edge, HTTPS). Пути — точечная нотация: например <code>data.temp</code> или <code>0.value</code>.</p>
                             <p class="small mb-3" id="smartSensorsBleStatusLine"><span class="text-muted" id="smartSensorsBleStatusLabel">BLE:</span> <span id="smartSensorsBleStatusText">—</span></p>
                             <div class="d-flex flex-wrap gap-2 mb-3">

@@ -577,7 +577,7 @@ function sendNodeMetricHistory(req, res, fixedMetric) {
             success: true,
             node,
             metric,
-            retentionHours: hostCpuTempSamples.HOST_NODE_METRIC_RETENTION_HOURS,
+            retentionHours: hostCpuTempSamples.getRetentionHours(),
             points
         });
     } catch (e) {

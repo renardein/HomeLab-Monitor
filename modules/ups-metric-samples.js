@@ -1,12 +1,22 @@
 const { getDbSync, saveDb } = require('./db');
+const settingsStore = require('./settings-store');
 
-const RETENTION_HOURS = 24;
+const DEFAULT_RETENTION_HOURS = 72;
 const TABLE = 'ups_metric_samples';
+
+function getRetentionHours() {
+    const raw = settingsStore.getSetting('metrics_history_retention_hours_ups') || settingsStore.getSetting('metrics_history_retention_hours');
+    let n = parseInt(raw, 10);
+    if (!Number.isFinite(n) || n < 24) n = DEFAULT_RETENTION_HOURS;
+    if (n > 24 * 30) n = 24 * 30;
+    return n;
+}
 
 function pruneUpsMetricSamples() {
     try {
+        const retention = getRetentionHours();
         const db = getDbSync();
-        db.run(`DELETE FROM ${TABLE} WHERE datetime(recorded_at) < datetime('now', ?)`, [`-${RETENTION_HOURS} hours`]);
+        db.run(`DELETE FROM ${TABLE} WHERE datetime(recorded_at) < datetime('now', ?)`, [`-${retention} hours`]);
         saveDb();
     } catch (_) {
         /* ignore */
@@ -52,6 +62,7 @@ function getUpsMetricHistory(upsSlot, metricId) {
     if (!mid) return [];
 
     const db = getDbSync();
+    const retention = getRetentionHours();
     const stmt = db.prepare(
         `SELECT recorded_at, metric_value, metric_format FROM ${TABLE}
          WHERE ups_slot = ?
@@ -59,7 +70,7 @@ function getUpsMetricHistory(upsSlot, metricId) {
            AND datetime(recorded_at) >= datetime('now', ?)
          ORDER BY recorded_at ASC`
     );
-    stmt.bind([slot, mid, `-${RETENTION_HOURS} hours`]);
+    stmt.bind([slot, mid, `-${retention} hours`]);
     const out = [];
     let metricFormat = null;
     while (stmt.step()) {
@@ -78,6 +89,6 @@ module.exports = {
     recordUpsMetricSamples,
     getUpsMetricHistory,
     pruneUpsMetricSamples,
-    UPS_METRIC_RETENTION_HOURS: RETENTION_HOURS
+    getRetentionHours
 };
 

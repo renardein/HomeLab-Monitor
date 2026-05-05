@@ -109,6 +109,7 @@ let setupWizardFinishMode = 'success';
 let clusterDashboardTiles = []; // [{ type: 'service'|'vmct'|'netdev'|'ups'|'speedtest'|'iperf3'|'smart_sensor'|'embed'|'truenas_server'|…, sourceId: 'type:id' }]
 let clusterDashboardTilesDirty = false;
 let clusterDashboardTilesSettingPresent = false;
+let clusterDashboardTilesAutosaveTimer = null;
 let savedTileViews = []; // [{ id, name, createdAt, payload }]
 /** Текст последней ошибки POST /api/settings (для сообщений пользователю). */
 let saveSettingsLastError = '';
@@ -204,6 +205,15 @@ let monitorDisableChromeGestures = true;
 let monitorTilesChartAxisTime = true;
 let monitorTilesChartAxisValues = true;
 let monitorTilesChartAxisYUnit = true;
+let metricsHistoryRetentionHoursCluster = 72;
+let metricsHistoryRetentionHoursHost = 72;
+let metricsHistoryRetentionHoursUps = 72;
+let metricsHistoryRetentionHoursSmart = 72;
+let chartWindowClusterMetricMin = 1440;
+let chartWindowHostMetricMin = 1440;
+let chartWindowUpsMetricMin = 1440;
+let chartWindowSmartSensorMetricMin = 1440;
+let tilesChartDisplayVariant = 'area';
 const appNavigationManager = window.AppNavigationManagerModule.createManager({
     getMonitorMode: () => monitorMode,
     applyMonitorView: (view) => applyMonitorView(view),
@@ -316,11 +326,16 @@ let upsMetricsModalAutoRefreshBusy = false;
 let upsMetricsModalSlot = null;
 let upsMetricsModalMetricId = null;
 let upsMetricsModalMetricFormat = null;
+let hostNodeMetricsModalNodeName = '';
+let hostNodeMetricsModalWindowMin = 1440;
+let clusterAggregateMetricsModalWindowMin = 1440;
+let upsMetricsModalWindowMin = 1440;
 let smartSensorsMetricsChart = null;
 let smartSensorsMetricsModalAutoRefreshTimer = null;
 let smartSensorsMetricsModalAutoRefreshBusy = false;
 let smartSensorsMetricsModalSensorId = null;
 let smartSensorsMetricsModalFieldKey = null;
+let smartSensorsMetricsModalWindowMin = 1440;
 const webBleSensorSessions = new Map(); // sensorId -> { device, service, characteristicMap: Map<uuid, BluetoothRemoteGATTCharacteristic> }
 let lastTrueNASOverviewData = null;
 let hostMetricsSettings = { pollIntervalSec: 10, timeoutMs: 3000, cacheTtlSec: 8, criticalTempC: 85, criticalLinkSpeedMbps: 1000 };
@@ -1540,6 +1555,15 @@ async function saveSettingsToServer(payload) {
     if (payload.monitorTilesChartAxisTime !== undefined) body.monitorTilesChartAxisTime = !!payload.monitorTilesChartAxisTime;
     if (payload.monitorTilesChartAxisValues !== undefined) body.monitorTilesChartAxisValues = !!payload.monitorTilesChartAxisValues;
     if (payload.monitorTilesChartAxisYUnit !== undefined) body.monitorTilesChartAxisYUnit = !!payload.monitorTilesChartAxisYUnit;
+    if (payload.metricsHistoryRetentionHoursCluster !== undefined) body.metricsHistoryRetentionHoursCluster = payload.metricsHistoryRetentionHoursCluster;
+    if (payload.metricsHistoryRetentionHoursHost !== undefined) body.metricsHistoryRetentionHoursHost = payload.metricsHistoryRetentionHoursHost;
+    if (payload.metricsHistoryRetentionHoursUps !== undefined) body.metricsHistoryRetentionHoursUps = payload.metricsHistoryRetentionHoursUps;
+    if (payload.metricsHistoryRetentionHoursSmart !== undefined) body.metricsHistoryRetentionHoursSmart = payload.metricsHistoryRetentionHoursSmart;
+    if (payload.chartWindowClusterMetricMin !== undefined) body.chartWindowClusterMetricMin = payload.chartWindowClusterMetricMin;
+    if (payload.chartWindowHostMetricMin !== undefined) body.chartWindowHostMetricMin = payload.chartWindowHostMetricMin;
+    if (payload.chartWindowUpsMetricMin !== undefined) body.chartWindowUpsMetricMin = payload.chartWindowUpsMetricMin;
+    if (payload.chartWindowSmartSensorMetricMin !== undefined) body.chartWindowSmartSensorMetricMin = payload.chartWindowSmartSensorMetricMin;
+    if (payload.tilesChartDisplayVariant !== undefined) body.tilesChartDisplayVariant = payload.tilesChartDisplayVariant;
     if (payload.speedtestEnabled !== undefined) body.speedtestEnabled = !!payload.speedtestEnabled;
     if (payload.speedtestServer !== undefined) body.speedtestServer = payload.speedtestServer;
     if (payload.speedtestPerDay !== undefined) body.speedtestPerDay = payload.speedtestPerDay;
@@ -3052,6 +3076,13 @@ function updateUILanguage() {
     setText('settingsMonitorTilesChartAxisTimeLabel', t('settingsMonitorTilesChartAxisTime'));
     setText('settingsMonitorTilesChartAxisValuesLabel', t('settingsMonitorTilesChartAxisValues'));
     setText('settingsMonitorTilesChartAxisYUnitLabel', t('settingsMonitorTilesChartAxisYUnit'));
+    setText('settingsMetricsHistoryRetentionHoursLabel', tOr('settingsMetricsHistoryRetentionHoursLabel', 'History retention'));
+    setText('settingsTilesChartDisplayVariantLabel', tOr('settingsTilesChartDisplayVariantLabel', 'Tiles chart style'));
+    setText('settingsChartWindowTitle', tOr('settingsChartWindowTitle', 'Chart window by type'));
+    setText('settingsChartWindowClusterLabel', tOr('settingsChartWindowClusterLabel', 'Cluster'));
+    setText('settingsChartWindowHostLabel', tOr('settingsChartWindowHostLabel', 'Host'));
+    setText('settingsChartWindowUpsLabel', tOr('settingsChartWindowUpsLabel', 'UPS'));
+    setText('settingsChartWindowSmartSensorLabel', tOr('settingsChartWindowSmartSensorLabel', 'Smart sensor'));
     setText('settingsClusterTilesAddBtnLabel', t('settingsClusterTilesAddBtn'));
     setText('settingsClusterTilesSaveBtnLabel', t('settingsClusterTilesSaveBtn'));
     const upsTypeSel = document.getElementById('upsTypeSelect');
@@ -5373,7 +5404,9 @@ function normalizeClusterDashboardTile(raw) {
             tilesGridW,
             tilesGridH,
             tilesGridCol,
-            tilesGridRow
+            tilesGridRow,
+            chartWindowMin: null,
+            chartDisplayVariant: null
         };
     }
 
@@ -5453,6 +5486,13 @@ function normalizeClusterDashboardTile(raw) {
     if (tilesGridCol > TILES_MONITOR_GRID_COLS) tilesGridCol = 0;
     if (tilesGridRow > TILES_MONITOR_GRID_ROWS) tilesGridRow = 0;
 
+    const chartWindowMin = isMetricChartTileType(type)
+        ? normalizeChartWindowMinutes(tile.chartWindowMin, 1440)
+        : null;
+    const chartDisplayVariant = isMetricChartTileType(type)
+        ? normalizeTileChartVariant(tile.chartDisplayVariant, 'area')
+        : null;
+
     return {
         type,
         sourceId,
@@ -5464,7 +5504,9 @@ function normalizeClusterDashboardTile(raw) {
         tilesGridW,
         tilesGridH,
         tilesGridCol,
-        tilesGridRow
+        tilesGridRow,
+        chartWindowMin,
+        chartDisplayVariant
     };
 }
 
@@ -6158,6 +6200,28 @@ function markClusterDashboardTilesDirty(nextDirty) {
     if (saveBtn) saveBtn.disabled = !clusterDashboardTilesDirty;
 }
 
+function scheduleClusterDashboardTilesAutosave() {
+    if (clusterDashboardTilesAutosaveTimer) {
+        clearTimeout(clusterDashboardTilesAutosaveTimer);
+        clusterDashboardTilesAutosaveTimer = null;
+    }
+    clusterDashboardTilesAutosaveTimer = setTimeout(async () => {
+        clusterDashboardTilesAutosaveTimer = null;
+        if (!clusterDashboardTilesDirty) return;
+        const snapshot = normalizeClusterDashboardTiles(clusterDashboardTiles);
+        const ok = await saveSettingsToServer({ clusterDashboardTiles: snapshot });
+        if (!ok) {
+            showToast((t('settingsClusterTilesSaveError') || 'Could not save tiles: {msg}').replace('{msg}', saveSettingsLastError || '—'), 'error');
+            markClusterDashboardTilesDirty(true);
+            return;
+        }
+        clusterDashboardTiles = snapshot;
+        clusterDashboardTilesSettingPresent = true;
+        markClusterDashboardTilesDirty(false);
+        renderSavedTileViewsSettingsList();
+    }, 800);
+}
+
 function clampTilesEditorSelectedIndex() {
     if (!Array.isArray(clusterDashboardTiles)) clusterDashboardTiles = [];
     if (!clusterDashboardTiles.length) {
@@ -6209,6 +6273,8 @@ function buildClusterDashboardTileDetailHtml(index) {
     const gridAutoHint = t('settingsClusterTileTilesGridAutoHint');
     const gridPresetLabel = t('settingsClusterTileTilesGridPresetLabel');
     const showTilesLabel = t('settingsClusterTileShowOnTilesLabel');
+    const tileChartWindowLabel = tOr('settingsTileChartWindowLabel', 'Display period');
+    const tileChartStyleLabel = tOr('settingsTilesChartDisplayVariantLabel', 'Chart style');
 
     const tile = clusterDashboardTiles[index];
     if (!tile) return '';
@@ -6342,6 +6408,31 @@ function buildClusterDashboardTileDetailHtml(index) {
         `;
     }
 
+    const metricTileExtraSettingsHtml = isMetricChartTileType(nt.type)
+        ? `
+                <div class="col-12 mt-2">
+                    <label class="form-label fw-bold small mb-1">${escapeHtml(tileChartWindowLabel)}</label>
+                    <select class="form-select form-select-sm"
+                        onchange="updateClusterDashboardTileFlags(${index}, { chartWindowMin: parseInt(this.value, 10) || 1440 })">
+                        <option value="1440" ${Number(nt.chartWindowMin) === 1440 ? 'selected' : ''}>24h</option>
+                        <option value="720" ${Number(nt.chartWindowMin) === 720 ? 'selected' : ''}>12h</option>
+                        <option value="360" ${Number(nt.chartWindowMin) === 360 ? 'selected' : ''}>6h</option>
+                        <option value="60" ${Number(nt.chartWindowMin) === 60 ? 'selected' : ''}>1h</option>
+                        <option value="30" ${Number(nt.chartWindowMin) === 30 ? 'selected' : ''}>30m</option>
+                    </select>
+                </div>
+                <div class="col-12">
+                    <label class="form-label fw-bold small mb-1">${escapeHtml(tileChartStyleLabel)}</label>
+                    <select class="form-select form-select-sm"
+                        onchange="updateClusterDashboardTileFlags(${index}, { chartDisplayVariant: this.value })">
+                        <option value="area" ${String(nt.chartDisplayVariant || 'area') === 'area' ? 'selected' : ''}>Area</option>
+                        <option value="line" ${String(nt.chartDisplayVariant || 'area') === 'line' ? 'selected' : ''}>Line</option>
+                        <option value="minimal" ${String(nt.chartDisplayVariant || 'area') === 'minimal' ? 'selected' : ''}>Minimal</option>
+                    </select>
+                </div>
+        `
+        : '';
+
     return `
         <div class="border rounded p-3 cluster-tiles-detail-panel cluster-tiles-detail-panel--side">
             <div class="row g-2 align-items-end">
@@ -6353,6 +6444,7 @@ function buildClusterDashboardTileDetailHtml(index) {
                 </div>
                 ${sourceFieldsHtml}
                 ${embedFieldsHtml}
+                ${metricTileExtraSettingsHtml}
                 <div class="col-12">
                     <div class="d-flex gap-2 justify-content-end flex-wrap">
                         <button type="button" class="btn btn-outline-secondary btn-sm" onclick="moveClusterDashboardTile(${index}, -1)" title="${escapeHtml(moveUpTitle)}" ${index === 0 ? 'disabled' : ''}>
@@ -6557,6 +6649,7 @@ function updateClusterDashboardTileType(index, nextType) {
     if (merged) clusterDashboardTiles[index] = merged;
     clusterDashboardTiles = normalizeClusterDashboardTiles(clusterDashboardTiles);
     markClusterDashboardTilesDirty(true);
+    scheduleClusterDashboardTilesAutosave();
     renderClusterDashboardTilesSettings();
 }
 
@@ -6568,6 +6661,7 @@ function updateClusterDashboardTileSource(index, sourceId) {
     };
     clusterDashboardTiles = normalizeClusterDashboardTiles(clusterDashboardTiles);
     markClusterDashboardTilesDirty(true);
+    scheduleClusterDashboardTilesAutosave();
     renderClusterDashboardTilesSettings();
 }
 
@@ -6647,9 +6741,20 @@ function updateClusterDashboardTileFlags(index, patch) {
         if (!Number.isFinite(r) || r < 0) r = 0;
         next.tilesGridRow = Math.min(TILES_MONITOR_GRID_ROWS, r);
     }
+    if (Object.prototype.hasOwnProperty.call(next, 'chartWindowMin')) {
+        next.chartWindowMin = isMetricChartTileType(next.type)
+            ? normalizeChartWindowMinutes(next.chartWindowMin, 1440)
+            : null;
+    }
+    if (Object.prototype.hasOwnProperty.call(next, 'chartDisplayVariant')) {
+        next.chartDisplayVariant = isMetricChartTileType(next.type)
+            ? normalizeTileChartVariant(next.chartDisplayVariant, 'area')
+            : null;
+    }
     clusterDashboardTiles[index] = next;
     clusterDashboardTiles = normalizeClusterDashboardTiles(clusterDashboardTiles);
     markClusterDashboardTilesDirty(true);
+    scheduleClusterDashboardTilesAutosave();
     renderClusterDashboardTilesSettings();
 }
 
@@ -6664,6 +6769,7 @@ function moveClusterDashboardTile(index, delta) {
     if (tilesEditorSelectedIndex === index) tilesEditorSelectedIndex = nextIndex;
     else if (tilesEditorSelectedIndex === nextIndex) tilesEditorSelectedIndex = index;
     markClusterDashboardTilesDirty(true);
+    scheduleClusterDashboardTilesAutosave();
     renderClusterDashboardTilesSettings();
 }
 
@@ -6672,6 +6778,7 @@ function removeClusterDashboardTile(index) {
     if (tilesEditorSelectedIndex === index) tilesEditorSelectedIndex = -1;
     else if (tilesEditorSelectedIndex > index) tilesEditorSelectedIndex--;
     markClusterDashboardTilesDirty(true);
+    scheduleClusterDashboardTilesAutosave();
     renderClusterDashboardTilesSettings();
 }
 
@@ -6706,7 +6813,92 @@ async function onMonitorTilesChartAxisOptionsChange() {
     }
 }
 
+async function onGlobalMetricsRetentionSettingsChange() {
+    const prev = {
+        cluster: metricsHistoryRetentionHoursCluster,
+        host: metricsHistoryRetentionHoursHost,
+        ups: metricsHistoryRetentionHoursUps,
+        smart: metricsHistoryRetentionHoursSmart
+    };
+    const elCluster = document.getElementById('settingsRetentionClusterSelect');
+    const elHost = document.getElementById('settingsRetentionHostSelect');
+    const elUps = document.getElementById('settingsRetentionUpsSelect');
+    const elSmart = document.getElementById('settingsRetentionSmartSelect');
+    metricsHistoryRetentionHoursCluster = Math.max(24, Math.min(24 * 30, parseInt(elCluster?.value, 10) || prev.cluster));
+    metricsHistoryRetentionHoursHost = Math.max(24, Math.min(24 * 30, parseInt(elHost?.value, 10) || prev.host));
+    metricsHistoryRetentionHoursUps = Math.max(24, Math.min(24 * 30, parseInt(elUps?.value, 10) || prev.ups));
+    metricsHistoryRetentionHoursSmart = Math.max(24, Math.min(24 * 30, parseInt(elSmart?.value, 10) || prev.smart));
+    const ok = await saveSettingsToServer({
+        metricsHistoryRetentionHoursCluster,
+        metricsHistoryRetentionHoursHost,
+        metricsHistoryRetentionHoursUps,
+        metricsHistoryRetentionHoursSmart
+    });
+    if (!ok) {
+        metricsHistoryRetentionHoursCluster = prev.cluster;
+        metricsHistoryRetentionHoursHost = prev.host;
+        metricsHistoryRetentionHoursUps = prev.ups;
+        metricsHistoryRetentionHoursSmart = prev.smart;
+        if (elCluster) elCluster.value = String(prev.cluster);
+        if (elHost) elHost.value = String(prev.host);
+        if (elUps) elUps.value = String(prev.ups);
+        if (elSmart) elSmart.value = String(prev.smart);
+        showToast((t('errorUpdate') || 'Update failed') + (saveSettingsLastError ? ': ' + saveSettingsLastError : ''), 'error');
+    }
+}
+
+async function onMetricsChartSettingsChange() {
+    const prev = {
+        chartWindowClusterMetricMin,
+        chartWindowHostMetricMin,
+        chartWindowUpsMetricMin,
+        chartWindowSmartSensorMetricMin,
+        tilesChartDisplayVariant
+    };
+    const clEl = document.getElementById('settingsChartWindowClusterMetricSelect');
+    const hoEl = document.getElementById('settingsChartWindowHostMetricSelect');
+    const upEl = document.getElementById('settingsChartWindowUpsMetricSelect');
+    const ssEl = document.getElementById('settingsChartWindowSmartSensorMetricSelect');
+    const tvEl = document.getElementById('settingsTilesChartDisplayVariantSelect');
+    chartWindowClusterMetricMin = normalizeChartWindowMinutes(clEl?.value, 1440);
+    chartWindowHostMetricMin = normalizeChartWindowMinutes(hoEl?.value, 1440);
+    chartWindowUpsMetricMin = normalizeChartWindowMinutes(upEl?.value, 1440);
+    chartWindowSmartSensorMetricMin = normalizeChartWindowMinutes(ssEl?.value, 1440);
+    tilesChartDisplayVariant = ['area', 'line', 'minimal'].includes(String(tvEl?.value || '').toLowerCase())
+        ? String(tvEl.value).toLowerCase()
+        : 'area';
+    const ok = await saveSettingsToServer({
+        chartWindowClusterMetricMin,
+        chartWindowHostMetricMin,
+        chartWindowUpsMetricMin,
+        chartWindowSmartSensorMetricMin,
+        tilesChartDisplayVariant
+    });
+    if (!ok) {
+        chartWindowClusterMetricMin = prev.chartWindowClusterMetricMin;
+        chartWindowHostMetricMin = prev.chartWindowHostMetricMin;
+        chartWindowUpsMetricMin = prev.chartWindowUpsMetricMin;
+        chartWindowSmartSensorMetricMin = prev.chartWindowSmartSensorMetricMin;
+        tilesChartDisplayVariant = prev.tilesChartDisplayVariant;
+        if (clEl) clEl.value = String(chartWindowClusterMetricMin);
+        if (hoEl) hoEl.value = String(chartWindowHostMetricMin);
+        if (upEl) upEl.value = String(chartWindowUpsMetricMin);
+        if (ssEl) ssEl.value = String(chartWindowSmartSensorMetricMin);
+        if (tvEl) tvEl.value = tilesChartDisplayVariant;
+        showToast((t('errorUpdate') || 'Update failed') + (saveSettingsLastError ? ': ' + saveSettingsLastError : ''), 'error');
+        return;
+    }
+    renderTilesMonitorScreen('tilesNormalGrid').catch(() => {});
+    if (!monitorMode || monitorCurrentView === 'tiles') {
+        renderTilesMonitorScreen().catch(() => {});
+    }
+}
+
 async function saveClusterDashboardTilesSettings() {
+    if (clusterDashboardTilesAutosaveTimer) {
+        clearTimeout(clusterDashboardTilesAutosaveTimer);
+        clusterDashboardTilesAutosaveTimer = null;
+    }
     clusterDashboardTiles = normalizeClusterDashboardTiles(clusterDashboardTiles);
     const ok = await saveSettingsToServer({ clusterDashboardTiles });
     if (!ok) {
@@ -8700,6 +8892,32 @@ function parseMetricHistoryPoints(rawPoints) {
     return out;
 }
 
+function normalizeChartWindowMinutes(v, fallback = 1440) {
+    const allowed = [30, 60, 360, 720, 1440];
+    const n = parseInt(v, 10);
+    return allowed.includes(n) ? n : fallback;
+}
+
+function normalizeTileChartVariant(v, fallback = 'area') {
+    const s = String(v || '').trim().toLowerCase();
+    if (s === 'line' || s === 'minimal' || s === 'area') return s;
+    return fallback;
+}
+
+function isMetricChartTileType(type) {
+    const t = String(type || '').trim().toLowerCase();
+    return t === 'ups_metric_chart' || t === 'cluster_metric_chart' || t === 'host_node_metric_chart' || t === 'smart_sensor_metric_chart';
+}
+
+function filterSeriesByWindowMinutes(points, windowMin) {
+    const src = Array.isArray(points) ? points : [];
+    const minutes = normalizeChartWindowMinutes(windowMin, 1440);
+    if (!src.length) return [];
+    const thresholdMs = Date.now() - minutes * 60 * 1000;
+    const filtered = src.filter((p) => Number.isFinite(p?.t) && p.t >= thresholdMs);
+    return filtered.length ? filtered : src;
+}
+
 /** Только маркеры линии на плитках (подписи осей — размер по умолчанию Chart.js). */
 function getTilesChartPointStyleForSeries(canvas, seriesLength) {
     if (!canvas || canvas.dataset?.tileCompact !== '1') return null;
@@ -8734,6 +8952,7 @@ function applyTilesChartPointStyleToChart(chart, canvas) {
 
 function renderHostNodeMetricLineChart(canvas, series, dsLabel, lineRgb, yUnit) {
     const isTileMetricChart = canvas?.dataset?.tileCompact === '1';
+    const tileVariant = isTileMetricChart ? String(canvas?.dataset?.tileVariant || 'area').toLowerCase() : 'area';
     const seriesForChart =
         !isTileMetricChart && Array.isArray(series) && series.length > 1200
             ? downsampleMetricSeriesEvenly(series, 1200)
@@ -8760,8 +8979,12 @@ function renderHostNodeMetricLineChart(canvas, series, dsLabel, lineRgb, yUnit) 
         text: yTitleText || yUnit,
         color: tickColor
     };
-    const pr = tilePoints ? tilePoints.pointRadius : (seriesForChart.length === 1 ? 6 : 2);
-    const ph = tilePoints ? tilePoints.pointHover : 4;
+    const pr = tileVariant === 'minimal'
+        ? 0
+        : (tilePoints ? tilePoints.pointRadius : (seriesForChart.length === 1 ? 6 : 2));
+    const ph = tileVariant === 'minimal' ? 2 : (tilePoints ? tilePoints.pointHover : 4);
+    const fillMode = !isTileMetricChart ? true : tileVariant === 'area';
+    const lineTension = tileVariant === 'line' || tileVariant === 'minimal' ? 0.12 : 0.2;
     return new Chart(canvas.getContext('2d'), {
         type: 'line',
         data: {
@@ -8771,8 +8994,8 @@ function renderHostNodeMetricLineChart(canvas, series, dsLabel, lineRgb, yUnit) 
                 data: dataVals,
                 borderColor: `rgb(${lineRgb})`,
                 backgroundColor: `rgba(${lineRgb}, 0.12)`,
-                fill: true,
-                tension: 0.2,
+                fill: fillMode,
+                tension: lineTension,
                 pointRadius: pr,
                 pointHoverRadius: ph
             }]
@@ -8847,10 +9070,12 @@ async function openHostNodeAllMetricsModal(nodeName) {
     const modalEl = document.getElementById('hostNodeAllMetricsModal');
     if (!modalEl) return;
 
+    hostNodeMetricsModalNodeName = String(nodeName || '').trim();
     destroyHostNodeMetricCharts();
 
     const titleEl = document.getElementById('hostNodeAllMetricsModalTitleText');
     const subEl = document.getElementById('hostNodeAllMetricsModalSubtitle');
+    const periodEl = document.getElementById('hostNodeMetricsPeriodSelect');
     const globalErr = document.getElementById('hostNodeAllMetricsGlobalError');
     if (titleEl) titleEl.textContent = t('hostNodeAllMetricsModalTitle') || 'Node metrics';
     if (globalErr) {
@@ -8869,6 +9094,13 @@ async function openHostNodeAllMetricsModal(nodeName) {
     const hint = t('hostNodeAllMetricsModalHint') || '';
     if (subEl) {
         subEl.innerHTML = `${escapeHtml(line1)}${hint ? `<br><span class="text-muted">${escapeHtml(hint)}</span>` : ''}`;
+    }
+    if (periodEl) {
+        periodEl.value = String(normalizeChartWindowMinutes(hostNodeMetricsModalWindowMin, 1440));
+        periodEl.onchange = () => {
+            hostNodeMetricsModalWindowMin = normalizeChartWindowMinutes(periodEl.value, 1440);
+            if (hostNodeMetricsModalNodeName) void openHostNodeAllMetricsModal(hostNodeMetricsModalNodeName);
+        };
     }
 
     setHostNodeMetricSectionsLoading();
@@ -8907,9 +9139,9 @@ async function openHostNodeAllMetricsModal(nodeName) {
         if (!rt.ok) throw new Error(dt.error || `temp: HTTP ${rt.status}`);
         if (!rc.ok) throw new Error(dc.error || `cpu: HTTP ${rc.status}`);
         if (!rm.ok) throw new Error(dm.error || `mem: HTTP ${rm.status}`);
-        tempPts = parseMetricHistoryPoints(dt.points);
-        cpuPts = parseMetricHistoryPoints(dc.points);
-        memPts = parseMetricHistoryPoints(dm.points);
+        tempPts = filterSeriesByWindowMinutes(parseMetricHistoryPoints(dt.points), hostNodeMetricsModalWindowMin);
+        cpuPts = filterSeriesByWindowMinutes(parseMetricHistoryPoints(dc.points), hostNodeMetricsModalWindowMin);
+        memPts = filterSeriesByWindowMinutes(parseMetricHistoryPoints(dm.points), hostNodeMetricsModalWindowMin);
     } catch (e) {
         const msg = (e && e.message) ? e.message : String(e);
         if (globalErr) {
@@ -9077,8 +9309,8 @@ async function refreshClusterAggregateChartsData({ showLoading } = { showLoading
         if (!rc.ok) throw new Error(dc.error || `cpu: HTTP ${rc.status}`);
         if (!rm.ok) throw new Error(dm.error || `mem: HTTP ${rm.status}`);
 
-        const cpuPts = parseMetricHistoryPoints(dc.points);
-        const memPts = parseMetricHistoryPoints(dm.points);
+        const cpuPts = filterSeriesByWindowMinutes(parseMetricHistoryPoints(dc.points), clusterAggregateMetricsModalWindowMin);
+        const memPts = filterSeriesByWindowMinutes(parseMetricHistoryPoints(dm.points), clusterAggregateMetricsModalWindowMin);
 
         applyClusterAggregateMetricSection(
             'Cpu',
@@ -9140,6 +9372,7 @@ async function openClusterAggregateMetricsModal() {
 
     const titleEl = document.getElementById('clusterAggregateMetricsModalTitleText');
     const subEl = document.getElementById('clusterAggregateMetricsModalSubtitle');
+    const periodEl = document.getElementById('clusterAggregateMetricsPeriodSelect');
     const globalErr = document.getElementById('clusterAggregateMetricsGlobalError');
     if (titleEl) titleEl.textContent = t('clusterAggregateMetricsModalTitle') || 'Cluster metrics';
     if (globalErr) {
@@ -9155,6 +9388,13 @@ async function openClusterAggregateMetricsModal() {
     const hint = t('clusterAggregateMetricsModalHint') || '';
     if (subEl) {
         subEl.innerHTML = hint ? `<span class="text-muted">${escapeHtml(hint)}</span>` : '';
+    }
+    if (periodEl) {
+        periodEl.value = String(normalizeChartWindowMinutes(clusterAggregateMetricsModalWindowMin, 1440));
+        periodEl.onchange = () => {
+            clusterAggregateMetricsModalWindowMin = normalizeChartWindowMinutes(periodEl.value, 1440);
+            void refreshClusterAggregateChartsData({ showLoading: true });
+        };
     }
 
     setClusterAggregateSectionsLoading();
@@ -9260,7 +9500,7 @@ async function refreshUpsMetricsModalChart({ showLoading = false } = {}) {
         const data = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(data?.error || `HTTP ${r.status}`);
 
-        const points = parseMetricHistoryPoints(data.points);
+        const points = filterSeriesByWindowMinutes(parseMetricHistoryPoints(data.points), upsMetricsModalWindowMin);
         upsMetricsModalMetricFormat = data.metricFormat || upsMetricsModalMetricFormat || null;
 
         if (!Array.isArray(points) || !points.length) {
@@ -9347,6 +9587,7 @@ async function openUpsAllMetricsModal(upsSlot) {
 
     const titleEl = document.getElementById('upsAllMetricsModalTitleText');
     const subtitleEl = document.getElementById('upsAllMetricsModalSubtitle');
+    const periodEl = document.getElementById('upsMetricsPeriodSelect');
     const metricLabelEl = document.getElementById('upsMetricsMetricSelectLabel');
     const globalErr = document.getElementById('upsAllMetricsGlobalError');
     if (titleEl) titleEl.textContent = t('upsAllMetricsModalTitle') || 'UPS metrics';
@@ -9359,6 +9600,13 @@ async function openUpsAllMetricsModal(upsSlot) {
     if (globalErr) {
         globalErr.textContent = '';
         globalErr.classList.add('d-none');
+    }
+    if (periodEl) {
+        periodEl.value = String(normalizeChartWindowMinutes(upsMetricsModalWindowMin, 1440));
+        periodEl.onchange = () => {
+            upsMetricsModalWindowMin = normalizeChartWindowMinutes(periodEl.value, 1440);
+            void refreshUpsMetricsModalChart({ showLoading: true });
+        };
     }
 
     const selectEl = document.getElementById('upsMetricsMetricSelect');
@@ -9513,7 +9761,7 @@ async function refreshSmartSensorsMetricsModalChart({ showLoading = false } = {}
         const data = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(data?.error || `HTTP ${r.status}`);
 
-        const points = parseMetricHistoryPoints(data.points);
+        const points = filterSeriesByWindowMinutes(parseMetricHistoryPoints(data.points), smartSensorsMetricsModalWindowMin);
         if (!Array.isArray(points) || !points.length) {
             if (globalErr) globalErr.classList.add('d-none');
             if (emptyEl) {
@@ -9586,6 +9834,7 @@ async function openSmartSensorsAllMetricsModal(sensorId) {
 
     const titleEl = document.getElementById('smartSensorsAllMetricsModalTitleText');
     const subtitleEl = document.getElementById('smartSensorsAllMetricsModalSubtitle');
+    const periodEl = document.getElementById('smartSensorsMetricsPeriodSelect');
     const metricLabelEl = document.getElementById('smartSensorsMetricsMetricSelectLabel');
     const globalErr = document.getElementById('smartSensorsAllMetricsGlobalError');
     if (titleEl) titleEl.textContent = t('smartSensorsAllMetricsModalTitle') || 'Smart sensor metrics';
@@ -9594,6 +9843,13 @@ async function openSmartSensorsAllMetricsModal(sensorId) {
     if (globalErr) {
         globalErr.textContent = '';
         globalErr.classList.add('d-none');
+    }
+    if (periodEl) {
+        periodEl.value = String(normalizeChartWindowMinutes(smartSensorsMetricsModalWindowMin, 1440));
+        periodEl.onchange = () => {
+            smartSensorsMetricsModalWindowMin = normalizeChartWindowMinutes(periodEl.value, 1440);
+            void refreshSmartSensorsMetricsModalChart({ showLoading: true });
+        };
     }
 
     const selectEl = document.getElementById('smartSensorsMetricsMetricSelect');
@@ -11116,6 +11372,8 @@ function buildClusterSmartSensorMetricChartTileHtml(tile, payload, tileIndex, ta
         emptyText,
         canvasAttrs: {
             ...tilesChartAxisOptionsDatasetAttr(),
+            'data-tile-variant': normalizeTileChartVariant(tile?.chartDisplayVariant, 'area'),
+            'data-chart-window-min': String(normalizeChartWindowMinutes(tile?.chartWindowMin, 1440)),
             'data-smart-sensor-metric-tile': '1',
             'data-tile-compact': '1',
             'data-sensor-id': parsed.sensorId,
@@ -11256,7 +11514,8 @@ function tilesChartAxisOptionsDatasetAttr() {
     return {
         'data-tile-axis-time': monitorTilesChartAxisTime ? '1' : '0',
         'data-tile-axis-values': monitorTilesChartAxisValues ? '1' : '0',
-        'data-tile-axis-y-unit': monitorTilesChartAxisYUnit ? '1' : '0'
+        'data-tile-axis-y-unit': monitorTilesChartAxisYUnit ? '1' : '0',
+        'data-tile-variant': tilesChartDisplayVariant
     };
 }
 
@@ -11346,6 +11605,9 @@ function updateOrCreateLineChart({ canvas, chartMap, series, dsLabel, lineRgb, y
         if (existing.data?.datasets?.[0]) {
             existing.data.datasets[0].data = seriesForChart.map((p) => p.v);
             existing.data.datasets[0].label = dsLabel;
+            const tileVariant = String(canvas?.dataset?.tileVariant || 'area').toLowerCase();
+            existing.data.datasets[0].fill = tileVariant === 'area';
+            existing.data.datasets[0].tension = (tileVariant === 'line' || tileVariant === 'minimal') ? 0.12 : 0.2;
         }
         const showAxisTime = canvas?.dataset?.tileAxisTime !== '0';
         const showAxisValues = canvas?.dataset?.tileAxisValues !== '0';
@@ -11566,6 +11828,8 @@ function buildClusterUpsMetricChartTileHtml(tile, payload, tileIndex, targetGrid
         emptyText,
         canvasAttrs: {
             ...tilesChartAxisOptionsDatasetAttr(),
+            'data-tile-variant': normalizeTileChartVariant(tile?.chartDisplayVariant, 'area'),
+            'data-chart-window-min': String(normalizeChartWindowMinutes(tile?.chartWindowMin, 1440)),
             'data-ups-metric-tile': '1',
             'data-tile-compact': '1',
             'data-ups-slot': String(slot),
@@ -11611,7 +11875,8 @@ async function initUpsMetricChartTiles(targetGridId) {
                 return;
             }
 
-            const points = parseMetricHistoryPoints(data?.points);
+            const tileWindowMin = normalizeChartWindowMinutes(canvas.dataset.chartWindowMin, chartWindowUpsMetricMin);
+            const points = filterSeriesByWindowMinutes(parseMetricHistoryPoints(data?.points), tileWindowMin);
             const metricFormat = data?.metricFormat != null ? String(data.metricFormat).trim() : metricFormatHint;
 
             if (!points.length) {
@@ -11661,6 +11926,8 @@ function buildClusterClusterMetricChartTileHtml(tile, tileIndex, targetGridId) {
         emptyText,
         canvasAttrs: {
             ...tilesChartAxisOptionsDatasetAttr(),
+            'data-tile-variant': normalizeTileChartVariant(tile?.chartDisplayVariant, 'area'),
+            'data-chart-window-min': String(normalizeChartWindowMinutes(tile?.chartWindowMin, 1440)),
             'data-cluster-metric-tile': '1',
             'data-tile-compact': '1',
             'data-cluster-metric': metric || 'cpu'
@@ -11707,7 +11974,8 @@ async function initClusterMetricChartTiles(targetGridId) {
                 return;
             }
 
-            const points = parseMetricHistoryPoints(data?.points);
+            const tileWindowMin = normalizeChartWindowMinutes(canvas.dataset.chartWindowMin, chartWindowClusterMetricMin);
+            const points = filterSeriesByWindowMinutes(parseMetricHistoryPoints(data?.points), tileWindowMin);
             if (!points.length) {
                 showTileEmptyIfNoChart({ canvas, emptyEl, chartMap: clusterMetricTileCharts, message: emptyText });
                 return;
@@ -11760,6 +12028,8 @@ function buildClusterHostNodeMetricChartTileHtml(tile, tileIndex, targetGridId) 
         emptyText,
         canvasAttrs: {
             ...tilesChartAxisOptionsDatasetAttr(),
+            'data-tile-variant': normalizeTileChartVariant(tile?.chartDisplayVariant, 'area'),
+            'data-chart-window-min': String(normalizeChartWindowMinutes(tile?.chartWindowMin, 1440)),
             'data-host-node-metric-tile': '1',
             'data-tile-compact': '1',
             'data-host-node': node,
@@ -11889,7 +12159,8 @@ async function initHostNodeMetricChartTiles(targetGridId) {
                 return;
             }
 
-            const points = parseMetricHistoryPoints(data?.points);
+            const tileWindowMin = normalizeChartWindowMinutes(canvas.dataset.chartWindowMin, chartWindowHostMetricMin);
+            const points = filterSeriesByWindowMinutes(parseMetricHistoryPoints(data?.points), tileWindowMin);
             if (!points.length) {
                 showTileEmptyIfNoChart({ canvas, emptyEl, chartMap: hostNodeMetricTileCharts, message: emptyTextDefault });
                 return;
@@ -11946,7 +12217,8 @@ async function initSmartSensorMetricChartTiles(targetGridId) {
                 return;
             }
 
-            const points = parseMetricHistoryPoints(data?.points);
+            const tileWindowMin = normalizeChartWindowMinutes(canvas.dataset.chartWindowMin, chartWindowSmartSensorMetricMin);
+            const points = filterSeriesByWindowMinutes(parseMetricHistoryPoints(data?.points), tileWindowMin);
             if (!points.length) {
                 showTileEmptyIfNoChart({ canvas, emptyEl, chartMap: smartSensorMetricTileCharts, message: emptyText });
                 return;
@@ -13550,7 +13822,14 @@ function normalizeSavedTileViews(raw) {
                 clusterDashboardTiles: normalizeClusterDashboardTiles(payload.clusterDashboardTiles),
                 monitorTilesChartAxisTime: parseBoolSettingClient(payload.monitorTilesChartAxisTime, true),
                 monitorTilesChartAxisValues: parseBoolSettingClient(payload.monitorTilesChartAxisValues, true),
-                monitorTilesChartAxisYUnit: parseBoolSettingClient(payload.monitorTilesChartAxisYUnit, true)
+                monitorTilesChartAxisYUnit: parseBoolSettingClient(payload.monitorTilesChartAxisYUnit, true),
+                tilesChartDisplayVariant: ['area', 'line', 'minimal'].includes(String(payload.tilesChartDisplayVariant || '').toLowerCase())
+                    ? String(payload.tilesChartDisplayVariant).toLowerCase()
+                    : 'area',
+                chartWindowClusterMetricMin: normalizeChartWindowMinutes(payload.chartWindowClusterMetricMin, 1440),
+                chartWindowHostMetricMin: normalizeChartWindowMinutes(payload.chartWindowHostMetricMin, 1440),
+                chartWindowUpsMetricMin: normalizeChartWindowMinutes(payload.chartWindowUpsMetricMin, 1440),
+                chartWindowSmartSensorMetricMin: normalizeChartWindowMinutes(payload.chartWindowSmartSensorMetricMin, 1440)
             }
         });
     }
@@ -13797,7 +14076,12 @@ function captureCurrentSavedTileViewPayload() {
         clusterDashboardTiles: normalizeClusterDashboardTiles(clusterDashboardTiles),
         monitorTilesChartAxisTime: !!monitorTilesChartAxisTime,
         monitorTilesChartAxisValues: !!monitorTilesChartAxisValues,
-        monitorTilesChartAxisYUnit: !!monitorTilesChartAxisYUnit
+        monitorTilesChartAxisYUnit: !!monitorTilesChartAxisYUnit,
+        tilesChartDisplayVariant,
+        chartWindowClusterMetricMin,
+        chartWindowHostMetricMin,
+        chartWindowUpsMetricMin,
+        chartWindowSmartSensorMetricMin
     };
 }
 
@@ -13836,18 +14120,40 @@ async function applySavedTileView(id) {
     monitorTilesChartAxisTime = parseBoolSettingClient(p.monitorTilesChartAxisTime, true);
     monitorTilesChartAxisValues = parseBoolSettingClient(p.monitorTilesChartAxisValues, true);
     monitorTilesChartAxisYUnit = parseBoolSettingClient(p.monitorTilesChartAxisYUnit, true);
+    tilesChartDisplayVariant = ['area', 'line', 'minimal'].includes(String(p.tilesChartDisplayVariant || '').toLowerCase())
+        ? String(p.tilesChartDisplayVariant).toLowerCase()
+        : 'area';
+    chartWindowClusterMetricMin = normalizeChartWindowMinutes(p.chartWindowClusterMetricMin, chartWindowClusterMetricMin);
+    chartWindowHostMetricMin = normalizeChartWindowMinutes(p.chartWindowHostMetricMin, chartWindowHostMetricMin);
+    chartWindowUpsMetricMin = normalizeChartWindowMinutes(p.chartWindowUpsMetricMin, chartWindowUpsMetricMin);
+    chartWindowSmartSensorMetricMin = normalizeChartWindowMinutes(p.chartWindowSmartSensorMetricMin, chartWindowSmartSensorMetricMin);
     const cTilesAxisT = el('settingsMonitorTilesChartAxisTimeCheckbox');
     const cTilesAxisV = el('settingsMonitorTilesChartAxisValuesCheckbox');
     const cTilesAxisU = el('settingsMonitorTilesChartAxisYUnitCheckbox');
+    const cwClusterEl = el('settingsChartWindowClusterMetricSelect');
+    const cwHostEl = el('settingsChartWindowHostMetricSelect');
+    const cwUpsEl = el('settingsChartWindowUpsMetricSelect');
+    const cwSmartEl = el('settingsChartWindowSmartSensorMetricSelect');
+    const tilesVariantEl = el('settingsTilesChartDisplayVariantSelect');
     if (cTilesAxisT) cTilesAxisT.checked = monitorTilesChartAxisTime;
     if (cTilesAxisV) cTilesAxisV.checked = monitorTilesChartAxisValues;
     if (cTilesAxisU) cTilesAxisU.checked = monitorTilesChartAxisYUnit;
+    if (cwClusterEl) cwClusterEl.value = String(chartWindowClusterMetricMin);
+    if (cwHostEl) cwHostEl.value = String(chartWindowHostMetricMin);
+    if (cwUpsEl) cwUpsEl.value = String(chartWindowUpsMetricMin);
+    if (cwSmartEl) cwSmartEl.value = String(chartWindowSmartSensorMetricMin);
+    if (tilesVariantEl) tilesVariantEl.value = tilesChartDisplayVariant;
     renderClusterDashboardTilesSettings();
     await saveSettingsToServer({
         clusterDashboardTiles,
         monitorTilesChartAxisTime,
         monitorTilesChartAxisValues,
-        monitorTilesChartAxisYUnit
+        monitorTilesChartAxisYUnit,
+        tilesChartDisplayVariant,
+        chartWindowClusterMetricMin,
+        chartWindowHostMetricMin,
+        chartWindowUpsMetricMin,
+        chartWindowSmartSensorMetricMin
     });
     renderClusterDashboardTiles().catch(() => {});
     renderTilesMonitorScreen('tilesNormalGrid').catch(() => {});
@@ -16447,6 +16753,17 @@ async function loadSettings() {
         monitorTilesChartAxisValues = leg;
         monitorTilesChartAxisYUnit = leg;
     }
+    metricsHistoryRetentionHoursCluster = Math.max(24, Math.min(24 * 30, parseInt(data.metrics_history_retention_hours_cluster ?? data.metrics_history_retention_hours, 10) || 72));
+    metricsHistoryRetentionHoursHost = Math.max(24, Math.min(24 * 30, parseInt(data.metrics_history_retention_hours_host ?? data.metrics_history_retention_hours, 10) || 72));
+    metricsHistoryRetentionHoursUps = Math.max(24, Math.min(24 * 30, parseInt(data.metrics_history_retention_hours_ups ?? data.metrics_history_retention_hours, 10) || 72));
+    metricsHistoryRetentionHoursSmart = Math.max(24, Math.min(24 * 30, parseInt(data.metrics_history_retention_hours_smart ?? data.metrics_history_retention_hours, 10) || 72));
+    chartWindowClusterMetricMin = normalizeChartWindowMinutes(data.chart_window_cluster_metric_min, 1440);
+    chartWindowHostMetricMin = normalizeChartWindowMinutes(data.chart_window_host_metric_min, 1440);
+    chartWindowUpsMetricMin = normalizeChartWindowMinutes(data.chart_window_ups_metric_min, 1440);
+    chartWindowSmartSensorMetricMin = normalizeChartWindowMinutes(data.chart_window_smart_sensor_metric_min, 1440);
+    tilesChartDisplayVariant = ['area', 'line', 'minimal'].includes(String(data.tiles_chart_display_variant || '').toLowerCase())
+        ? String(data.tiles_chart_display_variant).toLowerCase()
+        : 'area';
     monitorHotkeys = normalizeMonitorHotkeys(data.monitor_hotkeys);
     setValue('settingsDashboardWeatherCityInput', dashboardWeatherCity);
     setValue('settingsDashboardTimezoneInput', dashboardTimezone);
@@ -16469,6 +16786,24 @@ async function loadSettings() {
     if (cTilesAxisT) cTilesAxisT.checked = monitorTilesChartAxisTime;
     if (cTilesAxisV) cTilesAxisV.checked = monitorTilesChartAxisValues;
     if (cTilesAxisU) cTilesAxisU.checked = monitorTilesChartAxisYUnit;
+    const retentionClusterEl = el('settingsRetentionClusterSelect');
+    const retentionHostEl = el('settingsRetentionHostSelect');
+    const retentionUpsEl = el('settingsRetentionUpsSelect');
+    const retentionSmartEl = el('settingsRetentionSmartSelect');
+    const cwClusterEl = el('settingsChartWindowClusterMetricSelect');
+    const cwHostEl = el('settingsChartWindowHostMetricSelect');
+    const cwUpsEl = el('settingsChartWindowUpsMetricSelect');
+    const cwSmartEl = el('settingsChartWindowSmartSensorMetricSelect');
+    const tilesVariantEl = el('settingsTilesChartDisplayVariantSelect');
+    if (retentionClusterEl) retentionClusterEl.value = String(metricsHistoryRetentionHoursCluster);
+    if (retentionHostEl) retentionHostEl.value = String(metricsHistoryRetentionHoursHost);
+    if (retentionUpsEl) retentionUpsEl.value = String(metricsHistoryRetentionHoursUps);
+    if (retentionSmartEl) retentionSmartEl.value = String(metricsHistoryRetentionHoursSmart);
+    if (cwClusterEl) cwClusterEl.value = String(chartWindowClusterMetricMin);
+    if (cwHostEl) cwHostEl.value = String(chartWindowHostMetricMin);
+    if (cwUpsEl) cwUpsEl.value = String(chartWindowUpsMetricMin);
+    if (cwSmartEl) cwSmartEl.value = String(chartWindowSmartSensorMetricMin);
+    if (tilesVariantEl) tilesVariantEl.value = tilesChartDisplayVariant;
     renderMonitorHotkeysSettingsUI();
     monitorVmIcons = normalizeMonitorVmIconsMap(data.monitor_vm_icons);
     monitorVmIconColors = normalizeMonitorVmIconColorsMap(data.monitor_vm_icon_colors);

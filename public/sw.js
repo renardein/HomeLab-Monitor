@@ -1,4 +1,4 @@
-const SW_VERSION = 'hlm-sw-v2';
+const SW_VERSION = 'hlm-sw-v3';
 const APP_SHELL_CACHE = `${SW_VERSION}-shell`;
 const API_CACHE = `${SW_VERSION}-api`;
 

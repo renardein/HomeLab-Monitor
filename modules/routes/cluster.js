@@ -314,7 +314,7 @@ router.get('/metric-history', checkAuth, (req, res) => {
         res.json({
             success: true,
             metric,
-            retentionHours: clusterAggregateSamples.CLUSTER_AGGREGATE_RETENTION_HOURS,
+            retentionHours: clusterAggregateSamples.getRetentionHours(),
             points
         });
     } catch (e) {

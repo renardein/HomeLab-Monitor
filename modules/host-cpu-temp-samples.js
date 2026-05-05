@@ -1,6 +1,7 @@
 const { getDbSync, saveDb } = require('./db');
+const settingsStore = require('./settings-store');
 
-const RETENTION_HOURS = 24;
+const DEFAULT_RETENTION_HOURS = 72;
 const TABLE = 'host_node_metric_samples';
 
 const METRIC_COLUMN = {
@@ -9,10 +10,19 @@ const METRIC_COLUMN = {
     mem: 'mem_usage_pct'
 };
 
+function getRetentionHours() {
+    const raw = settingsStore.getSetting('metrics_history_retention_hours_host') || settingsStore.getSetting('metrics_history_retention_hours');
+    let n = parseInt(raw, 10);
+    if (!Number.isFinite(n) || n < 24) n = DEFAULT_RETENTION_HOURS;
+    if (n > 24 * 30) n = 24 * 30;
+    return n;
+}
+
 function pruneHostNodeMetricSamples() {
     try {
+        const retention = getRetentionHours();
         const db = getDbSync();
-        db.run(`DELETE FROM ${TABLE} WHERE datetime(recorded_at) < datetime('now', ?)`, [`-${RETENTION_HOURS} hours`]);
+        db.run(`DELETE FROM ${TABLE} WHERE datetime(recorded_at) < datetime('now', ?)`, [`-${retention} hours`]);
         saveDb();
     } catch (_) {
         /* ignore */
@@ -70,6 +80,7 @@ function getHostNodeMetricHistory(connectionId, nodeName, metric) {
     const nn = String(nodeName || '').trim();
     if (!cid || !nn) return [];
     const db = getDbSync();
+    const retention = getRetentionHours();
     const stmt = db.prepare(
         `SELECT recorded_at, ${col} AS v FROM ${TABLE}
          WHERE connection_id = ? AND node_name = ?
@@ -77,7 +88,7 @@ function getHostNodeMetricHistory(connectionId, nodeName, metric) {
            AND ${col} IS NOT NULL
          ORDER BY recorded_at ASC`
     );
-    stmt.bind([cid, nn, `-${RETENTION_HOURS} hours`]);
+    stmt.bind([cid, nn, `-${retention} hours`]);
     const out = [];
     while (stmt.step()) {
         const row = stmt.get();
@@ -101,6 +112,5 @@ module.exports = {
     getHostNodeMetricHistory,
     getHostCpuTempHistory,
     pruneHostNodeMetricSamples,
-    HOST_NODE_METRIC_RETENTION_HOURS: RETENTION_HOURS,
-    HOST_CPU_TEMP_RETENTION_HOURS: RETENTION_HOURS
+    getRetentionHours
 };

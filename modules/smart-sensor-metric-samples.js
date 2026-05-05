@@ -1,12 +1,22 @@
 const { getDbSync, saveDb } = require('./db');
+const settingsStore = require('./settings-store');
 
-const RETENTION_HOURS = 24;
+const DEFAULT_RETENTION_HOURS = 72;
 const TABLE = 'smart_sensor_metric_samples';
+
+function getRetentionHours() {
+    const raw = settingsStore.getSetting('metrics_history_retention_hours_smart') || settingsStore.getSetting('metrics_history_retention_hours');
+    let n = parseInt(raw, 10);
+    if (!Number.isFinite(n) || n < 24) n = DEFAULT_RETENTION_HOURS;
+    if (n > 24 * 30) n = 24 * 30;
+    return n;
+}
 
 function pruneSmartSensorMetricSamples() {
     try {
+        const retention = getRetentionHours();
         const db = getDbSync();
-        db.run(`DELETE FROM ${TABLE} WHERE datetime(recorded_at) < datetime('now', ?)`, [`-${RETENTION_HOURS} hours`]);
+        db.run(`DELETE FROM ${TABLE} WHERE datetime(recorded_at) < datetime('now', ?)`, [`-${retention} hours`]);
         saveDb();
     } catch (_) {
         /* ignore */
@@ -57,6 +67,7 @@ function getSmartSensorMetricHistory(sensorId, fieldKey) {
     if (!sid || !fk) return { points: [] };
 
     const db = getDbSync();
+    const retention = getRetentionHours();
     const stmt = db.prepare(
         `SELECT recorded_at, value FROM ${TABLE}
          WHERE sensor_id = ?
@@ -64,7 +75,7 @@ function getSmartSensorMetricHistory(sensorId, fieldKey) {
            AND datetime(recorded_at) >= datetime('now', ?)
          ORDER BY recorded_at ASC`
     );
-    stmt.bind([sid, fk, `-${RETENTION_HOURS} hours`]);
+    stmt.bind([sid, fk, `-${retention} hours`]);
     const out = [];
     while (stmt.step()) {
         const row = stmt.get();
@@ -80,5 +91,5 @@ function getSmartSensorMetricHistory(sensorId, fieldKey) {
 module.exports = {
     recordSmartSensorSamplesFromItems,
     getSmartSensorMetricHistory,
-    SMART_SENSOR_METRIC_RETENTION_HOURS: RETENTION_HOURS
+    getRetentionHours
 };

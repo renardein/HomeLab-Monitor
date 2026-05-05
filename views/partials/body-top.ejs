@@ -143,7 +143,13 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <div class="mb-3 small" id="hostNodeAllMetricsModalSubtitle"></div>
+                    <div class="d-flex align-items-center gap-2 flex-wrap mb-3">
+                        <div class="small flex-grow-1" id="hostNodeAllMetricsModalSubtitle"></div>
+                        <label class="form-label mb-0" for="hostNodeMetricsPeriodSelect">Период</label>
+                        <select class="form-select form-select-sm" id="hostNodeMetricsPeriodSelect" style="max-width: 120px;">
+                            <option value="1440">24h</option><option value="720">12h</option><option value="360">6h</option><option value="60">1h</option><option value="30">30m</option>
+                        </select>
+                    </div>
                     <div id="hostNodeAllMetricsGlobalError" class="alert alert-danger py-2 d-none" role="alert"></div>
 
                     <h6 class="fw-semibold mb-1"><i class="bi bi-thermometer-half me-1"></i><span id="hostNodeChartSectionLabelTemp"></span></h6>
@@ -170,7 +176,13 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <div class="mb-3 small" id="clusterAggregateMetricsModalSubtitle"></div>
+                    <div class="d-flex align-items-center gap-2 flex-wrap mb-3">
+                        <div class="small flex-grow-1" id="clusterAggregateMetricsModalSubtitle"></div>
+                        <label class="form-label mb-0" for="clusterAggregateMetricsPeriodSelect">Период</label>
+                        <select class="form-select form-select-sm" id="clusterAggregateMetricsPeriodSelect" style="max-width: 120px;">
+                            <option value="1440">24h</option><option value="720">12h</option><option value="360">6h</option><option value="60">1h</option><option value="30">30m</option>
+                        </select>
+                    </div>
                     <div id="clusterAggregateMetricsGlobalError" class="alert alert-danger py-2 d-none" role="alert"></div>
 
                     <h6 class="fw-semibold mb-1"><i class="bi bi-cpu me-1"></i><span id="clusterAggChartSectionLabelCpu"></span></h6>
@@ -193,7 +205,13 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <div class="mb-3 small" id="upsAllMetricsModalSubtitle"></div>
+                    <div class="d-flex align-items-center gap-2 flex-wrap mb-3">
+                        <div class="small flex-grow-1" id="upsAllMetricsModalSubtitle"></div>
+                        <label class="form-label mb-0" for="upsMetricsPeriodSelect">Период</label>
+                        <select class="form-select form-select-sm" id="upsMetricsPeriodSelect" style="max-width: 120px;">
+                            <option value="1440">24h</option><option value="720">12h</option><option value="360">6h</option><option value="60">1h</option><option value="30">30m</option>
+                        </select>
+                    </div>
                     <div id="upsAllMetricsGlobalError" class="alert alert-danger py-2 d-none" role="alert"></div>
 
                     <div class="d-flex align-items-center gap-2 flex-wrap mb-3">
@@ -216,7 +234,13 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <div class="mb-3 small" id="smartSensorsAllMetricsModalSubtitle"></div>
+                    <div class="d-flex align-items-center gap-2 flex-wrap mb-3">
+                        <div class="small flex-grow-1" id="smartSensorsAllMetricsModalSubtitle"></div>
+                        <label class="form-label mb-0" for="smartSensorsMetricsPeriodSelect">Период</label>
+                        <select class="form-select form-select-sm" id="smartSensorsMetricsPeriodSelect" style="max-width: 120px;">
+                            <option value="1440">24h</option><option value="720">12h</option><option value="360">6h</option><option value="60">1h</option><option value="30">30m</option>
+                        </select>
+                    </div>
                     <div id="smartSensorsAllMetricsGlobalError" class="alert alert-danger py-2 d-none" role="alert"></div>
 
                     <div class="d-flex align-items-center gap-2 flex-wrap mb-3">

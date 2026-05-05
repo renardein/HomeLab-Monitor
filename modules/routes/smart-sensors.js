@@ -626,7 +626,7 @@ router.get('/metric-history', (req, res) => {
             success: true,
             sensorId,
             field: fieldKey,
-            retentionHours: smartSensorMetricSamples.SMART_SENSOR_METRIC_RETENTION_HOURS,
+            retentionHours: smartSensorMetricSamples.getRetentionHours(),
             points
         });
     } catch (e) {

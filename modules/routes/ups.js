@@ -931,7 +931,7 @@ router.get('/metric-history', (req, res) => {
             slot,
             metric,
             metricFormat: history.metricFormat,
-            retentionHours: upsMetricSamples.UPS_METRIC_RETENTION_HOURS,
+            retentionHours: upsMetricSamples.getRetentionHours(),
             points: history.points
         });
     } catch (e) {

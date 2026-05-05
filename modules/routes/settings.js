@@ -144,6 +144,16 @@ const SETTING_KEYS = [
     'monitor_tiles_chart_axis_time',
     'monitor_tiles_chart_axis_values',
     'monitor_tiles_chart_axis_y_unit',
+    'metrics_history_retention_hours',
+    'metrics_history_retention_hours_cluster',
+    'metrics_history_retention_hours_host',
+    'metrics_history_retention_hours_ups',
+    'metrics_history_retention_hours_smart',
+    'chart_window_cluster_metric_min',
+    'chart_window_host_metric_min',
+    'chart_window_ups_metric_min',
+    'chart_window_smart_sensor_metric_min',
+    'tiles_chart_display_variant',
     // Speedtest (Ookla CLI)
     'speedtest_enabled',
     'speedtest_engine',
@@ -237,7 +247,22 @@ router.get('/', (req, res) => {
                 } else if (key === 'iperf3_provider_download_mbps' || key === 'iperf3_provider_upload_mbps') {
                     const n = parseFloat(String(value).trim().replace(',', '.'));
                     if (Number.isFinite(n) && n > 0) payload[key] = Math.min(n, 1_000_000);
-                } else if (key === 'refresh_interval' || key === 'current_server_index' || key === 'current_truenas_index' || key === 'session_ttl_minutes' || key === 'telegram_notify_interval_sec') {
+                } else if (
+                    key === 'refresh_interval' ||
+                    key === 'current_server_index' ||
+                    key === 'current_truenas_index' ||
+                    key === 'session_ttl_minutes' ||
+                    key === 'telegram_notify_interval_sec' ||
+                    key === 'metrics_history_retention_hours' ||
+                    key === 'metrics_history_retention_hours_cluster' ||
+                    key === 'metrics_history_retention_hours_host' ||
+                    key === 'metrics_history_retention_hours_ups' ||
+                    key === 'metrics_history_retention_hours_smart' ||
+                    key === 'chart_window_cluster_metric_min' ||
+                    key === 'chart_window_host_metric_min' ||
+                    key === 'chart_window_ups_metric_min' ||
+                    key === 'chart_window_smart_sensor_metric_min'
+                ) {
                     payload[key] = parseInt(value, 10);
                 } else if (key === 'telegram_notify_enabled') {
                     payload[key] = value === '1' || value === 'true';
@@ -436,6 +461,80 @@ router.post('/', (req, res) => {
                 const v = body.monitor_tiles_chart_axis_y_unit ?? body.monitorTilesChartAxisYUnit;
                 if (v === undefined) return undefined;
                 return v === true || v === '1' || v === 1 || v === 'true' ? '1' : '0';
+            })(),
+            metrics_history_retention_hours: (() => {
+                const v = body.metrics_history_retention_hours ?? body.metricsHistoryRetentionHours;
+                if (v === undefined) return undefined;
+                let n = parseInt(v, 10);
+                if (!Number.isFinite(n) || n < 24) n = 72;
+                if (n > 24 * 30) n = 24 * 30;
+                return n;
+            })(),
+            metrics_history_retention_hours_cluster: (() => {
+                const v = body.metrics_history_retention_hours_cluster ?? body.metricsHistoryRetentionHoursCluster;
+                if (v === undefined) return undefined;
+                let n = parseInt(v, 10);
+                if (!Number.isFinite(n) || n < 24) n = 72;
+                if (n > 24 * 30) n = 24 * 30;
+                return n;
+            })(),
+            metrics_history_retention_hours_host: (() => {
+                const v = body.metrics_history_retention_hours_host ?? body.metricsHistoryRetentionHoursHost;
+                if (v === undefined) return undefined;
+                let n = parseInt(v, 10);
+                if (!Number.isFinite(n) || n < 24) n = 72;
+                if (n > 24 * 30) n = 24 * 30;
+                return n;
+            })(),
+            metrics_history_retention_hours_ups: (() => {
+                const v = body.metrics_history_retention_hours_ups ?? body.metricsHistoryRetentionHoursUps;
+                if (v === undefined) return undefined;
+                let n = parseInt(v, 10);
+                if (!Number.isFinite(n) || n < 24) n = 72;
+                if (n > 24 * 30) n = 24 * 30;
+                return n;
+            })(),
+            metrics_history_retention_hours_smart: (() => {
+                const v = body.metrics_history_retention_hours_smart ?? body.metricsHistoryRetentionHoursSmart;
+                if (v === undefined) return undefined;
+                let n = parseInt(v, 10);
+                if (!Number.isFinite(n) || n < 24) n = 72;
+                if (n > 24 * 30) n = 24 * 30;
+                return n;
+            })(),
+            chart_window_cluster_metric_min: (() => {
+                const v = body.chart_window_cluster_metric_min ?? body.chartWindowClusterMetricMin;
+                if (v === undefined) return undefined;
+                const allowed = [30, 60, 360, 720, 1440];
+                const n = parseInt(v, 10);
+                return allowed.includes(n) ? n : 1440;
+            })(),
+            chart_window_host_metric_min: (() => {
+                const v = body.chart_window_host_metric_min ?? body.chartWindowHostMetricMin;
+                if (v === undefined) return undefined;
+                const allowed = [30, 60, 360, 720, 1440];
+                const n = parseInt(v, 10);
+                return allowed.includes(n) ? n : 1440;
+            })(),
+            chart_window_ups_metric_min: (() => {
+                const v = body.chart_window_ups_metric_min ?? body.chartWindowUpsMetricMin;
+                if (v === undefined) return undefined;
+                const allowed = [30, 60, 360, 720, 1440];
+                const n = parseInt(v, 10);
+                return allowed.includes(n) ? n : 1440;
+            })(),
+            chart_window_smart_sensor_metric_min: (() => {
+                const v = body.chart_window_smart_sensor_metric_min ?? body.chartWindowSmartSensorMetricMin;
+                if (v === undefined) return undefined;
+                const allowed = [30, 60, 360, 720, 1440];
+                const n = parseInt(v, 10);
+                return allowed.includes(n) ? n : 1440;
+            })(),
+            tiles_chart_display_variant: (() => {
+                const v = body.tiles_chart_display_variant ?? body.tilesChartDisplayVariant;
+                if (v === undefined) return undefined;
+                const s = String(v).trim().toLowerCase();
+                return (s === 'line' || s === 'minimal') ? s : 'area';
             })(),
             monitor_disable_chrome_gestures: (() => {
                 const v = body.monitor_disable_chrome_gestures ?? body.monitorDisableChromeGestures;
