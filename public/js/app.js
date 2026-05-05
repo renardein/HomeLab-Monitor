@@ -138,6 +138,24 @@ let dashboardWeatherProvider = 'open_meteo';
 let weatherOpenweathermapApiKeySet = false;
 let weatherYandexApiKeySet = false;
 let weatherGismeteoApiKeySet = false;
+
+function initPwaOfflineLite() {
+    if (!('serviceWorker' in navigator)) return;
+    window.addEventListener('load', async () => {
+        try {
+            await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+        } catch (e) {
+            console.warn('Service worker registration failed:', e);
+        }
+    });
+    window.addEventListener('online', () => {
+        try { showToast('Online mode restored', 'success'); } catch (_) {}
+    });
+    window.addEventListener('offline', () => {
+        try { showToast('Offline-lite mode: using cached data', 'warning'); } catch (_) {}
+    });
+}
+initPwaOfflineLite();
 let dashboardTimezone = DEFAULT_DASHBOARD_TIMEZONE;
 let dashboardWeatherData = null;
 let dashboardWeatherDisplayName = '';
