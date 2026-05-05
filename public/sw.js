@@ -1,4 +1,4 @@
-const SW_VERSION = 'hlm-sw-v1';
+const SW_VERSION = 'hlm-sw-v2';
 const APP_SHELL_CACHE = `${SW_VERSION}-shell`;
 const API_CACHE = `${SW_VERSION}-api`;
 
@@ -66,6 +66,25 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(req.url);
 
   if (url.origin !== self.location.origin) return;
+
+  // HTML navigation: prefer fresh network document, fallback to cached shell.
+  if (req.mode === 'navigate') {
+    event.respondWith((async () => {
+      try {
+        const netRes = await fetch(req);
+        if (netRes && netRes.ok) {
+          const cache = await caches.open(APP_SHELL_CACHE);
+          cache.put('/', netRes.clone()).catch(() => {});
+        }
+        return netRes;
+      } catch (_) {
+        const cachedRoot = await caches.match('/');
+        if (cachedRoot) return cachedRoot;
+        return new Response('Offline', { status: 503, statusText: 'Offline' });
+      }
+    })());
+    return;
+  }
 
   // API offline-lite: network first, cache fallback
   if (isApiOfflineLiteRequest(url, req.method)) {

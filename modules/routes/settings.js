@@ -130,6 +130,8 @@ const SETTING_KEYS = [
     'monitor_screens_order',
     'monitor_screens_enabled',
     'monitor_default_screen',
+    'saved_views',
+    'saved_tile_views',
     'monitor_hotkeys',
     'cluster_dashboard_tiles',
     'dashboard_weather_city',
@@ -193,6 +195,8 @@ router.get('/', (req, res) => {
                     key === 'monitor_hidden_vm_ids' ||
                     key === 'monitor_screens_order' ||
                     key === 'monitor_screens_enabled' ||
+                    key === 'saved_views' ||
+                    key === 'saved_tile_views' ||
                     key === 'monitor_hotkeys' ||
                     key === 'cluster_dashboard_tiles' ||
                     key === 'telegram_routes' ||
@@ -372,6 +376,16 @@ router.post('/', (req, res) => {
                 const s = String(v || '').trim();
                 if (!s || s === 'cluster') return 'cluster';
                 return MONITOR_DEFAULT_SCREEN_IDS.includes(s) ? s : 'cluster';
+            })(),
+            saved_views: (() => {
+                const v = body.saved_views ?? body.savedViews;
+                if (v === undefined) return undefined;
+                return Array.isArray(v) ? v : [];
+            })(),
+            saved_tile_views: (() => {
+                const v = body.saved_tile_views ?? body.savedTileViews;
+                if (v === undefined) return undefined;
+                return Array.isArray(v) ? v : [];
             })(),
             monitor_hotkeys: body.monitor_hotkeys ?? body.monitorHotkeys,
             cluster_dashboard_tiles: (() => {

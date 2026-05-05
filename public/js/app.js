@@ -93,6 +93,7 @@ let monitoredVmIds = []; // VMids that are in the "monitored" list (shown in set
 let monitorHiddenVmIds = []; // Of those, VMids to hide in monitor mode (checkbox unchecked)
 let monitorVmIcons = {}; // vmid -> Iconify icon name
 let monitorVmIconColors = {}; // vmid -> CSS hex color
+let savedViews = []; // [{ id, name, createdAt, payload }]
 /** @type {Array<object>} */
 let telegramNotificationRules = [];
 let telegramBotTokenSet = false;
@@ -108,6 +109,7 @@ let setupWizardFinishMode = 'success';
 let clusterDashboardTiles = []; // [{ type: 'service'|'vmct'|'netdev'|'ups'|'speedtest'|'iperf3'|'smart_sensor'|'embed'|'truenas_server'|…, sourceId: 'type:id' }]
 let clusterDashboardTilesDirty = false;
 let clusterDashboardTilesSettingPresent = false;
+let savedTileViews = []; // [{ id, name, createdAt, payload }]
 /** Текст последней ошибки POST /api/settings (для сообщений пользователю). */
 let saveSettingsLastError = '';
 const CLUSTER_DASHBOARD_TILE_TYPES = ['service', 'vmct', 'netdev', 'ups', 'ups_metric_chart', 'cluster_metric_chart', 'host_node_metric_chart', 'cluster_node', 'speedtest', 'iperf3', 'truenas_server', 'truenas_pool', 'truenas_disk', 'truenas_service', 'truenas_app', 'smart_sensor', 'smart_sensor_metric_chart', 'embed'];
@@ -147,7 +149,18 @@ function initPwaOfflineLite() {
     if (!('serviceWorker' in navigator)) return;
     window.addEventListener('load', async () => {
         try {
-            await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+            const reg = await navigator.serviceWorker.register('/sw.js', {
+                scope: '/',
+                updateViaCache: 'none'
+            });
+            try { await reg.update(); } catch (_) {}
+            let reloadedForSw = false;
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+                if (reloadedForSw) return;
+                reloadedForSw = true;
+                // Ensure latest HTML/JS is applied after SW upgrade.
+                window.location.reload();
+            });
         } catch (e) {
             console.warn('Service worker registration failed:', e);
         }
@@ -1509,6 +1522,8 @@ async function saveSettingsToServer(payload) {
     if (payload.monitorScreensOrder !== undefined) body.monitorScreensOrder = payload.monitorScreensOrder;
     if (payload.monitorScreensEnabled !== undefined) body.monitorScreensEnabled = payload.monitorScreensEnabled;
     if (payload.monitorDefaultScreen !== undefined) body.monitorDefaultScreen = payload.monitorDefaultScreen;
+    if (payload.savedViews !== undefined) body.savedViews = payload.savedViews;
+    if (payload.savedTileViews !== undefined) body.savedTileViews = payload.savedTileViews;
     if (payload.monitorHotkeys !== undefined) body.monitorHotkeys = payload.monitorHotkeys;
     if (payload.clusterDashboardTiles !== undefined) body.clusterDashboardTiles = payload.clusterDashboardTiles;
     if (payload.dashboardWeatherCity !== undefined) body.dashboardWeatherCity = payload.dashboardWeatherCity;
@@ -1615,6 +1630,12 @@ async function loadTranslations() {
 function t(key) {
     const dict = ensureTranslationsShape(translations);
     return dict[currentLanguage]?.[key] ?? dict.ru?.[key] ?? key;
+}
+
+function tOr(key, fallback) {
+    const v = t(key);
+    if (!v || v === key) return fallback;
+    return v;
 }
 
 /** Подстановка {name} в строку перевода (клиент). */
@@ -2718,6 +2739,12 @@ function updateUILanguage() {
         settingsNavSpeedtest: 'settingsNavSpeedtest',
         settingsNavIperf3: 'settingsNavIperf3',
         settingsNavTelegramIntegration: 'settingsNavTelegramIntegration',
+        settingsSavedViewsTitle: 'settingsSavedViewsTitle',
+        settingsSavedViewsHint: 'settingsSavedViewsHint',
+        settingsSavedViewSaveBtnText: 'settingsSavedViewSaveBtnText',
+        settingsSavedTileViewsTitle: 'settingsSavedTileViewsTitle',
+        settingsSavedTileViewsHint: 'settingsSavedTileViewsHint',
+        settingsSavedTileViewSaveBtnText: 'settingsSavedTileViewSaveBtnText',
         settingsTelegramTitle: 'settingsTelegramTitle',
         settingsTelegramHint: 'settingsTelegramHint',
         settingsTelegramBotTokenLabel: 'settingsTelegramBotTokenLabel',
@@ -2750,6 +2777,12 @@ function updateUILanguage() {
         const el = document.getElementById(id);
         if (el) el.textContent = t(key);
     }
+    setText('settingsSavedViewsTitle', tOr('settingsSavedViewsTitle', 'Saved views'));
+    setText('settingsSavedViewsHint', tOr('settingsSavedViewsHint', 'Save current monitor layout as preset and apply in one click.'));
+    setText('settingsSavedViewSaveBtnText', tOr('settingsSavedViewSaveBtnText', 'Save current'));
+    setText('settingsSavedTileViewsTitle', tOr('settingsSavedTileViewsTitle', 'Saved tile views'));
+    setText('settingsSavedTileViewsHint', tOr('settingsSavedTileViewsHint', 'Save current tiles layout and chart options as a preset.'));
+    setText('settingsSavedTileViewSaveBtnText', tOr('settingsSavedTileViewSaveBtnText', 'Save tiles'));
     localizeTelegramMessageModal();
     
     // Update theme and units button texts
@@ -3170,6 +3203,8 @@ function updateUILanguage() {
 
     setPlaceholder('settingsServiceNameInput', t('settingsServicePlaceholderName'));
     setPlaceholder('settingsServiceHostInput', t('settingsServicePlaceholderHost'));
+    setPlaceholder('settingsSavedViewNameInput', tOr('settingsSavedViewNamePlaceholder', 'Night wallboard'));
+    setPlaceholder('settingsSavedTileViewNameInput', tOr('settingsSavedTileViewNamePlaceholder', 'Wallboard compact'));
     setPlaceholder('upsHostInput', t('upsHostPlaceholder'));
     setPlaceholder('netdevHostInput', t('netdevHostPlaceholder'));
     setPlaceholder('speedtestServerInput', t('speedtestServerPlaceholder'));
@@ -6419,6 +6454,7 @@ function renderClusterDashboardTilesSettings() {
     const addBtn = document.getElementById('settingsClusterTilesAddBtn');
     if (addBtn) addBtn.disabled = clusterDashboardTiles.length >= MAX_CLUSTER_DASHBOARD_TILES;
     markClusterDashboardTilesDirty(clusterDashboardTilesDirty);
+    renderSavedTileViewsSettingsList();
 }
 
 function addClusterDashboardTile() {
@@ -13472,6 +13508,55 @@ function normalizeMonitorScreensEnabled(raw) {
     return monitorScreensManager.normalizeEnabled(raw);
 }
 
+function normalizeSavedViews(raw) {
+    if (!Array.isArray(raw)) return [];
+    const out = [];
+    for (const entry of raw) {
+        if (!entry || typeof entry !== 'object') continue;
+        const name = String(entry.name || '').trim();
+        if (!name) continue;
+        const payload = entry.payload && typeof entry.payload === 'object' ? entry.payload : {};
+        out.push({
+            id: String(entry.id || `sv_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`),
+            name: name.slice(0, 80),
+            createdAt: entry.createdAt ? String(entry.createdAt) : new Date().toISOString(),
+            payload: {
+                monitorScreensOrder: normalizeMonitorScreensOrder(payload.monitorScreensOrder),
+                monitorScreensEnabled: normalizeMonitorScreensEnabled(payload.monitorScreensEnabled),
+                monitorDefaultScreen: normalizeMonitorDefaultScreenFromServer(payload.monitorDefaultScreen),
+                clusterDashboardTiles: normalizeClusterDashboardTiles(payload.clusterDashboardTiles),
+                monitorHiddenServiceIds: Array.isArray(payload.monitorHiddenServiceIds) ? payload.monitorHiddenServiceIds.map((x) => Number(x)).filter(Number.isFinite) : [],
+                monitorVms: Array.isArray(payload.monitorVms) ? payload.monitorVms.map((x) => Number(x)).filter(Number.isFinite) : [],
+                monitorHiddenVmIds: Array.isArray(payload.monitorHiddenVmIds) ? payload.monitorHiddenVmIds.map((x) => Number(x)).filter(Number.isFinite) : []
+            }
+        });
+    }
+    return out.slice(0, 20);
+}
+
+function normalizeSavedTileViews(raw) {
+    if (!Array.isArray(raw)) return [];
+    const out = [];
+    for (const entry of raw) {
+        if (!entry || typeof entry !== 'object') continue;
+        const name = String(entry.name || '').trim();
+        if (!name) continue;
+        const payload = entry.payload && typeof entry.payload === 'object' ? entry.payload : {};
+        out.push({
+            id: String(entry.id || `stv_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`),
+            name: name.slice(0, 80),
+            createdAt: entry.createdAt ? String(entry.createdAt) : new Date().toISOString(),
+            payload: {
+                clusterDashboardTiles: normalizeClusterDashboardTiles(payload.clusterDashboardTiles),
+                monitorTilesChartAxisTime: parseBoolSettingClient(payload.monitorTilesChartAxisTime, true),
+                monitorTilesChartAxisValues: parseBoolSettingClient(payload.monitorTilesChartAxisValues, true),
+                monitorTilesChartAxisYUnit: parseBoolSettingClient(payload.monitorTilesChartAxisYUnit, true)
+            }
+        });
+    }
+    return out.slice(0, 20);
+}
+
 function normalizeMonitorHotkeyCombo(raw) {
     return monitorHotkeysManager.normalizeCombo(raw);
 }
@@ -13576,6 +13661,7 @@ function renderSettingsMonitorScreensOrderList() {
         btn.addEventListener('click', () => moveMonitorScreenOrder(parseInt(btn.dataset.index, 10), 1));
     });
     fillSettingsMonitorDefaultScreenSelect();
+    renderSavedViewsSettingsList();
 }
 
 function toggleMonitorScreenEnabled(id, enabled) {
@@ -13591,6 +13677,226 @@ function moveMonitorScreenOrder(index, delta) {
     saveSettingsToServer({ monitorScreensOrder: monitorScreensOrder });
     renderSettingsMonitorScreensOrderList();
     renderMonitorScreenDots();
+}
+
+function captureCurrentSavedViewPayload() {
+    return {
+        monitorScreensOrder: normalizeMonitorScreensOrder(monitorScreensOrder),
+        monitorScreensEnabled: normalizeMonitorScreensEnabled(monitorScreensEnabled),
+        monitorDefaultScreen: normalizeMonitorDefaultScreenFromServer(monitorDefaultScreen),
+        clusterDashboardTiles: normalizeClusterDashboardTiles(clusterDashboardTiles),
+        monitorHiddenServiceIds: Array.isArray(monitorHiddenServiceIds) ? monitorHiddenServiceIds.slice() : [],
+        monitorVms: Array.isArray(monitoredVmIds) ? monitoredVmIds.slice() : [],
+        monitorHiddenVmIds: Array.isArray(monitorHiddenVmIds) ? monitorHiddenVmIds.slice() : []
+    };
+}
+
+async function persistSavedViews() {
+    savedViews = normalizeSavedViews(savedViews);
+    await saveSettingsToServer({ savedViews });
+}
+
+async function saveCurrentAsSavedView() {
+    const input = el('settingsSavedViewNameInput');
+    if (!input) return;
+    const name = String(input.value || '').trim();
+    if (!name) {
+        showToast(tOr('settingsSavedViewsNameRequired', 'Enter view name'), 'warning');
+        input.focus();
+        return;
+    }
+    savedViews = [{
+        id: `sv_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        name: name.slice(0, 80),
+        createdAt: new Date().toISOString(),
+        payload: captureCurrentSavedViewPayload()
+    }, ...savedViews].slice(0, 20);
+    await persistSavedViews();
+    input.value = '';
+    renderSavedViewsSettingsList();
+    showToast(tOr('settingsSavedViewsSaved', 'Saved'), 'success');
+}
+
+async function applySavedView(id) {
+    const item = savedViews.find((v) => String(v.id) === String(id));
+    if (!item || !item.payload) return;
+    const p = item.payload;
+    monitorScreensOrder = normalizeMonitorScreensOrder(p.monitorScreensOrder);
+    monitorScreensEnabled = normalizeMonitorScreensEnabled(p.monitorScreensEnabled);
+    monitorDefaultScreen = normalizeMonitorDefaultScreenFromServer(p.monitorDefaultScreen);
+    clusterDashboardTiles = normalizeClusterDashboardTiles(p.clusterDashboardTiles);
+    clusterDashboardTilesDirty = false;
+    monitorHiddenServiceIds = Array.isArray(p.monitorHiddenServiceIds) ? p.monitorHiddenServiceIds.slice() : [];
+    monitoredVmIds = Array.isArray(p.monitorVms) ? p.monitorVms.slice() : [];
+    monitorHiddenVmIds = Array.isArray(p.monitorHiddenVmIds) ? p.monitorHiddenVmIds.slice() : [];
+    fillSettingsMonitorDefaultScreenSelect();
+    renderSettingsMonitorScreensOrderList();
+    renderClusterDashboardTilesSettings();
+    renderSettingsMonitoredServices();
+    renderSettingsMonitoredVms();
+    renderMonitorServicesList();
+    renderMonitorVmsList();
+    renderMonitorScreenDots();
+    await saveSettingsToServer({
+        monitorScreensOrder,
+        monitorScreensEnabled,
+        monitorDefaultScreen,
+        clusterDashboardTiles,
+        monitorHiddenServiceIds,
+        monitorVms: monitoredVmIds,
+        monitorHiddenVmIds
+    });
+    renderClusterDashboardTiles().catch(() => {});
+    showToast(tOr('settingsSavedViewsApplied', 'Applied') + `: ${item.name}`, 'success');
+}
+
+async function overwriteSavedView(id) {
+    const idx = savedViews.findIndex((v) => String(v.id) === String(id));
+    if (idx < 0) return;
+    savedViews[idx] = {
+        ...savedViews[idx],
+        createdAt: new Date().toISOString(),
+        payload: captureCurrentSavedViewPayload()
+    };
+    await persistSavedViews();
+    renderSavedViewsSettingsList();
+    showToast(tOr('settingsSavedViewsOverwritten', 'Overwritten'), 'success');
+}
+
+async function deleteSavedView(id) {
+    savedViews = savedViews.filter((v) => String(v.id) !== String(id));
+    await persistSavedViews();
+    renderSavedViewsSettingsList();
+}
+
+function renderSavedViewsSettingsList() {
+    const list = el('settingsSavedViewsList');
+    if (!list) return;
+    if (!Array.isArray(savedViews) || !savedViews.length) {
+        setHTMLIfChanged('settingsSavedViewsList', `<div class="text-muted small">${escapeHtml(t('backupNoData') || 'No data')}</div>`);
+        return;
+    }
+    const html = savedViews.map((v) => `
+        <div class="list-group-item d-flex align-items-center justify-content-between gap-2">
+            <div class="text-truncate">
+                <div class="fw-semibold text-truncate">${escapeHtml(v.name)}</div>
+                <div class="small text-muted">${escapeHtml(new Date(v.createdAt || Date.now()).toLocaleString(currentLanguage === 'ru' ? 'ru-RU' : 'en-US'))}</div>
+            </div>
+            <div class="btn-group btn-group-sm">
+                <button type="button" class="btn btn-outline-primary" onclick="applySavedView('${escapeHtml(v.id)}')">${escapeHtml(tOr('apply', 'Apply'))}</button>
+                <button type="button" class="btn btn-outline-secondary" onclick="overwriteSavedView('${escapeHtml(v.id)}')">${escapeHtml(tOr('settingsSavedViewsOverwrite', 'Overwrite'))}</button>
+                <button type="button" class="btn btn-outline-danger" onclick="deleteSavedView('${escapeHtml(v.id)}')">${escapeHtml(t('remove') || 'Remove')}</button>
+            </div>
+        </div>
+    `).join('');
+    setHTMLIfChanged('settingsSavedViewsList', html);
+}
+
+function captureCurrentSavedTileViewPayload() {
+    return {
+        clusterDashboardTiles: normalizeClusterDashboardTiles(clusterDashboardTiles),
+        monitorTilesChartAxisTime: !!monitorTilesChartAxisTime,
+        monitorTilesChartAxisValues: !!monitorTilesChartAxisValues,
+        monitorTilesChartAxisYUnit: !!monitorTilesChartAxisYUnit
+    };
+}
+
+async function persistSavedTileViews() {
+    savedTileViews = normalizeSavedTileViews(savedTileViews);
+    await saveSettingsToServer({ savedTileViews });
+}
+
+async function saveCurrentAsSavedTileView() {
+    const input = el('settingsSavedTileViewNameInput');
+    if (!input) return;
+    const name = String(input.value || '').trim();
+    if (!name) {
+        showToast(tOr('settingsSavedTileViewsNameRequired', 'Enter view name'), 'warning');
+        input.focus();
+        return;
+    }
+    savedTileViews = [{
+        id: `stv_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        name: name.slice(0, 80),
+        createdAt: new Date().toISOString(),
+        payload: captureCurrentSavedTileViewPayload()
+    }, ...savedTileViews].slice(0, 20);
+    await persistSavedTileViews();
+    input.value = '';
+    renderSavedTileViewsSettingsList();
+    showToast(tOr('settingsSavedTileViewsSaved', 'Tiles view saved'), 'success');
+}
+
+async function applySavedTileView(id) {
+    const item = savedTileViews.find((v) => String(v.id) === String(id));
+    if (!item || !item.payload) return;
+    const p = item.payload;
+    clusterDashboardTiles = normalizeClusterDashboardTiles(p.clusterDashboardTiles);
+    clusterDashboardTilesDirty = false;
+    monitorTilesChartAxisTime = parseBoolSettingClient(p.monitorTilesChartAxisTime, true);
+    monitorTilesChartAxisValues = parseBoolSettingClient(p.monitorTilesChartAxisValues, true);
+    monitorTilesChartAxisYUnit = parseBoolSettingClient(p.monitorTilesChartAxisYUnit, true);
+    const cTilesAxisT = el('settingsMonitorTilesChartAxisTimeCheckbox');
+    const cTilesAxisV = el('settingsMonitorTilesChartAxisValuesCheckbox');
+    const cTilesAxisU = el('settingsMonitorTilesChartAxisYUnitCheckbox');
+    if (cTilesAxisT) cTilesAxisT.checked = monitorTilesChartAxisTime;
+    if (cTilesAxisV) cTilesAxisV.checked = monitorTilesChartAxisValues;
+    if (cTilesAxisU) cTilesAxisU.checked = monitorTilesChartAxisYUnit;
+    renderClusterDashboardTilesSettings();
+    await saveSettingsToServer({
+        clusterDashboardTiles,
+        monitorTilesChartAxisTime,
+        monitorTilesChartAxisValues,
+        monitorTilesChartAxisYUnit
+    });
+    renderClusterDashboardTiles().catch(() => {});
+    renderTilesMonitorScreen('tilesNormalGrid').catch(() => {});
+    if (!monitorMode || monitorCurrentView === 'tiles') {
+        renderTilesMonitorScreen().catch(() => {});
+    }
+    showToast(tOr('settingsSavedTileViewsApplied', 'Tiles view applied') + `: ${item.name}`, 'success');
+}
+
+async function overwriteSavedTileView(id) {
+    const idx = savedTileViews.findIndex((v) => String(v.id) === String(id));
+    if (idx < 0) return;
+    savedTileViews[idx] = {
+        ...savedTileViews[idx],
+        createdAt: new Date().toISOString(),
+        payload: captureCurrentSavedTileViewPayload()
+    };
+    await persistSavedTileViews();
+    renderSavedTileViewsSettingsList();
+    showToast(tOr('settingsSavedTileViewsOverwritten', 'Tiles view overwritten'), 'success');
+}
+
+async function deleteSavedTileView(id) {
+    savedTileViews = savedTileViews.filter((v) => String(v.id) !== String(id));
+    await persistSavedTileViews();
+    renderSavedTileViewsSettingsList();
+}
+
+function renderSavedTileViewsSettingsList() {
+    const list = el('settingsSavedTileViewsList');
+    if (!list) return;
+    if (!Array.isArray(savedTileViews) || !savedTileViews.length) {
+        setHTMLIfChanged('settingsSavedTileViewsList', `<div class="text-muted small">${escapeHtml(t('backupNoData') || 'No data')}</div>`);
+        return;
+    }
+    const html = savedTileViews.map((v) => `
+        <div class="list-group-item d-flex align-items-center justify-content-between gap-2">
+            <div class="text-truncate">
+                <div class="fw-semibold text-truncate">${escapeHtml(v.name)}</div>
+                <div class="small text-muted">${escapeHtml(new Date(v.createdAt || Date.now()).toLocaleString(currentLanguage === 'ru' ? 'ru-RU' : 'en-US'))}</div>
+            </div>
+            <div class="btn-group btn-group-sm">
+                <button type="button" class="btn btn-outline-primary" onclick="applySavedTileView('${escapeHtml(v.id)}')">${escapeHtml(tOr('apply', 'Apply'))}</button>
+                <button type="button" class="btn btn-outline-secondary" onclick="overwriteSavedTileView('${escapeHtml(v.id)}')">${escapeHtml(tOr('settingsSavedTileViewsOverwrite', 'Overwrite'))}</button>
+                <button type="button" class="btn btn-outline-danger" onclick="deleteSavedTileView('${escapeHtml(v.id)}')">${escapeHtml(t('remove') || 'Remove')}</button>
+            </div>
+        </div>
+    `).join('');
+    setHTMLIfChanged('settingsSavedTileViewsList', html);
 }
 
 function updateMonitorToolbarTitleForView() {
@@ -16117,6 +16423,7 @@ async function loadSettings() {
     clusterDashboardTilesSettingPresent = Object.prototype.hasOwnProperty.call(data, 'cluster_dashboard_tiles');
     clusterDashboardTiles = normalizeClusterDashboardTiles(data.cluster_dashboard_tiles);
     clusterDashboardTilesDirty = false;
+    savedTileViews = normalizeSavedTileViews(data.saved_tile_views);
     dashboardWeatherCity = normalizeDashboardWeatherCity(data.dashboard_weather_city);
     dashboardWeatherProvider = normalizeDashboardWeatherProvider(data.dashboard_weather_provider);
     weatherOpenweathermapApiKeySet = !!data.weather_openweathermap_api_key_set;
@@ -16189,6 +16496,7 @@ async function loadSettings() {
         : MONITOR_SCREEN_IDS_ALL.slice();
     monitorScreensEnabled = normalizeMonitorScreensEnabled(data.monitor_screens_enabled);
     monitorDefaultScreen = normalizeMonitorDefaultScreenFromServer(data.monitor_default_screen);
+    savedViews = normalizeSavedViews(data.saved_views);
     speedtestClientEnabled = !!(data.speedtest_enabled === true || data.speedtest_enabled === '1'
         || data.speedtest_enabled === 1 || data.speedtest_enabled === 'true');
     speedtestEngine = String(data.speedtest_engine || '').trim().toLowerCase() === 'librespeed'
